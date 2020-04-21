@@ -3,6 +3,8 @@ use serde::{Deserialize, Serialize};
 use serde_json::Result;
 use clap::{ArgMatches};
 
+use crate::args;
+
 #[derive(Serialize, Deserialize)]
 pub enum CloudProviderConfig {
     GCP {
@@ -133,12 +135,13 @@ impl Config {
         }
         return serde_json::from_str(&content);
     }
-    pub fn create(args: ArgMatches) -> Result<Config> {
-        let mut c = Config::load(args.value_of("config").unwrap_or("./deplo.json")).unwrap();
+    pub fn create(args: &args::Args) -> Result<Config> {
+        let matches: &ArgMatches = &args.matches;
+        let mut c = Config::load(matches.value_of("config").unwrap_or("./deplo.json")).unwrap();
         c.cli = CliConfig {
-            verbosity: args.occurrences_of("verbosity"),
-            dryrun: args.occurrences_of("dryrun") > 0,
-            debug: match args.value_of("debug") {
+            verbosity: matches.occurrences_of("verbosity"),
+            dryrun: matches.occurrences_of("dryrun") > 0,
+            debug: match matches.value_of("debug") {
                 Some(s) => s.to_string(),
                 None => "".to_string()
             }
