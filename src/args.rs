@@ -1,5 +1,6 @@
 use std::error::Error;
 use std::result::Result;
+
 use clap::{App, Arg, ArgMatches};
 
 const VERSION: &'static str = env!("CARGO_PKG_VERSION");

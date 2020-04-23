@@ -1,4 +1,6 @@
 use std::fs;
+
+use simple_logger;
 use serde::{Deserialize, Serialize};
 use serde_json::Result;
 use clap::{ArgMatches};
@@ -146,8 +148,13 @@ impl Config {
                 None => "".to_string()
             }
         };
+        simple_logger::init_with_level(match c.cli.verbosity {
+            0 => log::Level::Error,
+            1 => log::Level::Info,
+            2 => log::Level::Debug,
+            3 => log::Level::Trace,
+            _ => log::Level::Info
+        }).unwrap();
         return Ok(c);
     }
-
-    // instance methods
 }
