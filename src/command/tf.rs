@@ -6,18 +6,18 @@ use crate::args;
 use crate::config;
 use crate::command;
 
-pub struct Gcloud<'a> {
+pub struct Terraformer<'a> {
     pub config: &'a config::Config
 }
 
-impl<'a> command::Command<'a> for Gcloud<'a> {
-    fn new(config: &'a config::Config) -> Result<Gcloud<'a>, Box<dyn Error>> {
-        return Ok(Gcloud {
+impl<'a> command::Command<'a> for Terraformer<'a> {
+    fn new(config: &config::Config) -> Result<Terraformer, Box<dyn Error>> {
+        return Ok(Terraformer {
             config: config
         });
     }
     fn run(&self, args: &args::Args) -> Result<(), Box<dyn Error>> {
-        log::info!("gcloud command invoked");
+        log::info!("tf command invoked");
         return Ok(());
     }
 }
