@@ -2,6 +2,7 @@ mod config;
 mod args;
 mod cli;
 mod command;
+mod shell;
 
 use log;
 
@@ -11,7 +12,7 @@ fn main() {
     match cli::run(&args, &c) {
         Ok(()) => std::process::exit(0),
         Err(err) => {
-            log::error!("deplo failure: {}", err);
+            log::error!("command failure: {}", err);
             std::process::exit(1)
         }
     }

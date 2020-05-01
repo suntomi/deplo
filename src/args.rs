@@ -1,4 +1,5 @@
 use std::error::Error;
+use std::fmt;
 use std::result::Result;
 
 use clap::{App, Arg, ArgMatches};
@@ -9,7 +10,22 @@ pub struct Args {
     pub matches: ArgMatches
 }
 
-impl Args {
+#[derive(Debug)]
+pub struct ArgsError {
+    pub cause: String
+}
+impl fmt::Display for ArgsError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.cause)
+    }
+}
+impl Error for ArgsError {
+    fn source(&self) -> Option<&(dyn Error + 'static)> {
+        None
+    }
+}
+
+impl<'a> Args {
     pub fn create() -> Result<Args, Box<dyn Error>> {
         return Ok(Args {
             matches: App::new("deplo")
@@ -42,12 +58,23 @@ impl Args {
             .subcommand(
                 App::new("gcloud")
                     .about("wrap gcloud to dryrun")
-                    .arg(Arg::with_name("input")
+                    .arg(Arg::new("args")
+                        .multiple(true)
                         .help("the file to add")
                         .index(1)
                         .required(true))
             )
             .get_matches()
-        });  
+        });
+    }
+    pub fn subcommand(&self) -> Option<&str> {
+        return self.matches.subcommand_name();
+    }
+    pub fn subcommand_matches(&self) -> Option<&ArgMatches> {
+        let name = match self.subcommand() {
+            Some(s) => s,
+            None => return None
+        };
+        return self.matches.subcommand_matches(name) 
     }
 }

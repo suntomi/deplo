@@ -1,22 +1,45 @@
+use std::error::Error;
+use std::fmt;
+
 use crate::args;
 use crate::config;
 use crate::command;
 
-pub fn run(args: &args::Args, config: &config::Config) -> Result<(), String> {
-    match args.matches.subcommand_name() {
+#[derive(Debug)]
+pub struct CliError {
+    pub cause: String
+}
+impl fmt::Display for CliError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.cause)
+    }
+}
+impl Error for CliError {
+    fn source(&self) -> Option<&(dyn Error + 'static)> {
+        None
+    }
+}
+
+
+pub fn run(args: &args::Args, config: &config::Config) -> Result<(), Box<dyn Error>> {
+    match args.subcommand() {
         Some(name) => {
             let cmd = match command::factory(name, config) {
                 Ok(cmd) => match cmd {
                     Some(cmd) => cmd,
-                    None => return Err(format!("no such subcommand {}", name)) 
+                    None => return Err(Box::new(CliError{ 
+                        cause: format!("no such subcommand {}", name) 
+                    })) 
                 }
-                Err(err) => return Err(err.to_string())
+                Err(err) => return Err(err)
             };
             match cmd.run(args) {
                 Ok(()) => return Ok(()),
-                Err(err) => return Err(err.to_string())
+                Err(err) => return Err(err)
             }
         },
-        None => return Err("no subcommand specified".to_string())
+        None => return Err(Box::new(CliError{ 
+            cause: format!("no command specified") 
+        })) 
     };
 }
