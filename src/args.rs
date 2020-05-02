@@ -64,6 +64,15 @@ impl<'a> Args {
                         .index(1)
                         .required(true))
             )
+            .subcommand(
+                App::new("tf")
+                    .about("wrap terraform to dryrun and other functionality")
+                    .arg(Arg::new("args")
+                        .multiple(true)
+                        .help("the file to add")
+                        .index(1)
+                        .required(true))
+            )
             .get_matches()
         });
     }

@@ -20,22 +20,24 @@ impl<'a> command::Command<'a> for Gcloud<'a> {
         });
     }
     fn run(&self, args: &args::Args) -> Result<(), Box<dyn Error>> {
-        log::error!("gcloud command invoked");
+        log::info!("gcloud command invoked");
         match args.subcommand_matches() {
             Some(m) => {
                 match m.values_of("args") {
                     Some(it) => {
                         let subcommand_args: Vec<&str> = it.collect();
-                        return self.shell.invoke(format!("gcloud {}", subcommand_args.join(" ")))
+                        return match self.shell.invoke("gcloud", &subcommand_args) {
+                            Ok(_) => Ok(()),
+                            Err(err) => Err(err)
+                        }
                     },
-                    None => return Err(Box::new(args::ArgsError{ 
-                        cause: "no argument for gcloud".to_string() 
-                    }))
+                    None => {}
                 }
             },
-            None => return Err(Box::new(args::ArgsError{ 
-                cause: "no argument for gcloud".to_string() 
-            }))
+            None => {}
         }
+        return Err(Box::new(args::ArgsError{ 
+            cause: "no argument for gcloud".to_string() 
+        }))
     }
 }
