@@ -56,34 +56,33 @@ impl<'a> Args {
                 .help("Sets the level of verbosity")
                 .takes_value(false))
             .subcommand(
-                App::new("gcloud")
-                    .about("wrap gcloud to dryrun")
+                App::new("init")
+                    .about("initialize deplo project. need to configure deplo.json beforehand")
                     .arg(Arg::new("args")
                         .multiple(true)
                         .help("the file to add")
                         .index(1)
-                        .required(true))
-            )
+                        .required(true)))
             .subcommand(
-                App::new("tf")
-                    .about("wrap terraform to dryrun and other functionality")
+                App::new("exec")
+                    .about("wrap 3rdparty command to dryrun")
                     .arg(Arg::new("args")
                         .multiple(true)
-                        .help("the file to add")
+                        .help("command name and arguments")
                         .index(1)
-                        .required(true))
-            )
+                        .required(true)))
             .get_matches()
         });
     }
-    pub fn subcommand(&self) -> Option<&str> {
-        return self.matches.subcommand_name();
-    }
-    pub fn subcommand_matches(&self) -> Option<&ArgMatches> {
-        let name = match self.subcommand() {
-            Some(s) => s,
-            None => return None
-        };
-        return self.matches.subcommand_matches(name) 
+    pub fn subcommand(&self) -> Option<(&str, &ArgMatches)> {
+        match self.matches.subcommand_name() {
+            Some(name) => {
+                match self.matches.subcommand_matches(name) {
+                    Some(m) => Some((name, m)),
+                    None => None
+                }
+            },
+            None => None
+        }
     }
 }

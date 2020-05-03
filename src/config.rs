@@ -101,7 +101,9 @@ pub struct ClientBuildConfig {
     pub account: String,
     pub password: String,
 
-    pub platform_build_configs: Vec<PlatformBuildConfig>
+    pub platform_build_configs: Vec<PlatformBuildConfig>,
+
+    pub stores: Vec<StoreConfig>,
 }
 #[derive(Serialize, Deserialize)]
 pub struct CommonConfig {
@@ -124,7 +126,6 @@ pub struct Config {
     pub cloud: CloudConfig,
     pub vcs: VCSConfig,
     pub ci: CIConfig,
-    pub stores: Vec<StoreConfig>,
     pub client_build: ClientBuildConfig,
 }
 

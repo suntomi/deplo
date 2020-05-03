@@ -23,7 +23,7 @@ impl Error for CliError {
 
 pub fn run(args: &args::Args, config: &config::Config) -> Result<(), Box<dyn Error>> {
     match args.subcommand() {
-        Some(name) => {
+        Some((name, _)) => {
             let cmd = match command::factory(name, config) {
                 Ok(cmd) => match cmd {
                     Some(cmd) => cmd,

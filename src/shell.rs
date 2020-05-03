@@ -32,9 +32,9 @@ impl<'a> Shell<'a> {
             config: config
         }
     }
-    fn create_command(cmd: &str, args: &Vec<&str>) -> Command {
-        let mut c = Command::new(cmd);
-        for arg in args.iter() {
+    fn create_command(args: &Vec<&str>) -> Command {
+        let mut c = Command::new(args[0]);
+        for arg in args.iter().skip(1) {
             c.arg(arg);
         }
         return c;
@@ -82,18 +82,18 @@ impl<'a> Shell<'a> {
         }
     }
     #[allow(dead_code)]
-    pub fn output_of(&self, cmd: &str, args: &Vec<&str>) -> Result<String, Box<dyn Error>> {
-        let mut cmd = Shell::<'a>::create_command(cmd, args);
+    pub fn output_of(&self, args: &Vec<&str>) -> Result<String, Box<dyn Error>> {
+        let mut cmd = Shell::<'a>::create_command(args);
         return Shell::get_output(&mut cmd);
     }
-    pub fn invoke(&self, cmd: &str, args: &Vec<&str>) -> Result<(), Box<dyn Error>> {
+    pub fn exec(&self, args: &Vec<&str>) -> Result<(), Box<dyn Error>> {
         if self.config.cli.dryrun {
-            let executed = format!("{} {}", cmd, args.join(" "));
+            let executed = format!("{}", args.join(" "));
             log::info!("dryrun: {}", executed);
             return Ok(());
         } else {
             log::info!("exec: {}", args.join(" "));
-            let mut cmd = Shell::<'a>::create_command(cmd, args);
+            let mut cmd = Shell::<'a>::create_command(args);
             return Shell::run_as_child(&mut cmd);
         }
     }

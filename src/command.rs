@@ -9,8 +9,8 @@ pub trait Command<'a> {
 }
 
 // subcommands
-pub mod gcloud;
-pub mod tf;
+pub mod init;
+pub mod exec;
 
 // factory
 fn factory_by<'a, T: Command<'a> + 'a>(
@@ -24,8 +24,8 @@ pub fn factory<'a>(
     name: &str, config: &'a config::Config
 ) -> Result<Option<Box<dyn Command<'a> + 'a>>, Box<dyn Error>> {
     let cmd = match name {
-        "gcloud" => factory_by::<gcloud::Gcloud>(config),
-        "tf" => factory_by::<tf::Terraformer>(config),
+        "init" => factory_by::<init::Init>(config),
+        "exec" => factory_by::<exec::Exec>(config),
         _ => return Ok(None)
     };
     return match cmd {
