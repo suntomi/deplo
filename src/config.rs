@@ -108,7 +108,7 @@ pub struct ClientBuildConfig {
 #[derive(Serialize, Deserialize)]
 pub struct CommonConfig {
     pub deplo_image: String,
-    pub script_dir: String,
+    pub data_dir: String,
     pub no_confirm_for_prod_deploy: bool,
 }
 #[derive(Serialize, Deserialize)]

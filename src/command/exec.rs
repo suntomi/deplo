@@ -7,16 +7,16 @@ use crate::config;
 use crate::command;
 use crate::shell;
 
-pub struct Exec<'a> {
+pub struct Exec<'a, S: shell::Shell<'a> = shell::Default<'a>> {
     pub config: &'a config::Config,
-    pub shell: shell::Shell<'a>
+    pub shell: S
 }
 
-impl<'a> command::Command<'a> for Exec<'a> {
-    fn new(config: &'a config::Config) -> Result<Exec<'a>, Box<dyn Error>> {
+impl<'a, S: shell::Shell<'a>> command::Command<'a> for Exec<'a, S> {
+    fn new(config: &'a config::Config) -> Result<Exec<'a, S>, Box<dyn Error>> {
         return Ok(Exec {
             config: config,
-            shell: shell::Shell::new(config)
+            shell: S::new(config)
         });
     }
     fn run(&self, args: &args::Args) -> Result<(), Box<dyn Error>> {

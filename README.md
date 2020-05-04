@@ -1,0 +1,6 @@
+- ```deplo init```: init deplo project structure
+- ```deplo exec```: execute 3rd party command (aws, aliyun, gcloud, terraform, etc.)
+- ```deplo ci```: run ci with configuration
+- ```deplo service```: service related subcommand
+    - ```deplo service create```: create service
+    - ```deplo service run```: run service
