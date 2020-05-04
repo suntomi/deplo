@@ -40,15 +40,36 @@ lazy_static! {
             .takes_value(false))
         .subcommand(
             App::new("init")
-                .about("initialize deplo project. need to configure deplo.json beforehand"))
+                .about("initialize deplo project. need to configure deplo.json beforehand")
+        )
         .subcommand(
             App::new("exec")
                 .about("wrap 3rdparty command to dryrun")
                 .arg(Arg::new("args")
                     .multiple(true)
                     .help("command name and arguments")
-                    .index(1)
-                    .required(true)))
+                    .required(true))
+        )
+        .subcommand(
+            App::new("service")
+                .about("control service, which represent single deployment unit")
+                .subcommand(
+                    App::new("create")
+                    .about("create service")
+                    .arg(Arg::new("name")
+                        .help("service name")
+                        .index(1)
+                        .required(true))
+                )    
+                .subcommand(
+                    App::new("deploy")
+                    .about("deploy service")
+                    .arg(Arg::new("name")
+                        .help("service name")
+                        .index(1)
+                        .required(true))
+                )    
+        )
         .get_matches();
 }
 
@@ -68,6 +89,9 @@ impl<'a> args::Args for Clap<'a> {
             },
             None => None
         }
+    }
+    fn occurence_of(&self, name: &str) -> u64 {
+        return self.matches.occurrences_of(name);
     }
     fn values_of(&self, name: &str) -> Option<Vec<&str>> {
         match self.matches.values_of(name) {

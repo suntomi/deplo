@@ -33,7 +33,7 @@ pub fn run<A: args::Args>(args: &A, config: &config::Config) -> Result<(), Box<d
                 Ok(cmd) => match cmd {
                     Some(cmd) => cmd,
                     None => return Err(Box::new(CliError{ 
-                        cause: format!("no such subcommand {}", name) 
+                        cause: format!("no such subcommand [{}]", name) 
                     })) 
                 }
                 Err(err) => return Err(err)

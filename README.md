@@ -1,6 +1,12 @@
 - ```deplo init```: init deplo project structure
+    - mkdir config.common.data_dir
+    - 
 - ```deplo exec```: execute 3rd party command (aws, aliyun, gcloud, terraform, etc.)
 - ```deplo ci```: run ci with configuration
 - ```deplo service```: service related subcommand
     - ```deplo service create```: create service
-    - ```deplo service run```: run service
+    - ```deplo service deploy```: run service
+- ```deplo infra```: control infrastructure
+    - ```deplo infra plan```: generate plan
+    - ```deplo infra apply```: apply generated plan
+    - ```deplo infra eval```: evaluate value of infrastructure  

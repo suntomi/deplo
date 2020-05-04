@@ -7,17 +7,12 @@ pub mod clap;
 pub trait Args : Sized {
     fn create() -> Result<Self, Box<dyn Error>>;
     fn subcommand(&self) -> Option<(&str, Self)>;
+    fn occurence_of(&self, name: &str) -> u64;
     fn values_of(&self, name: &str) -> Option<Vec<&str>>;
     fn value_of(&self, name: &str) -> Option<&str> {
         match self.values_of(name) {
             Some(v) => Some(v[0]),
             None => None
-        }
-    }
-    fn occurence_of(&self, name: &str) -> u64 {
-        match self.values_of(name) {
-            Some(v) => v.len() as u64,
-            None => 0
         }
     }
 }
