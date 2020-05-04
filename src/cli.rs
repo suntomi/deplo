@@ -5,6 +5,11 @@ use crate::args;
 use crate::config;
 use crate::command;
 
+const VERSION: &'static str = env!("CARGO_PKG_VERSION");
+pub fn version() -> &'static str {
+    VERSION
+}
+
 #[derive(Debug)]
 pub struct CliError {
     pub cause: String
@@ -21,9 +26,9 @@ impl Error for CliError {
 }
 
 
-pub fn run(args: &args::Args, config: &config::Config) -> Result<(), Box<dyn Error>> {
+pub fn run<A: args::Args>(args: &A, config: &config::Config) -> Result<(), Box<dyn Error>> {
     match args.subcommand() {
-        Some((name, _)) => {
+        Some((name, subargs)) => {
             let cmd = match command::factory(name, config) {
                 Ok(cmd) => match cmd {
                     Some(cmd) => cmd,
@@ -33,7 +38,7 @@ pub fn run(args: &args::Args, config: &config::Config) -> Result<(), Box<dyn Err
                 }
                 Err(err) => return Err(err)
             };
-            match cmd.run(args) {
+            match cmd.run(&subargs) {
                 Ok(()) => return Ok(()),
                 Err(err) => return Err(err)
             }

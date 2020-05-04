@@ -5,7 +5,7 @@ use crate::config;
 use crate::shell;
 
 pub struct Native<'a> {
-    pub config: &'a config::Config   
+    pub config: &'a config::Config<'a>   
 }
 impl<'a> shell::Shell<'a> for Native<'a> {
     fn new(config: &'a config::Config) -> Self {

@@ -8,36 +8,29 @@ use crate::command;
 use crate::shell;
 
 pub struct Exec<'a, S: shell::Shell<'a> = shell::Default<'a>> {
-    pub config: &'a config::Config,
+    pub config: &'a config::Config<'a>,
     pub shell: S
 }
 
-impl<'a, S: shell::Shell<'a>> command::Command<'a> for Exec<'a, S> {
+impl<'a, S: shell::Shell<'a>, A: args::Args> command::Command<'a, A> for Exec<'a, S> {
     fn new(config: &'a config::Config) -> Result<Exec<'a, S>, Box<dyn Error>> {
         return Ok(Exec {
             config: config,
             shell: S::new(config)
         });
     }
-    fn run(&self, args: &args::Args) -> Result<(), Box<dyn Error>> {
+    fn run(&self, args: &A) -> Result<(), Box<dyn Error>> {
         log::info!("exec command invoked");
-        match args.subcommand() {
-            Some((_, m)) => {
-                match m.values_of("args") {
-                    Some(it) => {
-                        let subcommand_args: Vec<&str> = it.collect();
-                        return match self.shell.exec(&subcommand_args) {
-                            Ok(_) => Ok(()),
-                            Err(err) => Err(err)
-                        }
-                    },
-                    None => {}
+        match args.values_of("args") {
+            Some(subargs) => {
+                return match self.shell.exec(&subargs) {
+                    Ok(_) => Ok(()),
+                    Err(err) => Err(err)
                 }
             },
-            None => {}
+            None => Err(Box::new(args::ArgsError{ 
+                cause: "no argument for exec".to_string() 
+            }))
         }
-        return Err(Box::new(args::ArgsError{ 
-            cause: "no argument for exec".to_string() 
-        }))
     }
 }

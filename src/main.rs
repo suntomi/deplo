@@ -1,3 +1,6 @@
+#[macro_use]
+extern crate lazy_static;
+
 mod config;
 mod args;
 mod cli;
@@ -7,7 +10,7 @@ mod shell;
 use log;
 
 fn main() {
-    let args = args::Args::create().unwrap();
+    let args = args::create().unwrap();
     let c = config::Config::create(&args).unwrap();
     match cli::run(&args, &c) {
         Ok(()) => std::process::exit(0),

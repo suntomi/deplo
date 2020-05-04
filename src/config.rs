@@ -3,7 +3,6 @@ use std::fs;
 use simple_logger;
 use serde::{Deserialize, Serialize};
 use serde_json::Result;
-use clap::{ArgMatches};
 
 use crate::args;
 
@@ -111,17 +110,16 @@ pub struct CommonConfig {
     pub data_dir: String,
     pub no_confirm_for_prod_deploy: bool,
 }
-#[derive(Serialize, Deserialize)]
 #[derive(Default)]
-pub struct CliConfig {
+pub struct CliConfig<'a> {
     pub verbosity: u64,
     pub dryrun: bool,
-    pub debug: String,
+    pub debug: Vec<&'a str>,
 }
 #[derive(Serialize, Deserialize)]
-pub struct Config {
+pub struct Config<'a> {
     #[serde(skip)]
-    pub cli: CliConfig,
+    pub cli: CliConfig<'a>,
     pub common: CommonConfig,
     pub cloud: CloudConfig,
     pub vcs: VCSConfig,
@@ -129,7 +127,7 @@ pub struct Config {
     pub client_build: ClientBuildConfig,
 }
 
-impl Config {
+impl<'a> Config<'a> {
     // static factory methods 
     pub fn load(path: &str) -> Result<Config> {
         let mut content = fs::read_to_string(path).unwrap();
@@ -138,15 +136,14 @@ impl Config {
         }
         return serde_json::from_str(&content);
     }
-    pub fn create(args: &args::Args) -> Result<Config> {
-        let matches: &ArgMatches = &args.matches;
-        let mut c = Config::load(matches.value_of("config").unwrap_or("./deplo.json")).unwrap();
+    pub fn create<A: args::Args>(args: &'a A) -> Result<Config> {
+        let mut c = Config::load(args.value_of("config").unwrap_or("./deplo.json")).unwrap();
         c.cli = CliConfig {
-            verbosity: matches.occurrences_of("verbosity"),
-            dryrun: matches.occurrences_of("dryrun") > 0,
-            debug: match matches.value_of("debug") {
-                Some(s) => s.to_string(),
-                None => "".to_string()
+            verbosity: args.occurence_of("verbosity"),
+            dryrun: args.occurence_of("dryrun") > 0,
+            debug: match args.values_of("debug") {
+                Some(s) => s,
+                None => vec!{}
             }
         };
         simple_logger::init_with_level(match c.cli.verbosity {
