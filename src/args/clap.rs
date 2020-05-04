@@ -7,6 +7,7 @@ use crate::args;
 use crate::cli;
 
 pub struct Clap<'a> {
+    pub hierarchy: Vec<&'a str>,
     pub matches: &'a ArgMatches
 }
     
@@ -60,7 +61,14 @@ lazy_static! {
                         .help("service name")
                         .index(1)
                         .required(true))
-                )    
+                    .arg(Arg::with_name("script")
+                        .short('s')
+                        .long("script")
+                        .help("sets the script type")
+                        .possible_values(
+                            &["sh", "dpl"]
+                        ))
+                )
                 .subcommand(
                     App::new("deploy")
                     .about("deploy service")
@@ -76,6 +84,7 @@ lazy_static! {
 impl<'a> args::Args for Clap<'a> {
     fn create() -> Result<Clap<'a>, Box<dyn Error>> {
         return Ok(Clap::<'a> {
+            hierarchy: vec!{},
             matches: &G_ROOT_MATCH
         })
     }
@@ -83,7 +92,14 @@ impl<'a> args::Args for Clap<'a> {
         match self.matches.subcommand_name() {
             Some(name) => {
                 match self.matches.subcommand_matches(name) {
-                    Some(m) => Some((name, Clap::<'a>{matches: m})),
+                    Some(m) => {
+                        let mut h = self.hierarchy.clone();
+                        h.push(name);
+                        Some((name, Clap::<'a>{
+                            hierarchy: h,
+                            matches: m
+                        }))
+                    },
                     None => None
                 }
             },
@@ -98,5 +114,8 @@ impl<'a> args::Args for Clap<'a> {
             Some(it) => Some(it.collect()),
             None => None
         }
+    }
+    fn command_path(&self) -> &Vec<&str> {
+        &self.hierarchy
     }
 }

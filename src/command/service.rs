@@ -24,9 +24,7 @@ impl<'a, S: shell::Shell<'a>> Service<'a, S> {
                 )?;
                 return Ok(())
             },
-            None => return Err(Box::new(args::ArgsError {
-                cause: "deplo service create: no name specified".to_string() 
-            }))
+            None => return Err(args.error("no name specified"))
         }
     }
     fn deploy<A: args::Args>(&self, _: &A) -> Result<(), Box<dyn Error>> {
@@ -46,12 +44,10 @@ impl<'a, S: shell::Shell<'a>, A: args::Args> command::Command<'a, A> for Service
         match args.subcommand() {
             Some(("create", subargs)) => return self.create(&subargs),
             Some(("deploy", subargs)) => return self.deploy(&subargs),
-            Some((name, _)) => return Err(Box::new(args::ArgsError {
-                cause: format!("deplo service: no such subcommand: [{}]", name) 
-            })),
-            None => return Err(Box::new(args::ArgsError {
-                cause: "deplo service: no subcommand specified".to_string() 
-            }))
+            Some((name, _)) => return Err(args.error(
+                &format!("no such subcommand: [{}]", name) 
+            )),
+            None => return Err(args.error("no subcommand specified"))
         }
     }
 }

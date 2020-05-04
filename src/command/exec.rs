@@ -28,9 +28,7 @@ impl<'a, S: shell::Shell<'a>, A: args::Args> command::Command<'a, A> for Exec<'a
                     Err(err) => Err(err)
                 }
             },
-            None => Err(Box::new(args::ArgsError{ 
-                cause: "no argument for exec".to_string() 
-            }))
+            None => Err(args.error("no argument for exec"))
         }
     }
 }
