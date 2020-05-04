@@ -43,7 +43,10 @@ pub fn factory<'a, S: args::Args>(
     let cmd = match name {
         "init" => factory_by::<S, init::Init>(config),
         "exec" => factory_by::<S, exec::Exec>(config),
-        _ => return Ok(None)
+        "service" => factory_by::<S, service::Service>(config),
+        _ => return Err(Box::new(CommandError {
+            cause: format!("add factory matching pattern for [{}]", name)
+        }))
     };
     return match cmd {
         Ok(cmd) => Ok(Some(cmd)),

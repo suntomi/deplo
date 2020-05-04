@@ -1,5 +1,6 @@
 use std::error::Error;
 use std::fs;
+use std::path;
 
 use log;
 
@@ -14,9 +15,19 @@ pub struct Service<'a, S: shell::Shell<'a> = shell::Default<'a>> {
 }
 
 impl<'a, S: shell::Shell<'a>> Service<'a, S> {
-    fn create<A: args::Args>(&self, _: &A) -> Result<(), Box<dyn Error>> {
+    fn create<A: args::Args>(&self, args: &A) -> Result<(), Box<dyn Error>> {
         log::info!("service create invoked");
-        return Ok(())
+        match args.value_of("name") {
+            Some(name) => {
+                fs::create_dir_all(
+                    path::Path::new(&self.config.common.data_dir).join(name)
+                )?;
+                return Ok(())
+            },
+            None => return Err(Box::new(args::ArgsError {
+                cause: "deplo service create: no name specified".to_string() 
+            }))
+        }
     }
     fn deploy<A: args::Args>(&self, _: &A) -> Result<(), Box<dyn Error>> {
         log::info!("service deploy invoked");      
@@ -32,14 +43,13 @@ impl<'a, S: shell::Shell<'a>, A: args::Args> command::Command<'a, A> for Service
         });
     }
     fn run(&self, args: &A) -> Result<(), Box<dyn Error>> {
-        log::info!("service command invoked");
         match args.subcommand() {
             Some(("create", subargs)) => return self.create(&subargs),
             Some(("deploy", subargs)) => return self.deploy(&subargs),
-            Some((name, _)) => return Err(Box::new(command::CommandError {
+            Some((name, _)) => return Err(Box::new(args::ArgsError {
                 cause: format!("deplo service: no such subcommand: [{}]", name) 
             })),
-            None => return Err(Box::new(command::CommandError {
+            None => return Err(Box::new(args::ArgsError {
                 cause: "deplo service: no subcommand specified".to_string() 
             }))
         }
