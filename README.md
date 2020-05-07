@@ -81,9 +81,19 @@ account="suntomi.inc@gmail.com",
 password="$DEPLO_CLIENT_STORE_APPLE_PASSWORD"
 
 [[client.stores.Google]]
-key = "$DEPLO_CLIENT_STORE_GOOGLE_ACCESS_KEY"    
+key = "$DEPLO_CLIENT_STORE_GOOGLE_ACCESS_KEY"
+
+[deploy.pr]
+"./master-data/.*" = "deplo service deploy master-data-build"
+
+[deploy.release]
+"./client/.*" = "deplo service deploy client"
+
 ```
 
 
 
 ### service.toml example
+``` toml
+
+```

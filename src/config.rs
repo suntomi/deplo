@@ -1,4 +1,5 @@
 use std::fs;
+use std::collections::{HashMap};
 
 use log;
 use simple_logger;
@@ -118,6 +119,11 @@ pub struct CommonConfig {
     pub data_dir: String,
     pub no_confirm_for_prod_deploy: bool,
 }
+#[derive(Serialize, Deserialize)]
+pub struct DeployConfig {
+    pub pr: HashMap<String, String>,
+    pub release: HashMap<String, String>,
+}
 #[derive(Default)]
 pub struct CliConfig<'a> {
     pub verbosity: u64,
@@ -133,6 +139,7 @@ pub struct Config<'a> {
     pub vcs: VCSConfig,
     pub ci: CIConfig,
     pub client: ClientConfig,
+    pub deploy: DeployConfig
 }
 
 impl<'a> Config<'a> {
