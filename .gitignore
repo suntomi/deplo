@@ -1,3 +1,5 @@
 /target
 deplo.json
+deplo.toml
+.env*
 meta
