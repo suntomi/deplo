@@ -95,5 +95,35 @@ key = "$DEPLO_CLIENT_STORE_GOOGLE_ACCESS_KEY"
 
 ### service.toml example
 ``` toml
+# using bash script to get ull control over deployment.
+[script]
+code = '''
+make -C server build IMAGE=$IMAGE
+# some script using specific command like gcloud/aws/aliyun/...
+docker tag $IMAGE $DEPLO_CONTAINER_REPOSITORY_URL:$DEPLO_PROJECT_ID-game-server #>/dev/null 2>&1 
+# you can wrap with deplo exec to dryrun
+deplo exec gcloud compute instance-templates create-with-container ...
+'''
+code = "./path/to/deploy/script.sh"
 
+[script.env]
+IMAGE=doz/server
+
+# or specified by parameter
+[container.image]
+id = "doz/server"
+build = "make -C server build"
+
+[container.deploy]
+type = "instance" # or "serverless"
+ports = [8080, 11111]
+
+[container.deploy.env]  
+GOOGLE_APPLICATION_CREDENTIALS = "/path/to/cred.json"
+
+[container.deploy.command_options]
+"max-num-replicas" = 64
+"min-num-replicas" = 1
+"target-cpu-utilization" = 0.5
+flags = ["scale-based-on-cpu"]
 ```

@@ -22,7 +22,8 @@ impl<'a, S: shell::Shell<'a>, A: args::Args> command::Command<'a, A> for Init<'a
     }
     fn run(&self, _: &A) -> Result<(), Box<dyn Error>> {
         log::info!("init command invoked");
-        fs::create_dir_all(&self.config.common.data_dir)?;
+        fs::create_dir_all(&self.config.root_path())?;
+        fs::create_dir_all(&self.config.services_path())?;
         return Ok(())
     }
 }

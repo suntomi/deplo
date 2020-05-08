@@ -1,0 +1,175 @@
+use std::fs;
+use std::fmt;
+use std::error::Error;
+use std::collections::{HashMap};
+
+use serde::{Deserialize, Serialize};
+use maplit::hashmap;
+
+use crate::config;
+use crate::shell;
+
+#[derive(Debug)]
+pub struct DeployError {
+    pub cause: String
+}
+impl fmt::Display for DeployError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.cause)
+    }
+}
+impl Error for DeployError {
+    fn source(&self) -> Option<&(dyn Error + 'static)> {
+        None
+    }
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+struct ImageConfig {
+    id: String,
+    build: String
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+enum DeployTarget {
+    Instance,
+    Serverless,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+#[serde(tag = "type")]
+enum Step {
+    Script {
+        code: String,
+        runner: Option<String>,
+        env: HashMap<String, String>,
+    },
+    Container {
+        image: String,
+        target: DeployTarget,
+        ports: Vec<u32>,
+        env: HashMap<String, String>,
+        command_options: HashMap<String, String>,
+    },
+    Storage {
+        // source file glob pattern => target storage path
+        copymap: HashMap<String, String>,
+    }
+}
+impl Step {
+    pub fn exec<'a, S: shell::Shell<'a>>(&self, shell: &S) -> Result<(), Box<dyn Error>> {
+        match self {
+            Self::Script { code, runner, env } => {
+                Ok(())
+            },
+            Self::Container { image, target, ports, env, command_options } => {
+                Ok(())
+            },
+            Self::Storage { copymap } => {
+                Ok(())
+            },
+        }
+    }
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct PlanData {
+    steps: Vec<Step>
+}
+
+pub struct Plan<'a> {
+    service: String,
+    config: &'a config::Config<'a>,
+    data: PlanData
+}
+impl<'a> Plan<'a> {
+    pub fn create(
+        config: &'a config::Config, 
+        service: &str, kind: &str
+    ) -> Result<Plan<'a>, Box<dyn Error>> {
+        Ok(Plan::<'a> {
+            service: service.to_string(),
+            config,
+            data: PlanData {
+                steps: match kind {
+                    "container" => vec!(Step::Script {
+                        code: "#!/bin/bash\n\
+                               build_image.sh your/image\n\
+                              ".to_string(),
+                        runner: None,
+                        env: hashmap!{},
+                    }, Step::Container {
+                        image: "your/image".to_string(),
+                        target: DeployTarget::Instance,
+                        ports: vec!(80),
+                        env: hashmap!{},
+                        command_options: hashmap!{},
+                    }), 
+                    "storage" => vec!(Step::Storage {
+                        copymap: hashmap! {
+                            "source_dir/copyfiles/*.".to_string() => 
+                            "target_bucket/folder/subfolder".to_string()
+                        }
+                    }),
+                    "script" => vec!(Step::Script {
+                        code: "#!/bin/bash\n\
+                               build_image.sh your/image\n\
+                               deploy_as_serverless.sh your/image your_autoscaling_group\n\
+                              ".to_string(),
+                        runner: Some("bash".to_string()),
+                        env: hashmap!{},
+                    }),
+                    _ => return Err(Box::new(DeployError {
+                        cause: format!("invalid deploy type: {:?}", kind)
+                    }))
+                }
+            }
+        })
+    }
+    pub fn load(
+        config: &'a config::Config, 
+        service: &str
+    ) -> Result<Plan<'a>, Box<dyn Error>> {
+        let pathbuf = config.services_path().join(format!("{}.toml", service));
+        match pathbuf.to_str() {
+            Some(path) => return Ok(Plan::<'a> {
+                service: service.to_string(),
+                config,
+                data: Self::load_plandata(path)?
+            }),
+            None => return Err(Box::new(DeployError {
+                cause: format!("invalid path string: {:?}", pathbuf)
+            }))
+        }
+    }
+    pub fn save(&self) -> Result<(), Box<dyn Error>> {
+        let pathbuf = self.config.services_path().join(format!("{}.toml", self.service));
+        match pathbuf.to_str() {
+            Some(path) => return self.save_plandata(path),
+            None => return Err(Box::new(DeployError {
+                cause: format!("invalid path string: {:?}", pathbuf)
+            }))
+        }
+    }
+    pub fn exec<S: shell::Shell<'a>>(&self, shell: &S) -> Result<(), Box<dyn Error>> {
+        for step in &self.data.steps {
+            step.exec(shell)?
+        }
+        Ok(())
+    }
+
+    fn load_plandata(path_or_text: &str) -> Result<PlanData, Box<dyn Error>> {
+        let data = match fs::read_to_string(path_or_text) {
+            Ok(text) => toml::from_str::<PlanData>(&text)?,
+            Err(_) => toml::from_str::<PlanData>(&path_or_text)?
+        };
+        Ok(data)
+    }
+    fn save_plandata(&self, path: &str) -> Result<(), Box<dyn Error>> {
+        let as_text = toml::to_string_pretty(&self.data)?;
+        match fs::write(path, &as_text) {
+            Ok(_) => Ok(()),
+            Err(err) => Err(Box::new(err))
+        }
+    }
+}

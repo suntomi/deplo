@@ -1,4 +1,5 @@
 use std::fs;
+use std::path;
 use std::collections::{HashMap};
 
 use log;
@@ -151,7 +152,7 @@ impl<'a> Config<'a> {
         }
         return toml::from_str(&content);
     }
-    pub fn create<A: args::Args>(args: &'a A) -> Result<Config, Error> {
+    pub fn create<A: args::Args>(args: &A) -> Result<Config, Error> {
         let verbosity = args.occurence_of("verbosity");
         simple_logger::init_with_level(match verbosity {
             0 => log::Level::Warn,
@@ -187,5 +188,11 @@ impl<'a> Config<'a> {
             }
         };
         return Ok(c);
+    }
+    pub fn root_path(&self) -> &path::Path {
+        return path::Path::new(&self.common.data_dir);
+    }
+    pub fn services_path(&self) -> path::PathBuf {
+        return path::Path::new(&self.common.data_dir).join("services");
     }
 }

@@ -67,13 +67,14 @@ lazy_static! {
                         .help("service name")
                         .index(1)
                         .required(true))
-                    .arg(Arg::with_name("script")
-                        .short('s')
-                        .long("script")
-                        .help("sets the script type")
+                    .arg(Arg::with_name("type")
+                        .short('t')
+                        .long("type")
+                        .help("specify service type")
                         .possible_values(
-                            &["sh", "dpl"]
-                        ))
+                            &["container", "storage", "script"]
+                        )
+                        .required(true))
                 )
                 .subcommand(
                     App::new("deploy")

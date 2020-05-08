@@ -4,9 +4,9 @@ use std::fmt;
 use super::args;
 use super::config;
 
-pub trait Command<'a, T: args::Args> {
+pub trait Command<'a, A: args::Args> {
     fn new(config: &'a config::Config) -> Result<Self, Box<dyn Error>> where Self : Sized;
-    fn run(&self, args: &T) -> Result<(), Box<dyn Error>>;
+    fn run(&self, args: &A) -> Result<(), Box<dyn Error>>;
 }
 
 #[derive(Debug)]

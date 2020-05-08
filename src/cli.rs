@@ -26,7 +26,7 @@ impl Error for CliError {
 }
 
 
-pub fn run<A: args::Args>(args: &A, config: &config::Config) -> Result<(), Box<dyn Error>> {
+pub fn run<'a, A: args::Args>(args: &A, config: &'a config::Config) -> Result<(), Box<dyn Error>> {
     match args.subcommand() {
         Some((name, subargs)) => {
             let cmd = match command::factory(name, config) {
