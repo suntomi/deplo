@@ -1,6 +1,7 @@
 use std::error::Error;
 
 use log;
+use maplit::hashmap;
 
 use crate::args;
 use crate::config;
@@ -23,7 +24,7 @@ impl<'a, S: shell::Shell<'a>, A: args::Args> command::Command<'a, A> for Exec<'a
         log::info!("exec command invoked");
         match args.values_of("args") {
             Some(subargs) => {
-                return match self.shell.exec(&subargs) {
+                return match self.shell.exec(&subargs, &hashmap!{}) {
                     Ok(_) => Ok(()),
                     Err(err) => Err(err)
                 }

@@ -1,5 +1,6 @@
 use std::fs;
 use std::fmt;
+use std::path;
 use std::error::Error;
 use std::collections::{HashMap};
 
@@ -60,9 +61,19 @@ impl Step {
     pub fn exec<'a, S: shell::Shell<'a>>(&self, shell: &S) -> Result<(), Box<dyn Error>> {
         match self {
             Self::Script { code, runner, env } => {
-                Ok(())
+                let default = "bash".to_string();
+                let r = runner.as_ref().unwrap_or(&default);
+                match fs::metadata(code) {
+                    Ok(_) => shell.exec(&vec!(r, code), &env),
+                    Err(_) => {
+                        return shell.exec(&vec!(
+                            "sh", "-c", &format!("echo \'{}\' | {}", code, r)
+                        ), &env)
+                    }
+                }
             },
             Self::Container { image, target, ports, env, command_options } => {
+                println!("deploy image: {}", image);
                 Ok(())
             },
             Self::Storage { copymap } => {

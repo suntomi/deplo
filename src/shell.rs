@@ -1,4 +1,5 @@
 use std::fmt;
+use std::collections::HashMap;
 use std::error::Error;
 
 use crate::config;
@@ -7,8 +8,8 @@ pub mod native;
 
 pub trait Shell<'a> {
     fn new(config: &'a config::Config) -> Self;
-    fn output_of(&self, args: &Vec<&str>) -> Result<String, Box<dyn Error>>;
-    fn exec(&self, args: &Vec<&str>) -> Result<(), Box<dyn Error>>;
+    fn output_of(&self, args: &Vec<&str>, envs: &HashMap<String, String>) -> Result<String, Box<dyn Error>>;
+    fn exec(&self, args: &Vec<&str>, envs: &HashMap<String, String>) -> Result<(), Box<dyn Error>>;
 }
 pub type Default<'a> = native::Native<'a>;
 

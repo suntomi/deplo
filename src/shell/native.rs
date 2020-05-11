@@ -1,4 +1,5 @@
 use std::process::{Command};
+use std::collections::HashMap;
 use std::error::Error;
 
 use crate::config;
@@ -14,27 +15,26 @@ impl<'a> shell::Shell<'a> for Native<'a> {
         }
     }
     #[allow(dead_code)]
-    fn output_of(&self, args: &Vec<&str>) -> Result<String, Box<dyn Error>> {
-        let mut cmd = Native::<'a>::create_command(args);
+    fn output_of(&self, args: &Vec<&str>, envs: &HashMap<String, String>) -> Result<String, Box<dyn Error>> {
+        let mut cmd = Native::<'a>::create_command(args, envs);
         return Native::get_output(&mut cmd);
     }
-    fn exec(&self, args: &Vec<&str>) -> Result<(), Box<dyn Error>> {
+    fn exec(&self, args: &Vec<&str>, envs: &HashMap<String, String>) -> Result<(), Box<dyn Error>> {
         if self.config.cli.dryrun {
             println!("dryrun: {}", args.join(" "));
             return Ok(());
         } else {
-            log::info!("exec: {}", args.join(" "));
-            let mut cmd = Native::<'a>::create_command(args);
+            log::trace!("exec: [{}]", args.join(" "));
+            let mut cmd = Native::<'a>::create_command(args, envs);
             return Native::run_as_child(&mut cmd);
         }
     }
 }
 impl <'a> Native<'a> {
-    fn create_command(args: &Vec<&str>) -> Command {
+    fn create_command(args: &Vec<&str>, envs: &HashMap<String, String>) -> Command {
         let mut c = Command::new(args[0]);
-        for arg in args.iter().skip(1) {
-            c.arg(arg);
-        }
+        c.args(&args[1..]);
+        c.envs(envs);
         return c;
     }
     fn get_output(cmd: &mut Command) -> Result<String, Box<dyn Error>> {
