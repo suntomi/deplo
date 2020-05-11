@@ -20,7 +20,7 @@ impl<'a> shell::Shell<'a> for Native<'a> {
         return Native::get_output(&mut cmd);
     }
     fn exec(&self, args: &Vec<&str>, envs: &HashMap<String, String>) -> Result<(), Box<dyn Error>> {
-        if self.config.cli.dryrun {
+        if self.config.runtime.dryrun {
             println!("dryrun: {}", args.join(" "));
             return Ok(());
         } else {

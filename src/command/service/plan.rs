@@ -1,6 +1,5 @@
 use std::fs;
 use std::fmt;
-use std::path;
 use std::error::Error;
 use std::collections::{HashMap};
 
@@ -32,7 +31,7 @@ struct ImageConfig {
 }
 
 #[derive(Serialize, Deserialize, Debug)]
-enum DeployTarget {
+pub enum DeployTarget {
     Instance,
     Serverless,
 }
@@ -50,7 +49,7 @@ enum Step {
         target: DeployTarget,
         ports: Vec<u32>,
         env: HashMap<String, String>,
-        command_options: HashMap<String, String>,
+        options: HashMap<String, String>,
     },
     Storage {
         // source file glob pattern => target storage path
@@ -58,7 +57,7 @@ enum Step {
     }
 }
 impl Step {
-    pub fn exec<'a, S: shell::Shell<'a>>(&self, shell: &S) -> Result<(), Box<dyn Error>> {
+    pub fn exec<'a, S: shell::Shell<'a>>(&self, plan: &Plan, shell: &S) -> Result<(), Box<dyn Error>> {
         match self {
             Self::Script { code, runner, env } => {
                 let default = "bash".to_string();
@@ -72,12 +71,28 @@ impl Step {
                     }
                 }
             },
-            Self::Container { image, target, ports, env, command_options } => {
-                println!("deploy image: {}", image);
-                Ok(())
+            Self::Container { target, image, ports, env, options } => {
+                let config = plan.config;
+                let cloud = config.cloud_service()?;
+                let release_target = config.release_target().expect("should be on release target branch");
+                // deploy image to cloud container registry
+                let pushed_image_tag = cloud.push_container_image(&image, 
+                    &format!("{}-{}-{}", config.project_id(), release_target, plan.service)
+                )?;
+                // deploy to autoscaling group or serverless platform
+                match target {
+                    DeployTarget::Instance => {
+                        return cloud.deploy_to_autoscaling_group(&pushed_image_tag, ports, env, options);
+                    },
+                    DeployTarget::Serverless => {
+                        return cloud.deploy_to_serverless_platform(&pushed_image_tag, ports, env, options);
+                    }
+                }
             },
             Self::Storage { copymap } => {
-                Ok(())
+                let config = plan.config;
+                let cloud = config.cloud_service()?;
+                return cloud.deploy_to_storage(&copymap)
             },
         }
     }
@@ -105,6 +120,7 @@ impl<'a> Plan<'a> {
                 steps: match kind {
                     "container" => vec!(Step::Script {
                         code: "#!/bin/bash\n\
+                               echo 'build conteiner'\n\
                                build_image.sh your/image\n\
                               ".to_string(),
                         runner: None,
@@ -114,7 +130,7 @@ impl<'a> Plan<'a> {
                         target: DeployTarget::Instance,
                         ports: vec!(80),
                         env: hashmap!{},
-                        command_options: hashmap!{},
+                        options: hashmap!{},
                     }), 
                     "storage" => vec!(Step::Storage {
                         copymap: hashmap! {
@@ -164,7 +180,7 @@ impl<'a> Plan<'a> {
     }
     pub fn exec<S: shell::Shell<'a>>(&self, shell: &S) -> Result<(), Box<dyn Error>> {
         for step in &self.data.steps {
-            step.exec(shell)?
+            step.exec(self, shell)?
         }
         Ok(())
     }

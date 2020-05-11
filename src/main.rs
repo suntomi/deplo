@@ -6,6 +6,8 @@ mod args;
 mod cli;
 mod command;
 mod shell;
+mod cloud;
+mod vcs;
 
 use log;
 

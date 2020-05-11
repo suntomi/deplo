@@ -34,11 +34,12 @@ impl<'a, S: shell::Shell<'a>> Service<'a, S> {
     }
     fn deploy<A: args::Args>(&self, args: &A) -> Result<(), Box<dyn Error>> {
         log::info!("service deploy invoked");      
-        return plan::Plan::<'a>::load(
+        let p = plan::Plan::<'a>::load(
             self.config, 
             // both required argument
             args.value_of("name").unwrap()
-        )?.exec(&self.shell);
+        )?;
+        return p.exec(&self.shell);
     }
 }
 
