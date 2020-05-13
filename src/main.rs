@@ -8,6 +8,7 @@ mod command;
 mod shell;
 mod cloud;
 mod vcs;
+mod endpoints;
 
 use log;
 

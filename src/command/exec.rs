@@ -24,7 +24,7 @@ impl<'a, S: shell::Shell<'a>, A: args::Args> command::Command<'a, A> for Exec<'a
         log::info!("exec command invoked");
         match args.values_of("args") {
             Some(subargs) => {
-                return match self.shell.exec(&subargs, &hashmap!{}) {
+                return match self.shell.exec(&subargs, &hashmap!{}, false) {
                     Ok(_) => Ok(()),
                     Err(err) => Err(err)
                 }

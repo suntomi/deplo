@@ -7,7 +7,7 @@ use crate::config;
 use crate::command;
 use crate::shell;
 
-mod plan;
+pub mod plan;
 
 pub struct Service<'a, S: shell::Shell<'a> = shell::Default<'a>> {
     pub config: &'a config::Config<'a>,

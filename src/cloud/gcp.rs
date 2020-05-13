@@ -2,34 +2,293 @@ use std::error::Error;
 use std::result::Result;
 use std::collections::HashMap;
 
-use crate::config;
-use crate::cloud;
+use regex::Regex;
+use maplit::hashmap;
 
-pub struct Gcp<'a> {
-    pub config: &'a config::Config<'a>
+use crate::config;
+use crate::shell;
+use crate::cloud;
+use crate::command::service::plan;
+
+pub struct Gcp<'a, S: shell::Shell<'a> = shell::Default<'a>> {
+    pub config: &'a config::Config<'a>,
+    pub service_account: String,
+    pub shell: S,
 }
 
-impl<'a> cloud::Cloud<'a> for Gcp<'a> {
-    fn new(config: &'a config::Config) -> Result<Gcp<'a>, Box<dyn Error>> {
-        return Ok(Gcp::<'a> {
-            config: config
-        });
+impl<'a, S: shell::Shell<'a>> Gcp<'a, S> {
+    // helpers
+    fn container_repository_url(&self) -> Option<String> {
+        let region = self.config.cloud_region();
+        let re = Regex::new(r"([^-]+)-").unwrap();
+        return match re.captures(region) {
+            Some(c) => Some(c.get(1).map_or("", |m| m.as_str()).to_string()),
+            None => None
+        }
     }
-    fn push_container_image(&self, src: &str, target: &str) -> Result<String, Box<dyn Error>> {
-        Ok("".to_string())
+    fn instance_template_name(&self, plan: &plan::Plan, version: u32) -> String {
+        return self.config.canonical_name(&format!("instance-template-{}-{}", plan.service, version))
     }
-    fn deploy_to_autoscaling_group(
-        &self, image: &str, ports: &Vec<u32>,
+    fn instance_group_name(&self, plan: &plan::Plan, version: u32) -> String {
+        return self.config.canonical_name(&format!("instance-group-{}-{}", plan.service, version))
+    }
+    fn instance_prefix(&self, plan: &plan::Plan, version: u32) -> String {
+        return self.config.canonical_name(&format!("instance-{}-{}", plan.service, version))
+    }
+    fn backend_service_name(&self, plan: &plan::Plan, version: u32, port: u32) -> String {
+        return self.config.canonical_name(&format!("backend-service-{}-{}-{}", plan.service, version, port))
+    }
+    fn health_check_name(&self, plan: &plan::Plan, version: u32, port: u32) -> String {
+        return format!("{}-health-check", self.backend_service_name(plan, version, port))
+    }
+    fn firewall_rule_name(&self, plan: &plan::Plan) -> String {
+        return self.config.canonical_name(&format!("fw-rules-{}", plan.service))
+    }
+    fn firewall_option_for_backend(&self, plan: &plan::Plan) -> String {
+        let fw_name=self.firewall_rule_name(plan);
+        let bs_list=self.shell.eval_output_of(&format!(r#"
+            gcloud compute security-policies list --format=json | 
+            jq ".[]|select(.name==\"{}\")"
+        "#, fw_name), &hashmap!{}).unwrap_or("".to_string());
+        if bs_list.is_empty() {
+            return "".to_string();
+        }
+        if bs_list == "null".to_string() {
+            return "".to_string();
+        }
+        return format!("--security-policy={}", fw_name);
+    }
+    fn backend_added(&self, backend_service_name: &str, instance_group_name: &str) -> bool {
+        let bs_list = self.shell.eval_output_of(&format!(r#"
+            gcloud compute backend-services list --format=json | 
+            jq ".[]|select(.name==\"{}\").backends"
+        "#, backend_service_name), &hashmap!{}).unwrap_or("".to_string());
+        if bs_list.is_empty() {
+            return true;
+        }
+        if bs_list == "null".to_string() {
+            return true;
+        }
+        let bs_group = self.shell.eval_output_of(&format!(r#"
+            echo {} | jq ".[]|select(.group|endswith(\"{}\"))|.group"
+        "#, bs_list, instance_group_name), &hashmap!{}).unwrap_or("".to_string());
+        if bs_group.is_empty() {
+            return true;
+        }
+        return false;
+    }    
+    fn instance_list(&self, 
+        instance_group_name: &str, resource_location_flag: &str
+    ) -> Result<String, Box<dyn Error>> {
+        return self.shell.eval(&format!(r#"
+            gcloud compute instance-groups list-instances {} {} --format=json |
+            jq '[.[].instance]|join(",")' | tr -d \"
+        "#, instance_group_name, resource_location_flag), &hashmap!{}, true);
+    }
+    fn deploy_instance_group(
+        &self, plan: &plan::Plan,
+        image: &str, ports: &Vec<u32>,
         env: &HashMap<String, String>,
         options: &HashMap<String, String>
     ) -> Result<(), Box<dyn Error>> {
+        // default value as lazy static
+        lazy_static! {
+            static ref DEFAULT_SCALING_CONFIG: String = "\
+                --max-num-replicas=$MAX_NUM_REPLICAS \
+                --min-num-replicas=$MIN_NUM_REPLICAS \
+                --scale-based-on-cpu \
+                --target-cpu-utilization=0.8".to_string();
+            static ref DEFAULT_CONTINER_OPTIONS: String = "".to_string();
+        }
+        // settings
+        let scaling_config = options.get("scaling_config").unwrap_or(&DEFAULT_SCALING_CONFIG);
+        let resource_location_flag = format!("--region={}", self.config.cloud_region());
+        let node_distribution = options.get("node_distribution").unwrap_or(&resource_location_flag);
+        let container_options = options.get("container_options").unwrap_or(&DEFAULT_CONTINER_OPTIONS);
+        let service_version = self.config.service_endpoint_version(&plan.service)?;
+        let deploy_path = format!("/{}/{}", plan.service, service_version);
+        let mut env_vec: Vec<String> = Vec::<String>::new();
+        env_vec.push(format!("DEPLO_SERVICE_VERSION={}", service_version));
+        env_vec.push(format!("DEPLO_SERVICE_NAME={}", plan.service));
+        env_vec.push(format!("DEPLO_SERVICE_PATH={}", deploy_path));
+        for (k, v) in env.iter() {
+            env_vec.push(format!("{}={}", k, v));
+        }
+
+        // generated names
+        let instance_template_name = self.instance_template_name(plan, service_version);
+        let instance_group_name = self.instance_group_name(plan, service_version);
+        let instance_prefix = self.instance_prefix(plan, service_version);
+        let service_account = &self.service_account;
+        let network = self.config.cloud_resource_name("network")?;
+    
+        // codes
+        log::info!("---- deploy_instance_group");
+        let tmpl_id = self.shell.eval_output_of(&format!(r#"
+            gcloud compute instance-templates list --format=json |
+            jq ".[] |
+            select(.name == \"{}\") |
+            .id"
+        "#, instance_template_name), &hashmap!{})?;
+        if tmpl_id.is_empty() {
+            log::info!("---- instance template:{} does not exist. create new", instance_template_name);
+            self.shell.eval(&format!("gcloud compute instance-templates create-with-container {} \
+                --container-image {} --service-account={} \
+                --network={} \
+                --scopes=cloud-platform \
+                --tags http-server,https-server \
+                --container-restart-policy on-failure \
+                --container-env {} \
+                {}
+            ", instance_template_name, image, service_account, network, env_vec.join(","), container_options), 
+            &hashmap!{}, false)?;
+        }
+        let ig_id = self.shell.eval_output_of(&format!(r#"
+            gcloud compute instance-groups list --format=json | 
+            jq ".[] | 
+            select(.name == \"{}\") | .id"
+        "#, instance_group_name), &hashmap!{})?;
+        if ig_id.is_empty() {
+            log::info!("---- instance group:{} does not exist. create new", instance_group_name);
+            self.shell.eval(&format!("gcloud compute instance-groups managed create {} \
+                {} --base-instance-name {} --size {} --template {}
+            ", instance_group_name, node_distribution, instance_prefix, 1, instance_template_name), 
+            &hashmap!{}, false)?;
+        } else {
+            log::info!("---- instance group:{} exists. update with new image", instance_group_name);
+            self.shell.eval(&format!("gcloud compute instance-groups managed set-instance-template {} \
+                --template {} {}
+            ", instance_group_name, instance_template_name, resource_location_flag), 
+            &hashmap!{}, false)?;
+            let instance_list = self.instance_list(&instance_group_name, &resource_location_flag)?;
+            self.shell.eval(&format!("gcloud compute instance-groups managed recreate-instances {} \
+                --instances {} {}
+            ", instance_group_name, instance_list, resource_location_flag), 
+            &hashmap!{}, false)?;
+        }
+        log::info!("---- set named port for {}", instance_group_name);
+        self.shell.eval(&format!("gcloud compute instance-groups set-named-ports {} \
+            {} \
+            --named-ports={}", 
+            instance_group_name, resource_location_flag, 
+            ports.iter().map(u32::to_string).collect::<Vec<String>>().join(",")
+        ), 
+        &hashmap!{}, false)?;
+        log::info!("---- set autoscaling settings for {}", instance_group_name);
+        self.shell.eval(&format!("gcloud compute instance-groups managed set-autoscaling {} \
+            {} {}
+        ", instance_group_name, resource_location_flag, scaling_config), &hashmap!{}, false)?;
         Ok(())
     }
-    fn deploy_to_serverless_platform(
-        &self, image: &str, ports: &Vec<u32>,
+    fn deploy_backend_service(
+        &self, plan: &plan::Plan,
+        port: u32
+    ) -> Result<(), Box<dyn Error>> {
+        let service_version = self.config.service_endpoint_version(&plan.service)?;
+        let backend_service_name=self.backend_service_name(plan, port, service_version);
+        let health_check_name=self.health_check_name(plan, service_version, port);
+        let instance_group_name = self.instance_group_name(plan, service_version);
+        let instance_group_type=format!("--instance-group-region={}", self.config.cloud_region());
+    
+        log::info!("---- deploy_backend_sevice");
+        let hc_id = self.shell.eval_output_of(&format!(r#"gcloud compute health-checks list --format=json | 
+            jq ".[] | 
+            select(.name == \"{}\") | .id"
+        "#, health_check_name), &hashmap!{})?;
+        if hc_id.is_empty() {
+            log::info!("---- health check:{} does not exist. create new", health_check_name);
+            self.shell.eval(&format!("gcloud compute health-checks create http {} \
+                --port-name={} --request-path=/ping
+            ", health_check_name, backend_service_name), &hashmap!{}, false)?;
+        }
+        let bs_id=self.shell.eval_output_of(&format!(r#"gcloud compute backend-services list --format=json | 
+            jq ".[] | 
+            select(.name == \"{}\") | .id"
+        "#, backend_service_name), &hashmap!{})?;
+        if bs_id.is_empty() {
+            log::info!("---- backend service:{} does not exist. create new", backend_service_name);
+            self.shell.eval(&format!("gcloud compute backend-services create {} \
+                --connection-draining-timeout=10 --health-checks={} \
+                --protocol=HTTP --port-name={} --global {}
+            ", backend_service_name, backend_service_name, backend_service_name, ""), 
+            &hashmap!{}, false)?;
+        }
+        let backend_added=self.backend_added(&backend_service_name, &instance_group_name);
+        if !backend_added {
+            log::info!("---- add backend instance group {} to {}", instance_group_name, backend_service_name);
+            self.shell.eval(&format!("gcloud compute backend-services add-backend {} --instance-group={} \
+                --global $instance_group_type
+            ", backend_service_name, instance_group_name), &hashmap!{}, false)?;
+        }
+        log::info!("---- update backend service balancing setting {}", backend_service_name);
+        // TODO: found proper settings for balancing
+        self.shell.eval(&format!("gcloud compute backend-services update-backend {} --instance-group={} \
+            --balancing-mode=UTILIZATION --global {}
+        ", backend_service_name, instance_group_name, instance_group_type), &hashmap!{}, false)?;
+        let fw_option=self.firewall_option_for_backend(plan);
+        if !fw_option.is_empty() {
+            log::info!("---- update backend to use firewall {}", fw_option);
+            self.shell.eval(&format!("
+                gcloud compute backend-services update {} {} --global
+            ", backend_service_name, fw_option), &hashmap!{}, false)?;
+        }
+        Ok(())
+    }
+}
+
+impl<'a, S: shell::Shell<'a>> cloud::Cloud<'a> for Gcp<'a, S> {
+    fn new(config: &'a config::Config) -> Result<Gcp<'a, S>, Box<dyn Error>> {
+        return Ok(Gcp::<'a, S> {
+            config: config,
+            service_account: "".to_string(),
+            shell: S::new(config)
+        });
+    }
+
+    fn push_container_image(
+        &self, src: &str, target: &str
+    ) -> Result<String, Box<dyn Error>> {
+        self.shell.exec(&vec!("docker", "tag", src, target), &hashmap!{}, false)?;
+        // authentication
+        match &self.config.cloud.provider {
+            config::CloudProviderConfig::GCP{ key } => {
+                self.shell.exec(&vec!(
+                    "sh", "-C",
+                    &format!(
+                        "echo '{}' | docker login -u _json_key --password-stdin https://{}",
+                        key, self.container_repository_url().expect(
+                            &format!("invalid region:{}", self.config.cloud_region())
+                        )
+                    )
+                ), &hashmap!{}, false)?;
+            },
+            _ => return Err(Box::new(cloud::CloudError{
+                cause: format!("invalid provider config: {}. gcp config requred", 
+                    self.config.cloud.provider)
+            }))
+        }
+        self.shell.exec(&vec!("docker", "push", target), &hashmap!{}, false)?;
+        Ok(target.to_string())
+    }
+    fn deploy_container(
+        &self, plan: &plan::Plan,
+        target: &plan::DeployTarget, 
+        image: &str, ports: &Vec<u32>,
         env: &HashMap<String, String>,
         options: &HashMap<String, String>
     ) -> Result<(), Box<dyn Error>> {
+        match target {
+            plan::DeployTarget::Instance => {
+                self.deploy_instance_group(plan, image, ports, env, options)?;
+                for port in ports {
+                    self.deploy_backend_service(plan, *port)?;
+                }
+            },
+            plan::DeployTarget::Kubernetes => {
+            },
+            plan::DeployTarget::Serverless => {
+            }
+        }
         Ok(())
     }
 
@@ -38,10 +297,15 @@ impl<'a> cloud::Cloud<'a> for Gcp<'a> {
     ) -> Result<(), Box<dyn Error>> {
         Ok(())
     }
-    fn deploy_to_storage(
+    fn deploy_storage(
         &self, copymap: &HashMap<String, String>
     ) -> Result<(), Box<dyn Error>> {
         Ok(())
     }
 
+    fn deploy_load_balancer(
+        &self
+    ) -> Result<(), Box<dyn Error>> {
+        Ok(())
+    }
 }

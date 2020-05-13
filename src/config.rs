@@ -12,6 +12,22 @@ use dotenv::dotenv;
 use crate::args;
 use crate::vcs;
 use crate::cloud;
+use crate::endpoints;
+
+#[derive(Debug)]
+pub struct ConfigError {
+    pub cause: String
+}
+impl fmt::Display for ConfigError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.cause)
+    }
+}
+impl Error for ConfigError {
+    fn source(&self) -> Option<&(dyn Error + 'static)> {
+        None
+    }
+}
 
 #[derive(Serialize, Deserialize)]
 #[serde(tag = "type")]
@@ -30,9 +46,9 @@ pub enum CloudProviderConfig {
 impl fmt::Display for CloudProviderConfig {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::GCP{ key } => write!(f, "gcp"),
-            Self::AWS{ key_id, secret_key } => write!(f, "aws"),
-            Self::ALI{ key } => write!(f, "ali"),
+            Self::GCP{ key:_ } => write!(f, "gcp"),
+            Self::AWS{ key_id:_, secret_key:_ } => write!(f, "aws"),
+            Self::ALI{ key:_ } => write!(f, "ali"),
         }
     }    
 }
@@ -75,8 +91,8 @@ pub enum VCSConfig {
 impl fmt::Display for VCSConfig {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::Github{ email, account, key } => write!(f, "github"),
-            Self::Gitlab{ email, account, key } => write!(f, "gitlab"),
+            Self::Github{ email:_, account:_, key:_ } => write!(f, "github"),
+            Self::Gitlab{ email:_, account:_, key:_ } => write!(f, "gitlab"),
         }
     }    
 }
@@ -101,6 +117,17 @@ impl TerraformerConfig {
                 project_id,
                 region: _
             } => &project_id
+        }
+    }
+    pub fn region(&self) -> &str {
+        match self {
+            Self::TerraformGCP{ 
+                backend_bucket: _,
+                backend_bucket_prefix: _,
+                root_domain: _,
+                project_id: _,
+                region
+            } => &region
         }
     }
 }
@@ -152,6 +179,7 @@ pub struct CommonConfig {
     pub deplo_image: String,
     pub data_dir: String,
     pub no_confirm_for_prod_deploy: bool,
+    pub release_targets: HashMap<String, String>,
 }
 #[derive(Serialize, Deserialize)]
 pub struct DeployConfig {
@@ -239,6 +267,16 @@ impl<'a> Config<'a> {
     pub fn services_path(&self) -> path::PathBuf {
         return path::Path::new(&self.common.data_dir).join("services");
     }
+    pub fn endpoints_path(&self, release_target: Option<&str>) -> Option<path::PathBuf> {
+        let p = path::Path::new(&self.common.data_dir).join("endpoints");
+        if let Some(e) = release_target {
+            return Some(p.join(format!("{}.toml", e)));
+        } else if let Some(e) = self.release_target() {
+            return Some(p.join(format!("{}.toml", e)));
+        } else {
+            return None;
+        }
+    }
     pub fn project_id(&self) -> &str {
         return self.cloud.terraformer.project_id()
     }
@@ -248,8 +286,59 @@ impl<'a> Config<'a> {
             None => None
         }
     }
+    pub fn canonical_name(&self, prefixed_name: &str) -> String {
+        return format!("{}-{}-{}", self.project_id(), 
+            self.release_target().expect("should be on release target branch"),
+            prefixed_name
+        )
+    }
+    pub fn service_endpoint_version(&'a self, service: &str) -> Result<u32, Box<dyn Error>> {
+        match self.endpoints_path(None) {
+            Some(path) => match fs::read_to_string(path) {
+                Ok(content) => match toml::from_str::<endpoints::Endpoints>(&content) {
+                    Ok(ep) => match ep.versions[0].get(&service.to_string()) {
+                        Some(v) => Ok(*v),
+                        None => Err(Box::new(ConfigError {
+                            cause: format!("no version for service {}", service)
+                        })),
+                    }
+                    Err(err) => Err(Box::new(err))
+                },
+                Err(err) => Err(Box::new(err))
+            },
+            None => Err(Box::new(ConfigError {
+                cause: format!("no endpoint path")
+            }))
+        }
+    }
+    pub fn update_service_endpoint_version(&self, service: &str) -> Result<u32, Box<dyn Error>> {
+        match self.endpoints_path(None) {
+            Some(path) => match fs::read_to_string(&path) {
+                Ok(content) => match toml::from_str::<endpoints::Endpoints>(&content) {
+                    Ok(mut ep) => {
+                        let v = ep.versions[0].entry(service.to_string()).or_insert(0);
+                        *v += 1;
+                        let as_text = toml::to_string_pretty(&ep)?;
+                        fs::write(&path, &as_text)?;
+                        Ok(ep.versions[0][service])
+                    }
+                    Err(err) => Err(Box::new(err))
+                },
+                Err(err) => Err(Box::new(err))
+            },
+            None => Err(Box::new(ConfigError {
+                cause: format!("no endpoint path")
+            }))
+        }        
+    }
     pub fn cloud_service(&'a self) -> Result<Box<dyn cloud::Cloud<'a> + 'a>, Box<dyn Error>> {
         return cloud::factory(&self);
+    }
+    pub fn cloud_region(&'a self) -> &str {
+        return self.cloud.terraformer.region();
+    }
+    pub fn cloud_resource_name(&self, path: &str) -> Result<String, Box<dyn Error>> {
+        return Ok("hoge".to_string());
     }
     pub fn vcs_service(&'a self) -> Result<Box<dyn vcs::VCS<'a> + 'a>, Box<dyn Error>> {
         return vcs::factory(&self);

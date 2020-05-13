@@ -33,6 +33,7 @@ struct ImageConfig {
 #[derive(Serialize, Deserialize, Debug)]
 pub enum DeployTarget {
     Instance,
+    Kubernetes,
     Serverless,
 }
 
@@ -61,38 +62,32 @@ impl Step {
         match self {
             Self::Script { code, runner, env } => {
                 let default = "bash".to_string();
-                let r = runner.as_ref().unwrap_or(&default);
-                match fs::metadata(code) {
-                    Ok(_) => shell.exec(&vec!(r, code), &env),
+                let runner_command = runner.as_ref().unwrap_or(&default);
+                let r = match fs::metadata(code) {
+                    Ok(_) => shell.exec(&vec!(runner_command, code), &env, false),
                     Err(_) => {
-                        return shell.exec(&vec!(
-                            "sh", "-c", &format!("echo \'{}\' | {}", code, r)
-                        ), &env)
+                        shell.exec(&vec!(
+                            "sh", "-c", &format!("echo \'{}\' | {}", code, runner_command)
+                        ), &env, false)
                     }
+                };
+                match r {
+                    Ok(_) => Ok(()),
+                    Err(err) => Err(err)
                 }
             },
             Self::Container { target, image, ports, env, options } => {
                 let config = plan.config;
                 let cloud = config.cloud_service()?;
-                let release_target = config.release_target().expect("should be on release target branch");
                 // deploy image to cloud container registry
-                let pushed_image_tag = cloud.push_container_image(&image, 
-                    &format!("{}-{}-{}", config.project_id(), release_target, plan.service)
-                )?;
+                let pushed_image_tag = cloud.push_container_image(&image, &config.canonical_name(&plan.service))?;
                 // deploy to autoscaling group or serverless platform
-                match target {
-                    DeployTarget::Instance => {
-                        return cloud.deploy_to_autoscaling_group(&pushed_image_tag, ports, env, options);
-                    },
-                    DeployTarget::Serverless => {
-                        return cloud.deploy_to_serverless_platform(&pushed_image_tag, ports, env, options);
-                    }
-                }
+                return cloud.deploy_container(plan, &target, &pushed_image_tag, ports, env, options);
             },
             Self::Storage { copymap } => {
                 let config = plan.config;
                 let cloud = config.cloud_service()?;
-                return cloud.deploy_to_storage(&copymap)
+                return cloud.deploy_storage(&copymap)
             },
         }
     }
@@ -104,7 +99,7 @@ pub struct PlanData {
 }
 
 pub struct Plan<'a> {
-    service: String,
+    pub service: String,
     config: &'a config::Config<'a>,
     data: PlanData
 }

@@ -9,7 +9,13 @@ pub mod native;
 pub trait Shell<'a> {
     fn new(config: &'a config::Config) -> Self;
     fn output_of(&self, args: &Vec<&str>, envs: &HashMap<String, String>) -> Result<String, Box<dyn Error>>;
-    fn exec(&self, args: &Vec<&str>, envs: &HashMap<String, String>) -> Result<(), Box<dyn Error>>;
+    fn exec(&self, args: &Vec<&str>, envs: &HashMap<String, String>, capture: bool) -> Result<String, Box<dyn Error>>;
+    fn eval(&self, code: &str, envs: &HashMap<String, String>, capture: bool) -> Result<String, Box<dyn Error>> {
+        return self.exec(&vec!("sh", "-c", code), envs, capture);
+    }
+    fn eval_output_of(&self, code: &str, envs: &HashMap<String, String>) -> Result<String, Box<dyn Error>> {
+        return self.output_of(&vec!("sh", "-c", code), envs);
+    }
 }
 pub type Default<'a> = native::Native<'a>;
 

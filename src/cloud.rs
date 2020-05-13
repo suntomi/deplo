@@ -2,19 +2,17 @@ use std::error::Error;
 use std::collections::HashMap;
 use std::fmt;
 
-use super::config;
+use crate::config;
+use crate::command::service::plan;
 
 pub trait Cloud<'a> {
     fn new(config: &'a config::Config) -> Result<Self, Box<dyn Error>> where Self : Sized;
     // container 
     fn push_container_image(&self, src: &str, target: &str) -> Result<String, Box<dyn Error>>;
-    fn deploy_to_autoscaling_group(
-        &self, image: &str, ports: &Vec<u32>, 
-        env: &HashMap<String, String>,
-        options: &HashMap<String, String>
-    ) -> Result<(), Box<dyn Error>>;
-    fn deploy_to_serverless_platform(
-        &self, image: &str, ports: &Vec<u32>, 
+    fn deploy_container(
+        &self, plan: &plan::Plan,
+        target: &plan::DeployTarget,
+        image: &str, ports: &Vec<u32>, 
         env: &HashMap<String, String>,
         options: &HashMap<String, String>
     ) -> Result<(), Box<dyn Error>>;
@@ -22,8 +20,12 @@ pub trait Cloud<'a> {
     fn create_bucket(
         &self, bucket_name: &str
     ) -> Result<(), Box<dyn Error>>;
-    fn deploy_to_storage(
+    fn deploy_storage(
         &self, copymap: &HashMap<String, String>
+    ) -> Result<(), Box<dyn Error>>;
+    // load balancer
+    fn deploy_load_balancer(
+        &self
     ) -> Result<(), Box<dyn Error>>;
 }
 
