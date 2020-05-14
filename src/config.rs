@@ -119,6 +119,17 @@ impl TerraformerConfig {
             } => &project_id
         }
     }
+    pub fn root_domain(&self) -> &str {
+        match self {
+            Self::TerraformGCP{ 
+                backend_bucket: _,
+                backend_bucket_prefix: _,
+                root_domain,
+                project_id: _,
+                region: _
+            } => &root_domain
+        }
+    }
     pub fn region(&self) -> &str {
         match self {
             Self::TerraformGCP{ 
@@ -220,10 +231,9 @@ impl<'a> Config<'a> {
     pub fn create<A: args::Args>(args: &A) -> Result<Config, Box<dyn Error>> {
         let verbosity = args.occurence_of("verbosity");
         simple_logger::init_with_level(match verbosity {
-            0 => log::Level::Warn,
-            1 => log::Level::Info,
-            2 => log::Level::Debug,
-            3 => log::Level::Trace,
+            0 => log::Level::Info,
+            1 => log::Level::Debug,
+            2 => log::Level::Trace,
             _ => log::Level::Warn
         }).unwrap();
         // load dotenv
@@ -267,18 +277,23 @@ impl<'a> Config<'a> {
     pub fn services_path(&self) -> path::PathBuf {
         return path::Path::new(&self.common.data_dir).join("services");
     }
-    pub fn endpoints_path(&self, release_target: Option<&str>) -> Option<path::PathBuf> {
+    pub fn endpoints_path(&self, release_target: Option<&str>) -> path::PathBuf {
         let p = path::Path::new(&self.common.data_dir).join("endpoints");
         if let Some(e) = release_target {
-            return Some(p.join(format!("{}.toml", e)));
+            log::info!("ep1:{}", e);
+            return p.join(format!("{}.toml", e));
         } else if let Some(e) = self.release_target() {
-            return Some(p.join(format!("{}.toml", e)));
+            log::info!("ep2:{}", e);
+            return p.join(format!("{}.toml", e));
         } else {
-            return None;
+            return p;
         }
     }
     pub fn project_id(&self) -> &str {
         return self.cloud.terraformer.project_id()
+    }
+    pub fn root_domain(&self) -> &str {
+        return self.cloud.terraformer.root_domain()
     }
     pub fn release_target(&self) -> Option<&str> {
         return match &self.runtime.release_target {
@@ -293,43 +308,21 @@ impl<'a> Config<'a> {
         )
     }
     pub fn service_endpoint_version(&'a self, service: &str) -> Result<u32, Box<dyn Error>> {
-        match self.endpoints_path(None) {
-            Some(path) => match fs::read_to_string(path) {
-                Ok(content) => match toml::from_str::<endpoints::Endpoints>(&content) {
-                    Ok(ep) => match ep.versions[0].get(&service.to_string()) {
-                        Some(v) => Ok(*v),
-                        None => Err(Box::new(ConfigError {
-                            cause: format!("no version for service {}", service)
-                        })),
-                    }
-                    Err(err) => Err(Box::new(err))
-                },
-                Err(err) => Err(Box::new(err))
+        match endpoints::Endpoints::load(&self.endpoints_path(None)) {
+            Ok(ep) => match ep.releases.get("curr").unwrap().versions.get(&service.to_string()) {
+                Some(v) => Ok(*v),
+                None => Ok(0), // not deployed yet
             },
-            None => Err(Box::new(ConfigError {
-                cause: format!("no endpoint path")
-            }))
+            Err(err) => Err(err)
         }
     }
     pub fn update_service_endpoint_version(&self, service: &str) -> Result<u32, Box<dyn Error>> {
-        match self.endpoints_path(None) {
-            Some(path) => match fs::read_to_string(&path) {
-                Ok(content) => match toml::from_str::<endpoints::Endpoints>(&content) {
-                    Ok(mut ep) => {
-                        let v = ep.versions[0].entry(service.to_string()).or_insert(0);
-                        *v += 1;
-                        let as_text = toml::to_string_pretty(&ep)?;
-                        fs::write(&path, &as_text)?;
-                        Ok(ep.versions[0][service])
-                    }
-                    Err(err) => Err(Box::new(err))
-                },
-                Err(err) => Err(Box::new(err))
-            },
-            None => Err(Box::new(ConfigError {
-                cause: format!("no endpoint path")
-            }))
-        }        
+        endpoints::Endpoints::modify(&self.endpoints_path(None), |ep| {
+            let r = ep.releases.get_mut("next").unwrap();
+            let v = r.versions.entry(service.to_string()).or_insert(0);
+            *v += 1;
+            return Ok(*v);
+        })
     }
     pub fn cloud_service(&'a self) -> Result<Box<dyn cloud::Cloud<'a> + 'a>, Box<dyn Error>> {
         return cloud::factory(&self);

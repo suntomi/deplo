@@ -15,6 +15,6 @@ impl<'a> vcs::VCS<'a> for Github<'a> {
         });
     }
     fn release_target(&self) -> Option<String> {
-        Some("".to_string())
+        None
     }
 }

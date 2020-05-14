@@ -39,7 +39,9 @@ impl<'a, S: shell::Shell<'a>> Service<'a, S> {
             // both required argument
             args.value_of("name").unwrap()
         )?;
-        return p.exec(&self.shell);
+        p.exec(&self.shell)?;
+        self.config.update_service_endpoint_version(&p.service)?;
+        Ok(())
     }
 }
 
