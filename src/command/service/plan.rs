@@ -116,7 +116,7 @@ impl<'a> Plan<'a> {
                     "container" => vec!(Step::Script {
                         code: "#!/bin/bash\n\
                                echo 'build conteiner'\n\
-                               build_image.sh your/image\n\
+                               docker build -t your/image rsc/docker/base\n\
                               ".to_string(),
                         runner: None,
                         env: hashmap!{},

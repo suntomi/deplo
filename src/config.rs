@@ -43,6 +43,16 @@ pub enum CloudProviderConfig {
         key: String
     }
 }
+impl CloudProviderConfig {
+    fn infra_code_path(&self, config: &Config) -> path::PathBuf {
+        let base = path::Path::new("deplo").join("rsc").join("infra");
+        match self {
+            Self::GCP{ key:_ } => base.join("gcp"),
+            Self::AWS{ key_id:_, secret_key:_ } => base.join("aws"),
+            Self::ALI{ key:_ } => base.join("ali"),
+        }
+    }
+}
 impl fmt::Display for CloudProviderConfig {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
@@ -303,6 +313,12 @@ impl<'a> Config<'a> {
             Some(s) => Some(&s),
             None => None
         }
+    }
+    pub fn infra_code_source_path(&self) -> path::PathBuf {
+        return self.cloud.provider.infra_code_path(&self);
+    }
+    pub fn infra_code_dest_path(&self) -> path::PathBuf {
+        return path::Path::new(&self.common.data_dir).join("infra");
     }
     pub fn canonical_name(&self, prefixed_name: &str) -> String {
         return format!("{}-{}-{}", self.project_id(), 
