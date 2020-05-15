@@ -1,3 +1,4 @@
+use std::{thread, time};
 use std::error::Error;
 use std::result::Result;
 use std::collections::HashMap;
@@ -26,6 +27,16 @@ impl<'a, S: shell::Shell<'a>> Gcp<'a, S> {
             None => None
         }
     }
+    fn service_account(config: &'a config::Config, shell: &S) -> Result<String, Box<dyn Error>> {
+        if let config::CloudProviderConfig::GCP{key} = &config.cloud.provider {
+            return shell.eval_output_of(&format!(r#"
+                echo '{}' | jq ".client_email"
+            "#, key), &hashmap!{})
+        }
+        return Err(Box::new(config::ConfigError{
+            cause: format!("should have GCP config for config.cloud.provider, but {}", config.cloud.provider)
+        }))
+    }
     fn instance_template_name(&self, plan: &plan::Plan, version: u32) -> String {
         return self.config.canonical_name(&format!("instance-template-{}-{}", plan.service, version))
     }
@@ -37,6 +48,12 @@ impl<'a, S: shell::Shell<'a>> Gcp<'a, S> {
     }
     fn backend_service_name(&self, plan: &plan::Plan, version: u32, port: u32) -> String {
         return self.config.canonical_name(&format!("backend-service-{}-{}-{}", plan.service, version, port))
+    }
+    fn serverless_service_name(&self, plan: &plan::Plan) -> String {
+        return self.config.canonical_name(&format!("serverless-{}", plan.service))
+    }
+    fn subscription_name(&self, topic_name: &str) -> String {
+        return format!("{}-subscription", topic_name);
     }
     fn health_check_name(&self, plan: &plan::Plan, version: u32, port: u32) -> String {
         return format!("{}-health-check", self.backend_service_name(plan, version, port))
@@ -85,6 +102,84 @@ impl<'a, S: shell::Shell<'a>> Gcp<'a, S> {
             jq '[.[].instance]|join(",")' | tr -d \"
         "#, instance_group_name, resource_location_flag), &hashmap!{}, true);
     }
+    fn wait_serverless_deployment_finish(&self, service_name: &str) -> Result<(), Box<dyn Error>> {
+        print!("waiting {} become active.", service_name);
+        loop {
+            let out = self.shell.eval_output_of(&format!(r#"
+                gcloud beta run services list --platform=managed --format=json | 
+                jq ".[]|select(.metadata.name == \"{}\")"
+            "#, service_name), &hashmap!{})?;
+            if out.is_empty() {
+                continue
+            }
+            let status_type=self.shell.eval_output_of(&format!(r#"
+                echo '{}' | 
+                jq ".status.conditions[0].type" | tr -d \"
+            "#, out), &hashmap!{})?;
+            if status_type == "Ready" && status_type == "True" {
+                println!("done.");
+                return Ok(())
+            } else {
+                log::error!("------ cloud run deploy status ------");
+                let status=self.shell.eval_output_of(&format!(r#"
+                    echo '{}' | jq ".status" | tr -d \"
+                "#, out), &hashmap!{})?;
+                log::error!("=> {}:{}", status, status_type);
+                thread::sleep(time::Duration::from_secs(5));
+            }
+            print!(".")
+        }
+    }
+    fn get_serverless_service_url(&self, service_name: &str) -> Result<String, Box<dyn Error>> {
+        let out = self.shell.eval_output_of(&format!(r#"
+            gcloud beta run services list --platform=managed --format=json | 
+            jq ".[]|select(.metadata.name == \"{}\")
+        "#, service_name), &hashmap!{})?;
+        if out.is_empty() {
+            return Err(Box::new(cloud::CloudError{
+                cause: format!(
+                    "invalid service_name:{} correspond service does not exist", 
+                    service_name)
+            }))
+        }
+        return self.shell.eval_output_of(&format!(r#"
+            echo '{}' | jq ".status.address.url" | tr -d \"
+        "#, out), &hashmap!{});
+    }
+    fn subscribe_topic(
+        &self,
+        service_name: &str, subscribe_name: &str, topic_name: &str,
+        url: Option<&str>
+    ) -> Result<(), Box<dyn Error>> {
+        let default_url = self.get_serverless_service_url(service_name)?;
+        let endpoint_url = url.unwrap_or(&default_url);
+        let out = self.shell.eval_output_of(&format!(r#"
+            gcloud beta pubsub subscriptions list --format=json | 
+            jq ".[]|select(.name|endswith(\"{}\"))
+        "#, subscribe_name), &hashmap!{})?;
+        if !out.is_empty() {
+            let curr_url = self.shell.eval_output_of(&format!(r#"
+                echo {} | jq ".pushConfig.pushEndpoint" | tr -d \"
+            "#, out), &hashmap!{})?;
+            let re = Regex::new(&format!("^{}/?$", endpoint_url)).unwrap();
+            match re.captures(&curr_url) {
+                Some(c) => {
+                    log::info!("{}: already subscribe to {}. skipped", subscribe_name, endpoint_url);
+                    return Ok(())
+                },
+                None => {}
+            }
+        }
+        self.shell.eval(&format!("
+            gcloud beta pubsub subscriptions create {} --topic {} \
+            --push-endpoint={}/ \
+            --push-auth-service-account={}
+        ", subscribe_name, topic_name, endpoint_url, self.service_account), 
+        &hashmap!{}, false)?;
+
+        Ok(())
+    }
+    // create instance group
     fn deploy_instance_group(
         &self, plan: &plan::Plan,
         image: &str, ports: &Vec<u32>,
@@ -108,6 +203,9 @@ impl<'a, S: shell::Shell<'a>> Gcp<'a, S> {
         let service_version = self.config.service_endpoint_version(&plan.service)?;
         let deploy_path = format!("/{}/{}", plan.service, service_version);
         let mut env_vec: Vec<String> = Vec::<String>::new();
+        env_vec.push(format!("DEPLO_RELEASE_TARGET={}", 
+            self.config.release_target().expect("should be on release target branch")
+        ));
         env_vec.push(format!("DEPLO_SERVICE_VERSION={}", service_version));
         env_vec.push(format!("DEPLO_SERVICE_NAME={}", plan.service));
         env_vec.push(format!("DEPLO_SERVICE_PATH={}", deploy_path));
@@ -180,6 +278,7 @@ impl<'a, S: shell::Shell<'a>> Gcp<'a, S> {
         ", instance_group_name, resource_location_flag, scaling_config), &hashmap!{}, false)?;
         Ok(())
     }
+    // deploy container to backend service
     fn deploy_backend_service(
         &self, plan: &plan::Plan,
         port: u32
@@ -234,13 +333,76 @@ impl<'a, S: shell::Shell<'a>> Gcp<'a, S> {
         }
         Ok(())
     }
+    // deploy container to cloud run
+    fn deploy_serverless(
+        &self, plan: &plan::Plan,
+        image: &str,
+        env: &HashMap<String, String>,
+        options: &HashMap<String, String>
+    ) -> Result<(), Box<dyn Error>> {
+        // default value as lazy static
+        lazy_static! {
+            static ref DEFAULT_MEMORY: String = "1Gi".to_string();
+            static ref DEFAULT_EXECUTION_TIMEOUT: String = "15m".to_string();
+            static ref DEFAULT_CONTAINER_OPTIONS: String = "".to_string();
+        }
+        // settings
+        let service_name = self.serverless_service_name(plan);
+        let region = self.config.cloud_region();
+        let service_version = self.config.service_endpoint_version(&plan.service)?;
+        let mem = options.get("memory").unwrap_or(&DEFAULT_MEMORY);
+        let timeout = options.get("execution_timeout").unwrap_or(&DEFAULT_EXECUTION_TIMEOUT);
+        let container_options = options.get("container_options").unwrap_or(&DEFAULT_CONTAINER_OPTIONS);
+        let subscribed_topic = options.get("subscribed_topic").unwrap_or(&DEFAULT_CONTAINER_OPTIONS);
+        let access_control_options = if options.get("access_control").unwrap_or(&DEFAULT_CONTAINER_OPTIONS) != "any" {
+            "--no-allow-unauthenticated"
+        } else {
+            ""
+        };
+        let mut env_vec: Vec<String> = Vec::<String>::new();
+        env_vec.push(format!("DEPLO_RELEASE_TARGET={}", 
+            self.config.release_target().expect("should be on release target branch")
+        ));
+        env_vec.push(format!("DEPLO_SERVICE_VERSION={}", service_version));
+        env_vec.push(format!("DEPLO_SERVICE_NAME={}", plan.service));
+        for (k, v) in env.iter() {
+            env_vec.push(format!("{}={}", k, v));
+        }
+        // direct traffic 
+        match self.shell.eval(&format!("\
+                gcloud beta run deploy {} \
+                --image={} \
+                --platform managed --region={} \
+                --memory={} --timeout={} {} \
+                {}", 
+                service_name, image, region,
+                mem, timeout, access_control_options, container_options
+            ), &hashmap!{}, false) {
+            Ok(_) => log::info!("succeed to deploy container {}", image),
+            Err(err) => {
+                // seems interrupted
+                self.wait_serverless_deployment_finish(&service_name)?;
+            }
+        }
+        // set traffic to latest
+        self.shell.eval(&format!("gcloud alpha run services update-traffic {} \
+            --platform managed --region={} \
+            --to-latest", service_name, region), &hashmap!{}, false)?;
+        
+        if !subscribed_topic.is_empty() {
+            let subscription_name = self.subscription_name(subscribed_topic);
+            self.subscribe_topic(&service_name, &subscription_name, subscribed_topic, None)?;
+        }
+        return Ok(())
+    }
 }
 
 impl<'a, S: shell::Shell<'a>> cloud::Cloud<'a> for Gcp<'a, S> {
     fn new(config: &'a config::Config) -> Result<Gcp<'a, S>, Box<dyn Error>> {
+        let shell = S::new(config);
         return Ok(Gcp::<'a, S> {
             config: config,
-            service_account: "".to_string(),
+            service_account: Gcp::<'a, S>::service_account(config, &shell)?,
             shell: S::new(config)
         });
     }
@@ -287,6 +449,7 @@ impl<'a, S: shell::Shell<'a>> cloud::Cloud<'a> for Gcp<'a, S> {
             plan::DeployTarget::Kubernetes => {
             },
             plan::DeployTarget::Serverless => {
+                self.deploy_serverless(plan, image, env, options)?;
             }
         }
         Ok(())
