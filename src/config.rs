@@ -277,8 +277,11 @@ impl<'a> Config<'a> {
     pub fn services_path(&self) -> path::PathBuf {
         return path::Path::new(&self.common.data_dir).join("services");
     }
-    pub fn endpoints_path(&self, release_target: Option<&str>) -> path::PathBuf {
-        let p = path::Path::new(&self.common.data_dir).join("endpoints");
+    pub fn endpoints_path(&self) -> path::PathBuf {
+        return path::Path::new(&self.common.data_dir).join("endpoints");
+    }
+    pub fn endpoints_file_path(&self, release_target: Option<&str>) -> path::PathBuf {
+        let p = self.endpoints_path();
         if let Some(e) = release_target {
             log::info!("ep1:{}", e);
             return p.join(format!("{}.toml", e));
@@ -286,7 +289,7 @@ impl<'a> Config<'a> {
             log::info!("ep2:{}", e);
             return p.join(format!("{}.toml", e));
         } else {
-            return p;
+            panic!("should be on release target branch")
         }
     }
     pub fn project_id(&self) -> &str {
@@ -308,7 +311,7 @@ impl<'a> Config<'a> {
         )
     }
     pub fn service_endpoint_version(&'a self, service: &str) -> Result<u32, Box<dyn Error>> {
-        match endpoints::Endpoints::load(&self.endpoints_path(None)) {
+        match endpoints::Endpoints::load(&self.endpoints_file_path(None)) {
             Ok(ep) => match ep.releases.get("curr").unwrap().versions.get(&service.to_string()) {
                 Some(v) => Ok(*v),
                 None => Ok(0), // not deployed yet
@@ -317,7 +320,7 @@ impl<'a> Config<'a> {
         }
     }
     pub fn update_service_endpoint_version(&self, service: &str) -> Result<u32, Box<dyn Error>> {
-        endpoints::Endpoints::modify(&self.endpoints_path(None), |ep| {
+        endpoints::Endpoints::modify(&self.endpoints_file_path(None), |ep| {
             let r = ep.releases.get_mut("next").unwrap();
             let v = r.versions.entry(service.to_string()).or_insert(0);
             *v += 1;

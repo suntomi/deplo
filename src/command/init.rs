@@ -25,11 +25,11 @@ impl<'a, S: shell::Shell<'a>, A: args::Args> command::Command<'a, A> for Init<'a
         log::info!("init command invoked");
         fs::create_dir_all(&self.config.root_path())?;
         fs::create_dir_all(&self.config.services_path())?;
-        fs::create_dir_all(&self.config.endpoints_path(None))?;
+        fs::create_dir_all(&self.config.endpoints_path())?;
         for (k, _) in &self.config.common.release_targets {
             log::info!("create versions file for {}", k);
             let ep = endpoints::Endpoints::new(&format!("{}.{}", k, self.config.root_domain()));
-            ep.save(self.config.endpoints_path(Some(k)))?;
+            ep.save(self.config.endpoints_file_path(Some(k)))?;
         }
         return Ok(())
     }

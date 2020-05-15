@@ -24,6 +24,7 @@ impl Error for VCSError {
 }
 
 // subcommands
+pub mod git;
 pub mod github;
 
 // factorys
