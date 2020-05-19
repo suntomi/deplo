@@ -1,34 +1,41 @@
 # command line argument
 CMD=
 REL=
-TARGET=x86_64-unknown-linux-musl
 
 # settings
-TARGET_PATH=$(CURDIR)/target/$(TARGET)
-INFRA_SCRIPT_PATH=$(CURDIR)/rsc/infra
+LINUX_TARGET=x86_64-unknown-linux-musl
+DARWIN_TARGET=x86_64-apple-darwin
+RESOURCE_FILE_PATH=$(CURDIR)/rsc
+IMAGE_BUILD_ROOT_PATH=$(CURDIR)/docker/release
 ifeq ($(REL), 1)
-DEPLO_PATH=$(TARGET_PATH)/release/deplo
+BUILD_PROFILE=release
 RELEASE=--release
 else
-DEPLO_PATH=$(TARGET_PATH)/debug/deplo
+BUILD_PROFILE=debug
 RELEASE=
 endif
+DEPLO_LINUX=$(CURDIR)/target/$(LINUX_TARGET)/$(BUILD_PROFILE)/deplo
+DEPLO_DARWIN=$(CURDIR)/target/$(DARWIN_TARGET)/$(BUILD_PROFILE)/deplo
+
 
 build:
-	cargo build $(RELEASE) --target $(TARGET)
+	cross build $(RELEASE) --target $(LINUX_TARGET)
+	cross build $(RELEASE) --target $(DARWIN_TARGET)
 
 base: 
-	docker build -t suntomi/deplo_base rsc/docker/base
+	docker build -t suntomi/deplo_base docker/base
 
-shell: 
-	cp $(CURDIR)/Cargo.* rsc/docker/shell
-	docker build -t suntomi/deplo_shell rsc/docker/shell
+shell:
+	cp $(CURDIR)/Cargo.* docker/shell
+	docker build -t suntomi/deplo_shell docker/shell
 
 image: base build
-	cp $(DEPLO_PATH) rsc/docker/release/
-	-rm -r rsc/docker/release/rsc
-	cp -r $(INFRA_SCRIPT_PATH) rsc/docker/release/rsc
-	docker build -t suntomi/deplo rsc/docker/release
+	cp $(DEPLO_LINUX) $(IMAGE_BUILD_ROOT_PATH)
+	-rm -r $(IMAGE_BUILD_ROOT_PATH)/rsc
+	cp -r $(RESOURCE_FILE_PATH) $(IMAGE_BUILD_ROOT_PATH)/
+	mkdir -p $(IMAGE_BUILD_ROOT_PATH)/rsc/bin
+	cp $(DEPLO_DARWIN) $(IMAGE_BUILD_ROOT_PATH)/rsc/bin/deplo_darwin
+	docker build -t suntomi/deplo $(IMAGE_BUILD_ROOT_PATH)
 
 run:
 	docker run --rm -ti -v $(CURDIR):/workdir -w /workdir suntomi/deplo $(CMD)
@@ -37,4 +44,5 @@ sh:
 	docker run --rm -ti -w /workdir \
 		-v $(CURDIR):/workdir \
 		-v $(HOME)/.cargo/registry:/.cargo/registry \
+		-v /var/run/docker.sock:/var/run/docker.sock \
 		suntomi/deplo_shell sh

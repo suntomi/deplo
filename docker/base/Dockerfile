@@ -3,7 +3,7 @@ FROM alpine:3.11
 # install common dependencies
 RUN apk --update add git make python unzip expect curl bash
 
-# install gcloud command
+# install gcloud command, TODO: move to on-demand installation
 ENV HOME /
 ENV CLOUDSDK_PYTHON_SITEPACKAGES 1
 ENV CLOUDSDK_VERSION=292.0.0
@@ -36,3 +36,11 @@ RUN curl -L https://github.com/docker/compose/releases/download/${DOCKER_COMPOSE
 ENV GIT_LFS_VERSION=2.11.0
 RUN mkdir /git-lfs && curl -o /git-lfs/package.tgz -L https://github.com/git-lfs/git-lfs/releases/download/v${GIT_LFS_VERSION}/git-lfs-linux-amd64-v${GIT_LFS_VERSION}.tar.gz && \
 	cd /git-lfs && tar -zxvf package.tgz && bash install.sh && rm -rf /git-lfs
+
+ENV JQ_VERSION=1.6
+RUN curl -o /usr/bin/jq -L https://github.com/stedolan/jq/releases/download/jq-$JQ_VERSION/jq-linux64 && chmod +x /usr/bin/jq
+
+ENV DOCKER_VERSION=18.06.1-ce
+USER root
+RUN curl -o /docker.tgz https://download.docker.com/linux/static/stable/x86_64/docker-$DOCKER_VERSION.tgz && \
+	tar -zxvf /docker.tgz && cp /docker/docker* /usr/bin && rm -rf /docker /docker.tgz

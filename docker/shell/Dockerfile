@@ -1,5 +1,8 @@
 FROM suntomi/deplo_base
 
+# all rust toolchain requires gcc/clang installed (https://github.com/rust-lang/rustup/issues/2213)
+RUN apk --update add gcc g++
+
 RUN curl https://sh.rustup.rs -sSf | \
     # 1.44がreleaseされたらbetaは外す. (https://github.com/rust-lang/rust/issues/40174#issuecomment-618999438)
     sh /dev/stdin -y --default-toolchain beta \
