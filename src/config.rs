@@ -296,10 +296,8 @@ impl<'a> Config<'a> {
     pub fn endpoints_file_path(&self, release_target: Option<&str>) -> path::PathBuf {
         let p = self.endpoints_path();
         if let Some(e) = release_target {
-            log::info!("ep1:{}", e);
             return p.join(format!("{}.toml", e));
         } else if let Some(e) = self.release_target() {
-            log::info!("ep2:{}", e);
             return p.join(format!("{}.toml", e));
         } else {
             panic!("should be on release target branch")

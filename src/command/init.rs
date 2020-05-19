@@ -22,10 +22,21 @@ impl<'a, S: shell::Shell<'a>, A: args::Args> command::Command<'a, A> for Init<'a
             shell: S::new(config)
         });
     }
-    fn run(&self, _: &A) -> Result<(), Box<dyn Error>> {
+    fn run(&self, args: &A) -> Result<(), Box<dyn Error>> {
         log::info!("init command invoked");
         fs::create_dir_all(&self.config.root_path())?;
         fs::create_dir_all(&self.config.services_path())?;
+        if args.occurence_of("reinit") > 0 {
+            match fs::remove_dir_all(self.config.infra_code_dest_path()) {
+                Ok(_) => {},
+                Err(err) => { 
+                    log::error!(
+                        "fail to cleanup for reinitialize: fail to remove {} with {:?}",
+                        self.config.infra_code_dest_path().to_str().unwrap(), err
+                    )
+                },
+            }
+        }
         log::debug!("copy infra setup scripts: {}=>{}", 
             self.config.infra_code_source_path().to_str().unwrap(), 
             self.config.infra_code_dest_path().to_str().unwrap()
@@ -41,10 +52,9 @@ impl<'a, S: shell::Shell<'a>, A: args::Args> command::Command<'a, A> for Init<'a
                 depth: 0
             }
         )?;
-        log::info!("init command invoked3");
         fs::create_dir_all(&self.config.endpoints_path())?;
         for (k, _) in &self.config.common.release_targets {
-            log::info!("create versions file for {}", k);
+            log::info!("create versions file for [{}]", k);
             let ep = endpoints::Endpoints::new(&format!("{}.{}", k, self.config.root_domain()));
             ep.save(self.config.endpoints_file_path(Some(k)))?;
         }

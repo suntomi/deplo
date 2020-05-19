@@ -48,6 +48,10 @@ lazy_static! {
         .subcommand(
             App::new("init")
                 .about("initialize deplo project. need to configure deplo.json beforehand")
+                .arg(Arg::new("reinit")
+                    .long("reinit")
+                    .help("initialize again")
+                    .required(true))
         )
         .subcommand(
             App::new("exec")
