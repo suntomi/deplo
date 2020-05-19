@@ -26,11 +26,16 @@ impl<'a, S: shell::Shell<'a>, A: args::Args> command::Command<'a, A> for Init<'a
         log::info!("init command invoked");
         fs::create_dir_all(&self.config.root_path())?;
         fs::create_dir_all(&self.config.services_path())?;
+        log::info!("init command invoked: {}=>{}", 
+            self.config.infra_code_source_path().to_str().unwrap(), 
+            self.config.infra_code_dest_path().to_str().unwrap()
+        );
         fs_extra::dir::copy(
             self.config.infra_code_source_path(),
             self.config.infra_code_dest_path(),
             &fs_extra::dir::CopyOptions::new()
         )?;
+        log::info!("init command invoked3");
         fs::create_dir_all(&self.config.endpoints_path())?;
         for (k, _) in &self.config.common.release_targets {
             log::info!("create versions file for {}", k);

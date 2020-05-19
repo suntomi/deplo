@@ -45,7 +45,7 @@ pub enum CloudProviderConfig {
 }
 impl CloudProviderConfig {
     fn infra_code_path(&self, config: &Config) -> path::PathBuf {
-        let base = path::Path::new("deplo").join("rsc").join("infra");
+        let base = config.resource_root_path().join("infra");
         match self {
             Self::GCP{ key:_ } => base.join("gcp"),
             Self::AWS{ key_id:_, secret_key:_ } => base.join("aws"),
@@ -283,6 +283,9 @@ impl<'a> Config<'a> {
     }
     pub fn root_path(&self) -> &path::Path {
         return path::Path::new(&self.common.data_dir);
+    }
+    pub fn resource_root_path(&self) -> &path::Path {
+        return path::Path::new("rsc");
     }
     pub fn services_path(&self) -> path::PathBuf {
         return path::Path::new(&self.common.data_dir).join("services");

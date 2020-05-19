@@ -1,14 +1,14 @@
-FROM node:10.16-slim
+FROM alpine:3.11
 
 # install common dependencies
-RUN apt-get update && apt-get install -y git make python gcc g++ unzip expect && rm -rf /var/lib/apt/lists/*
+RUN apk --update add git make python unzip expect curl bash
 
 # install gcloud command
 ENV HOME /
 ENV CLOUDSDK_PYTHON_SITEPACKAGES 1
 ENV CLOUDSDK_VERSION=292.0.0
 RUN curl https://dl.google.com/dl/cloudsdk/channels/rapid/downloads/google-cloud-sdk-$CLOUDSDK_VERSION-linux-x86_64.tar.gz --output google-cloud-sdk.zip && tar -zxf google-cloud-sdk.zip && rm google-cloud-sdk.zip
-RUN google-cloud-sdk/install.sh --usage-reporting=true --path-update=true --bash-completion=true --rc-path=/.bashrc --additional-components app-engine-java app-engine-python kubectl alpha beta pubsub-emulator cloud-datastore-emulator app-engine-go bigtable
+RUN google-cloud-sdk/install.sh --usage-reporting=true --path-update=true --bash-completion=true --rc-path=/.bashrc --additional-components kubectl alpha beta bigtable
 # Disable updater check for the whole installation. # Users won't be bugged with notifications to update to the latest version of gcloud.
 RUN google-cloud-sdk/bin/gcloud config set --installation component_manager/disable_update_check true
 # Disable updater completely. # Running `gcloud components update` doesn't really do anything in a union FS. # Changes are lost on a subsequent run.
@@ -28,7 +28,6 @@ RUN curl -L -o /hub.tgz https://github.com/github/hub/releases/download/v$HUB_VE
 ENV TERRAFORM_VERSION=0.12.25
 RUN curl -L -o /tf.zip https://releases.hashicorp.com/terraform/${TERRAFORM_VERSION}/terraform_${TERRAFORM_VERSION}_linux_amd64.zip && \
 	unzip /tf.zip && mv /terraform /usr/local/bin && rm -rf /tf.zip
-RUN apt-get update && apt-get install -y ruby ruby-json && rm -rf /var/lib/apt/lists/*
 
 ENV DOCKER_COMPOSE_VERSION=1.25.5
 RUN curl -L https://github.com/docker/compose/releases/download/${DOCKER_COMPOSE_VERSION}/docker-compose-`uname -s`-`uname -m` -o /usr/local/bin/docker-compose && \
