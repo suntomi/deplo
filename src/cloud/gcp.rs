@@ -2,6 +2,7 @@ use std::{thread, time};
 use std::error::Error;
 use std::result::Result;
 use std::collections::HashMap;
+use std::fs;
 
 use regex::Regex;
 use maplit::hashmap;
@@ -403,8 +404,58 @@ impl<'a, S: shell::Shell<'a>> cloud::Cloud<'a> for Gcp<'a, S> {
         return Ok(Gcp::<'a, S> {
             config: config,
             service_account: Gcp::<'a, S>::service_account(config, &shell)?,
-            shell: S::new(config)
+            shell
         });
+    }
+    fn setup_dependency(&self) -> Result<(), Box<dyn Error>> {
+        Ok(())        
+    }
+    fn generate_terraformer_config(&self, name: &str) -> Result<String, Box<dyn Error>> {
+        match name {
+            "terraform.backend" => {
+                let config::TerraformerConfig::Terraform {
+                    backend_bucket,
+                    backend_bucket_prefix,
+                    root_domain: _,
+                    region: _
+                } = &self.config.cloud.terraformer;
+                if let config::CloudProviderConfig::GCP{
+                    key,
+                } = &self.config.cloud.provider {
+                    fs::write("/tmp/gcp-secret.json", key)?;
+                } else {
+                    return Err(Box::new(cloud::CloudError{
+                        cause: format!(
+                            "should have GCP config but have: {}", 
+                            self.config.cloud.provider
+                        )
+                    }))                    
+                }
+                return Ok(format!("\
+                    bucket = \"{}\"\n\
+                    prefix = \"{}\"\n\
+                    credentials = \"/tmp/gcp-secret.json\"\n\
+                ", backend_bucket, backend_bucket_prefix));
+            },
+            "terraform.tfvars" => {
+                let config::TerraformerConfig::Terraform {
+                    backend_bucket:_,
+                    backend_bucket_prefix:_,
+                    root_domain,
+                    region
+                } = &self.config.cloud.terraformer;
+                return Ok(format!("\
+                    root_domain = \"{}\"\n\
+                    project_id = \"{}\"\n\
+                    region = \"{}\"\n\
+                ", root_domain, self.config.common.project_id, region));
+            }
+            _ => {
+                Err(Box::new(cloud::CloudError{
+                    cause: format!("invalid terraformer config name: {}", name)
+                }))
+            }
+        }
     }
 
     fn push_container_image(
@@ -413,7 +464,7 @@ impl<'a, S: shell::Shell<'a>> cloud::Cloud<'a> for Gcp<'a, S> {
         self.shell.exec(&vec!("docker", "tag", src, target), &hashmap!{}, false)?;
         // authentication
         match &self.config.cloud.provider {
-            config::CloudProviderConfig::GCP{ key } => {
+            config::CloudProviderConfig::GCP{key} => {
                 self.shell.exec(&vec!(
                     "sh", "-C",
                     &format!(

@@ -9,6 +9,7 @@ mod shell;
 mod cloud;
 mod vcs;
 mod endpoints;
+mod tf;
 
 use log;
 

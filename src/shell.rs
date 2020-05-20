@@ -1,4 +1,5 @@
 use std::fmt;
+use std::path::Path;
 use std::collections::HashMap;
 use std::error::Error;
 
@@ -8,6 +9,7 @@ pub mod native;
 
 pub trait Shell<'a> {
     fn new(config: &'a config::Config) -> Self;
+    fn set_cwd<P: AsRef<Path> + 'a>(&mut self, dir: P) -> Result<(), Box<dyn Error>>;
     fn output_of(&self, args: &Vec<&str>, envs: &HashMap<String, String>) -> Result<String, Box<dyn Error>>;
     fn exec(&self, args: &Vec<&str>, envs: &HashMap<String, String>, capture: bool) -> Result<String, Box<dyn Error>>;
     fn eval(&self, code: &str, envs: &HashMap<String, String>, capture: bool) -> Result<String, Box<dyn Error>> {

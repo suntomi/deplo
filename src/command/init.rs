@@ -8,7 +8,9 @@ use crate::args;
 use crate::config;
 use crate::command;
 use crate::shell;
+use crate::cloud;
 use crate::endpoints;
+use crate::tf;
 
 pub struct Init<'a, S: shell::Shell<'a> = shell::Default<'a>> {
     pub config: &'a config::Config<'a>,
@@ -52,6 +54,13 @@ impl<'a, S: shell::Shell<'a>, A: args::Args> command::Command<'a, A> for Init<'a
                 depth: 0
             }
         )?;
+        log::debug!("create new environment by terraformer");
+        let tf = tf::factory(self.config)?;
+        let c = self.config.cloud_service()?;
+        tf.init(&c)?;
+        tf.exec()?;
+
+        log::debug!("create endpoints files for each release target");
         fs::create_dir_all(&self.config.endpoints_path())?;
         for (k, _) in &self.config.common.release_targets {
             log::info!("create versions file for [{}]", k);

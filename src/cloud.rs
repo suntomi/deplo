@@ -7,6 +7,8 @@ use crate::command::service::plan;
 
 pub trait Cloud<'a> {
     fn new(config: &'a config::Config) -> Result<Self, Box<dyn Error>> where Self : Sized;
+    fn setup_dependency(&self) -> Result<(), Box<dyn Error>>;
+    fn generate_terraformer_config(&self, name: &str) -> Result<String, Box<dyn Error>>;
     // container 
     fn push_container_image(&self, src: &str, target: &str) -> Result<String, Box<dyn Error>>;
     fn deploy_container(
@@ -53,6 +55,7 @@ fn factory_by<'a, T: Cloud<'a> + 'a>(
     config: &'a config::Config
 ) -> Result<Box<dyn Cloud<'a> + 'a>, Box<dyn Error>> {
     let cmd = T::new(config).unwrap();
+    cmd.setup_dependency()?;
     return Ok(Box::new(cmd) as Box<dyn Cloud<'a> + 'a>);
 }
 
@@ -60,7 +63,7 @@ pub fn factory<'a>(
     config: &'a config::Config
 ) -> Result<Box<dyn Cloud<'a> + 'a>, Box<dyn Error>> {
     match &config.cloud.provider {
-        config::CloudProviderConfig::GCP { key: _ } => {
+        config::CloudProviderConfig::GCP {key:_} => {
             return factory_by::<gcp::Gcp>(config);
         },
         _ => return Err(Box::new(CloudError {

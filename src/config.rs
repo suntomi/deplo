@@ -8,6 +8,7 @@ use log;
 use simple_logger;
 use serde::{Deserialize, Serialize};
 use dotenv::dotenv;
+use regex::{Regex,Captures};
 
 use crate::args;
 use crate::vcs;
@@ -40,25 +41,27 @@ pub enum CloudProviderConfig {
         secret_key: String
     },
     ALI {
-        key: String
+        key_id: String,
+        secret_key: String
     }
 }
 impl CloudProviderConfig {
     fn infra_code_path(&self, config: &Config) -> path::PathBuf {
         let base = config.resource_root_path().join("infra");
         match self {
-            Self::GCP{ key:_ } => base.join("gcp"),
-            Self::AWS{ key_id:_, secret_key:_ } => base.join("aws"),
-            Self::ALI{ key:_ } => base.join("ali"),
+            Self::GCP{key:_} => base.join("gcp"),
+            Self::AWS{key_id:_, secret_key:_} => base.join("aws"),
+            Self::ALI{key_id:_, secret_key:_} => base.join("ali"),
         }
     }
+
 }
 impl fmt::Display for CloudProviderConfig {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::GCP{ key:_ } => write!(f, "gcp"),
-            Self::AWS{ key_id:_, secret_key:_ } => write!(f, "aws"),
-            Self::ALI{ key:_ } => write!(f, "ali"),
+            Self::GCP{key:_} => write!(f, "gcp"),
+            Self::AWS{key_id:_, secret_key:_} => write!(f, "aws"),
+            Self::ALI{key_id:_, secret_key:_} => write!(f, "ali"),
         }
     }    
 }
@@ -109,48 +112,46 @@ impl fmt::Display for VCSConfig {
 #[derive(Serialize, Deserialize)]
 #[serde(tag = "type")]
 pub enum TerraformerConfig {
-    TerraformGCP {
+    Terraform {
         backend_bucket: String,
         backend_bucket_prefix: String,    
         root_domain: String,
-        project_id: String,
         region: String,
     }
 }
 impl TerraformerConfig {
-    pub fn project_id(&self) -> &str {
-        match self {
-            Self::TerraformGCP{ 
-                backend_bucket: _,
-                backend_bucket_prefix: _,
-                root_domain: _,
-                project_id,
-                region: _
-            } => &project_id
-        }
-    }
     pub fn root_domain(&self) -> &str {
         match self {
-            Self::TerraformGCP{ 
+            Self::Terraform { 
                 backend_bucket: _,
                 backend_bucket_prefix: _,
                 root_domain,
-                project_id: _,
                 region: _
             } => &root_domain
         }
     }
     pub fn region(&self) -> &str {
         match self {
-            Self::TerraformGCP{ 
+            Self::Terraform { 
                 backend_bucket: _,
                 backend_bucket_prefix: _,
                 root_domain: _,
-                project_id: _,
                 region
             } => &region
         }
     }
+}
+impl fmt::Display for TerraformerConfig {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Terraform { 
+                backend_bucket: _,
+                backend_bucket_prefix: _,
+                root_domain,
+                region: _
+            } => write!(f, "terraform")
+        }
+    }    
 }
 #[derive(Serialize, Deserialize)]
 pub struct CloudConfig {
@@ -197,6 +198,7 @@ pub struct ClientConfig {
 }
 #[derive(Serialize, Deserialize)]
 pub struct CommonConfig {
+    pub project_id: String,
     pub deplo_image: String,
     pub data_dir: String,
     pub no_confirm_for_prod_deploy: bool,
@@ -229,10 +231,15 @@ pub struct Config<'a> {
 impl<'a> Config<'a> {
     // static factory methods 
     pub fn load(path: &str) -> Result<Config, Box<dyn Error>> {
-        let mut content = fs::read_to_string(path).unwrap();
-        if envsubst::is_templated(&content) {
-            content = envsubst::substitute(&content, &std::env::vars().collect()).unwrap();
-        }
+        let envs: HashMap<String, String> = std::env::vars().collect();
+        let re = Regex::new(r"\$\{([^\}]+)\}").unwrap();
+        let src = fs::read_to_string(path).unwrap();
+        let content = re.replace_all(&src, |caps: &Captures| {
+            match envs.get(&caps[1]) {
+                Some(s) => s.replace("\n", r"\n").replace(r"\", r"\\").replace(r#"""#, r#"\""#),
+                None => return caps[1].to_string()
+            }
+        });
         match toml::from_str(&content) {
             Ok(c) => Ok(c),
             Err(err) => Err(Box::new(err))
@@ -241,9 +248,10 @@ impl<'a> Config<'a> {
     pub fn create<A: args::Args>(args: &A) -> Result<Config, Box<dyn Error>> {
         let verbosity = args.occurence_of("verbosity");
         simple_logger::init_with_level(match verbosity {
-            0 => log::Level::Info,
-            1 => log::Level::Debug,
-            2 => log::Level::Trace,
+            0 => log::Level::Warn,
+            1 => log::Level::Info,
+            2 => log::Level::Debug,
+            3 => log::Level::Trace,
             _ => log::Level::Warn
         }).unwrap();
         // load dotenv
@@ -262,7 +270,7 @@ impl<'a> Config<'a> {
                 } 
             },
         };
-        //println!("DEPLO_CLIENT_IOS_TEAM_ID:{}", std::env::var("DEPLO_CLIENT_IOS_TEAM_ID").unwrap());    
+        // println!("DEPLO_CLOUD_ACCESS_KEY:{}", std::env::var("DEPLO_CLOUD_ACCESS_KEY").unwrap());    
         let mut c = Config::load(args.value_of("config").unwrap_or("./deplo.toml")).unwrap();
         c.runtime = RuntimeConfig {
             verbosity,
@@ -304,7 +312,7 @@ impl<'a> Config<'a> {
         }
     }
     pub fn project_id(&self) -> &str {
-        return self.cloud.terraformer.project_id()
+        return &self.common.project_id
     }
     pub fn root_domain(&self) -> &str {
         return self.cloud.terraformer.root_domain()

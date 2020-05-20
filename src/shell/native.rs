@@ -2,22 +2,29 @@ use std::process::{Command, Stdio};
 use std::collections::HashMap;
 use std::error::Error;
 use std::io::Read;
+use std::path::Path;
 
 use crate::config;
 use crate::shell;
 
 pub struct Native<'a> {
-    pub config: &'a config::Config<'a>   
+    pub config: &'a config::Config<'a>,
+    pub cwd: Option<String>
 }
 impl<'a> shell::Shell<'a> for Native<'a> {
     fn new(config: &'a config::Config) -> Self {
         return Native {
-            config: config
+            config: config,
+            cwd: None
         }
+    }
+    fn set_cwd<P: 'a + AsRef<Path>>(&mut self, dir: P) -> Result<(), Box<dyn Error>> {
+        self.cwd = Some(dir.as_ref().to_str().unwrap().to_string());
+        Ok(())
     }
     #[allow(dead_code)]
     fn output_of(&self, args: &Vec<&str>, envs: &HashMap<String, String>) -> Result<String, Box<dyn Error>> {
-        let mut cmd = Native::<'a>::create_command(args, envs, true);
+        let mut cmd = self.create_command(args, envs, true);
         return Native::get_output(&mut cmd);
     }
     fn exec(
@@ -29,16 +36,25 @@ impl<'a> shell::Shell<'a> for Native<'a> {
             return Ok(cmd);
         } else {
             log::trace!("exec: [{}]", args.join(" "));
-            let mut cmd = Native::<'a>::create_command(args, envs, capture);
+            let mut cmd = self.create_command(args, envs, capture);
             return Native::run_as_child(&mut cmd);
         }
     }
 }
 impl <'a> Native<'a> {
-    fn create_command(args: &Vec<&str>, envs: &HashMap<String, String>, capture: bool) -> Command {
+    fn create_command(&self, args: &Vec<&str>, envs: &HashMap<String, String>, capture: bool) -> Command {
         let mut c = Command::new(args[0]);
         c.args(&args[1..]);
         c.envs(envs);
+        match &self.cwd {
+            Some(cwd) => { 
+                c.current_dir(cwd); 
+                log::trace!("create_command:[{}]@[{}]", args.join(" "), cwd);
+            },
+            _ => {
+                log::trace!("create_command:[{}]", args.join(" "));
+            }
+        };
         if capture {
             c.stdout(Stdio::piped());
             c.stderr(Stdio::piped());
