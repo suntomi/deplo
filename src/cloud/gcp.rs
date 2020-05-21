@@ -444,11 +444,20 @@ impl<'a, S: shell::Shell<'a>> cloud::Cloud<'a> for Gcp<'a, S> {
                     root_domain,
                     region
                 } = &self.config.cloud.terraformer;
-                return Ok(format!("\
-                    root_domain = \"{}\"\n\
-                    project_id = \"{}\"\n\
-                    region = \"{}\"\n\
-                ", root_domain, self.config.common.project_id, region));
+                return Ok(
+                    format!(
+                        "\
+                            root_domain = \"{}\"\n\
+                            project_id = \"{}\"\n\
+                            region = \"{}\"\n\
+                            envs = [{}]\n\
+                        ",
+                        root_domain, self.config.common.project_id, region, 
+                        self.config.common.release_targets
+                            .keys().map(|s| &**s)
+                            .collect::<Vec<&str>>().join(",")
+                    )
+                );
             }
             _ => {
                 Err(Box::new(cloud::CloudError{

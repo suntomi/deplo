@@ -18,7 +18,7 @@ impl<'a> shell::Shell<'a> for Native<'a> {
             cwd: None
         }
     }
-    fn set_cwd<P: 'a + AsRef<Path>>(&mut self, dir: P) -> Result<(), Box<dyn Error>> {
+    fn set_cwd<P: AsRef<Path>>(&mut self, dir: P) -> Result<(), Box<dyn Error>> {
         self.cwd = Some(dir.as_ref().to_str().unwrap().to_string());
         Ok(())
     }
