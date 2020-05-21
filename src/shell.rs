@@ -9,7 +9,8 @@ pub mod native;
 
 pub trait Shell<'a> {
     fn new(config: &'a config::Config) -> Self;
-    fn set_cwd<P: AsRef<Path>>(&mut self, dir: P) -> Result<(), Box<dyn Error>>;
+    fn set_cwd<P: AsRef<Path>>(&mut self, dir: Option<&P>) -> Result<(), Box<dyn Error>>;
+    fn set_env(&mut self, key: &'a str, val: String) -> Result<(), Box<dyn Error>>;
     fn output_of(&self, args: &Vec<&str>, envs: &HashMap<String, String>) -> Result<String, Box<dyn Error>>;
     fn exec(&self, args: &Vec<&str>, envs: &HashMap<String, String>, capture: bool) -> Result<String, Box<dyn Error>>;
     fn eval(&self, code: &str, envs: &HashMap<String, String>, capture: bool) -> Result<String, Box<dyn Error>> {

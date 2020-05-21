@@ -1,9 +1,11 @@
 resource "google_compute_network" "vpc-network" {
-  name = "${var.project}-${var.env}-vpc-network"  
+  for_each = toset(var.envs)
+  name = "${var.project}-${each.value}-vpc-network"  
 }
 resource "google_compute_firewall" "default" {
-  name    = "${var.project}-${var.env}-fw-allow-ssh"
-  network = "${google_compute_network.vpc-network.name}"
+  for_each = toset(var.envs)
+  name    = "${var.project}-${each.value}-fw-allow-ssh"
+  network = google_compute_network.vpc-network[each.value].name
 
   allow {
     protocol = "tcp"
@@ -14,8 +16,9 @@ resource "google_compute_firewall" "default" {
 }
 
 resource "google_compute_firewall" "health-check" {
-  name    = "${var.project}-${var.env}-fw-allow-health-check"
-  network = "${google_compute_network.vpc-network.name}"
+  for_each = toset(var.envs)
+  name    = "${var.project}-${each.value}-fw-allow-health-check"
+  network = google_compute_network.vpc-network[each.value].name
 
   allow {
     protocol = "tcp"
@@ -27,8 +30,9 @@ resource "google_compute_firewall" "health-check" {
 }
 
 resource "google_compute_firewall" "allow-internal" {
-  name    = "${var.project}-${var.env}-fw-allow-internal"
-  network = "${google_compute_network.vpc-network.name}"
+  for_each = toset(var.envs)
+  name    = "${var.project}-${each.value}-fw-allow-internal"
+  network = google_compute_network.vpc-network[each.value].name
   description = "Allow internal traffic on the default network"
 
   allow {
@@ -46,18 +50,27 @@ resource "google_compute_firewall" "allow-internal" {
 }
 
 resource "google_compute_global_address" "private_ip_range" {
-  provider = "google-beta"
-
-  name          = "${var.project}-${var.env}-private-ip-range"
+  for_each      = toset(var.envs)
+  name          = "${var.project}-${each.value}-private-ip-range"
   purpose       = "VPC_PEERING"
-  address_type = "INTERNAL"
+  address_type  = "INTERNAL"
   prefix_length = 16
-  network       = "${google_compute_network.vpc-network.name}"
+  network       = google_compute_network.vpc-network[each.value].name
+}
+
+resource "null_resource" "dependency_getter" {
+  provisioner "local-exec" {
+    command = "echo ${length(var.dependencies)}"
+  }
 }
 
 resource "google_service_networking_connection" "private_vpc_connection" {
-  network       = "${google_compute_network.vpc-network.name}"
+  for_each      = toset(var.envs)
+  network       = google_compute_network.vpc-network[each.value].name
   service       = "servicenetworking.googleapis.com"
-  reserved_peering_ranges = ["${google_compute_global_address.private_ip_range.name}"]
-}
+  reserved_peering_ranges = [google_compute_global_address.private_ip_range[each.value].name]
 
+  depends_on = [
+    null_resource.dependency_getter
+  ]
+}

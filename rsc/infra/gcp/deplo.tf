@@ -1,6 +1,8 @@
 variable "root_domain" {}
+variable "dns_zone" {}
 variable "project_id" {}
 variable "region" {}
+variable "bucket_prefix" {}
 variable "envs" {
   type = list(string)
 }
@@ -15,36 +17,46 @@ terraform {
   }
 }
 
-module "dns" {
-  source = "./modules/dns"
+//
+// api
+//
+module "api" {
+  source = "./modules/api"
+}
 
-  project = "${var.project_id}"
-  root_domain = "${var.root_domain}"
-  predefined_zone = "${var.predefined_zone}"
+//
+// storage
+//
+module "storage" {
+  source = "./modules/storage"
+  project = var.project_id
+  bucket_prefix = var.bucket_prefix
 }
 
 //
 // vpc
 //
 module "vpc" {
-  for_each  = "${toset(var.envs)}"
   source = "./modules/vpc"
 
-  env = "${each.value}"
-  project = "${var.project_id}"
-  region = "${var.region}"
+  envs = var.envs
+  project = var.project_id
+  region = var.region
+
+  dependencies = [
+    module.api.ready
+  ]
 }
 
 //
 // lb 
 //
 module "lb" {
-  for_each  = "${toset(var.envs)}"
   source = "./modules/lb"
 
-  env = "${each.value}"
-  project = "${var.project_id}"
-  root_domain = "${var.root_domain}"
-  zone_name = "${module.dns.zone_name}"
-  default_backend_url = "${module.storage.bucket_404_url}"
+  envs = var.envs
+  project = var.project_id
+  root_domain = "${var.project_id}.${var.root_domain}"
+  dns_zone = var.dns_zone
+  default_backend_url = module.storage.bucket_404_url
 }

@@ -48,8 +48,8 @@ pub fn factory<'a>(
     match &config.cloud.terraformer {
         config::TerraformerConfig::Terraform {
             backend_bucket: _,
-            backend_bucket_prefix: _,
-            root_domain: _,
+            bucket_prefix: _,
+            dns_zone: _,
             region: _
         } => {
             return factory_by::<terraform::Terraform>(config);

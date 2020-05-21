@@ -4,22 +4,35 @@ use std::error::Error;
 use std::io::Read;
 use std::path::Path;
 
+use maplit::hashmap;
+
 use crate::config;
 use crate::shell;
 
 pub struct Native<'a> {
     pub config: &'a config::Config<'a>,
-    pub cwd: Option<String>
+    pub cwd: Option<String>,
+    pub envs: HashMap<String, String>,
 }
 impl<'a> shell::Shell<'a> for Native<'a> {
     fn new(config: &'a config::Config) -> Self {
         return Native {
             config: config,
-            cwd: None
+            cwd: None,
+            envs: hashmap!{}
         }
     }
-    fn set_cwd<P: AsRef<Path>>(&mut self, dir: P) -> Result<(), Box<dyn Error>> {
-        self.cwd = Some(dir.as_ref().to_str().unwrap().to_string());
+    fn set_cwd<P: AsRef<Path>>(&mut self, dir: Option<&P>) -> Result<(), Box<dyn Error>> {
+        self.cwd = match dir {
+            Some(d) => Some(d.as_ref().to_str().unwrap().to_string()),
+            None => None
+        };
+        Ok(())
+    }
+    fn set_env(&mut self, key: &str, val: String) -> Result<(), Box<dyn Error>> {
+        let ent = self.envs.entry(key.to_string());
+        // why we have to write such redundant and inefficient codes just for setting value to hashmap?
+        ent.and_modify(|e| *e = val.clone()).or_insert(val);
         Ok(())
     }
     #[allow(dead_code)]
@@ -55,6 +68,7 @@ impl <'a> Native<'a> {
                 log::trace!("create_command:[{}]", args.join(" "));
             }
         };
+        c.envs(&self.envs);
         if capture {
             c.stdout(Stdio::piped());
             c.stderr(Stdio::piped());

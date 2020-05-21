@@ -43,6 +43,7 @@ enum Step {
     Script {
         code: String,
         runner: Option<String>,
+        workdir: Option<String>,
         env: HashMap<String, String>,
     },
     Container {
@@ -58,11 +59,13 @@ enum Step {
     }
 }
 impl Step {
-    pub fn exec<'a, S: shell::Shell<'a>>(&self, plan: &Plan, shell: &S) -> Result<(), Box<dyn Error>> {
+    pub fn exec<'a, S: shell::Shell<'a>>(&self, plan: &Plan<'a>) -> Result<(), Box<dyn Error>> {
         match self {
-            Self::Script { code, runner, env } => {
+            Self::Script { code, runner, env, workdir } => {
                 let default = "bash".to_string();
                 let runner_command = runner.as_ref().unwrap_or(&default);
+                let mut shell = S::new(plan.config);
+                shell.set_cwd(workdir.as_ref());
                 let r = match fs::metadata(code) {
                     Ok(_) => shell.exec(&vec!(runner_command, code), &env, false),
                     Err(_) => {
@@ -71,6 +74,7 @@ impl Step {
                         ), &env, false)
                     }
                 };
+                shell.set_cwd::<String>(None);
                 match r {
                     Ok(_) => Ok(()),
                     Err(err) => Err(err)
@@ -95,7 +99,7 @@ impl Step {
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct PlanData {
-    steps: Vec<Step>
+    steps: Vec<Step>,
 }
 
 pub struct Plan<'a> {
@@ -119,6 +123,7 @@ impl<'a> Plan<'a> {
                                docker build -t your/image rsc/docker/base\n\
                               ".to_string(),
                         runner: None,
+                        workdir: None,
                         env: hashmap!{},
                     }, Step::Container {
                         image: "your/image".to_string(),
@@ -139,6 +144,7 @@ impl<'a> Plan<'a> {
                                deploy_as_serverless.sh your/image your_autoscaling_group\n\
                               ".to_string(),
                         runner: Some("bash".to_string()),
+                        workdir: None,
                         env: hashmap!{},
                     }),
                     _ => return Err(Box::new(DeployError {
@@ -173,9 +179,9 @@ impl<'a> Plan<'a> {
             }))
         }
     }
-    pub fn exec<S: shell::Shell<'a>>(&self, shell: &S) -> Result<(), Box<dyn Error>> {
+    pub fn exec<S: shell::Shell<'a>>(&self) -> Result<(), Box<dyn Error>> {
         for step in &self.data.steps {
-            step.exec(self, shell)?
+            step.exec::<S>(self)?
         }
         Ok(())
     }

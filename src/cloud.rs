@@ -9,6 +9,8 @@ pub trait Cloud<'a> {
     fn new(config: &'a config::Config) -> Result<Self, Box<dyn Error>> where Self : Sized;
     fn setup_dependency(&self) -> Result<(), Box<dyn Error>>;
     fn generate_terraformer_config(&self, name: &str) -> Result<String, Box<dyn Error>>;
+    // dns
+    fn root_domain_dns_name(&self, zone: &str) -> Result<String, Box<dyn Error>>;
     // container 
     fn push_container_image(&self, src: &str, target: &str) -> Result<String, Box<dyn Error>>;
     fn deploy_container(

@@ -59,7 +59,7 @@ key = "$DEPLO_CLOUD_ACCESS_KEY"
 type = "TerraformGCP"
 backend_bucket = "suntomi-publishing-generic-terraform"
 backend_bucket_prefix = "vault"
-root_domain = "suntomi.dev"
+dns_zone = "suntomi.dev"
 project_id = "suntomi"
 region = "asia-northeast1"
 

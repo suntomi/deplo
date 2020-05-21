@@ -4,24 +4,28 @@ variable "project" {
 variable "root_domain" {
   type = string
 }
-variable "zone_name" {
+variable "dns_zone" {
   type = string
 }
 variable "default_backend_url" {
   type = string
 }
-variable "env" {
-  type = string
+variable "envs" {
+  type = list(string)
 }
 variable "ip_version" {
   type = string
   default = "IPV4"
 }
 
-output "dns_name" {
-  value = "${google_dns_record_set.a.name}"
+output "dns_names" {
+  value = {for k in keys(google_dns_record_set.a) : 
+    k => google_dns_record_set.a[k].name
+  }
 }
-output "ip_address" {
-  value = "${google_compute_global_address.default.address}"
+output "ip_addresses" {
+  value = {for k in keys(google_compute_global_address.default) : 
+    k => google_compute_global_address.default[k].name
+  }
 }
 

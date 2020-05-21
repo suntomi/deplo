@@ -17,7 +17,7 @@ pub struct Terraform<'a, S: shell::Shell<'a> = shell::Default<'a>> {
 impl<'a, S: shell::Shell<'a>> tf::Terraformer<'a> for Terraform<'a, S> {
     fn new(config: &'a config::Config) -> Result<Terraform<'a, S>, Box<dyn Error>> {
         let mut shell = S::new(config);
-        shell.set_cwd(config.infra_code_dest_path())?;
+        shell.set_cwd(Some(&config.infra_code_dest_path()))?;
         return Ok(Terraform::<'a, S> {
             config: config,
             shell

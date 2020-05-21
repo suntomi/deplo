@@ -62,9 +62,10 @@ impl<'a, S: shell::Shell<'a>, A: args::Args> command::Command<'a, A> for Init<'a
 
         log::debug!("create endpoints files for each release target");
         fs::create_dir_all(&self.config.endpoints_path())?;
+        let root_domain = self.config.root_domain()?;
         for (k, _) in &self.config.common.release_targets {
             log::info!("create versions file for [{}]", k);
-            let ep = endpoints::Endpoints::new(&format!("{}.{}", k, self.config.root_domain()));
+            let ep = endpoints::Endpoints::new(&format!("{}.{}", k, root_domain));
             ep.save(self.config.endpoints_file_path(Some(k)))?;
         }
         return Ok(())

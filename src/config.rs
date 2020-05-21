@@ -114,28 +114,28 @@ impl fmt::Display for VCSConfig {
 pub enum TerraformerConfig {
     Terraform {
         backend_bucket: String,
-        backend_bucket_prefix: String,    
-        root_domain: String,
+        bucket_prefix: Option<String>,
+        dns_zone: String,
         region: String,
     }
 }
 impl TerraformerConfig {
-    pub fn root_domain(&self) -> &str {
+    pub fn dns_zone(&self) -> &str {
         match self {
             Self::Terraform { 
                 backend_bucket: _,
-                backend_bucket_prefix: _,
-                root_domain,
+                bucket_prefix: _,
+                dns_zone,
                 region: _
-            } => &root_domain
+            } => &dns_zone
         }
     }
     pub fn region(&self) -> &str {
         match self {
             Self::Terraform { 
                 backend_bucket: _,
-                backend_bucket_prefix: _,
-                root_domain: _,
+                bucket_prefix: _,
+                dns_zone: _,
                 region
             } => &region
         }
@@ -146,8 +146,8 @@ impl fmt::Display for TerraformerConfig {
         match self {
             Self::Terraform { 
                 backend_bucket: _,
-                backend_bucket_prefix: _,
-                root_domain,
+                bucket_prefix: _,
+                dns_zone: _,
                 region: _
             } => write!(f, "terraform")
         }
@@ -314,8 +314,13 @@ impl<'a> Config<'a> {
     pub fn project_id(&self) -> &str {
         return &self.common.project_id
     }
-    pub fn root_domain(&self) -> &str {
-        return self.cloud.terraformer.root_domain()
+    pub fn dns_zone(&self) -> &str {
+        return self.cloud.terraformer.dns_zone()
+    }
+    pub fn root_domain(&self) -> Result<String, Box<dyn Error>> {
+        let cloud = self.cloud_service()?;
+        let dns_name = cloud.root_domain_dns_name(&self.cloud.terraformer.dns_zone())?;
+        Ok(dns_name[..dns_name.len()-1].to_string())
     }
     pub fn release_target(&self) -> Option<&str> {
         return match &self.runtime.release_target {

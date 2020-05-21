@@ -1,13 +1,20 @@
 variable "project" {
   type = string
 }
-variable "env" {
-  type = string
+variable "envs" {
+  type = list(string)
 }
 variable "region" {
   type = string
 }
+variable "dependencies" {
+  type = list(string)
+  default = []
+}
 
-output "network" {
-  value = "${google_compute_network.vpc-network.self_link}"
+output "networks" {
+  value = {for k in keys(google_compute_network.vpc-network) : 
+    k => google_compute_network.vpc-network[k].self_link
+  }
+
 }
