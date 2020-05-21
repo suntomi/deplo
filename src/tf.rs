@@ -9,6 +9,8 @@ pub trait Terraformer<'a> {
     fn init(&self, cloud: &Box<dyn cloud::Cloud<'a> + 'a>) -> Result<(), Box<dyn Error>>;
     fn plan(&self) -> Result<(), Box<dyn Error>>;
     fn apply(&self) -> Result<(), Box<dyn Error>>;
+    fn rclist(&self) -> Result<Vec<String>, Box<dyn Error>>;
+    fn eval(&self, path: &str) -> Result<String, Box<dyn Error>>;
     fn exec(&self) -> Result<(), Box<dyn Error>> {
         self.plan()?;
         self.apply()

@@ -54,6 +54,25 @@ lazy_static! {
                     .required(true))
         )
         .subcommand(
+            App::new("infra")
+                .about("control infrastrucure for deplo")
+                .subcommand(
+                    App::new("plan")
+                    .about("plan infra change")
+                )
+                .subcommand(
+                    App::new("apply")
+                    .about("apply infra change")
+                )
+                .subcommand(
+                    App::new("rsc")
+                    .about("get resource value or list")
+                    .arg(Arg::new("path")
+                        .help("resource path. if omitted, list of resource paths are returned")
+                        .index(1))
+                )
+        )
+        .subcommand(
             App::new("exec")
                 .about("wrap 3rdparty command to dryrun")
                 .arg(Arg::new("args")

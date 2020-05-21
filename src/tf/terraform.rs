@@ -1,7 +1,8 @@
 use std::error::Error;
-use std::{fs, path};
+use std::fs;
 use std::result::Result;
 
+use regex::{Regex,Captures};
 use maplit::hashmap;
 
 use crate::config;
@@ -33,6 +34,32 @@ impl<'a, S: shell::Shell<'a>> tf::Terraformer<'a> for Terraform<'a, S> {
             "-var-file=tfvars"
         ), &hashmap!{}, false)?;
         Ok(())
+    }
+    fn rclist(&self) -> Result<Vec<String>, Box<dyn Error>> {
+        let r = self.shell.output_of(&vec!(
+            "terraform", "state", "list", "-no-color"
+        ), &hashmap!{})?;
+        Ok(r.split('\n').map(|s| s.to_string()).collect())
+    }
+    fn eval(&self, path: &str) -> Result<String, Box<dyn Error>> {
+        let parsed: Vec<&str> = path.split("@").collect();
+        let addr_and_key = if parsed.len() > 1 {
+            (parsed[1], parsed[0])
+        } else {
+            (parsed[0], "")
+        };
+        let r = self.shell.eval_output_of(&format!("\
+            terraform state show -no-color '{}'
+        ", addr_and_key.0), &hashmap!{})?;
+        if addr_and_key.1.is_empty() {
+            Ok(r)
+        } else {
+            let re = regex::Regex::new(&format!(r#"{}\s+=\s+"([^"]*)""#, addr_and_key.1)).unwrap();
+            return match re.captures(&r) {
+                Some(c) => Ok(c.get(1).map_or("", |m| m.as_str()).to_string()),
+                None => Ok("".to_string())
+            }
+        }
     }
     fn plan(&self) -> Result<(), Box<dyn Error>> {
         self.shell.exec(&vec!(

@@ -13,6 +13,7 @@ use regex::{Regex,Captures};
 use crate::args;
 use crate::vcs;
 use crate::cloud;
+use crate::tf;
 use crate::endpoints;
 
 #[derive(Debug)]
@@ -359,6 +360,9 @@ impl<'a> Config<'a> {
     }
     pub fn cloud_service(&'a self) -> Result<Box<dyn cloud::Cloud<'a> + 'a>, Box<dyn Error>> {
         return cloud::factory(&self);
+    }
+    pub fn terraformer(&'a self) -> Result<Box<dyn tf::Terraformer<'a> + 'a>, Box<dyn Error>> {
+        return tf::factory(&self);
     }
     pub fn cloud_region(&'a self) -> &str {
         return self.cloud.terraformer.region();
