@@ -26,6 +26,7 @@ impl Error for CommandError {
 
 // subcommands
 pub mod init;
+pub mod destroy;
 pub mod infra;
 pub mod exec;
 pub mod service;
@@ -43,6 +44,7 @@ pub fn factory<'a, S: args::Args>(
 ) -> Result<Option<Box<dyn Command<'a, S> + 'a>>, Box<dyn Error>> {
     let cmd = match name {
         "init" => factory_by::<S, init::Init>(config),
+        "destroy" => factory_by::<S, destroy::Destroy>(config),
         "infra" => factory_by::<S, infra::Infra>(config),
         "exec" => factory_by::<S, exec::Exec>(config),
         "service" => factory_by::<S, service::Service>(config),

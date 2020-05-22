@@ -7,6 +7,7 @@ use crate::cloud;
 pub trait Terraformer<'a> {
     fn new(config: &'a config::Config) -> Result<Self, Box<dyn Error>> where Self : Sized;
     fn init(&self, cloud: &Box<dyn cloud::Cloud<'a> + 'a>) -> Result<(), Box<dyn Error>>;
+    fn destroy(&self, cloud: &Box<dyn cloud::Cloud<'a> + 'a>);
     fn plan(&self) -> Result<(), Box<dyn Error>>;
     fn apply(&self) -> Result<(), Box<dyn Error>>;
     fn rclist(&self) -> Result<Vec<String>, Box<dyn Error>>;

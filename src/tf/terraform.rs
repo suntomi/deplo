@@ -35,6 +35,19 @@ impl<'a, S: shell::Shell<'a>> tf::Terraformer<'a> for Terraform<'a, S> {
         ), &hashmap!{}, false)?;
         Ok(())
     }
+    fn destroy(&self, _: &Box<dyn cloud::Cloud<'a> + 'a>) {
+        match self.shell.exec(&vec!(
+            "terraform", "destroy", "-var-file=tfvars"
+        ), &hashmap!{}, false) {
+            Ok(_) => {},
+            Err(err) => {
+                log::error!("\
+                    destroy infra fail with {:?}, \
+                    check undeleted resources and manually cleanup\
+                ", err);
+            }
+        }
+    }
     fn rclist(&self) -> Result<Vec<String>, Box<dyn Error>> {
         let r = self.shell.output_of(&vec!(
             "terraform", "state", "list", "-no-color"

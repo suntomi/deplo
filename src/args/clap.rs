@@ -59,6 +59,10 @@ lazy_static! {
                     .required(true))
         )
         .subcommand(
+            App::new("destroy")
+                .about("destroy deplo project")
+        )
+        .subcommand(
             App::new("infra")
                 .about("control infrastrucure for deplo")
                 .subcommand(
