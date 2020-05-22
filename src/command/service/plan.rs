@@ -82,7 +82,11 @@ impl Step {
                 let config = plan.config;
                 let cloud = config.cloud_service()?;
                 // deploy image to cloud container registry
-                let pushed_image_tag = cloud.push_container_image(&image, &config.canonical_name(&plan.service))?;
+                let pushed_image_tag = cloud.push_container_image(&image, 
+                    &format!("{}:{}", 
+                        &config.canonical_name(&plan.service), 
+                        config.next_service_endpoint_version(&plan.service)?)
+                )?;
                 // deploy to autoscaling group or serverless platform
                 return cloud.deploy_container(plan, &target, &pushed_image_tag, ports, env, options);
             },

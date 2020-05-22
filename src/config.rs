@@ -353,6 +353,9 @@ impl<'a> Config<'a> {
             Err(err) => Err(err)
         }
     }
+    pub fn next_service_endpoint_version(&self, service: &str) -> Result<u32, Box<dyn Error>> {
+        Ok(self.service_endpoint_version(service)? + 1)
+    }
     pub fn update_service_endpoint_version(&self, service: &str) -> Result<u32, Box<dyn Error>> {
         endpoints::Endpoints::modify(&self.endpoints_file_path(None), |ep| {
             let r = ep.releases.get_mut("next").unwrap();
@@ -371,7 +374,7 @@ impl<'a> Config<'a> {
         return self.cloud.terraformer.region();
     }
     pub fn cloud_resource_name(&self, path: &str) -> Result<String, Box<dyn Error>> {
-        return Ok("hoge".to_string());
+        return self.terraformer()?.eval(path);
     }
     pub fn vcs_service(&'a self) -> Result<Box<dyn vcs::VCS<'a> + 'a>, Box<dyn Error>> {
         return vcs::factory(&self);

@@ -1,6 +1,7 @@
 prefix = 'dev.suntomi.dev'
 
 [paths]
-[releases.prev.versions]
 [releases.next.versions]
+api = 1
 [releases.curr.versions]
+[releases.prev.versions]

@@ -95,26 +95,33 @@ impl<'a, S: shell::Shell<'a>> Gcp<'a, S> {
             jq -jr ".[]|select(.name==\"{}\").backends"
         "#, backend_service_name), &hashmap!{}).unwrap_or("".to_string());
         if bs_list.is_empty() {
-            return true;
+            return false;
         }
         if bs_list == "null".to_string() {
-            return true;
+            return false;
         }
         let bs_group = self.shell.eval_output_of(&format!(r#"
             echo {} | jq -jr ".[]|select(.group|endswith(\"{}\"))|.group"
         "#, bs_list, instance_group_name), &hashmap!{}).unwrap_or("".to_string());
         if bs_group.is_empty() {
-            return true;
+            return false;
         }
         return false;
     }    
     fn instance_list(&self, 
         instance_group_name: &str, resource_location_flag: &str
     ) -> Result<String, Box<dyn Error>> {
-        Ok(self.shell.eval(&format!(r#"
-            gcloud compute instance-groups list-instances {} {} --format=json |
-            jq -jr '[.[].instance]|join(",")'
-        "#, instance_group_name, resource_location_flag), &hashmap!{}, true)?)
+        let mut list: String;
+        loop {
+            list = self.shell.eval(&format!(r#"
+                gcloud compute instance-groups list-instances {} {} --format=json |
+                jq -jr '[.[].instance]|join(",")'
+            "#, instance_group_name, resource_location_flag), &hashmap!{}, true)?;
+            if !list.is_empty() {
+                return Ok(list)
+            }
+            thread::sleep(time::Duration::from_secs(5))
+        }
     }
     fn wait_serverless_deployment_finish(&self, service_name: &str) -> Result<(), Box<dyn Error>> {
         print!("waiting {} become active.", service_name);
@@ -177,7 +184,7 @@ impl<'a, S: shell::Shell<'a>> Gcp<'a, S> {
             "#, out), &hashmap!{})?;
             let re = Regex::new(&format!("^{}/?$", endpoint_url)).unwrap();
             match re.captures(&curr_url) {
-                Some(c) => {
+                Some(_) => {
                     log::info!("{}: already subscribe to {}. skipped", subscribe_name, endpoint_url);
                     return Ok(())
                 },
@@ -203,22 +210,23 @@ impl<'a, S: shell::Shell<'a>> Gcp<'a, S> {
         // default value as lazy static
         lazy_static! {
             static ref DEFAULT_SCALING_CONFIG: String = "\
-                --max-num-replicas=$MAX_NUM_REPLICAS \
-                --min-num-replicas=$MIN_NUM_REPLICAS \
+                --max-num-replicas=16 \
+                --min-num-replicas=1 \
                 --scale-based-on-cpu \
                 --target-cpu-utilization=0.8".to_string();
             static ref DEFAULT_CONTINER_OPTIONS: String = "".to_string();
         }
         // settings
-        let scaling_config = options.get("scaling_config").unwrap_or(&DEFAULT_SCALING_CONFIG);
+        let scaling_config = options.get("scaling_options").unwrap_or(&DEFAULT_SCALING_CONFIG);
         let resource_location_flag = format!("--region={}", self.config.cloud_region());
         let node_distribution = options.get("node_distribution").unwrap_or(&resource_location_flag);
         let container_options = options.get("container_options").unwrap_or(&DEFAULT_CONTINER_OPTIONS);
-        let service_version = self.config.service_endpoint_version(&plan.service)?;
+        let service_version = self.config.next_service_endpoint_version(&plan.service)?;
         let deploy_path = format!("/{}/{}", plan.service, service_version);
+        let release_target = self.config.release_target().expect("should be on release target branch");
         let mut env_vec: Vec<String> = Vec::<String>::new();
         env_vec.push(format!("DEPLO_RELEASE_TARGET={}", 
-            self.config.release_target().expect("should be on release target branch")
+            release_target
         ));
         env_vec.push(format!("DEPLO_SERVICE_VERSION={}", service_version));
         env_vec.push(format!("DEPLO_SERVICE_NAME={}", plan.service));
@@ -232,7 +240,9 @@ impl<'a, S: shell::Shell<'a>> Gcp<'a, S> {
         let instance_group_name = self.instance_group_name(plan, service_version);
         let instance_prefix = self.instance_prefix(plan, service_version);
         let service_account = &self.service_account;
-        let network = self.config.cloud_resource_name("network")?;
+        let network = self.config.cloud_resource_name(
+            "name@module.vpc.google_compute_network.vpc-network[\"dev\"]"
+        )?;
     
         // codes
         log::info!("---- deploy_instance_group");
@@ -283,7 +293,7 @@ impl<'a, S: shell::Shell<'a>> Gcp<'a, S> {
             {} \
             --named-ports={}", 
             instance_group_name, resource_location_flag, 
-            ports.iter().map(u32::to_string).collect::<Vec<String>>().join(",")
+            ports.iter().map(|p| format!("port-{}:{}", p, p)).collect::<Vec<String>>().join(",")
         ), 
         &hashmap!{}, false)?;
         log::info!("---- set autoscaling settings for {}", instance_group_name);
@@ -297,7 +307,7 @@ impl<'a, S: shell::Shell<'a>> Gcp<'a, S> {
         &self, plan: &plan::Plan,
         port: u32
     ) -> Result<(), Box<dyn Error>> {
-        let service_version = self.config.service_endpoint_version(&plan.service)?;
+        let service_version = self.config.next_service_endpoint_version(&plan.service)?;
         let backend_service_name=self.backend_service_name(plan, port, service_version);
         let health_check_name=self.health_check_name(plan, service_version, port);
         let instance_group_name = self.instance_group_name(plan, service_version);
@@ -323,15 +333,15 @@ impl<'a, S: shell::Shell<'a>> Gcp<'a, S> {
             self.shell.eval(&format!("gcloud compute backend-services create {} \
                 --connection-draining-timeout=10 --health-checks={} \
                 --protocol=HTTP --port-name={} --global {}
-            ", backend_service_name, backend_service_name, backend_service_name, ""), 
+            ", backend_service_name, health_check_name, backend_service_name, ""), 
             &hashmap!{}, false)?;
         }
         let backend_added=self.backend_added(&backend_service_name, &instance_group_name);
         if !backend_added {
             log::info!("---- add backend instance group {} to {}", instance_group_name, backend_service_name);
             self.shell.eval(&format!("gcloud compute backend-services add-backend {} --instance-group={} \
-                --global $instance_group_type
-            ", backend_service_name, instance_group_name), &hashmap!{}, false)?;
+                --global {}
+            ", backend_service_name, instance_group_name, instance_group_type), &hashmap!{}, false)?;
         }
         log::info!("---- update backend service balancing setting {}", backend_service_name);
         // TODO: found proper settings for balancing
@@ -363,7 +373,7 @@ impl<'a, S: shell::Shell<'a>> Gcp<'a, S> {
         // settings
         let service_name = self.serverless_service_name(plan);
         let region = self.config.cloud_region();
-        let service_version = self.config.service_endpoint_version(&plan.service)?;
+        let service_version = self.config.next_service_endpoint_version(&plan.service)?;
         let mem = options.get("memory").unwrap_or(&DEFAULT_MEMORY);
         let timeout = options.get("execution_timeout").unwrap_or(&DEFAULT_EXECUTION_TIMEOUT);
         let container_options = options.get("container_options").unwrap_or(&DEFAULT_CONTAINER_OPTIONS);
@@ -393,7 +403,7 @@ impl<'a, S: shell::Shell<'a>> Gcp<'a, S> {
                 mem, timeout, access_control_options, container_options
             ), &hashmap!{}, false) {
             Ok(_) => log::info!("succeed to deploy container {}", image),
-            Err(err) => {
+            Err(_) => {
                 // seems interrupted
                 self.wait_serverless_deployment_finish(&service_name)?;
             }
@@ -587,15 +597,10 @@ impl<'a, S: shell::Shell<'a>> cloud::Cloud<'a> for Gcp<'a, S> {
                     self.config.cloud.provider)
             }))
         }
-        self.shell.exec(&vec!(
-            "docker", "tag", src,  
-            &format!("{}/{}/{}", repository_url, self.gcp_project_id, target)
-        ), &hashmap!{}, false)?;
-        self.shell.exec(&vec!(
-            "docker", "push", 
-            &format!("{}/{}/{}", repository_url, self.gcp_project_id, target)
-        ), &hashmap!{}, false)?;
-        Ok(target.to_string())
+        let container_image_tag = format!("{}/{}/{}", repository_url, self.gcp_project_id, target);
+        self.shell.exec(&vec!("docker", "tag", src,  &container_image_tag), &hashmap!{}, false)?;
+        self.shell.exec(&vec!("docker", "push", &container_image_tag), &hashmap!{}, false)?;
+        Ok(container_image_tag)
     }
     fn deploy_container(
         &self, plan: &plan::Plan,

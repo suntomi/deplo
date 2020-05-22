@@ -47,7 +47,6 @@ impl<'a> shell::Shell<'a> for Native<'a> {
             println!("dryrun: {}", cmd);
             return Ok(cmd);
         } else {
-            log::trace!("exec: [{}]", args.join(" "));
             let mut cmd = self.create_command(args, envs, capture);
             return Native::run_as_child(&mut cmd);
         }
