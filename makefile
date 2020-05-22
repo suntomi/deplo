@@ -40,6 +40,9 @@ image: base build
 run:
 	docker run --rm -ti -v $(CURDIR):/workdir -w /workdir suntomi/deplo $(CMD)
 
+dev:
+	cargo run -- -vv -w /workdir/test/projects/dev $(CMD)
+
 sh:
 	docker run --rm -ti -w /workdir \
 		-v $(CURDIR):/workdir \

@@ -65,7 +65,7 @@ impl Step {
                 let default = "bash".to_string();
                 let runner_command = runner.as_ref().unwrap_or(&default);
                 let mut shell = S::new(plan.config);
-                shell.set_cwd(workdir.as_ref());
+                shell.set_cwd(workdir.as_ref())?;
                 let r = match fs::metadata(code) {
                     Ok(_) => shell.exec(&vec!(runner_command, code), &env, false),
                     Err(_) => {
@@ -74,7 +74,7 @@ impl Step {
                         ), &env, false)
                     }
                 };
-                shell.set_cwd::<String>(None);
+                shell.set_cwd::<String>(None)?;
                 match r {
                     Ok(_) => Ok(()),
                     Err(err) => Err(err)

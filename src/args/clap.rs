@@ -45,6 +45,11 @@ lazy_static! {
             .multiple(true)
             .help("Sets the level of verbosity")
             .takes_value(false))
+        .arg(Arg::with_name("workdir")
+            .short('w')
+            .long("workdir")
+            .help("Sets working directory of entire process")
+            .takes_value(true))
         .subcommand(
             App::new("init")
                 .about("initialize deplo project. need to configure deplo.json beforehand")

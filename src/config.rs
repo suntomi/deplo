@@ -247,6 +247,12 @@ impl<'a> Config<'a> {
         }
     }
     pub fn create<A: args::Args>(args: &A) -> Result<Config, Box<dyn Error>> {
+        // apply working directory
+        match args.value_of("workdir") {
+            Some(wd) => { std::env::set_current_dir(&wd)?; },
+            None => {}
+        }
+        // apply verbosity
         let verbosity = args.occurence_of("verbosity");
         simple_logger::init_with_level(match verbosity {
             0 => log::Level::Warn,
@@ -314,9 +320,6 @@ impl<'a> Config<'a> {
     }
     pub fn project_id(&self) -> &str {
         return &self.common.project_id
-    }
-    pub fn dns_zone(&self) -> &str {
-        return self.cloud.terraformer.dns_zone()
     }
     pub fn root_domain(&self) -> Result<String, Box<dyn Error>> {
         let cloud = self.cloud_service()?;
