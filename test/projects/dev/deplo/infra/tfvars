@@ -1,0 +1,6 @@
+root_domain = "suntomi.dev"
+dns_zone = "suntomi-zone"
+project_id = "deplo"
+region = "asia-northeast1"
+bucket_prefix = "deplo"
+envs = ["dev","prod"]

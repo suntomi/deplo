@@ -19,3 +19,6 @@ COPY ./Cargo.toml Cargo.toml
 COPY ./Cargo.lock Cargo.lock
 # remove build result cache to force rebuild with actual project 
 RUN cargo build --color never && rm src/*.rs && rm -r /tmp/target/debug/.fingerprint/deplo-*
+
+# create dummy entrypoint of resource files
+RUN mkdir /workdir/rsc && ln -s /workdir/rsc /

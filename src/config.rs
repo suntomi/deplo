@@ -300,7 +300,7 @@ impl<'a> Config<'a> {
         return path::Path::new(&self.common.data_dir);
     }
     pub fn resource_root_path(&self) -> &path::Path {
-        return path::Path::new("rsc");
+        return path::Path::new("/rsc");
     }
     pub fn services_path(&self) -> path::PathBuf {
         return path::Path::new(&self.common.data_dir).join("services");

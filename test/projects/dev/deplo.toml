@@ -1,0 +1,76 @@
+[common]
+project_id = "deplo"
+deplo_image = "suntomi/deplo"
+data_dir = "deplo"
+no_confirm_for_prod_deploy = false
+
+[common.release_targets]
+dev = "master"
+prod = "release/.*"
+
+[cloud.provider]
+type = "GCP"
+key = "${DEPLO_CLOUD_ACCESS_KEY}"
+
+[cloud.terraformer]
+type = "Terraform"
+backend_bucket = "deplo-terraform-state"
+bucket_prefix = "deplo"
+dns_zone = "suntomi-zone"
+region = "asia-northeast1"
+
+[vcs]
+type = "Github"
+email = "${DEPLO_VCS_ACCESS_EMAIL}"
+account = "suntomi-bot"
+key = "${DEPLO_VCS_ACCESS_KEY}"
+
+[ci]
+type = "Circle"
+key = "${DEPLO_CI_ACCESS_KEY}"
+
+[client]
+org_name = "suntomi, inc."
+app_name = "deplo app"
+app_code = "deplo"
+app_id = "${DEPLO_CLIENT_APP_ID}"
+client_project_path = "./client"
+artifact_path = "/tmp/deplo"
+version_config_path = "./meta/client/version"
+
+unity_path = "/Applications/Unity_2018.4.2f1/Unity.app/Contents/MacOS/Unity"
+serial_code = "${DEPLO_CLIENT_UNITY_SERIAL_CODE}"
+account = "${DEPLO_CLIENT_UNITY_ACCOUNT_EMAIL}"
+password = "${DEPLO_CLIENT_UNITY_ACCOUNT_PASSWORD}"
+
+[[client.platform_build_configs]]
+type = "Android"
+keystore_password = "${DEPLO_CLIENT_ANDROID_KEYSTORE_PASSWORD}"
+keyalias_name = "deplo"
+keyalias_password = "${DEPLO_CLIENT_ANDROID_KEYALIAS_PASSWORD}"
+keystore_path = "./meta/client/Android/user.keystore"
+use_expansion_file = false
+
+[[client.platform_build_configs]]
+type = "IOS"
+team_id = "${DEPLO_CLIENT_IOS_TEAM_ID}"
+numeric_team_id = "${DEPLO_CLIENT_IOS_NUMERIC_TEAM_ID}"
+signing_password = "${DEPLO_CLIENT_IOS_P12_SIGNING_PASSWORD}"
+signing_plist_path = "./meta/client/iOS/suntomi_distribution.plist"
+signing_p12_path = "./meta/client/iOS/suntomi_distribution.p12"
+singing_provision_path = "./meta/client/iOS/suntomi_deplo_appstore.mobileprovision"
+
+[[client.stores]]
+type = "Apple"
+account = "${DEPLO_CLIENT_STORE_APPLE_ACCOUNT}"
+password = "${DEPLO_CLIENT_STORE_APPLE_PASSWORD}"
+
+[[client.stores]]
+type = "Google"
+key = "${DEPLO_CLIENT_STORE_GOOGLE_ACCESS_KEY}"
+
+[deploy.pr]
+"./master-data/.*" = "deplo service deploy master-data-build"
+
+[deploy.release]
+"./client/.*" = "deplo service deploy client"

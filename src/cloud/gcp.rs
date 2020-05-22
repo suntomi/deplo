@@ -467,6 +467,9 @@ impl<'a, S: shell::Shell<'a>> cloud::Cloud<'a> for Gcp<'a, S> {
                     dns_zone: _,
                     region: _
                 } = &self.config.cloud.terraformer;
+                self.shell.exec(
+                    &vec!("gsutil", "mb", &format!("gs://{}", backend_bucket)), 
+                    &hashmap!{}, false)?;
                 return Ok(format!("\
                     bucket = \"{}\"\n\
                     prefix = \"{}\"\n\
