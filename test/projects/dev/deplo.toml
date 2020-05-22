@@ -16,7 +16,7 @@ key = "${DEPLO_CLOUD_ACCESS_KEY}"
 type = "Terraform"
 backend_bucket = "deplo-terraform-state"
 bucket_prefix = "deplo"
-dns_zone = "suntomi-zone"
+dns_zone = "suntomi-zone@suntomi"
 region = "asia-northeast1"
 
 [vcs]

@@ -26,7 +26,7 @@ impl<'a, S: shell::Shell<'a>, A: args::Args> command::Command<'a, A> for Exec<'a
             Some(subargs) => {
                 return match self.shell.exec(&subargs, &hashmap!{}, false) {
                     Ok(_) => Ok(()),
-                    Err(err) => Err(err)
+                    Err(err) => Err(Box::new(err))
                 }
             },
             None => Err(args.error("no argument for exec"))

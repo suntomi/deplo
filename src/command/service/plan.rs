@@ -77,7 +77,7 @@ impl Step {
                 shell.set_cwd::<String>(None)?;
                 match r {
                     Ok(_) => Ok(()),
-                    Err(err) => Err(err)
+                    Err(err) => Err(Box::new(err))
                 }
             },
             Self::Container { target, image, ports, env, options } => {

@@ -26,6 +26,7 @@ impl<'a, S: shell::Shell<'a>, A: args::Args> command::Command<'a, A> for Destroy
         let tf = tf::factory(self.config)?;
         let c = self.config.cloud_service()?;
         tf.destroy(&c);
+        c.cleanup_dependency()?;
         return Ok(())
     }
 }

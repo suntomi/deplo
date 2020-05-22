@@ -8,6 +8,7 @@ use crate::command::service::plan;
 pub trait Cloud<'a> {
     fn new(config: &'a config::Config) -> Result<Self, Box<dyn Error>> where Self : Sized;
     fn setup_dependency(&self) -> Result<(), Box<dyn Error>>;
+    fn cleanup_dependency(&self) -> Result<(), Box<dyn Error>>;
     fn generate_terraformer_config(&self, name: &str) -> Result<String, Box<dyn Error>>;
     // dns
     fn root_domain_dns_name(&self, zone: &str) -> Result<String, Box<dyn Error>>;

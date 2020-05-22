@@ -18,8 +18,8 @@ impl<'a, S: shell::Shell<'a>> Git<'a, S> {
         }
     }
     pub fn current_branch(&self) -> Result<String, Box<dyn Error>> {
-        return self.shell.output_of(&vec!(
+        Ok(self.shell.output_of(&vec!(
             "git", "symbolic-ref" , "--short", "HEAD"
-        ), &hashmap!{});
+        ), &hashmap!{})?)
     }
 }

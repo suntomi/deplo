@@ -1,5 +1,6 @@
 variable "root_domain" {}
 variable "dns_zone" {}
+variable "dns_zone_project" {}
 variable "project_id" {}
 variable "region" {}
 variable "bucket_prefix" {}
@@ -31,6 +32,10 @@ module "storage" {
   source = "./modules/storage"
   project = var.project_id
   bucket_prefix = var.bucket_prefix
+
+  dependencies = [
+    module.api.ready
+  ]
 }
 
 //
@@ -58,5 +63,10 @@ module "lb" {
   project = var.project_id
   root_domain = "${var.project_id}.${var.root_domain}"
   dns_zone = var.dns_zone
+  dns_zone_project = var.dns_zone_project
   default_backend_url = module.storage.bucket_404_url
+
+  dependencies = [
+    module.api.ready
+  ]
 }

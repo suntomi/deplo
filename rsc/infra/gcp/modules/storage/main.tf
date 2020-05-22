@@ -2,6 +2,12 @@ locals {
   bucket_prefix = "${length(var.bucket_prefix) > 0 ? var.bucket_prefix : var.project}"
 }
 
+resource "null_resource" "dependency_getter" {
+  provisioner "local-exec" {
+    command = "echo ${length(var.dependencies)}"
+  }
+}
+
 resource "google_storage_bucket" "bucket_404" {
   name     = "${local.bucket_prefix}-service-404"
 }
@@ -27,6 +33,10 @@ resource "google_compute_backend_bucket" "custom_buckets" {
   name        = "${google_storage_bucket.custom_buckets[each.value].name}-backend"
   bucket_name = google_storage_bucket.custom_buckets[each.value].name
   enable_cdn  = true
+
+  depends_on = [
+    null_resource.dependency_getter
+  ]
 }
 
 resource "google_storage_bucket_acl" "custom_buckets" {

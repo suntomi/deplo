@@ -35,14 +35,13 @@ impl<'a> shell::Shell<'a> for Native<'a> {
         ent.and_modify(|e| *e = val.clone()).or_insert(val);
         Ok(())
     }
-    #[allow(dead_code)]
-    fn output_of(&self, args: &Vec<&str>, envs: &HashMap<String, String>) -> Result<String, Box<dyn Error>> {
+    fn output_of(&self, args: &Vec<&str>, envs: &HashMap<String, String>) -> Result<String, shell::ShellError> {
         let mut cmd = self.create_command(args, envs, true);
         return Native::get_output(&mut cmd);
     }
     fn exec(
         &self, args: &Vec<&str>, envs: &HashMap<String, String>, capture: bool
-    ) -> Result<String, Box<dyn Error>> {
+    ) -> Result<String, shell::ShellError> {
         if self.config.runtime.dryrun {
             let cmd = args.join(" ");
             println!("dryrun: {}", cmd);
@@ -75,26 +74,34 @@ impl <'a> Native<'a> {
         }
         return c;
     }
-    fn get_output(cmd: &mut Command) -> Result<String, Box<dyn Error>> {
+    fn get_output(cmd: &mut Command) -> Result<String, shell::ShellError> {
         // TODO: option to capture stderr as no error case
         match cmd.output() {
             Ok(output) => {
                 if output.status.success() { 
                     match String::from_utf8(output.stdout) {
                         Ok(s) => return Ok(s),
-                        Err(err) => return Err(Box::new(err))
+                        Err(err) => return Err(shell::ShellError::OtherFailure{
+                            cause: format!("stdout character code error {:?}", err)
+                        })
                     }
                 } else {
                     match String::from_utf8(output.stderr) {
-                        Ok(s) => return Err(Box::new(shell::ShellError{ cause: s })),
-                        Err(err) => return Err(Box::new(err))
+                        Ok(s) => return Err(shell::ShellError::OtherFailure{ 
+                            cause: format!("command returns error {}", s)
+                        }),
+                        Err(err) => return Err(shell::ShellError::OtherFailure{
+                            cause: format!("stderr character code error {:?}", err)
+                        })
                     }
                 }
             },
-            Err(err) => Err(Box::new(err))
-        }
+            Err(err) => return Err(shell::ShellError::OtherFailure{
+                cause: format!("get output error {:?}", err)
+            })
+}
     }
-    fn run_as_child(cmd: &mut Command) -> Result<String, Box<dyn Error>> {
+    fn run_as_child(cmd: &mut Command) -> Result<String,shell::ShellError> {
         match cmd.spawn() {
             Ok(mut process) => {
                 match process.wait() { 
@@ -104,25 +111,29 @@ impl <'a> Native<'a> {
                             match process.stdout {
                                 Some(mut stream) => match stream.read_to_string(& mut s) {
                                     Ok(_) => return Ok(s),
-                                    Err(err) => return Err(Box::new(err))
+                                    Err(err) => return Err(shell::ShellError::OtherFailure{
+                                        cause: format!("read stream error {:?}", err)
+                                    })
                                 },
                                 None => Ok("".to_string())
                             }
                         } else {
-                            return Err(Box::new(shell::ShellError{ 
-                                cause: match status.code() {
-                                    Some(code) => format!(
-                                        "`{}` exit with {}", format!("{:?}", cmd), code
-                                    ),
-                                    None => format!("cmd terminated by signal")
-                                }
-                            }));
+                            return match status.code() {
+                                Some(_) => Err(shell::ShellError::ExitStatus{ status }),
+                                None => Err(shell::ShellError::OtherFailure{
+                                    cause: format!("cmd terminated by signal")
+                                }),
+                            }
                         }
                     },
-                    Err(err) => Err(Box::new(err))
+                    Err(err) => Err(shell::ShellError::OtherFailure{
+                        cause: format!("wait process error {:?}", err)
+                    })
                 }
             },
-            Err(err) => Err(Box::new(err))
+            Err(err) => Err(shell::ShellError::OtherFailure{
+                cause: format!("process spawn error {:?}", err)
+            })
         }
     }
 }

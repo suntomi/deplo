@@ -31,9 +31,9 @@ impl<'a, S: shell::Shell<'a>> Gcp<'a, S> {
     }
     fn service_account(config: &'a config::Config, shell: &S) -> Result<String, Box<dyn Error>> {
         if let config::CloudProviderConfig::GCP{key} = &config.cloud.provider {
-            return shell.eval_output_of(&format!(r#"
+            return Ok(shell.eval_output_of(&format!(r#"
                 echo '{}' | jq -jr ".client_email"
-            "#, key), &hashmap!{})
+            "#, key), &hashmap!{})?)
         }
         return Err(Box::new(config::ConfigError{
             cause: format!("should have GCP config for config.cloud.provider, but {}", config.cloud.provider)
@@ -41,9 +41,9 @@ impl<'a, S: shell::Shell<'a>> Gcp<'a, S> {
     }
     fn gcp_project_id(config: &'a config::Config, shell: &S) -> Result<String, Box<dyn Error>> {
         if let config::CloudProviderConfig::GCP{key} = &config.cloud.provider {
-            return shell.eval_output_of(&format!(r#"
+            return Ok(shell.eval_output_of(&format!(r#"
                 echo '{}' | jq -jr ".project_id"
-            "#, key), &hashmap!{})
+            "#, key), &hashmap!{})?)
         }
         return Err(Box::new(config::ConfigError{
             cause: format!("should have GCP config for config.cloud.provider, but {}", config.cloud.provider)
@@ -109,10 +109,10 @@ impl<'a, S: shell::Shell<'a>> Gcp<'a, S> {
     fn instance_list(&self, 
         instance_group_name: &str, resource_location_flag: &str
     ) -> Result<String, Box<dyn Error>> {
-        return self.shell.eval(&format!(r#"
+        Ok(self.shell.eval(&format!(r#"
             gcloud compute instance-groups list-instances {} {} --format=json |
             jq -jr '[.[].instance]|join(",")'
-        "#, instance_group_name, resource_location_flag), &hashmap!{}, true);
+        "#, instance_group_name, resource_location_flag), &hashmap!{}, true)?)
     }
     fn wait_serverless_deployment_finish(&self, service_name: &str) -> Result<(), Box<dyn Error>> {
         print!("waiting {} become active.", service_name);
@@ -154,9 +154,9 @@ impl<'a, S: shell::Shell<'a>> Gcp<'a, S> {
                     service_name)
             }))
         }
-        return self.shell.eval_output_of(&format!(r#"
+        Ok(self.shell.eval_output_of(&format!(r#"
             echo '{}' | jq -jr ".status.address.url"
-        "#, out), &hashmap!{});
+        "#, out), &hashmap!{})?)
     }
     fn subscribe_topic(
         &self,
@@ -407,6 +407,15 @@ impl<'a, S: shell::Shell<'a>> Gcp<'a, S> {
         }
         return Ok(())
     }
+    fn get_zone_and_project<'b>(&'b self, dns_zone: &'b str) -> (&'b str, &'b str) {
+        let parsed: Vec<&str> = dns_zone.split("@").collect();
+        return if parsed.len() > 1 {
+            (parsed[0], parsed[1])
+        } else {
+            (parsed[0], &*self.gcp_project_id)
+        };
+    }
+
 }
 
 impl<'a, S: shell::Shell<'a>> cloud::Cloud<'a> for Gcp<'a, S> {
@@ -441,6 +450,9 @@ impl<'a, S: shell::Shell<'a>> cloud::Cloud<'a> for Gcp<'a, S> {
                         gcloud config set run/region {}",
                         &self.gcp_project_id, &self.config.cloud_region(), &self.config.cloud_region()
                     ), &hashmap!{}, false)?;
+                    self.shell.exec(&vec!(
+                        "gcloud", "services", "enable", "cloudresourcemanager.googleapis.com"
+                    ), &hashmap!{}, false)?;
                 } else {
                     return Err(Box::new(cloud::CloudError{
                         cause: format!(
@@ -458,6 +470,23 @@ impl<'a, S: shell::Shell<'a>> cloud::Cloud<'a> for Gcp<'a, S> {
         }
         Ok(())        
     }
+    fn cleanup_dependency(&self) -> Result<(), Box<dyn Error>> {
+        let config::TerraformerConfig::Terraform {
+            backend_bucket,
+            bucket_prefix: _,
+            dns_zone: _,
+            region: _
+        } = &self.config.cloud.terraformer;
+        return match self.shell.exec(
+            &vec!("gsutil", "rb", &format!("gs://{}", backend_bucket)), 
+            &hashmap!{}, false) {
+            Ok(_) => Ok(()),
+            Err(err) => match err {
+                shell::ShellError::ExitStatus{ status:_ } => Ok(()),
+                _ => Err(Box::new(err))
+            }
+        }
+    }
     fn generate_terraformer_config(&self, name: &str) -> Result<String, Box<dyn Error>> {
         match name {
             "terraform.backend" => {
@@ -467,9 +496,15 @@ impl<'a, S: shell::Shell<'a>> cloud::Cloud<'a> for Gcp<'a, S> {
                     dns_zone: _,
                     region: _
                 } = &self.config.cloud.terraformer;
-                self.shell.exec(
+                match self.shell.exec(
                     &vec!("gsutil", "mb", &format!("gs://{}", backend_bucket)), 
-                    &hashmap!{}, false)?;
+                    &hashmap!{}, false) {
+                    Ok(_) => {},
+                    Err(err) => match err {
+                        shell::ShellError::ExitStatus{ status:_ } => {},
+                        _ => return Err(Box::new(err))
+                    }            
+                }
                 return Ok(format!("\
                     bucket = \"{}\"\n\
                     prefix = \"{}\"\n\
@@ -484,18 +519,21 @@ impl<'a, S: shell::Shell<'a>> cloud::Cloud<'a> for Gcp<'a, S> {
                     region
                 } = &self.config.cloud.terraformer;
                 let root_domain_dns_name = self.root_domain_dns_name(dns_zone)?;
+                let zone_and_project = self.get_zone_and_project(dns_zone);
                 return Ok(
                     format!(
                         "\
                             root_domain = \"{}\"\n\
                             dns_zone = \"{}\"\n\
+                            dns_zone_project = \"{}\"\n\
                             project_id = \"{}\"\n\
                             region = \"{}\"\n\
                             bucket_prefix = \"{}\"\n\
                             envs = [\"{}\"]\n\
                         ",
                         &root_domain_dns_name[..root_domain_dns_name.len()-1], 
-                        dns_zone, self.config.common.project_id, region, 
+                        zone_and_project.0, zone_and_project.1, 
+                        self.config.common.project_id, region, 
                         bucket_prefix.as_ref().unwrap_or(&"".to_string()), 
                         self.config.common.release_targets
                             .keys().map(|s| &**s)
@@ -513,10 +551,11 @@ impl<'a, S: shell::Shell<'a>> cloud::Cloud<'a> for Gcp<'a, S> {
 
     // dns
     fn root_domain_dns_name(&self, zone: &str) -> Result<String, Box<dyn Error>> {
+        let zone_and_project = self.get_zone_and_project(zone);
         let r = self.shell.eval_output_of(&format!(r#"
-            gcloud dns managed-zones list --format=json |
+            gcloud dns managed-zones list --project={} --format=json |
             jq -jr ".[]|select(.name==\"{}\").dnsName"
-        "#, zone), &hashmap!{})?;
+        "#, zone_and_project.1, zone_and_project.0), &hashmap!{})?;
         if r.is_empty() {
             return Err(Box::new(cloud::CloudError{
                 cause: format!("no such zone: {} [{}]", zone, r)

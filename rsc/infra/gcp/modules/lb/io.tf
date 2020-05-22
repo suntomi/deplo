@@ -7,6 +7,9 @@ variable "root_domain" {
 variable "dns_zone" {
   type = string
 }
+variable "dns_zone_project" {
+  type = string
+}
 variable "default_backend_url" {
   type = string
 }
@@ -16,6 +19,10 @@ variable "envs" {
 variable "ip_version" {
   type = string
   default = "IPV4"
+}
+variable "dependencies" {
+  type = list(string)
+  default = []
 }
 
 output "dns_names" {

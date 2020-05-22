@@ -1,3 +1,20 @@
+### setup
+- gcp
+  1. create project
+  2. create service account 
+    - Compute Admin
+    - Compute Network Admin
+    - DNS Admin
+    - Cloud Run Admin
+    - Storage Admin 
+    - Quota Admin
+  3. if dns is managed by other project, please give above service account to DNS Admin role for another project 
+    - ```dns_zone``` variable of ```[cloud.terraformer]``` section should be ```"${dns-zone-resource-name}@${project-belongs-to}"```.
+- aws
+  - TBD
+- ali
+  - TBD
+
 ### commands
 - ```deplo init```: init deplo project structure
     - mkdir config.common.data_dir

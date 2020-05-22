@@ -1,4 +1,11 @@
+resource "null_resource" "dependency_getter" {
+  provisioner "local-exec" {
+    command = "echo ${length(var.dependencies)}"
+  }
+}
+
 resource "google_dns_record_set" "a" {
+  project = var.dns_zone_project
   for_each   = toset(var.envs)
   name = "${each.value}.${var.root_domain}."
   type = "A"
@@ -12,6 +19,7 @@ resource "google_dns_record_set" "a" {
 }
 
 resource "google_dns_record_set" "caa" {
+  project = var.dns_zone_project
   for_each   = toset(var.envs)
   name = "${each.value}.${var.root_domain}."
   type = "CAA"
@@ -35,6 +43,10 @@ resource "google_compute_global_address" "default" {
   for_each   = toset(var.envs)
   name       = "${var.project}-${each.value}-global-address"
   ip_version = var.ip_version
+
+  depends_on = [
+    null_resource.dependency_getter
+  ]
 }
 
 # HTTPS proxy  when ssl is true

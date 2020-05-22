@@ -1,6 +1,16 @@
+resource "null_resource" "dependency_getter" {
+  provisioner "local-exec" {
+    command = "echo ${length(var.dependencies)}"
+  }
+}
+
 resource "google_compute_network" "vpc-network" {
   for_each = toset(var.envs)
   name = "${var.project}-${each.value}-vpc-network"  
+
+  depends_on = [
+    null_resource.dependency_getter
+  ]
 }
 resource "google_compute_firewall" "default" {
   for_each = toset(var.envs)
@@ -56,12 +66,6 @@ resource "google_compute_global_address" "private_ip_range" {
   address_type  = "INTERNAL"
   prefix_length = 16
   network       = google_compute_network.vpc-network[each.value].name
-}
-
-resource "null_resource" "dependency_getter" {
-  provisioner "local-exec" {
-    command = "echo ${length(var.dependencies)}"
-  }
 }
 
 resource "google_service_networking_connection" "private_vpc_connection" {
