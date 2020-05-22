@@ -70,7 +70,7 @@ type = "Google"
 key = "${DEPLO_CLIENT_STORE_GOOGLE_ACCESS_KEY}"
 
 [deploy.pr]
-"./master-data/.*" = "deplo service deploy master-data-build"
+"client/.*" = "deplo service deploy client"
 
 [deploy.release]
-"./client/.*" = "deplo service deploy client"
+"api/.*" = "deplo service deploy api"

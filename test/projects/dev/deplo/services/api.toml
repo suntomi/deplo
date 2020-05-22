@@ -1,0 +1,21 @@
+[[steps]]
+type = 'Script'
+workdir = 'api'
+code = '''
+#!/bin/bash
+cargo build --release
+mv target/release/api docker/apisv
+docker build -t deplo-sandbox/apisv docker
+'''
+
+[steps.env]
+
+[[steps]]
+type = 'Container'
+image = 'deplo-sandbox/apisv'
+target = 'Instance'
+ports = [80]
+
+[steps.env]
+
+[steps.options]
