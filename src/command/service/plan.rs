@@ -69,9 +69,7 @@ impl Step {
                 let r = match fs::metadata(code) {
                     Ok(_) => shell.exec(&vec!(runner_command, code), &env, false),
                     Err(_) => {
-                        shell.exec(&vec!(
-                            "sh", "-c", &format!("echo \'{}\' | {}", code, runner_command)
-                        ), &env, false)
+                        shell.eval(&format!("echo \'{}\' | {}", code, runner_command), &env, false)
                     }
                 };
                 shell.set_cwd::<String>(None)?;

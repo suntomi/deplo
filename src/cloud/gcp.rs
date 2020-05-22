@@ -25,7 +25,9 @@ impl<'a, S: shell::Shell<'a>> Gcp<'a, S> {
         let region = self.config.cloud_region();
         let re = Regex::new(r"([^-]+)-").unwrap();
         return match re.captures(region) {
-            Some(c) => Some(c.get(1).map_or("", |m| m.as_str()).to_string()),
+            Some(c) => Some(
+                format!("{}.gcr.io", c.get(1).map_or("", |m| m.as_str()).to_string())
+            ),
             None => None
         }
     }
@@ -569,17 +571,15 @@ impl<'a, S: shell::Shell<'a>> cloud::Cloud<'a> for Gcp<'a, S> {
         &self, src: &str, target: &str
     ) -> Result<String, Box<dyn Error>> {
         self.shell.exec(&vec!("docker", "tag", src, target), &hashmap!{}, false)?;
+        let repository_url = self.container_repository_url().expect(
+            &format!("invalid region:{}", self.config.cloud_region())
+        );
         // authentication
         match &self.config.cloud.provider {
             config::CloudProviderConfig::GCP{key} => {
-                self.shell.exec(&vec!(
-                    "sh", "-C",
-                    &format!(
-                        "echo '{}' | docker login -u _json_key --password-stdin https://{}",
-                        key, self.container_repository_url().expect(
-                            &format!("invalid region:{}", self.config.cloud_region())
-                        )
-                    )
+                self.shell.eval(&format!(
+                    "echo '{}' | docker login -u _json_key --password-stdin https://{}",
+                    key, repository_url
                 ), &hashmap!{}, false)?;
             },
             _ => return Err(Box::new(cloud::CloudError{
@@ -587,7 +587,14 @@ impl<'a, S: shell::Shell<'a>> cloud::Cloud<'a> for Gcp<'a, S> {
                     self.config.cloud.provider)
             }))
         }
-        self.shell.exec(&vec!("docker", "push", target), &hashmap!{}, false)?;
+        self.shell.exec(&vec!(
+            "docker", "tag", src,  
+            &format!("{}/{}/{}", repository_url, self.gcp_project_id, target)
+        ), &hashmap!{}, false)?;
+        self.shell.exec(&vec!(
+            "docker", "push", 
+            &format!("{}/{}/{}", repository_url, self.gcp_project_id, target)
+        ), &hashmap!{}, false)?;
         Ok(target.to_string())
     }
     fn deploy_container(

@@ -1,7 +1,8 @@
 locals {
   basic_services = [
     "compute.googleapis.com",
-    "servicenetworking.googleapis.com"
+    "servicenetworking.googleapis.com",
+    "containerregistry.googleapis.com"
   ]
 }
 

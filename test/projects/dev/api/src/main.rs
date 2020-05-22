@@ -70,13 +70,19 @@ async fn create_something(
 async fn main() -> io::Result<()> {
     std::env::set_var("RUST_LOG", "actix_web=info");
     env_logger::init();
-    let endpoint = "127.0.0.1:8080";
+
+    let _ = std::env::var("DEPLO_RELEASE_TARGET").unwrap_or("dev".to_string());
+    let version = std::env::var("DEPLO_SERVICE_VERSION").unwrap_or("1".to_string());
+    let name = std::env::var("DEPLO_SERVICE_NAME").unwrap_or("api".to_string());
+    let endpoint = "127.0.0.1:80";
 
     println!("Starting server at: {:?}", endpoint);
-    HttpServer::new(|| {
+    HttpServer::new(move || {
         App::new()
             .data(Client::default())
-            .service(web::resource("/something").route(web::post().to(create_something)))
+            .service(web::resource(
+                format!("/{}/{}/something", name, version)
+            ).route(web::post().to(create_something)))
     })
     .bind(endpoint)?
     .run()
