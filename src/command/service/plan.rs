@@ -10,6 +10,7 @@ use glob::glob;
 
 use crate::config;
 use crate::shell;
+use crate::cloud;
 
 #[derive(Debug)]
 pub struct DeployError {
@@ -58,7 +59,7 @@ enum Step {
     },
     Storage {
         // source file glob pattern => target storage path
-        copymap: HashMap<String, String>,
+        copymap: HashMap<String, cloud::DeployStorageOption>,
     },
     Store {
         kind: config::StoreKind,
@@ -148,7 +149,12 @@ impl<'a> Plan<'a> {
                     "storage" => vec!(Step::Storage {
                         copymap: hashmap! {
                             "source_dir/copyfiles/*.".to_string() => 
-                            "target_bucket/folder/subfolder".to_string()
+                            cloud::DeployStorageOption {
+                                destination: "target_bucket/folder/subfolder".to_string(),
+                                permission: None,
+                                max_age: None,
+                                excludes: None
+                            }
                         },
                     }),
                     "store" => vec!(Step::Store {

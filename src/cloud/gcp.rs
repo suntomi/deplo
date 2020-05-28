@@ -734,11 +734,52 @@ impl<'a, S: shell::Shell<'a>> cloud::Cloud<'a> for Gcp<'a, S> {
     fn create_bucket(
         &self, bucket_name: &str
     ) -> Result<(), Box<dyn Error>> {
-        Ok(())
+        match self.shell.exec(
+            &vec!("gsutil", "mb", &format!("gs://{}", bucket_name)), 
+            &hashmap!{}, false) {
+            Ok(_) => Ok(()),
+            Err(err) => match err {
+                shell::ShellError::ExitStatus{ status:_ } => Ok(()),
+                _ => return Err(Box::new(err))
+            }            
+        }
     }
     fn deploy_storage(
-        &self, copymap: &HashMap<String, String>
+        &self, copymap: &HashMap<String, cloud::DeployStorageOption>
     ) -> Result<(), Box<dyn Error>> {
+        let re = Regex::new(r#"^([^/])+/.*"#).unwrap();
+        for (src, config) in copymap {
+            let dst = &config.destination;
+            match re.captures(dst) {
+                Some(c) => match c.get(1) {
+                    Some(m) => { self.create_bucket(m.as_str())?; },
+                    None => return Err(Box::new(cloud::CloudError{
+                        cause: format!("invalid dst config: {}", dst)
+                    }))
+                },
+                None => return Err(Box::new(cloud::CloudError{
+                    cause: format!("invalid dst config: {}", dst)
+                }))
+            }
+            if dst.ends_with("/") {
+                self.shell.exec(&vec!(
+                    "gsutil", 
+                    "-h", &format!("Cache-Control:public,max-age={}", config.max_age.unwrap_or(3600)), 
+                    "-m", "rsync", &config.excludes.as_ref().unwrap_or(&"".to_string()),
+                    "-a", &config.permission.as_ref().unwrap_or(&"public-read".to_string()), 
+                    "-r", src, 
+                    &format!("gs://{}", dst)
+                ), &hashmap!{}, false)?;
+            } else {
+                self.shell.exec(&vec!(
+                    "gsutil", 
+                    "-h", &format!("Cache-Control:public,max-age={}", config.max_age.unwrap_or(3600)), 
+                    "cp", 
+                    "-a", config.permission.as_ref().unwrap_or(&"public-read".to_string()), 
+                    src, &format!("gs://{}", dst)
+                ), &hashmap!{}, false)?;
+            }
+        }
         Ok(())
     }
 

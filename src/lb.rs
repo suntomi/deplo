@@ -4,6 +4,7 @@ use maplit::hashmap;
 use chrono::Utc;
 
 use crate::config;
+use crate::cloud;
 use crate::endpoints;
 
 fn meta_pr(config: &config::Config, title: &str, label: &str) -> Result<(), Box<dyn Error>> {
@@ -67,7 +68,12 @@ fn deploy_meta(
     cloud.create_bucket(&bucket_name)?;
     cloud.deploy_storage(&hashmap! {
         format!("{}/endpoints/{}.toml", config.root_path().to_string_lossy(), release_target) => 
-        format!("{}/meta/data.toml", bucket_name)
+        cloud::DeployStorageOption {
+            destination: format!("{}/meta/data.toml", bucket_name),
+            permission: None,
+            excludes: None,
+            max_age: None
+        }
     })
 }
 
