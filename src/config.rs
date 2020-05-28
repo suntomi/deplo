@@ -101,6 +101,11 @@ pub enum StoreConfig {
         key: String
     }
 }
+#[derive(Serialize, Deserialize, Debug)]
+pub enum StoreKind {
+    AppStore,
+    PlayStore,
+}
 #[derive(Serialize, Deserialize)]
 #[serde(tag = "type")]
 pub enum VCSConfig {
@@ -228,6 +233,7 @@ pub struct RuntimeConfig<'a> {
     pub verbosity: u64,
     pub dryrun: bool,
     pub debug: Vec<&'a str>,
+    pub store_deployments: Vec<String>,
     pub release_target: Option<String>,
 }
 #[derive(Serialize, Deserialize)]
@@ -294,6 +300,7 @@ impl<'a> Config<'a> {
         let mut c = Config::load(args.value_of("config").unwrap_or("./deplo.toml")).unwrap();
         c.runtime = RuntimeConfig {
             verbosity,
+            store_deployments: vec!(),
             dryrun: args.occurence_of("dryrun") > 0,
             debug: match args.values_of("debug") {
                 Some(s) => s,
@@ -405,7 +412,7 @@ impl<'a> Config<'a> {
         return vcs::factory(&self);
     }
     
-    fn verify(&self) -> Result<(), Box<dyn Error>> {
+    fn verify(&mut self) -> Result<(), Box<dyn Error>> {
         log::debug!("verify config");
         // global configuration verificaiton
         // 1. all endpoints/plans can be loaded without error 
@@ -416,27 +423,37 @@ impl<'a> Config<'a> {
             match entry {
                 Ok(path) => {
                     log::debug!("verify config: load at path {}", path.to_string_lossy());
-                    let plan = plan::Plan::load_by_path(&self, &path)?;
-                    match plan.ports()? {
-                        Some(ports) => {
-                            for (n, _) in &ports {
-                                let name = if n.is_empty() { &plan.service } else { n };
-                                match services.get(name) {
-                                    Some(service_name) => return Err(Box::new(ConfigError {
-                                        cause: format!(
-                                            "endpoint name:{} both exists in plan {}.toml and {}.toml",
-                                            name, service_name, plan.service
-                                        )
-                                    })),
-                                    None => {
-                                        services.entry(name.to_string()).or_insert(plan.service.clone());
+                    let store_deployment_name = {
+                        let plan = plan::Plan::load_by_path(&self, &path)?;
+                        match plan.ports()? {
+                            Some(ports) => {
+                                for (n, _) in &ports {
+                                    let name = if n.is_empty() { &plan.service } else { n };
+                                    match services.get(name) {
+                                        Some(service_name) => return Err(Box::new(ConfigError {
+                                            cause: format!(
+                                                "endpoint name:{} both exists in plan {}.toml and {}.toml",
+                                                name, service_name, plan.service
+                                            )
+                                        })),
+                                        None => {
+                                            services.entry(name.to_string()).or_insert(plan.service.clone());
+                                        }
                                     }
                                 }
+                            },
+                            None => {
+                                services.entry(plan.service.clone()).or_insert(plan.service.clone());
                             }
-                        },
-                        None => {
-                            services.entry(plan.service.clone()).or_insert(plan.service.clone());
                         }
+                        if plan.has_store_deployment()? {
+                            plan.service.clone()
+                        } else {
+                            "".to_string()
+                        }
+                    };
+                    if !store_deployment_name.is_empty() {
+                        self.runtime.store_deployments.push(store_deployment_name);
                     }
                 },
                 Err(e) => return Err(Box::new(e))

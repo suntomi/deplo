@@ -46,7 +46,6 @@ impl PartialEq for Release {
 pub struct Endpoints {
     pub version: u32,
     pub confirm_deploy: Option<bool>,
-    pub clients: Vec<String>,
     pub prefix: String,
     pub default: Option<String>,
     pub paths: HashMap<String, String>,
@@ -59,7 +58,6 @@ impl Endpoints {
         Endpoints {
             version: 0,
             confirm_deploy: None,
-            clients: vec!(),
             prefix: prefix.to_string(),
             default: None,
             paths: hashmap!{},
@@ -119,7 +117,9 @@ impl Endpoints {
         }
         return Ok(false)
     }
-    pub fn cascade_versions(&mut self, release_name: Option<&str>, force: bool) -> Result<(), Box<dyn Error>> {
+    pub fn cascade_versions(
+        &mut self, config: &config::Config, release_name: Option<&str>, force: bool
+    ) -> Result<(), Box<dyn Error>> {
         let curr = self.releases.get("curr").unwrap().clone();
         let next = self.releases.get("next").unwrap().clone();
         if release_name == None && curr == next {
@@ -127,7 +127,7 @@ impl Endpoints {
             return Ok(())
         }
         if release_name == None || release_name == Some("prev") {
-            if force || self.should_cascade_current() {
+            if force || self.should_cascade_current(config) {
                 self.releases.entry("prev".to_string()).and_modify(|e| *e = curr);
             }
         }
@@ -149,28 +149,14 @@ impl Endpoints {
         }
     }
 
-    fn verify(&self, config: &config::Config) -> Result<(), Box<dyn Error>> {
-        for client in &self.clients {
-            let pathbuf = config.services_path().join(format!("{}.toml", client));
-            match fs::metadata(&pathbuf) {
-                Ok(_) => {},
-                Err(err) => return escalate!(Box::new(config::ConfigError {
-                    cause: format!(
-                        "{}: service names appeared in clients array \
-                        should have corresponding service deployment file({}) \
-                        but cause error {:?}",
-                        self.target(), pathbuf.to_str().unwrap(), err
-                    )
-                }))
-            }
-        }
+    fn verify(&self, _: &config::Config) -> Result<(), Box<dyn Error>> {
         Ok(())
     }
     fn target<'a>(&'a self) -> &'a str {
         self.prefix.split(".").collect::<Vec<&str>>()[0]
     }
-    fn should_cascade_current(&self) -> bool {
-        for client in &self.clients {
+    fn should_cascade_current(&self, config: &config::Config) -> bool {
+        for client in &config.runtime.store_deployments {
             if self.version_changed(client) {
                 return true
             }

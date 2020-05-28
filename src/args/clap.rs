@@ -104,7 +104,7 @@ lazy_static! {
                         .long("type")
                         .help("specify service type")
                         .possible_values(
-                            &["container", "storage", "script"]
+                            &["container", "storage", "store"]
                         )
                         .required(true))
                 )

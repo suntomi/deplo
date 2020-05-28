@@ -94,12 +94,13 @@ pub fn deploy(
         if !confirm_deploy || 
             endpoints::DeployState::ConfirmCascade == endpoints_deploy_state {
             log::info!("--- cascade versions confirm_deploy:{} endpoints_deploy_state:{}", 
-            confirm_deploy, endpoints_deploy_state);
-            endpoints.cascade_versions(None, false)?;
+                confirm_deploy, endpoints_deploy_state
+            );
+            endpoints.cascade_versions(config, None, false)?;
             if !confirm_deploy {
                 // update prev to prevent older incompatible client from accessing
                 // for production, this is pending to later pull request merging (see below)
-                endpoints.cascade_versions(Some("prev"), true)?;
+                endpoints.cascade_versions(config, Some("prev"), true)?;
             }
             if path_will_change {
                 log::info!("--- {}: meta version up {} => {} due to urlmap changes", 
@@ -128,7 +129,7 @@ pub fn deploy(
     } else if endpoints::DeployState::BeforeCleanup == endpoints_deploy_state {
         endpoints.deploy_state = None;
         // update prev to prevent older incompatible client from accessing
-        endpoints.cascade_versions(Some("prev"), true)?;
+        endpoints.cascade_versions(config, Some("prev"), true)?;
         meta_pr(config, "update $target.json: cleanup load balancer", "cutover_commit")?;
         // TODO: if possible we create rollback PR. 
         // any better way other than creating dev.rollback.json on confirm_cascade?

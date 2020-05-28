@@ -59,6 +59,9 @@ enum Step {
     Storage {
         // source file glob pattern => target storage path
         copymap: HashMap<String, String>,
+    },
+    Store {
+        kind: config::StoreKind,
     }
 }
 impl Step {
@@ -99,6 +102,9 @@ impl Step {
                 let cloud = config.cloud_service()?;
                 return cloud.deploy_storage(&copymap);
             },
+            Self::Store { kind:_ } => {
+                return Ok(())
+            }
         }
     }
 }
@@ -144,6 +150,9 @@ impl<'a> Plan<'a> {
                             "source_dir/copyfiles/*.".to_string() => 
                             "target_bucket/folder/subfolder".to_string()
                         },
+                    }),
+                    "store" => vec!(Step::Store {
+                        kind: config::StoreKind::AppStore,
                     }),
                     _ => return Err(Box::new(DeployError {
                         cause: format!("invalid deploy type: {:?}", kind)
@@ -215,6 +224,25 @@ impl<'a> Plan<'a> {
         }
         Ok(())
     }
+    pub fn has_store_deployment(&self) -> Result<bool, Box<dyn Error>> {
+        for step in &self.data.steps {
+            match step {
+                Step::Script { code:_, runner:_, env:_, workdir:_ } => {},
+                Step::Container { target:_, image:_, port:_, extra_ports:_, env:_, options:_ } => {
+                    return Ok(false)
+                },
+                Step::Storage { copymap:_ } => {
+                    return Ok(false)
+                },
+                Step::Store { kind:_ } => {
+                    return Ok(true)
+                }
+            }
+        }
+        return Err(Box::new(DeployError {
+            cause: format!("no container/storage are deployed in {}.toml", self.service)
+        }))
+    }
     pub fn has_bluegreen_deployment(&self) -> Result<bool, Box<dyn Error>> {
         for step in &self.data.steps {
             match step {
@@ -223,6 +251,9 @@ impl<'a> Plan<'a> {
                     return Ok(true)
                 },
                 Step::Storage { copymap:_ } => {
+                    return Ok(false)
+                },
+                Step::Store { kind:_ } => {
                     return Ok(false)
                 }
             }
@@ -242,6 +273,9 @@ impl<'a> Plan<'a> {
                 },
                 Step::Storage { copymap:_ } => {
                     return Ok(None)
+                },
+                Step::Store { kind:_ } => {
+                    return Ok(None)
                 }
             }
         }
@@ -251,30 +285,26 @@ impl<'a> Plan<'a> {
     }
 
     fn verify(&self) -> Result<(), Box<dyn Error>> {
+        let err = Box::new(DeployError {
+            cause: format!(
+                "only one storage/container/store deployment can exist in {}.toml", 
+                self.service
+            )
+        });
         let mut deployment_found = false;
         for step in &self.data.steps {
             match step {
                 Step::Script { code:_, runner:_, env:_, workdir:_ } => {},
                 Step::Container { target:_, image:_, port:_, extra_ports:_, env:_, options:_ } => {
-                    if deployment_found {
-                        return Err(Box::new(DeployError {
-                            cause: format!(
-                                "only one storage/container deployment can exist in {}.toml", 
-                                self.service
-                            )
-                        }))
-                    }
+                    if deployment_found { return Err(err) }
                     deployment_found = true;
-                }
+                },
                 Step::Storage { copymap:_ } => {
-                    if deployment_found {
-                        return Err(Box::new(DeployError {
-                            cause: format!(
-                                "only one storage/container deployment can exist in {}.toml", 
-                                self.service
-                            )
-                        }))
-                    }
+                    if deployment_found { return Err(err) }
+                    deployment_found = true;
+                },
+                Step::Store { kind:_ } => {
+                    if deployment_found { return Err(err) }
                     deployment_found = true;
                 }
             }

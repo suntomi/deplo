@@ -1,6 +1,5 @@
 version = 0
 prefix = 'dev.deplo.suntomi.dev'
-clients = ['ios','android']
 default = 'api'
 
 [paths]
