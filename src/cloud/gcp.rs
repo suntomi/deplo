@@ -8,6 +8,7 @@ use regex::Regex;
 use maplit::hashmap;
 
 use crate::config;
+use crate::endpoints;
 use crate::shell;
 use crate::cloud;
 use crate::command::service::plan;
@@ -60,8 +61,12 @@ impl<'a, S: shell::Shell<'a>> Gcp<'a, S> {
     fn instance_prefix(&self, plan: &plan::Plan, version: u32) -> String {
         return self.config.canonical_name(&format!("instance-{}-{}", plan.service, version))
     }
-    fn backend_service_name(&self, plan: &plan::Plan, version: u32, port: u32) -> String {
-        return self.config.canonical_name(&format!("backend-service-{}-{}-{}", plan.service, version, port))
+    fn backend_service_name(&self, plan: &plan::Plan, name: &str, version: u32) -> String {
+        if name.is_empty() {
+            return self.config.canonical_name(&format!("backend-service-{}-{}", plan.service, version))
+        } else {
+            return self.config.canonical_name(&format!("backend-service-{}-{}-{}", plan.service, name, version))
+        }
     }
     fn serverless_service_name(&self, plan: &plan::Plan) -> String {
         return self.config.canonical_name(&format!("serverless-{}", plan.service))
@@ -69,12 +74,99 @@ impl<'a, S: shell::Shell<'a>> Gcp<'a, S> {
     fn subscription_name(&self, topic_name: &str) -> String {
         return format!("{}-subscription", topic_name);
     }
-    fn health_check_name(&self, plan: &plan::Plan, version: u32, port: u32) -> String {
-        return format!("{}-health-check", self.backend_service_name(plan, version, port))
+    fn health_check_name(&self, plan: &plan::Plan, name: &str, version: u32) -> String {
+        return format!("{}-health-check", self.backend_service_name(plan, name, version))
     }
     fn firewall_rule_name(&self, plan: &plan::Plan) -> String {
         return self.config.canonical_name(&format!("fw-rules-{}", plan.service))
     }
+    fn url_map_name(&self) -> String {
+        return self.config.canonical_name("url-map")
+    }
+    fn path_matcher_name(&self, endpoints_version: u32) -> String {
+        return self.config.canonical_name(&format!("path-matcher-{}", endpoints_version))
+    }
+    fn metadata_backend_bucket_name(&self, endpoint_version: u32) -> String {
+        return self.config.canonical_name(&format!("backend-service-metadata-{}", endpoint_version));
+    }
+    fn backend_bucket_name(&self, plan: &plan::Plan) -> String {
+        return self.config.canonical_name(&format!("backend-bucket-{}", plan.service))
+    }
+    fn host_rule_add_option_name(&self, url_map_name: &str, target_host: &str) -> Result<&str, Box<dyn Error>> {
+        let host_rules = self.shell.eval_output_of(&format!(
+            r#"gcloud compute url-maps describe {} --format=json | jq ".hostRules""#, url_map_name
+        ), &hashmap!{})?;
+        if host_rules.is_empty() {
+            return Ok("new-hosts")
+        }
+        if host_rules == "null" {
+            return Ok("new-hosts")
+        }
+        let host_group = self.shell.eval_output_of(&format!(
+            r#"echo {} | jq ".[].hosts[]" | grep "{}""#, host_rules, target_host
+        ), &hashmap!{})?;
+        if host_group.is_empty() {
+            return Ok("new-hosts")
+        }
+        return Ok("existing-host")
+    }
+    fn service_path_rule(&self, endpoints: &endpoints::Endpoints) -> Result<String, Box<dyn Error>> {
+        let mut rules = vec!();
+        let services = endpoints.releases.get("curr").unwrap().versions.keys();
+        for s in services {
+            let plan = plan::Plan::load(self.config, s)?;
+            if plan.has_bluegreen_deployment()? {
+                let current_version = endpoints.get_version("curr", s);
+                let next_version = endpoints.get_version("next", s);
+                let prev_version = endpoints.get_version("prev", s);
+                let ports = plan.ports()?.expect("container deployment should have at least an exposed port");
+                for (name, port) in &ports {
+                    let curr_backend_service = self.backend_service_name(&plan, name, current_version);
+                    let next_backend_service = self.backend_service_name(&plan, name, next_version);
+                    let prev_backend_service = self.backend_service_name(&plan, name, prev_version);
+                    if current_version == next_version {
+                        if next_version == 0 {
+                            // no service deployed. so no path_rule here. 
+                            continue
+                        } else if next_version == prev_version {
+                            // all same version, only single backend required
+                            rules.push(format!("/{}/{}/*={}", s, next_version, next_backend_service));
+                        } else {
+                            // prev version still points old endpoint. anchor prev
+                            rules.push(format!("/{}/{}/*={},/{}/{}/*={}", 
+                                s, next_version, next_backend_service,
+                                s, prev_version, prev_backend_service));
+                        }
+                    } else {
+                        if current_version == 0 {
+                            // next_version is first version to deploy 
+                            rules.push(format!("/{}/{}/*={}", s, next_version, next_backend_service));
+                        } else {
+                            rules.push(format!("/{}/{}/*={},/{}/{}/*={}", 
+                                s, current_version, curr_backend_service, 
+                                s, next_version, next_backend_service));
+                        }
+                    }
+                }
+            }
+        }
+        Ok(rules.join(","))
+    }
+    fn bucket_path_rule(
+        &self, endpoints: &endpoints::Endpoints, endpoints_version: u32
+    ) -> Result<String, Box<dyn Error>> {
+        let mut rules = vec!();
+        let services = endpoints.releases.get("curr").unwrap().versions.keys();
+        rules.push(format!("/meta/*={}", self.metadata_backend_bucket_name(endpoints_version)));
+        for s in services {
+            let plan = plan::Plan::load(self.config, s)?;
+            if !plan.has_bluegreen_deployment()? {
+                rules.push(format!("/{}/*={}", s, self.backend_bucket_name(&plan)));
+            }
+        }
+        Ok(rules.join(","))
+    }
+
     fn firewall_option_for_backend(&self, plan: &plan::Plan) -> String {
         let fw_name=self.firewall_rule_name(plan);
         let bs_list=self.shell.eval_output_of(&format!(r#"
@@ -203,7 +295,7 @@ impl<'a, S: shell::Shell<'a>> Gcp<'a, S> {
     // create instance group
     fn deploy_instance_group(
         &self, plan: &plan::Plan,
-        image: &str, ports: &Vec<u32>,
+        image: &str, ports: &HashMap<String, u32>,
         env: &HashMap<String, String>,
         options: &HashMap<String, String>
     ) -> Result<(), Box<dyn Error>> {
@@ -231,7 +323,7 @@ impl<'a, S: shell::Shell<'a>> Gcp<'a, S> {
         env_vec.push(format!("DEPLO_SERVICE_VERSION={}", service_version));
         env_vec.push(format!("DEPLO_SERVICE_NAME={}", plan.service));
         env_vec.push(format!("DEPLO_SERVICE_PATH={}", deploy_path));
-        for (k, v) in env.iter() {
+        for (k, v) in env {
             env_vec.push(format!("{}={}", k, v));
         }
 
@@ -293,7 +385,9 @@ impl<'a, S: shell::Shell<'a>> Gcp<'a, S> {
             {} \
             --named-ports={}", 
             instance_group_name, resource_location_flag, 
-            ports.iter().map(|p| format!("port-{}:{}", p, p)).collect::<Vec<String>>().join(",")
+            ports.iter().map(
+                |p| format!("{}:{}", if p.0.is_empty() { "primary-port" } else { p.0 }, p.1)
+            ).collect::<Vec<String>>().join(",")
         ), 
         &hashmap!{}, false)?;
         log::info!("---- set autoscaling settings for {}", instance_group_name);
@@ -305,13 +399,13 @@ impl<'a, S: shell::Shell<'a>> Gcp<'a, S> {
     // deploy container to backend service
     fn deploy_backend_service(
         &self, plan: &plan::Plan,
-        port: u32
+        name: &str
     ) -> Result<(), Box<dyn Error>> {
         let service_version = self.config.next_service_endpoint_version(&plan.service)?;
-        let backend_service_name=self.backend_service_name(plan, port, service_version);
-        let health_check_name=self.health_check_name(plan, service_version, port);
+        let backend_service_name = self.backend_service_name(plan, name, service_version);
+        let health_check_name = self.health_check_name(plan, name, service_version);
         let instance_group_name = self.instance_group_name(plan, service_version);
-        let instance_group_type=format!("--instance-group-region={}", self.config.cloud_region());
+        let instance_group_type = format!("--instance-group-region={}", self.config.cloud_region());
     
         log::info!("---- deploy_backend_sevice");
         let hc_id = self.shell.eval_output_of(&format!(r#"gcloud compute health-checks list --format=json | 
@@ -389,7 +483,7 @@ impl<'a, S: shell::Shell<'a>> Gcp<'a, S> {
         ));
         env_vec.push(format!("DEPLO_SERVICE_VERSION={}", service_version));
         env_vec.push(format!("DEPLO_SERVICE_NAME={}", plan.service));
-        for (k, v) in env.iter() {
+        for (k, v) in env {
             env_vec.push(format!("{}={}", k, v));
         }
         // direct traffic 
@@ -427,7 +521,6 @@ impl<'a, S: shell::Shell<'a>> Gcp<'a, S> {
             (parsed[0], &*self.gcp_project_id)
         };
     }
-
 }
 
 impl<'a, S: shell::Shell<'a>> cloud::Cloud<'a> for Gcp<'a, S> {
@@ -605,15 +698,16 @@ impl<'a, S: shell::Shell<'a>> cloud::Cloud<'a> for Gcp<'a, S> {
     fn deploy_container(
         &self, plan: &plan::Plan,
         target: &plan::DeployTarget, 
-        image: &str, ports: &Vec<u32>,
+        // note: ports always contain single entry corresponding to the empty string key
+        image: &str, ports: &HashMap<String, u32>,
         env: &HashMap<String, String>,
         options: &HashMap<String, String>
     ) -> Result<(), Box<dyn Error>> {
         match target {
             plan::DeployTarget::Instance => {
                 self.deploy_instance_group(plan, image, ports, env, options)?;
-                for port in ports {
-                    self.deploy_backend_service(plan, *port)?;
+                for (name, port) in ports {
+                    self.deploy_backend_service(plan, name)?;
                 }
             },
             plan::DeployTarget::Kubernetes => {
@@ -637,9 +731,77 @@ impl<'a, S: shell::Shell<'a>> cloud::Cloud<'a> for Gcp<'a, S> {
         Ok(())
     }
 
-    fn deploy_load_balancer(
-        &self
+    fn update_path_matcher(
+        &self, endpoints: &endpoints::Endpoints, maybe_endpoints_version: Option<u32>
     ) -> Result<(), Box<dyn Error>> {
+        let target = self.config.release_target().expect("should be on release branch");
+        let default_backend_option = match &endpoints.default {
+            Some(ep) => {
+                let plan = plan::Plan::find_by_endpoint(self.config, ep)?;
+                log::warn!("TODO: support manually set default backend bucket case");
+                format!("--default-service={}", 
+                    self.backend_service_name(&plan, ep, endpoints.get_version("next", ep))
+                )
+            },
+            None => {
+                format!("--default-backend-bucket={}", self.config.default_backend())
+            }
+        };
+        let endpoints_version = maybe_endpoints_version.unwrap_or(endpoints.version);
+        log::info!("--- update path matcher ({}/{}/{})", target, default_backend_option, endpoints_version);
+        let target_host = &endpoints.prefix;
+        let url_map_name = self.url_map_name();
+        let path_matcher_name = self.path_matcher_name(endpoints_version);
+        let service_path_rule = self.service_path_rule(&endpoints)?;
+        let bucket_path_rule = self.bucket_path_rule(&endpoints, endpoints_version)?;
+        let host_rule_add_option_name = self.host_rule_add_option_name(&url_map_name, target_host)?;
+        self.shell.exec(&vec!(
+            "gcloud", "compute", "url-maps", "add-path-matcher", &url_map_name,
+            &format!("--path-matcher-name={}", path_matcher_name),
+            &default_backend_option,
+            &format!("--backend-bucket-path-rules={}", bucket_path_rule),
+            &format!("--backend-service-path-rules={}", service_path_rule),
+            &format!("--{}={}", host_rule_add_option_name, target_host),
+            "--delete-orphaned-path-matcher"
+        ), &hashmap!{}, false)?;
+    
+        log::info!("--- update default service");
+        self.shell.exec(&vec!(
+            "gcloud", "compute", "url-maps", "set-default-service", &url_map_name,
+            &default_backend_option, "--global"
+        ), &hashmap!{}, false)?;
+    
+        log::info!("--- waiting for new urlmap being applied");
+        let services = endpoints.releases.get("next").unwrap().versions.keys();
+        for s in services {
+            let plan = plan::Plan::load(self.config, s)?;
+            if !plan.has_bluegreen_deployment()? {
+                log::debug!("[{}] does not change path. skipped", s);
+                continue
+            }
+            let next_version = endpoints.get_version("net", s);
+            if next_version <= 0 {
+                continue
+            }
+            log::info!("wait for [{}]'s next version url being active.", s);
+            let mut count = 0;
+            loop {
+                let status: u32 = self.shell.eval_output_of(&format!(r#"
+                    curl https://{}/{}/{}/ping --output /dev/null -w %{{http_code}} 2>/dev/null
+                "#, target_host, s, next_version), &hashmap!{})?.parse().unwrap();
+                if status == 200 {
+                    log::info!("done");
+                    break
+                } else {
+                    count += 1;
+                    if count > 360 {
+                        log::error!("[{}]:too long to active. abort", s);
+                    }
+                }
+                print!(".");
+                std::thread::sleep(std::time::Duration::from_secs(5));
+            }
+        }
         Ok(())
     }
 }

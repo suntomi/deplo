@@ -3,6 +3,7 @@ use std::collections::HashMap;
 use std::fmt;
 
 use crate::config;
+use crate::endpoints;
 use crate::command::service::plan;
 
 pub trait Cloud<'a> {
@@ -17,7 +18,8 @@ pub trait Cloud<'a> {
     fn deploy_container(
         &self, plan: &plan::Plan,
         target: &plan::DeployTarget,
-        image: &str, ports: &Vec<u32>, 
+        // note: ports always contain single entry corresponding to the empty string key
+        image: &str, ports: &HashMap<String, u32>, 
         env: &HashMap<String, String>,
         options: &HashMap<String, String>
     ) -> Result<(), Box<dyn Error>>;
@@ -29,8 +31,8 @@ pub trait Cloud<'a> {
         &self, copymap: &HashMap<String, String>
     ) -> Result<(), Box<dyn Error>>;
     // load balancer
-    fn deploy_load_balancer(
-        &self
+    fn update_path_matcher(
+        &self, endpoints: &endpoints::Endpoints, next_endpoints_version: Option<u32>
     ) -> Result<(), Box<dyn Error>>;
 }
 

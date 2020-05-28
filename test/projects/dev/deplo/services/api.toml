@@ -14,7 +14,9 @@ docker build -t deplo-sandbox/apisv docker
 type = 'Container'
 image = 'deplo-sandbox/apisv'
 target = 'Instance'
-ports = [80]
+port = 80
+[steps.extra_ports]
+admin = 10000
 
 [steps.env]
 

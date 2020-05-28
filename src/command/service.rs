@@ -6,6 +6,7 @@ use crate::args;
 use crate::config;
 use crate::command;
 use crate::shell;
+use crate::lb;
 
 pub mod plan;
 
@@ -40,8 +41,25 @@ impl<'a, S: shell::Shell<'a>> Service<'a, S> {
             args.value_of("name").unwrap()
         )?;
         p.exec::<S>()?;
-        self.config.update_service_endpoint_version(&p.service)?;
+        match p.ports()? {
+            Some(ports) => {
+                for (name, _) in &ports {
+                    self.config.update_service_endpoint_version(name)?;
+                }
+            },
+            None => {
+                self.config.update_service_endpoint_version(&p.service)?;
+            }
+        }
         Ok(())
+    }
+    fn cutover<A: args::Args>(&self, _: &A) -> Result<(), Box<dyn Error>> {
+        log::info!("service cutover invoked");      
+        lb::deploy(self.config)
+    }
+    fn cleanup<A: args::Args>(&self, _: &A) -> Result<(), Box<dyn Error>> {
+        log::info!("service cleanup invoked");      
+        lb::cleanup(self.config)
     }
 }
 
@@ -56,6 +74,8 @@ impl<'a, S: shell::Shell<'a>, A: args::Args> command::Command<'a, A> for Service
         match args.subcommand() {
             Some(("create", subargs)) => return self.create(&subargs),
             Some(("deploy", subargs)) => return self.deploy(&subargs),
+            Some(("cutover", subargs)) => return self.cutover(&subargs),
+            Some(("cleanup", subargs)) => return self.cleanup(&subargs),
             Some((name, _)) => return Err(args.error(
                 &format!("no such subcommand: [{}]", name) 
             )),

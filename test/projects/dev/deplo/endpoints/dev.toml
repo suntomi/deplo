@@ -1,4 +1,6 @@
-prefix = 'dev.suntomi.dev'
+prefix = 'dev.deplo.suntomi.dev'
+clients = ['ios','android']
+default = 'api'
 
 [paths]
 [releases.next.versions]

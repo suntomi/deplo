@@ -2,7 +2,6 @@ use std::error::Error;
 use std::fs;
 use std::result::Result;
 
-use regex::{Regex,Captures};
 use maplit::hashmap;
 
 use crate::config;

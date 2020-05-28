@@ -8,13 +8,17 @@ use log;
 use simple_logger;
 use serde::{Deserialize, Serialize};
 use dotenv::dotenv;
+use maplit::hashmap;
 use regex::{Regex,Captures};
+use glob::glob;
 
 use crate::args;
 use crate::vcs;
 use crate::cloud;
 use crate::tf;
+use crate::ci;
 use crate::endpoints;
+use crate::command::service::plan;
 
 #[derive(Debug)]
 pub struct ConfigError {
@@ -69,13 +73,21 @@ impl fmt::Display for CloudProviderConfig {
 #[derive(Serialize, Deserialize)]
 #[serde(tag = "type")]
 pub enum CIConfig {
-    Github {
+    GhAction {
         account: String,
         key: String
     },
     Circle {
         key: String
     }
+}
+impl fmt::Display for CIConfig {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::GhAction{key:_,account:_} => write!(f, "github-action"),
+            Self::Circle{key:_} => write!(f, "circle"),
+        }
+    }    
 }
 #[derive(Serialize, Deserialize)]
 #[serde(tag = "type")]
@@ -294,6 +306,12 @@ impl<'a> Config<'a> {
                 vcs.release_target()
             }
         };
+        // verify all configuration files, including endoints/plans
+        c.verify()?;
+        // create service objects and invoke associated setup
+        let _ = c.ci_service()?;
+        let _ = c.cloud_service()?;
+        
         return Ok(c);
     }
     pub fn root_path(&self) -> &path::Path {
@@ -324,7 +342,7 @@ impl<'a> Config<'a> {
     pub fn root_domain(&self) -> Result<String, Box<dyn Error>> {
         let cloud = self.cloud_service()?;
         let dns_name = cloud.root_domain_dns_name(&self.cloud.terraformer.dns_zone())?;
-        Ok(dns_name[..dns_name.len()-1].to_string())
+        Ok(format!("{}.{}", self.common.project_id, dns_name[..dns_name.len()-1].to_string()))
     }
     pub fn release_target(&self) -> Option<&str> {
         return match &self.runtime.release_target {
@@ -344,31 +362,37 @@ impl<'a> Config<'a> {
             prefixed_name
         )
     }
-    pub fn service_endpoint_version(&'a self, service: &str) -> Result<u32, Box<dyn Error>> {
-        match endpoints::Endpoints::load(&self.endpoints_file_path(None)) {
-            Ok(ep) => match ep.releases.get("curr").unwrap().versions.get(&service.to_string()) {
+    pub fn service_endpoint_version(&'a self, endpoint: &str) -> Result<u32, Box<dyn Error>> {
+        match endpoints::Endpoints::load(&self, &self.endpoints_file_path(None)) {
+            Ok(ep) => match ep.releases.get("curr").unwrap().versions.get(&endpoint.to_string()) {
                 Some(v) => Ok(*v),
                 None => Ok(0), // not deployed yet
             },
             Err(err) => Err(err)
         }
     }
-    pub fn next_service_endpoint_version(&self, service: &str) -> Result<u32, Box<dyn Error>> {
-        Ok(self.service_endpoint_version(service)? + 1)
+    pub fn next_service_endpoint_version(&self, endpoint: &str) -> Result<u32, Box<dyn Error>> {
+        Ok(self.service_endpoint_version(endpoint)? + 1)
     }
-    pub fn update_service_endpoint_version(&self, service: &str) -> Result<u32, Box<dyn Error>> {
-        endpoints::Endpoints::modify(&self.endpoints_file_path(None), |ep| {
+    pub fn update_service_endpoint_version(&self, endpoint: &str) -> Result<u32, Box<dyn Error>> {
+        endpoints::Endpoints::modify(&self, &self.endpoints_file_path(None), |ep| {
             let r = ep.releases.get_mut("next").unwrap();
-            let v = r.versions.entry(service.to_string()).or_insert(0);
+            let v = r.versions.entry(endpoint.to_string()).or_insert(0);
             *v += 1;
             return Ok(*v);
         })
+    }
+    pub fn default_backend(&self) -> String {
+        format!("{}-backend-bucket-404", self.common.project_id)
     }
     pub fn cloud_service(&'a self) -> Result<Box<dyn cloud::Cloud<'a> + 'a>, Box<dyn Error>> {
         return cloud::factory(&self);
     }
     pub fn terraformer(&'a self) -> Result<Box<dyn tf::Terraformer<'a> + 'a>, Box<dyn Error>> {
         return tf::factory(&self);
+    }
+    pub fn ci_service(&'a self) -> Result<Box<dyn ci::CI<'a> + 'a>, Box<dyn Error>> {
+        return ci::factory(&self);
     }
     pub fn cloud_region(&'a self) -> &str {
         return self.cloud.terraformer.region();
@@ -378,5 +402,45 @@ impl<'a> Config<'a> {
     }
     pub fn vcs_service(&'a self) -> Result<Box<dyn vcs::VCS<'a> + 'a>, Box<dyn Error>> {
         return vcs::factory(&self);
+    }
+    
+    fn verify(&self) -> Result<(), Box<dyn Error>> {
+        log::debug!("verify config");
+        // global configuration verificaiton
+        // 1. all endpoints/plans can be loaded without error 
+        //    (loading endpoints/plans verify consistency of its content)
+        // 2. keys in each plan's extra_ports is project-unique
+        let mut services: HashMap<String, String> = hashmap!{};
+        for entry in glob(&self.services_path().join("*.toml").to_string_lossy())? {
+            match entry {
+                Ok(path) => {
+                    log::debug!("verify config: load at path {}", path.to_string_lossy());
+                    let plan = plan::Plan::load_by_path(&self, &path)?;
+                    match plan.ports()? {
+                        Some(ports) => {
+                            for (n, _) in &ports {
+                                let name = if n.is_empty() { &plan.service } else { n };
+                                match services.get(name) {
+                                    Some(service_name) => return Err(Box::new(ConfigError {
+                                        cause: format!(
+                                            "endpoint name:{} both exists in plan {}.toml and {}.toml",
+                                            name, service_name, plan.service
+                                        )
+                                    })),
+                                    None => {
+                                        services.entry(name.to_string()).or_insert(plan.service.clone());
+                                    }
+                                }
+                            }
+                        },
+                        None => {
+                            services.entry(plan.service.clone()).or_insert(plan.service.clone());
+                        }
+                    }
+                },
+                Err(e) => return Err(Box::new(e))
+            }
+        }
+        Ok(())
     }
 }

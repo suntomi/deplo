@@ -79,7 +79,7 @@ impl <'a> Native<'a> {
             Ok(output) => {
                 if output.status.success() { 
                     match String::from_utf8(output.stdout) {
-                        Ok(s) => return Ok(s),
+                        Ok(s) => return Ok(s.trim().to_string()),
                         Err(err) => return Err(shell::ShellError::OtherFailure{
                             cause: format!("stdout character code error {:?}", err)
                         })
@@ -98,7 +98,7 @@ impl <'a> Native<'a> {
             Err(err) => return Err(shell::ShellError::OtherFailure{
                 cause: format!("get output error {:?}", err)
             })
-}
+        }
     }
     fn run_as_child(cmd: &mut Command) -> Result<String,shell::ShellError> {
         match cmd.spawn() {
@@ -108,8 +108,8 @@ impl <'a> Native<'a> {
                         if status.success() {
                             let mut s = String::new();
                             match process.stdout {
-                                Some(mut stream) => match stream.read_to_string(& mut s) {
-                                    Ok(_) => return Ok(s),
+                                Some(mut stream) => match stream.read_to_string(&mut s) {
+                                    Ok(_) => return Ok(s.trim().to_string()),
                                     Err(err) => return Err(shell::ShellError::OtherFailure{
                                         cause: format!("read stream error {:?}", err)
                                     })

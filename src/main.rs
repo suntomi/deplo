@@ -10,6 +10,9 @@ mod cloud;
 mod vcs;
 mod endpoints;
 mod tf;
+mod lb;
+mod ci;
+mod util;
 
 use log;
 

@@ -56,9 +56,6 @@ pub fn factory<'a>(
             region: _
         } => {
             return factory_by::<terraform::Terraform>(config);
-        },
-        _ => return Err(Box::new(TerraformerError {
-            cause: format!("add factory matching pattern for [{}]", config.cloud.terraformer)
-        }))
+        }
     };
 }

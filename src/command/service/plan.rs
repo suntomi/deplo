@@ -1,10 +1,12 @@
 use std::fs;
 use std::fmt;
+use std::path;
 use std::error::Error;
 use std::collections::{HashMap};
 
 use serde::{Deserialize, Serialize};
 use maplit::hashmap;
+use glob::glob;
 
 use crate::config;
 use crate::shell;
@@ -49,7 +51,8 @@ enum Step {
     Container {
         image: String,
         target: DeployTarget,
-        ports: Vec<u32>,
+        port: u32,
+        extra_ports: Option<HashMap<String, u32>>,
         env: HashMap<String, String>,
         options: HashMap<String, String>,
     },
@@ -78,7 +81,7 @@ impl Step {
                     Err(err) => Err(Box::new(err))
                 }
             },
-            Self::Container { target, image, ports, env, options } => {
+            Self::Container { target, image, port, extra_ports, env, options } => {
                 let config = plan.config;
                 let cloud = config.cloud_service()?;
                 // deploy image to cloud container registry
@@ -88,12 +91,13 @@ impl Step {
                         config.next_service_endpoint_version(&plan.service)?)
                 )?;
                 // deploy to autoscaling group or serverless platform
-                return cloud.deploy_container(plan, &target, &pushed_image_tag, ports, env, options);
+                let ports = plan.ports()?.expect("container deployment should have at least an exposed port");
+                return cloud.deploy_container(plan, &target, &pushed_image_tag, &ports, env, options);
             },
             Self::Storage { copymap } => {
                 let config = plan.config;
                 let cloud = config.cloud_service()?;
-                return cloud.deploy_storage(&copymap)
+                return cloud.deploy_storage(&copymap);
             },
         }
     }
@@ -130,7 +134,8 @@ impl<'a> Plan<'a> {
                     }, Step::Container {
                         image: "your/image".to_string(),
                         target: DeployTarget::Instance,
-                        ports: vec!(80),
+                        port: 80,
+                        extra_ports: None,
                         env: hashmap!{},
                         options: hashmap!{},
                     }), 
@@ -138,16 +143,7 @@ impl<'a> Plan<'a> {
                         copymap: hashmap! {
                             "source_dir/copyfiles/*.".to_string() => 
                             "target_bucket/folder/subfolder".to_string()
-                        }
-                    }),
-                    "script" => vec!(Step::Script {
-                        code: "#!/bin/bash\n\
-                               build_image.sh your/image\n\
-                               deploy_as_serverless.sh your/image your_autoscaling_group\n\
-                              ".to_string(),
-                        runner: Some("bash".to_string()),
-                        workdir: None,
-                        env: hashmap!{},
+                        },
                     }),
                     _ => return Err(Box::new(DeployError {
                         cause: format!("invalid deploy type: {:?}", kind)
@@ -160,17 +156,49 @@ impl<'a> Plan<'a> {
         config: &'a config::Config, 
         service: &str
     ) -> Result<Plan<'a>, Box<dyn Error>> {
-        let pathbuf = config.services_path().join(format!("{}.toml", service));
-        match pathbuf.to_str() {
-            Some(path) => return Ok(Plan::<'a> {
-                service: service.to_string(),
-                config,
-                data: Self::load_plandata(path)?
-            }),
+        let path = config.services_path().join(format!("{}.toml", service));
+        Plan::<'a>::load_by_path(config, &path)
+    }
+    pub fn load_by_path(
+        config: &'a config::Config, path: &path::PathBuf
+    ) -> Result<Plan<'a>, Box<dyn Error>> {
+        let service = path.file_stem().unwrap();
+        match path.to_str() {
+            Some(path) => {
+                let plan = Plan::<'a> {
+                    service: service.to_string_lossy().to_string(),
+                    config,
+                    data: Self::load_plandata(path)?
+                };
+                plan.verify()?;
+                return Ok(plan)
+            }
             None => return Err(Box::new(DeployError {
-                cause: format!("invalid path string: {:?}", pathbuf)
+                cause: format!("invalid path string: {:?}", path)
             }))
         }
+    }
+    pub fn find_by_endpoint(
+        config: &'a config::Config, endpoint: &str
+    ) -> Result<Plan<'a>, Box<dyn Error>> {
+        for entry in glob(&config.services_path().join("*.toml").to_string_lossy())? {
+            match entry {
+                Ok(path) => {
+                    let plan = Plan::<'a>::load_by_path(config, &path)?;
+                    match plan.ports()? {
+                        Some(ports) => match ports.get(endpoint) {
+                            Some(_) => return Ok(plan),
+                            None => {}
+                        },
+                        None => {}
+                    }
+                },
+                Err(e) => return Err(Box::new(e))
+            }
+        }
+        Err(Box::new(DeployError {
+            cause: format!("plan contains endpoint:{} does not found", endpoint)
+        }))
     }
     pub fn save(&self) -> Result<(), Box<dyn Error>> {
         let pathbuf = self.config.services_path().join(format!("{}.toml", self.service));
@@ -187,7 +215,72 @@ impl<'a> Plan<'a> {
         }
         Ok(())
     }
+    pub fn has_bluegreen_deployment(&self) -> Result<bool, Box<dyn Error>> {
+        for step in &self.data.steps {
+            match step {
+                Step::Script { code:_, runner:_, env:_, workdir:_ } => {},
+                Step::Container { target:_, image:_, port:_, extra_ports:_, env:_, options:_ } => {
+                    return Ok(true)
+                },
+                Step::Storage { copymap:_ } => {
+                    return Ok(false)
+                }
+            }
+        }
+        return Err(Box::new(DeployError {
+            cause: format!("no container/storage are deployed in {}.toml", self.service)
+        }))
+    }
+    pub fn ports(&self) -> Result<Option<HashMap<String, u32>>, Box<dyn Error>> {
+        for step in &self.data.steps {
+            match step {
+                Step::Script { code:_, runner:_, env:_, workdir:_ } => {},
+                Step::Container { target:_, image:_, port, extra_ports, env:_, options:_ } => {
+                    let mut ports = extra_ports.clone().unwrap_or(hashmap!{});
+                    ports.entry("".to_string()).or_insert(*port);
+                    return Ok(Some(ports))
+                },
+                Step::Storage { copymap:_ } => {
+                    return Ok(None)
+                }
+            }
+        }
+        return Err(Box::new(DeployError {
+            cause: format!("either storage/container deployment should exist in {}.toml", self.service)
+        }))
+    }
 
+    fn verify(&self) -> Result<(), Box<dyn Error>> {
+        let mut deployment_found = false;
+        for step in &self.data.steps {
+            match step {
+                Step::Script { code:_, runner:_, env:_, workdir:_ } => {},
+                Step::Container { target:_, image:_, port:_, extra_ports:_, env:_, options:_ } => {
+                    if deployment_found {
+                        return Err(Box::new(DeployError {
+                            cause: format!(
+                                "only one storage/container deployment can exist in {}.toml", 
+                                self.service
+                            )
+                        }))
+                    }
+                    deployment_found = true;
+                }
+                Step::Storage { copymap:_ } => {
+                    if deployment_found {
+                        return Err(Box::new(DeployError {
+                            cause: format!(
+                                "only one storage/container deployment can exist in {}.toml", 
+                                self.service
+                            )
+                        }))
+                    }
+                    deployment_found = true;
+                }
+            }
+        }
+        Ok(())
+    }
     fn load_plandata(path_or_text: &str) -> Result<PlanData, Box<dyn Error>> {
         let data = match fs::read_to_string(path_or_text) {
             Ok(text) => toml::from_str::<PlanData>(&text)?,
