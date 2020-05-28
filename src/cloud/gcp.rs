@@ -198,7 +198,7 @@ impl<'a, S: shell::Shell<'a>> Gcp<'a, S> {
         if bs_group.is_empty() {
             return false;
         }
-        return false;
+        return true;
     }    
     fn instance_list(&self, 
         instance_group_name: &str, resource_location_flag: &str
