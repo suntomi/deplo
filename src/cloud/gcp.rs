@@ -112,15 +112,25 @@ impl<'a, S: shell::Shell<'a>> Gcp<'a, S> {
     }
     fn service_path_rule(&self, endpoints: &endpoints::Endpoints) -> Result<String, Box<dyn Error>> {
         let mut rules = vec!();
-        let services = endpoints.releases.get("curr").unwrap().versions.keys();
-        for s in services {
-            let plan = plan::Plan::load(self.config, s)?;
+        let mut processed: HashMap<String, bool> = hashmap!{};
+        let endpoint_names = endpoints.releases.get("next").unwrap().versions.keys();
+        for ep in endpoint_names {
+            if processed.contains_key(&*ep) {
+                log::info!("service_path_rule {} is already processed", ep);
+                continue;
+            }
+            let service = match self.config.find_service_by_endpoint(ep) {
+                Some(s) => s,
+                None => continue
+            };
+            let plan = plan::Plan::load(self.config, service)?;
             if plan.has_bluegreen_deployment()? {
-                let current_version = endpoints.get_version("curr", s);
-                let next_version = endpoints.get_version("next", s);
-                let prev_version = endpoints.get_version("prev", s);
+                let current_version = endpoints.get_version("curr", ep);
+                let next_version = endpoints.get_version("next", ep);
+                let prev_version = endpoints.get_version("prev", ep);
                 let ports = plan.ports()?.expect("container deployment should have at least an exposed port");
                 for (name, _) in &ports {
+                    let path = if name.is_empty() { service } else { name };
                     let curr_backend_service = self.backend_service_name(&plan, name, current_version);
                     let next_backend_service = self.backend_service_name(&plan, name, next_version);
                     let prev_backend_service = self.backend_service_name(&plan, name, prev_version);
@@ -130,23 +140,24 @@ impl<'a, S: shell::Shell<'a>> Gcp<'a, S> {
                             continue
                         } else if next_version == prev_version {
                             // all same version, only single backend required
-                            rules.push(format!("/{}/{}/*={}", s, next_version, next_backend_service));
+                            rules.push(format!("/{}/{}/*={}", path, next_version, next_backend_service));
                         } else {
                             // prev version still points old endpoint. anchor prev
                             rules.push(format!("/{}/{}/*={},/{}/{}/*={}", 
-                                s, next_version, next_backend_service,
-                                s, prev_version, prev_backend_service));
+                                path, next_version, next_backend_service,
+                                path, prev_version, prev_backend_service));
                         }
                     } else {
                         if current_version == 0 {
                             // next_version is first version to deploy 
-                            rules.push(format!("/{}/{}/*={}", s, next_version, next_backend_service));
+                            rules.push(format!("/{}/{}/*={}", path, next_version, next_backend_service));
                         } else {
                             rules.push(format!("/{}/{}/*={},/{}/{}/*={}", 
-                                s, current_version, curr_backend_service, 
-                                s, next_version, next_backend_service));
+                                path, current_version, curr_backend_service, 
+                                path, next_version, next_backend_service));
                         }
                     }
+                    processed.entry(path.to_string()).or_insert(true);
                 }
             }
         }
@@ -754,6 +765,7 @@ impl<'a, S: shell::Shell<'a>> cloud::Cloud<'a> for Gcp<'a, S> {
         let url_map_name = self.url_map_name();
         let path_matcher_name = self.path_matcher_name(endpoints_version);
         let service_path_rule = self.service_path_rule(&endpoints)?;
+        log::info!("--- service_path_rule {}", service_path_rule);
         let bucket_path_rule = self.bucket_path_rule(&endpoints, endpoints_version)?;
         let host_rule_add_option_name = self.host_rule_add_option_name(&url_map_name, target_host)?;
         self.shell.exec(&vec!(

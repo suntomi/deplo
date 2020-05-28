@@ -234,6 +234,7 @@ pub struct RuntimeConfig<'a> {
     pub dryrun: bool,
     pub debug: Vec<&'a str>,
     pub store_deployments: Vec<String>,
+    pub endpoint_service_map: HashMap<String, String>,
     pub release_target: Option<String>,
 }
 #[derive(Serialize, Deserialize)]
@@ -301,6 +302,7 @@ impl<'a> Config<'a> {
         c.runtime = RuntimeConfig {
             verbosity,
             store_deployments: vec!(),
+            endpoint_service_map: hashmap!{},
             dryrun: args.occurence_of("dryrun") > 0,
             debug: match args.values_of("debug") {
                 Some(s) => s,
@@ -417,6 +419,9 @@ impl<'a> Config<'a> {
             None => false
         }
     }
+    pub fn find_service_by_endpoint(&self, endpoint: &str) -> Option<&String> {
+        self.runtime.endpoint_service_map.get(endpoint)
+    }
     
     fn verify(&mut self) -> Result<(), Box<dyn Error>> {
         log::debug!("verify config");
@@ -424,7 +429,7 @@ impl<'a> Config<'a> {
         // 1. all endpoints/plans can be loaded without error 
         //    (loading endpoints/plans verify consistency of its content)
         // 2. keys in each plan's extra_ports is project-unique
-        let mut services: HashMap<String, String> = hashmap!{};
+        let mut services = hashmap!{};
         for entry in glob(&self.services_path().join("*.toml").to_string_lossy())? {
             match entry {
                 Ok(path) => {
@@ -465,6 +470,7 @@ impl<'a> Config<'a> {
                 Err(e) => return Err(Box::new(e))
             }
         }
+        self.runtime.endpoint_service_map = services;
         Ok(())
     }
 }

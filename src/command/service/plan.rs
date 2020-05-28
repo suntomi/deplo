@@ -314,7 +314,14 @@ impl<'a> Plan<'a> {
     fn load_plandata(path_or_text: &str) -> Result<PlanData, Box<dyn Error>> {
         let data = match fs::read_to_string(path_or_text) {
             Ok(text) => toml::from_str::<PlanData>(&text)?,
-            Err(_) => toml::from_str::<PlanData>(&path_or_text)?
+            Err(_) => match toml::from_str::<PlanData>(&path_or_text) {
+                Ok(p) => p,
+                Err(err) => return Err(Box::new(DeployError {
+                    cause: format!(
+                        "load_plandata: cannot load plan data from {} by {}", path_or_text, err
+                    )
+                }))
+            }
         };
         Ok(data)
     }

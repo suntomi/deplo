@@ -79,6 +79,7 @@ pub fn deploy(
         config,
         &config.endpoints_file_path(Some(target))
     )?;
+    log::info!("endpoint loaded");
     let current_metaver = endpoints.version;
     let path_will_change = endpoints.path_will_change(config)?;
     let endpoints_deploy_state = match &endpoints.deploy_state {
