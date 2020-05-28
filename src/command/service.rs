@@ -43,7 +43,8 @@ impl<'a, S: shell::Shell<'a>> Service<'a, S> {
         p.exec::<S>()?;
         match p.ports()? {
             Some(ports) => {
-                for (name, _) in &ports {
+                for (n, _) in &ports {
+                    let name = if n.is_empty() { &p.service } else { n };
                     self.config.update_service_endpoint_version(name)?;
                 }
             },

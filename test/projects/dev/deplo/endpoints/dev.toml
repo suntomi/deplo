@@ -3,7 +3,8 @@ prefix = 'dev.deplo.suntomi.dev'
 default = 'api'
 
 [paths]
-[releases.next.versions]
-api = 1
 [releases.curr.versions]
 [releases.prev.versions]
+[releases.next.versions]
+api = 1
+admin = 1

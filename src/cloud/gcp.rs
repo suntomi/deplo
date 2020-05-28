@@ -120,7 +120,7 @@ impl<'a, S: shell::Shell<'a>> Gcp<'a, S> {
                 let next_version = endpoints.get_version("next", s);
                 let prev_version = endpoints.get_version("prev", s);
                 let ports = plan.ports()?.expect("container deployment should have at least an exposed port");
-                for (name, port) in &ports {
+                for (name, _) in &ports {
                     let curr_backend_service = self.backend_service_name(&plan, name, current_version);
                     let next_backend_service = self.backend_service_name(&plan, name, next_version);
                     let prev_backend_service = self.backend_service_name(&plan, name, prev_version);
@@ -706,7 +706,7 @@ impl<'a, S: shell::Shell<'a>> cloud::Cloud<'a> for Gcp<'a, S> {
         match target {
             plan::DeployTarget::Instance => {
                 self.deploy_instance_group(plan, image, ports, env, options)?;
-                for (name, port) in ports {
+                for (name, _) in ports {
                     self.deploy_backend_service(plan, name)?;
                 }
             },
