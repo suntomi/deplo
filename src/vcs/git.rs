@@ -121,6 +121,12 @@ impl<'a, S: shell::Shell<'a>> GitFeatures<'a> for Git<'a, S> {
     fn rebase_with_remote_counterpart(
         &self, url: &str, remote_branch: &str
     ) -> Result<String, Box<dyn Error>> {
+        if self.config.has_debug_option("skip_rebase") {
+            return Ok(self.shell.output_of(
+                &vec!("git", "diff", "--name-only", "HEAD^1...HEAD"),
+                &hashmap!{}
+            )?)
+        }
         self.shell.exec(&vec!("git", "config", "--global", "user.email", &self.email), &hashmap!{}, false)?;
         self.shell.exec(&vec!("git", "config", "--global", "user.name", &self.username), &hashmap!{}, false)?;
         self.shell.exec(&vec!("git", "remote", "add", "latest", url), &hashmap!{}, false)?;

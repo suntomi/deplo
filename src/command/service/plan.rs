@@ -197,7 +197,7 @@ impl<'a> Plan<'a> {
                     match plan.ports()? {
                         Some(ports) => match ports.get(endpoint) {
                             Some(_) => return Ok(plan),
-                            None => {}
+                            None => if endpoint == plan.service { return Ok(plan) }
                         },
                         None => {}
                     }

@@ -738,9 +738,10 @@ impl<'a, S: shell::Shell<'a>> cloud::Cloud<'a> for Gcp<'a, S> {
         let default_backend_option = match &endpoints.default {
             Some(ep) => {
                 let plan = plan::Plan::find_by_endpoint(self.config, ep)?;
+                let name = if ep == &plan.service { "" } else { ep };
                 log::warn!("TODO: support manually set default backend bucket case");
                 format!("--default-service={}", 
-                    self.backend_service_name(&plan, ep, endpoints.get_version("next", ep))
+                    self.backend_service_name(&plan, name, endpoints.get_version("next", ep))
                 )
             },
             None => {

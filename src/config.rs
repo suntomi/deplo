@@ -411,6 +411,12 @@ impl<'a> Config<'a> {
     pub fn vcs_service(&'a self) -> Result<Box<dyn vcs::VCS<'a> + 'a>, Box<dyn Error>> {
         return vcs::factory(&self);
     }
+    pub fn has_debug_option(&self, name: &str) -> bool {
+        match self.runtime.debug.iter().position(|&e| e == name) {
+            Some(_) => true,
+            None => false
+        }
+    }
     
     fn verify(&mut self) -> Result<(), Box<dyn Error>> {
         log::debug!("verify config");
