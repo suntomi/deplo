@@ -167,12 +167,16 @@ impl<'a, S: shell::Shell<'a>> Gcp<'a, S> {
         &self, endpoints: &endpoints::Endpoints, endpoints_version: u32
     ) -> Result<String, Box<dyn Error>> {
         let mut rules = vec!();
-        let services = endpoints.releases.get("curr").unwrap().versions.keys();
+        let endpoint_names = endpoints.releases.get("curr").unwrap().versions.keys();
         rules.push(format!("/meta/*={}", self.metadata_backend_bucket_name(endpoints_version)));
-        for s in services {
-            let plan = plan::Plan::load(self.config, s)?;
+        for ep in endpoint_names {
+            let service = match self.config.find_service_by_endpoint(ep) {
+                Some(s) => s,
+                None => continue
+            };
+            let plan = plan::Plan::load(self.config, service)?;
             if !plan.has_bluegreen_deployment()? {
-                rules.push(format!("/{}/*={}", s, self.backend_bucket_name(&plan)));
+                rules.push(format!("/{}/*={}", ep, self.backend_bucket_name(&plan)));
             }
         }
         Ok(rules.join(","))
@@ -826,30 +830,34 @@ impl<'a, S: shell::Shell<'a>> cloud::Cloud<'a> for Gcp<'a, S> {
         ), &hashmap!{}, false)?;
     
         log::info!("--- waiting for new urlmap being applied");
-        let services = endpoints.releases.get("next").unwrap().versions.keys();
-        for s in services {
-            let plan = plan::Plan::load(self.config, s)?;
+        let endpoint_names = endpoints.releases.get("next").unwrap().versions.keys();
+        for ep in endpoint_names {
+            let service = match self.config.find_service_by_endpoint(ep) {
+                Some(s) => s,
+                None => continue
+            };
+            let plan = plan::Plan::load(self.config, service)?;
             if !plan.has_bluegreen_deployment()? {
-                log::debug!("[{}] does not change path. skipped", s);
+                log::debug!("[{}] does not change path. skipped", service);
                 continue
             }
-            let next_version = endpoints.get_version("net", s);
+            let next_version = endpoints.get_version("net", ep);
             if next_version <= 0 {
                 continue
             }
-            log::info!("wait for [{}]'s next version url being active.", s);
+            log::info!("wait for [{}]'s next version url being active.", service);
             let mut count = 0;
             loop {
                 let status: u32 = self.shell.eval_output_of(&format!(r#"
                     curl https://{}/{}/{}/ping --output /dev/null -w %{{http_code}} 2>/dev/null
-                "#, target_host, s, next_version), &hashmap!{})?.parse().unwrap();
+                "#, target_host, service, next_version), &hashmap!{})?.parse().unwrap();
                 if status == 200 {
                     log::info!("done");
                     break
                 } else {
                     count += 1;
                     if count > 360 {
-                        log::error!("[{}]:too long to active. abort", s);
+                        log::error!("[{}]:too long to active. abort", service);
                     }
                 }
                 print!(".");

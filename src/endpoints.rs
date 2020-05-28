@@ -106,10 +106,14 @@ impl Endpoints {
         Ok(r)
     }
     pub fn path_will_change(&self, config: &config::Config) -> Result<bool, Box<dyn Error>> {
-        let next = self.releases.get("next").unwrap();
-        for (key, value) in &next.versions {
-            if self.version_changed(key) {
-                let plan = plan::Plan::load(config, key)?;
+        let vs = &self.releases.get("next").unwrap().versions;
+        for (ep, _) in vs {
+            if self.version_changed(ep) {
+                let service = match config.find_service_by_endpoint(ep) {
+                    Some(s) => s,
+                    None => continue
+                };
+                let plan = plan::Plan::load(config, service)?;
                 if plan.has_bluegreen_deployment()? {
                     return Ok(true)
                 }

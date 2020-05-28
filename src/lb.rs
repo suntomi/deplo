@@ -72,7 +72,7 @@ fn deploy_meta(
             destination: format!("{}/meta/data.toml", bucket_name),
             permission: None,
             excludes: None,
-            max_age: None
+            max_age: Some(300)
         }
     })
 }
