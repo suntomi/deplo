@@ -4,6 +4,7 @@ use std::fmt;
 use crate::args;
 use crate::config;
 use crate::command;
+use crate::util::escalate;
 
 const VERSION: &'static str = env!("CARGO_PKG_VERSION");
 pub fn version() -> &'static str {
@@ -36,11 +37,11 @@ pub fn run<'a, A: args::Args>(args: &A, config: &'a config::Config) -> Result<()
                         cause: format!("no such subcommand [{}]", name) 
                     })) 
                 }
-                Err(err) => return Err(err)
+                Err(err) => return escalate!(err)
             };
             match cmd.run(&subargs) {
                 Ok(()) => return Ok(()),
-                Err(err) => return Err(err)
+                Err(err) => return escalate!(err)
             }
         },
         None => return Err(Box::new(CliError{ 

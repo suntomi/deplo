@@ -3,6 +3,7 @@ use std::fmt;
 
 use super::args;
 use super::config;
+use crate::util::escalate;
 
 pub trait Command<'a, A: args::Args> {
     fn new(config: &'a config::Config) -> Result<Self, Box<dyn Error>> where Self : Sized;
@@ -54,6 +55,6 @@ pub fn factory<'a, S: args::Args>(
     };
     return match cmd {
         Ok(cmd) => Ok(Some(cmd)),
-        Err(err) => Err(err)
+        Err(err) => escalate!(err)
     }
 }

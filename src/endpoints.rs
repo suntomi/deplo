@@ -9,6 +9,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::config;
 use crate::command::service::plan;
+use crate::util::escalate;
 
 #[derive(Serialize, Deserialize, PartialEq, Clone)]
 pub enum DeployState {
@@ -86,7 +87,7 @@ impl Endpoints {
                 ep.verify(config)?;
                 Ok(ep)
             },
-            Err(err) => Err(Box::new(err))
+            Err(err) => escalate!(Box::new(err))
         }        
     }
     pub fn save<P: AsRef<path::Path>>(&self, path: P) -> Result<(), Box<dyn Error>> {
@@ -153,7 +154,7 @@ impl Endpoints {
             let pathbuf = config.services_path().join(format!("{}.toml", client));
             match fs::metadata(&pathbuf) {
                 Ok(_) => {},
-                Err(err) => return Err(Box::new(config::ConfigError {
+                Err(err) => return escalate!(Box::new(config::ConfigError {
                     cause: format!(
                         "{}: service names appeared in clients array \
                         should have corresponding service deployment file({}) \

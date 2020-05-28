@@ -22,7 +22,7 @@ fn main() {
     match cli::run(&args, &c) {
         Ok(()) => std::process::exit(0),
         Err(err) => {
-            log::error!("command failure: {:?}", err);
+            log::error!("command failure: {}", err);
             std::process::exit(1)
         }
     }

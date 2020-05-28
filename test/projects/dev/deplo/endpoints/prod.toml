@@ -1,3 +1,4 @@
+version = 0
 prefix = 'prod.deplo.suntomi.dev'
 clients = ['ios','android']
 default = 'api:80'

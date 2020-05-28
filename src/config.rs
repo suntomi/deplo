@@ -19,6 +19,7 @@ use crate::tf;
 use crate::ci;
 use crate::endpoints;
 use crate::command::service::plan;
+use crate::util::escalate;
 
 #[derive(Debug)]
 pub struct ConfigError {
@@ -255,7 +256,7 @@ impl<'a> Config<'a> {
         });
         match toml::from_str(&content) {
             Ok(c) => Ok(c),
-            Err(err) => Err(Box::new(err))
+            Err(err) => escalate!(Box::new(err))
         }
     }
     pub fn create<A: args::Args>(args: &A) -> Result<Config, Box<dyn Error>> {
@@ -368,7 +369,7 @@ impl<'a> Config<'a> {
                 Some(v) => Ok(*v),
                 None => Ok(0), // not deployed yet
             },
-            Err(err) => Err(err)
+            Err(err) => escalate!(err)
         }
     }
     pub fn next_service_endpoint_version(&self, endpoint: &str) -> Result<u32, Box<dyn Error>> {

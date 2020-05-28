@@ -81,7 +81,7 @@ impl Step {
                     Err(err) => Err(Box::new(err))
                 }
             },
-            Self::Container { target, image, port, extra_ports, env, options } => {
+            Self::Container { target, image, port:_, extra_ports:_, env, options } => {
                 let config = plan.config;
                 let cloud = config.cloud_service()?;
                 // deploy image to cloud container registry
