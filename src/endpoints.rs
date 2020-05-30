@@ -29,6 +29,22 @@ impl fmt::Display for DeployState {
     }
 }
 
+#[derive(Serialize, Deserialize, PartialEq, Clone)]
+pub enum ChangeType {
+    None,
+    Path,
+    Version,
+}
+impl fmt::Display for ChangeType {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::None => write!(f, "none"),
+            Self::Path => write!(f, "path"),
+            Self::Version => write!(f, "version"),
+        }
+    }
+}
+
 
 #[derive(Serialize, Deserialize, Clone)]
 pub struct Release {
@@ -38,7 +54,7 @@ pub struct Release {
 
 impl PartialEq for Release {
     fn eq(&self, other: &Self) -> bool {
-        self.paths == other.paths
+        self.versions == other.versions
     }
 }
 
@@ -105,21 +121,25 @@ impl Endpoints {
         ep.save(&path)?;
         Ok(r)
     }
-    pub fn path_will_change(&self, config: &config::Config) -> Result<bool, Box<dyn Error>> {
+    pub fn path_will_change(&self, config: &config::Config) -> Result<ChangeType, Box<dyn Error>> {
+        let mut change = ChangeType::None;
         let vs = &self.releases.get("next").unwrap().versions;
         for (ep, _) in vs {
             if self.version_changed(ep) {
+                if change != ChangeType::Path {
+                    change = ChangeType::Version;
+                }
                 let service = match config.find_service_by_endpoint(ep) {
                     Some(s) => s,
                     None => continue
                 };
                 let plan = plan::Plan::load(config, service)?;
                 if plan.has_bluegreen_deployment()? {
-                    return Ok(true)
+                    change = ChangeType::Path;
                 }
             }
         }
-        return Ok(false)
+        return Ok(change)
     }
     pub fn cascade_versions(
         &mut self, config: &config::Config, release_name: Option<&str>, force: bool
@@ -139,10 +159,13 @@ impl Endpoints {
             self.releases.entry("curr".to_string()).and_modify(|e| *e = next);
         }
 
+        self.persist(config)?;
+
         Ok(())
     }
-    pub fn version_up(&mut self) -> Result<(), Box<dyn Error>> {
+    pub fn version_up(&mut self, config: &config::Config) -> Result<(), Box<dyn Error>> {
         self.version += 1;
+        self.persist(config)?;
         Ok(())
     }
     pub fn get_version(&self, release_name: &str, service: &str) -> u32 {

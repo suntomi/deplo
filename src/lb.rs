@@ -90,17 +90,17 @@ pub fn deploy(
     )?;
     log::info!("endpoint loaded");
     let current_metaver = endpoints.version;
-    let path_will_change = endpoints.path_will_change(config)?;
+    let change_type = endpoints.path_will_change(config)?;
     let endpoints_deploy_state = match &endpoints.deploy_state {
         Some(ds) => ds.clone(),
         None => endpoints::DeployState::Invalid
     };
     let confirm_deploy = endpoints.confirm_deploy.unwrap_or(false);
     let mut next_metaver: Option<u32> = None;
-    log::info!("---- deploy_load_balancer path_will_change({}), endpoints_deploy_state({})",
-        path_will_change, endpoints_deploy_state
+    log::info!("---- deploy_load_balancer change_type({}), endpoints_deploy_state({})",
+        change_type, endpoints_deploy_state
     );
-    if path_will_change {
+    if change_type != endpoints::ChangeType::None {
         if !confirm_deploy || 
             endpoints::DeployState::ConfirmCascade == endpoints_deploy_state {
             log::info!("--- cascade versions confirm_deploy:{} endpoints_deploy_state:{}", 
@@ -112,11 +112,11 @@ pub fn deploy(
                 // for production, this is pending to later pull request merging (see below)
                 endpoints.cascade_versions(config, Some("prev"), true)?;
             }
-            if path_will_change {
+            if change_type == endpoints::ChangeType::Path {
                 log::info!("--- {}: meta version up {} => {} due to urlmap changes", 
                     target, current_metaver, current_metaver + 1
                 );
-                endpoints.version_up()?;
+                endpoints.version_up(config)?;
             }
             // next_metaver= (use version in metadata)
             if endpoints::DeployState::ConfirmCascade == endpoints_deploy_state {
@@ -133,7 +133,7 @@ pub fn deploy(
         log::info!("--- deploy metadata bucket");
         deploy_meta(config, target, &endpoints, next_metaver)?;
 
-        if path_will_change {
+        if change_type == endpoints::ChangeType::Path {
             config.cloud_service()?.update_path_matcher(&endpoints, next_metaver)?;
         }
     } else if endpoints::DeployState::BeforeCleanup == endpoints_deploy_state {
