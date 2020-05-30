@@ -1,3 +1,6 @@
+//
+// tfvars
+//
 variable "root_domain" {}
 variable "dns_zone" {}
 variable "dns_zone_project" {}
@@ -12,10 +15,23 @@ variable "predefined_zone" {
   default = ""
 }
 
+//
+// terraform settings
+//
 terraform {
   backend "gcs" {
     //configured by config/backend 
   }
+}
+provider "google" {
+  project     = var.project_id
+  region      = var.region
+  version     = "~> 3.22.0"
+}
+provider "google-beta" {
+  project     = var.project_id
+  region      = var.region
+  version     = "~> 3.22.0"
 }
 
 //

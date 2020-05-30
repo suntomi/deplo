@@ -101,7 +101,7 @@ impl Step {
             Self::Storage { copymap } => {
                 let config = plan.config;
                 let cloud = config.cloud_service()?;
-                return cloud.deploy_storage(&copymap);
+                return cloud.deploy_storage(cloud::StorageKind::Service{plan}, &copymap);
             },
             Self::Store { kind:_ } => {
                 return Ok(())

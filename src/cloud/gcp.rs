@@ -32,6 +32,11 @@ impl<'a, S: shell::Shell<'a>> Gcp<'a, S> {
             None => None
         }
     }
+    fn storage_region(&self) -> String {
+        let region = self.config.cloud_region();
+        let re = Regex::new(r"([^-]+)-").unwrap();
+        return re.captures(region).unwrap().get(1).map_or("", |m| m.as_str()).to_string();
+    }
     fn service_account(config: &'a config::Config, shell: &S) -> Result<String, Box<dyn Error>> {
         if let config::CloudProviderConfig::GCP{key} = &config.cloud.provider {
             return Ok(shell.eval_output_of(&format!(r#"
@@ -87,7 +92,7 @@ impl<'a, S: shell::Shell<'a>> Gcp<'a, S> {
         return self.config.canonical_name(&format!("path-matcher-{}", endpoints_version))
     }
     fn metadata_backend_bucket_name(&self, endpoint_version: u32) -> String {
-        return self.config.canonical_name(&format!("backend-service-metadata-{}", endpoint_version));
+        return self.config.canonical_name(&format!("backend-bucket-metadata-{}", endpoint_version));
     }
     fn backend_bucket_name(&self, plan: &plan::Plan) -> String {
         return self.config.canonical_name(&format!("backend-bucket-{}", plan.service))
@@ -103,12 +108,35 @@ impl<'a, S: shell::Shell<'a>> Gcp<'a, S> {
             return Ok("new-hosts")
         }
         let host_group = self.shell.eval_output_of(&format!(
-            r#"echo {} | jq ".[].hosts[]" | grep "{}""#, host_rules, target_host
+            r#"echo '{}' | jq ".[].hosts[]" | grep "{}""#, host_rules, target_host
         ), &hashmap!{})?;
         if host_group.is_empty() {
             return Ok("new-hosts")
         }
         return Ok("existing-host")
+    }
+    fn fw_rule_name_for_health_check(&self) -> String {
+        self.config.canonical_name("fw-allow-health-check")
+    }
+    fn port_is_opened(&self, port: u32) -> Result<bool, Box<dyn Error>> {
+        let fw_rules = self.shell.eval_output_of(&format!(r#"
+            gcloud compute firewall-rules list --format=json | 
+            jq -jr ".[]|select(.name==\"{}\").allowed
+        "#, self.fw_rule_name_for_health_check()), &hashmap!{})?;
+        if fw_rules.is_empty() {
+            return Ok(false)
+        }
+        if fw_rules == "null" {
+            return Ok(false)
+        }
+        let entry = self.shell.eval_output_of(&format!(
+            r#"echo '{}' | jq ".allowed[]|select(.IPProtocol==\"tcp\").ports" | grep {}"#, 
+            fw_rules, port
+        ), &hashmap!{})?;
+        if entry.is_empty() {
+            return Ok(false)
+        }
+        return Ok(true)
     }
     fn service_path_rule(&self, endpoints: &endpoints::Endpoints) -> Result<String, Box<dyn Error>> {
         let mut rules = vec!();
@@ -208,7 +236,7 @@ impl<'a, S: shell::Shell<'a>> Gcp<'a, S> {
             return false;
         }
         let bs_group = self.shell.eval_output_of(&format!(r#"
-            echo {} | jq -jr ".[]|select(.group|endswith(\"{}\"))|.group"
+            echo '{}' | jq -jr ".[]|select(.group|endswith(\"{}\"))|.group"
         "#, bs_list, instance_group_name), &hashmap!{}).unwrap_or("".to_string());
         if bs_group.is_empty() {
             return false;
@@ -287,7 +315,7 @@ impl<'a, S: shell::Shell<'a>> Gcp<'a, S> {
         "#, subscribe_name), &hashmap!{})?;
         if !out.is_empty() {
             let curr_url = self.shell.eval_output_of(&format!(r#"
-                echo {} | jq -jr ".pushConfig.pushEndpoint"
+                echo '{}' | jq -jr ".pushConfig.pushEndpoint"
             "#, out), &hashmap!{})?;
             let re = Regex::new(&format!("^{}/?$", endpoint_url)).unwrap();
             match re.captures(&curr_url) {
@@ -401,7 +429,7 @@ impl<'a, S: shell::Shell<'a>> Gcp<'a, S> {
             --named-ports={}", 
             instance_group_name, resource_location_flag, 
             ports.iter().map(
-                |p| format!("{}:{}", if p.0.is_empty() { "primary-port" } else { p.0 }, p.1)
+                |p| format!("{}:{}", self.backend_service_name(plan, p.0, service_version), p.1)
             ).collect::<Vec<String>>().join(",")
         ), 
         &hashmap!{}, false)?;
@@ -418,6 +446,7 @@ impl<'a, S: shell::Shell<'a>> Gcp<'a, S> {
     ) -> Result<(), Box<dyn Error>> {
         let service_version = self.config.next_service_endpoint_version(&plan.service)?;
         let backend_service_name = self.backend_service_name(plan, name, service_version);
+        let backend_service_port_name = &backend_service_name;
         let health_check_name = self.health_check_name(plan, name, service_version);
         let instance_group_name = self.instance_group_name(plan, service_version);
         let instance_group_type = format!("--instance-group-region={}", self.config.cloud_region());
@@ -431,7 +460,7 @@ impl<'a, S: shell::Shell<'a>> Gcp<'a, S> {
             log::info!("---- health check:{} does not exist. create new", health_check_name);
             self.shell.eval(&format!("gcloud compute health-checks create http {} \
                 --port-name={} --request-path=/ping
-            ", health_check_name, backend_service_name), &hashmap!{}, false)?;
+            ", health_check_name, backend_service_port_name), &hashmap!{}, false)?;
         }
         let bs_id=self.shell.eval_output_of(&format!(r#"gcloud compute backend-services list --format=json | 
             jq -jr ".[] | 
@@ -442,7 +471,7 @@ impl<'a, S: shell::Shell<'a>> Gcp<'a, S> {
             self.shell.eval(&format!("gcloud compute backend-services create {} \
                 --connection-draining-timeout=10 --health-checks={} \
                 --protocol=HTTP --port-name={} --global {}
-            ", backend_service_name, health_check_name, backend_service_name, ""), 
+            ", backend_service_name, health_check_name, backend_service_port_name, ""), 
             &hashmap!{}, false)?;
         }
         let backend_added=self.backend_added(&backend_service_name, &instance_group_name);
@@ -721,7 +750,7 @@ impl<'a, S: shell::Shell<'a>> cloud::Cloud<'a> for Gcp<'a, S> {
         match target {
             plan::DeployTarget::Instance => {
                 self.deploy_instance_group(plan, image, ports, env, options)?;
-                for (name, _) in ports {
+                for (name, port) in ports {
                     self.deploy_backend_service(plan, name)?;
                 }
             },
@@ -739,7 +768,10 @@ impl<'a, S: shell::Shell<'a>> cloud::Cloud<'a> for Gcp<'a, S> {
         &self, bucket_name: &str
     ) -> Result<(), Box<dyn Error>> {
         match self.shell.exec(
-            &vec!("gsutil", "mb", &format!("gs://{}", bucket_name)), 
+            &vec!("gsutil", "mb", 
+                "-l", &self.storage_region(), 
+                &format!("gs://{}", bucket_name)
+            ), 
             &hashmap!{}, false) {
             Ok(_) => Ok(()),
             Err(err) => match err {
@@ -749,14 +781,19 @@ impl<'a, S: shell::Shell<'a>> cloud::Cloud<'a> for Gcp<'a, S> {
         }
     }
     fn deploy_storage(
-        &self, copymap: &HashMap<String, cloud::DeployStorageOption>
+        &self, kind: cloud::StorageKind<'a>, copymap: &HashMap<String, cloud::DeployStorageOption>
     ) -> Result<(), Box<dyn Error>> {
-        let re = Regex::new(r#"^([^/])+/.*"#).unwrap();
+        let re = Regex::new(r#"^([^/]+)/.*"#).unwrap();
         for (src, config) in copymap {
+            log::info!("copy {} => {:?}", src, config);
             let dst = &config.destination;
-            match re.captures(dst) {
+            let bucket_name = match re.captures(dst) {
                 Some(c) => match c.get(1) {
-                    Some(m) => { self.create_bucket(m.as_str())?; },
+                    Some(m) => { 
+                        let bn = m.as_str();
+                        self.create_bucket(bn)?; 
+                        bn.to_string()
+                    },
                     None => return Err(Box::new(cloud::CloudError{
                         cause: format!("invalid dst config: {}", dst)
                     }))
@@ -764,7 +801,7 @@ impl<'a, S: shell::Shell<'a>> cloud::Cloud<'a> for Gcp<'a, S> {
                 None => return Err(Box::new(cloud::CloudError{
                     cause: format!("invalid dst config: {}", dst)
                 }))
-            }
+            };
             if dst.ends_with("/") {
                 self.shell.exec(&vec!(
                     "gsutil", 
@@ -781,6 +818,27 @@ impl<'a, S: shell::Shell<'a>> cloud::Cloud<'a> for Gcp<'a, S> {
                     "cp", 
                     "-a", config.permission.as_ref().unwrap_or(&"public-read".to_string()), 
                     src, &format!("gs://{}", dst)
+                ), &hashmap!{}, false)?;
+            }
+
+            let backend_bucket_info = self.shell.eval_output_of(&format!(r#"
+                gcloud compute backend-buckets list --format=json | 
+                jq ".[]|select(.bucketName==\"{}\")"
+            "#, bucket_name), &hashmap!{})?;
+            if backend_bucket_info.is_empty() {
+                let backend_bucket_name = match kind {
+                    cloud::StorageKind::Service { plan } => {
+                        self.backend_bucket_name(plan)
+                    },
+                    cloud::StorageKind::Metadata { version } => {
+                        self.metadata_backend_bucket_name(version)
+                    }
+                };
+                self.shell.exec(&vec!(
+                    "gcloud", "compute", "backend-buckets", "create", 
+                    &backend_bucket_name,
+                    &format!("--gcs-bucket-name={}", bucket_name),
+                    "--enable-cdn"
                 ), &hashmap!{}, false)?;
             }
         }
@@ -829,7 +887,7 @@ impl<'a, S: shell::Shell<'a>> cloud::Cloud<'a> for Gcp<'a, S> {
             &default_backend_option, "--global"
         ), &hashmap!{}, false)?;
     
-        log::info!("--- waiting for new urlmap being applied");
+        log::info!("--- waiting for new urlmap having applied");
         let endpoint_names = endpoints.releases.get("next").unwrap().versions.keys();
         for ep in endpoint_names {
             let service = match self.config.find_service_by_endpoint(ep) {
@@ -841,7 +899,7 @@ impl<'a, S: shell::Shell<'a>> cloud::Cloud<'a> for Gcp<'a, S> {
                 log::debug!("[{}] does not change path. skipped", service);
                 continue
             }
-            let next_version = endpoints.get_version("net", ep);
+            let next_version = endpoints.get_version("next", ep);
             if next_version <= 0 {
                 continue
             }
@@ -857,7 +915,9 @@ impl<'a, S: shell::Shell<'a>> cloud::Cloud<'a> for Gcp<'a, S> {
                 } else {
                     count += 1;
                     if count > 360 {
-                        log::error!("[{}]:too long to active. abort", service);
+                        return Err(Box::new(cloud::CloudError{
+                            cause: format!("[{}]:too long to active. abort", service)
+                        }))
                     }
                 }
                 print!(".");

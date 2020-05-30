@@ -54,27 +54,30 @@ fn try_commit_meta(config: &config::Config) -> Result<bool, Box<dyn Error>> {
     )
 }
 fn metadata_bucket_name(
-    config: &config::Config,
-    release_target: &str, metaver: u32
+    config: &config::Config, metaver: u32
 ) -> String {
-    config.canonical_name(&format!("{}-{}", release_target, metaver))
+    config.canonical_name(&format!("metadata-{}",  metaver))
 }
 fn deploy_meta(
     config: &config::Config, release_target: &str, endpoints: &endpoints::Endpoints, metaver: Option<u32>
 ) -> Result<(), Box<dyn Error>> {
     let cloud = config.cloud_service()?;
     let mv = metaver.unwrap_or(endpoints.version);
-    let bucket_name = metadata_bucket_name(config, release_target, mv);
-    cloud.create_bucket(&bucket_name)?;
-    cloud.deploy_storage(&hashmap! {
-        format!("{}/endpoints/{}.toml", config.root_path().to_string_lossy(), release_target) => 
-        cloud::DeployStorageOption {
-            destination: format!("{}/meta/data.toml", bucket_name),
-            permission: None,
-            excludes: None,
-            max_age: Some(300)
+    let bucket_name = metadata_bucket_name(config, mv);
+    cloud.deploy_storage(
+        cloud::StorageKind::Metadata {
+            version: mv
+        },
+        &hashmap! {
+            format!("{}/endpoints/{}.toml", config.root_path().to_string_lossy(), release_target) => 
+            cloud::DeployStorageOption {
+                destination: format!("{}/meta/data.toml", bucket_name),
+                permission: None,
+                excludes: None,
+                max_age: Some(300)
+            }
         }
-    })
+    )
 }
 
 pub fn deploy(

@@ -80,10 +80,10 @@ impl<'a, S: shell::Shell<'a>> GitFeatures<'a> for Git<'a, S> {
 			if !diff.is_empty() {
                 log::info!("diff found for {} [{}]", pattern, diff);
                 self.shell.exec(&vec!("git", "add", pattern), &hashmap!{}, false)?;
-				changed=true
+				changed = true
             }
         }
-		if changed {
+		if !changed {
 			log::info!("skip push because no changes for provided pattern [{}]", patterns.join(" "));
 			return Ok(false)
         } else {

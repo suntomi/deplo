@@ -15,6 +15,14 @@ pub struct DeployStorageOption {
     pub excludes: Option<String>, //valid on directory copy
     pub destination: String
 }
+pub enum StorageKind<'a> {
+    Service {
+        plan: &'a plan::Plan<'a>
+    },
+    Metadata {
+        version: u32
+    }
+}
 pub trait Cloud<'a> {
     fn new(config: &'a config::Config) -> Result<Self, Box<dyn Error>> where Self : Sized;
     fn setup_dependency(&self) -> Result<(), Box<dyn Error>>;
@@ -37,8 +45,9 @@ pub trait Cloud<'a> {
         &self, bucket_name: &str
     ) -> Result<(), Box<dyn Error>>;
     fn deploy_storage(
+        &self, kind: StorageKind<'a>, 
         //copymap]: src => dest option. if src ends with /, directory copy
-        &self, copymap: &HashMap<String, DeployStorageOption>
+        copymap: &HashMap<String, DeployStorageOption>
     ) -> Result<(), Box<dyn Error>>;
     // load balancer
     fn update_path_matcher(

@@ -7,9 +7,9 @@ use actix_web::{
     client::Client,
     error::ErrorBadRequest,
     web::{self, BytesMut},
-    App, Error, HttpResponse, HttpServer,
+    App, Error, HttpResponse, HttpServer, HttpRequest
 };
-use futures::StreamExt;
+use futures::{future,StreamExt};
 use validator::Validate;
 use validator_derive::Validate;
 
@@ -66,24 +66,44 @@ async fn create_something(
         .body(serde_json::to_string(&d).unwrap()))
 }
 
+async fn ok(
+    req: HttpRequest
+) -> Result<HttpResponse, Error> {
+    Ok(HttpResponse::Ok().content_type("text/plain").body("OK"))
+}
+
 #[actix_rt::main]
 async fn main() -> io::Result<()> {
     std::env::set_var("RUST_LOG", "actix_web=info");
     env_logger::init();
+    let target = std::env::var("DEPLO_RELEASE_TARGET").unwrap_or("dev".to_string());
 
-    let _ = std::env::var("DEPLO_RELEASE_TARGET").unwrap_or("dev".to_string());
-    let version = std::env::var("DEPLO_SERVICE_VERSION").unwrap_or("1".to_string());
-    let name = std::env::var("DEPLO_SERVICE_NAME").unwrap_or("api".to_string());
-    let path = std::env::var("DEPLO_SERVICE_PATH").unwrap_or(format!("/{}/{}", name, version));
-    let endpoint = "127.0.0.1:80";
-
-    println!("Starting server at: {:?}", endpoint);
-    HttpServer::new(move || {
+    println!("Starting {} server at port 80,10000", target);
+    let s1 = HttpServer::new(move || {
+        let version = std::env::var("DEPLO_SERVICE_VERSION").unwrap_or("1".to_string());
+        let name = std::env::var("DEPLO_SERVICE_NAME").unwrap_or("api".to_string());
+        let path = std::env::var("DEPLO_SERVICE_PATH").unwrap_or(format!("/{}/{}", name, version));
         App::new()
             .data(Client::default())
-            .service(web::resource(format!("{}/something", path)).route(web::post().to(create_something)))
+            .service(web::resource(format!("{}/something", &path)).route(web::post().to(create_something)))
+            .service(web::resource(format!("{}/ping", &path)).route(web::get().to(ok)))
+            .service(web::resource("/ping".to_string()).route(web::get().to(ok)))
     })
-    .bind(endpoint)?
-    .run()
-    .await
+    .bind("0.0.0.0:80")?
+    .run();
+
+    let s2 = HttpServer::new(move || {
+        let version = std::env::var("DEPLO_SERVICE_VERSION").unwrap_or("1".to_string());
+        let name = std::env::var("DEPLO_SERVICE_NAME").unwrap_or("api".to_string());
+        let path = std::env::var("DEPLO_SERVICE_PATH").unwrap_or(format!("/{}/{}", name, version));
+        App::new()
+            .data(Client::default())
+            .service(web::resource(format!("{}/ping", &path)).route(web::get().to(ok)))
+            .service(web::resource("/ping".to_string()).route(web::get().to(ok)))
+    })
+    .bind("0.0.0.0:10000")?
+    .run();
+
+    future::try_join(s1, s2).await?;
+    Ok(())
 }

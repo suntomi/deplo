@@ -3,7 +3,6 @@ use std::collections::HashMap;
 use std::fmt;
 
 use super::config;
-use crate::util::defer;
 
 pub trait VCS<'a> {
     fn new(config: &'a config::Config) -> Result<Self, Box<dyn Error>> where Self : Sized;
@@ -49,9 +48,6 @@ fn factory_by<'a, T: VCS<'a> + 'a>(
 pub fn factory<'a>(
     config: &'a config::Config
 ) -> Result<Box<dyn VCS<'a> + 'a>, Box<dyn Error>> {
-    defer!(
-        println!("deferred")
-    );
     match &config.vcs {
         config::VCSConfig::Github { email:_,  account:_, key:_ } => {
             return factory_by::<github::Github>(config);

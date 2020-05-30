@@ -385,10 +385,11 @@ impl<'a> Config<'a> {
         Ok(self.service_endpoint_version(endpoint)? + 1)
     }
     pub fn update_service_endpoint_version(&self, endpoint: &str) -> Result<u32, Box<dyn Error>> {
-        endpoints::Endpoints::modify(&self, &self.endpoints_file_path(None), |ep| {
-            let r = ep.releases.get_mut("next").unwrap();
+        endpoints::Endpoints::modify(&self, &self.endpoints_file_path(None), |eps| {
+            let current_version = eps.get_version("curr", endpoint);
+            let r = eps.releases.get_mut("next").unwrap();
             let v = r.versions.entry(endpoint.to_string()).or_insert(0);
-            *v += 1;
+            *v = current_version + 1;
             return Ok(*v);
         })
     }

@@ -4,7 +4,7 @@ workdir = 'api'
 code = '''
 #!/bin/bash
 cargo build --release
-mv target/release/apisv docker/apisv
+mv /tmp/target/release/apisv docker/apisv
 docker build -t deplo-sandbox/apisv docker
 '''
 

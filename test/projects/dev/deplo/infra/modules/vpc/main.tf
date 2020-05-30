@@ -32,7 +32,7 @@ resource "google_compute_firewall" "health-check" {
 
   allow {
     protocol = "tcp"
-    ports    = ["80", "443"]
+    ports    = ["0-65535"]
   }
 
   // glb ip ranges
