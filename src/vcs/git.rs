@@ -7,6 +7,19 @@ use crate::config;
 use crate::shell;
 use crate::util::defer;
 
+// because defer uses Drop trait behaviour, this cannot be de-duped as function
+macro_rules! setup_remote {
+    ($git:expr, $url:expr) => {
+        $git.shell.exec(&vec!("git", "remote", "add", "latest", $url), &hashmap!{}, false)?;
+        // defered removal of latest
+        defer!(
+            $git.shell.exec(&vec!(
+                "git", "remote", "remove", "latest"
+            ), &hashmap!{}, false).unwrap();
+        );
+    };
+}
+
 pub struct Git<'a, S: shell::Shell<'a> = shell::Default<'a>> {
     config: &'a config::Config<'a>,
     username: String,
@@ -32,6 +45,15 @@ pub trait GitHubFeatures<'a> {
     fn pr(
         &self, title: &str, head_branch: &str, base_branch: &str, options: &HashMap<&str, &str>
     ) -> Result<(), Box<dyn Error>>;    
+}
+
+impl<'a, S: shell::Shell<'a>> Git<'a, S> {
+    fn setup_author(&self) -> Result<(), Box<dyn Error>> {
+        log::info!("git: setup {}/{}", self.email, self.username);
+        self.shell.exec(&vec!("git", "config", "--global", "user.email", &self.email), &hashmap!{}, false)?;
+        self.shell.exec(&vec!("git", "config", "--global", "user.name", &self.username), &hashmap!{}, false)?;
+        Ok(())
+    }
 }
 
 impl<'a, S: shell::Shell<'a>> GitFeatures<'a> for Git<'a, S> {
@@ -94,6 +116,7 @@ impl<'a, S: shell::Shell<'a>> GitFeatures<'a> for Git<'a, S> {
 			log::info!("commit done: [{}]", msg);
 			match self.config.release_target() {
                 Some(_) => {
+                    setup_remote!(self, url);
                     let b = self.current_branch()?;
                     // update remote counter part of the deploy branch again
                     // because sometimes other commits are made (eg. merging pull request, job updates metadata)
@@ -121,21 +144,15 @@ impl<'a, S: shell::Shell<'a>> GitFeatures<'a> for Git<'a, S> {
     fn rebase_with_remote_counterpart(
         &self, url: &str, remote_branch: &str
     ) -> Result<String, Box<dyn Error>> {
+        // user and email
+        self.setup_author()?;
         if self.config.has_debug_option("skip_rebase") {
             return Ok(self.shell.output_of(
                 &vec!("git", "diff", "--name-only", "HEAD^1...HEAD"),
                 &hashmap!{}
             )?)
         }
-        self.shell.exec(&vec!("git", "config", "--global", "user.email", &self.email), &hashmap!{}, false)?;
-        self.shell.exec(&vec!("git", "config", "--global", "user.name", &self.username), &hashmap!{}, false)?;
-        self.shell.exec(&vec!("git", "remote", "add", "latest", url), &hashmap!{}, false)?;
-        // defered removal of latest 
-        defer!(
-            self.shell.exec(&vec!(
-                "git", "remote", "remove", "latest"
-            ), &hashmap!{}, false).unwrap();
-        );
+        setup_remote!(self, url);
         // we cannot `git pull latest $remote_branch` here. eg. $remote_branch = master case on circleCI. 
         // sometimes latest/master and master diverged, and pull causes merge FETCH_HEAD into master.
         // then it raises error if no mail/user name specified, because these are diverges branches. 

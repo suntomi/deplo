@@ -39,8 +39,7 @@ fn backport_pr(config: &config::Config) -> Result<(), Box<dyn Error>> {
 fn try_commit_meta(config: &config::Config) -> Result<bool, Box<dyn Error>> {
     let vcs = config.vcs_service()?;
     let hash = vcs.commit_hash()?;
-    let local_branch = vcs.current_branch()?;
-    let remote_branch = format!("{}-meta-pr-{}", local_branch, hash);
+    let remote_branch = vcs.current_branch()?;
     vcs.push(
         &remote_branch, &format!("update meta (by {})", hash),
         &vec!(&format!(
