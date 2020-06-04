@@ -47,15 +47,15 @@ enum Step {
         code: String,
         runner: Option<String>,
         workdir: Option<String>,
-        env: HashMap<String, String>,
+        env: Option<HashMap<String, String>>,
     },
     Container {
         image: String,
         target: DeployTarget,
         port: u32,
         extra_ports: Option<HashMap<String, u32>>,
-        env: HashMap<String, String>,
-        options: HashMap<String, String>,
+        env: Option<HashMap<String, String>>,
+        options: Option<HashMap<String, String>>,
     },
     Storage {
         // source file glob pattern => target storage path
@@ -74,9 +74,15 @@ impl Step {
                 let mut shell = S::new(plan.config);
                 shell.set_cwd(workdir.as_ref())?;
                 let r = match fs::metadata(code) {
-                    Ok(_) => shell.exec(&vec!(runner_command, code), &env, false),
+                    Ok(_) => shell.exec(
+                        &vec!(runner_command, code), 
+                        env.as_ref().unwrap_or(&hashmap!{}), false
+                    ),
                     Err(_) => {
-                        shell.eval(&format!("echo \'{}\' | {}", code, runner_command), &env, false)
+                        shell.eval(
+                            &format!("echo \'{}\' | {}", code, runner_command), 
+                            env.as_ref().unwrap_or(&hashmap!{}), false
+                        )
                     }
                 };
                 shell.set_cwd::<String>(None)?;
@@ -96,7 +102,11 @@ impl Step {
                 )?;
                 // deploy to autoscaling group or serverless platform
                 let ports = plan.ports()?.expect("container deployment should have at least an exposed port");
-                return cloud.deploy_container(plan, &target, &pushed_image_tag, &ports, env, options);
+                return cloud.deploy_container(
+                    plan, &target, &pushed_image_tag, &ports, 
+                    env.as_ref().unwrap_or(&hashmap!{}), 
+                    options.as_ref().unwrap_or(&hashmap!{})
+                );
             },
             Self::Storage { copymap } => {
                 let config = plan.config;
@@ -137,14 +147,14 @@ impl<'a> Plan<'a> {
                               ".to_string(),
                         runner: None,
                         workdir: None,
-                        env: hashmap!{},
+                        env: Some(hashmap!{}),
                     }, Step::Container {
                         image: "your/image".to_string(),
                         target: DeployTarget::Instance,
                         port: 80,
                         extra_ports: None,
-                        env: hashmap!{},
-                        options: hashmap!{},
+                        env: Some(hashmap!{}),
+                        options: Some(hashmap!{}),
                     }), 
                     "storage" => vec!(Step::Storage {
                         copymap: hashmap! {

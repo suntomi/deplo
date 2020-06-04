@@ -8,8 +8,6 @@ mv /tmp/target/release/apisv docker/apisv
 docker build -t deplo-sandbox/apisv docker
 '''
 
-[steps.env]
-
 [[steps]]
 type = 'Container'
 image = 'deplo-sandbox/apisv'
@@ -17,7 +15,3 @@ target = 'Instance'
 port = 80
 [steps.extra_ports]
 admin = 10000
-
-[steps.env]
-
-[steps.options]
