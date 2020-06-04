@@ -13,6 +13,7 @@ mod tf;
 mod lb;
 mod ci;
 mod util;
+mod plan;
 
 use log;
 

@@ -11,7 +11,7 @@ use crate::config;
 use crate::endpoints;
 use crate::shell;
 use crate::cloud;
-use crate::command::service::plan;
+use crate::plan;
 
 pub struct Gcp<'a, S: shell::Shell<'a> = shell::Default<'a>> {
     pub config: &'a config::Config<'a>,

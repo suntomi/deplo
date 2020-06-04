@@ -18,7 +18,7 @@ use crate::cloud;
 use crate::tf;
 use crate::ci;
 use crate::endpoints;
-use crate::command::service::plan;
+use crate::plan;
 use crate::util::escalate;
 
 #[derive(Debug)]

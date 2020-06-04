@@ -8,7 +8,7 @@ use maplit::hashmap;
 use serde::{Deserialize, Serialize};
 
 use crate::config;
-use crate::command::service::plan;
+use crate::plan;
 use crate::util::escalate;
 
 #[derive(Serialize, Deserialize, PartialEq, Clone)]

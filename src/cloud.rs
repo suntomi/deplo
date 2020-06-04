@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::config;
 use crate::endpoints;
-use crate::command::service::plan;
+use crate::plan;
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct DeployStorageOption {
