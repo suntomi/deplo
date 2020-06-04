@@ -1,10 +1,14 @@
-version = 0
+version = 1
 prefix = 'dev.deplo.suntomi.dev'
 default = 'api'
 
 [paths]
-[releases.curr.versions]
-[releases.prev.versions]
 [releases.next.versions]
+api = 1
+admin = 1
+[releases.curr.versions]
+api = 1
+admin = 1
+[releases.prev.versions]
 api = 1
 admin = 1
