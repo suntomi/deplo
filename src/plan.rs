@@ -11,6 +11,7 @@ use glob::glob;
 use crate::config;
 use crate::shell;
 use crate::cloud;
+use crate::util;
 
 #[derive(Debug)]
 pub struct DeployError {
@@ -28,18 +29,58 @@ impl Error for DeployError {
 }
 
 #[derive(Serialize, Deserialize, Debug)]
-struct ImageConfig {
-    id: String,
-    build: String
-}
-
-#[derive(Serialize, Deserialize, Debug)]
-pub enum DeployTarget {
+pub enum ContainerDeployTarget {
     Instance,
     Kubernetes,
     Serverless,
 }
 
+#[derive(Serialize, Deserialize, Debug)]
+#[serde(tag = "type")]
+pub enum DistributionConfig {
+    Apple {
+        account: String,
+        password: String
+    },
+    Google {
+        key: String
+    },
+    Storage {
+        bucket_name: String
+    }
+}
+#[derive(Serialize, Deserialize, Debug)]
+#[serde(tag = "type")]
+pub enum UnityPlatformBuildConfig {
+    Android {
+        keystore_password: String,
+        keyalias_name: String,
+        keyalias_password: String,
+        keystore_path: String,
+        use_expansion_file: bool,            
+    },
+    IOS {
+        team_id: String,
+        numeric_team_id: String,
+        signing_password: String,
+        signing_plist_path: String,
+        signing_p12_path: String,
+        singing_provision_path: String,
+    }
+}
+#[derive(Serialize, Deserialize, Debug)]
+#[serde(tag = "type")]
+pub enum BuildConfig {
+    Unity {
+        unity_version: String,
+        serial_code: String,
+        account: String,
+        password: String,
+        platform: UnityPlatformBuildConfig,
+    },
+    CreateReactApp {
+    }
+}
 #[derive(Serialize, Deserialize, Debug)]
 #[serde(tag = "type")]
 enum Step {
@@ -51,7 +92,7 @@ enum Step {
     },
     Container {
         image: String,
-        target: DeployTarget,
+        target: ContainerDeployTarget,
         port: u32,
         extra_ports: Option<HashMap<String, u32>>,
         env: Option<HashMap<String, String>>,
@@ -61,8 +102,16 @@ enum Step {
         // source file glob pattern => target storage path
         copymap: HashMap<String, cloud::DeployStorageOption>,
     },
-    Store {
-        kind: config::StoreKind,
+    Build {
+        org_name: String,
+        app_name: String,
+        app_id: String,
+        project_path: String,
+        artifact_path: Option<String>,
+        config: BuildConfig,
+    },
+    Distribution {
+        config: DistributionConfig,
     }
 }
 impl Step {
@@ -113,7 +162,7 @@ impl Step {
                 let cloud = config.cloud_service()?;
                 return cloud.deploy_storage(cloud::StorageKind::Service{plan}, &copymap);
             },
-            Self::Store { kind:_ } => {
+            _ => {
                 return Ok(())
             }
         }
@@ -131,6 +180,25 @@ pub struct Plan<'a> {
     data: PlanData
 }
 impl<'a> Plan<'a> {
+    fn make_unity_build_step(platform_build_config: UnityPlatformBuildConfig) -> Step {
+        Self::make_build_step(BuildConfig::Unity {
+            unity_version: "${DEPLO_BUILD_UNITY_VERSION}".to_string(),
+            serial_code: "${DEPLO_BUILD_UNITY_SERIAL_CODE}".to_string(),
+            account: "${DEPLO_BUILD_UNITY_ACCOUNT_EMAIL}".to_string(),
+            password: "${DEPLO_BUILD_UNITY_ACCOUNT_PASSWORD}".to_string(),
+            platform: platform_build_config
+        })
+    }
+    fn make_build_step(config: BuildConfig) -> Step {
+        return Step::Build {
+            org_name: "${DEPLO_ORG_NAME}".to_string(),
+            app_name: "${DEPLO_APP_NAME".to_string(),
+            app_id: "${DEPLO_APP_ID}".to_string(),
+            project_path: "./client".to_string(),
+            artifact_path: None,
+            config
+        }
+    }
     pub fn create(
         config: &'a config::Config, 
         service: &str, kind: &str
@@ -150,7 +218,7 @@ impl<'a> Plan<'a> {
                         env: Some(hashmap!{}),
                     }, Step::Container {
                         image: "your/image".to_string(),
-                        target: DeployTarget::Instance,
+                        target: ContainerDeployTarget::Instance,
                         port: 80,
                         extra_ports: None,
                         env: Some(hashmap!{}),
@@ -167,9 +235,44 @@ impl<'a> Plan<'a> {
                             }
                         },
                     }),
-                    "store" => vec!(Step::Store {
-                        kind: config::StoreKind::AppStore,
-                    }),
+                    "unity_ios" => vec!(
+                        Self::make_unity_build_step(UnityPlatformBuildConfig::IOS{
+                            team_id: "${DEPLO_BUILD_UNITY_IOS_TEAM_ID}".to_string(),
+                            numeric_team_id: "${DEPLO_BUILD_UNITY_IOS_NUMERIC_TEAM_ID}".to_string(),
+                            signing_password: "${DEPLO_BUILD_UNITY_IOS_P12_SIGNING_PASSWORD}".to_string(),
+                            signing_plist_path: "${DEPLO_BUILD_UNITY_IOS_SIGNING_FILES_PATH}/distribution.plist".to_string(),
+                            signing_p12_path: "${DEPLO_BUILD_UNITY_IOS_SIGNING_FILES_PATH}/distribution.p12".to_string(),
+                            singing_provision_path: "${DEPLO_BUILD_UNITY_IOS_SIGNING_FILES_PATH}/appstore.mobileprovision".to_string(),
+                        }),
+                        Step::Distribution {
+                            config: DistributionConfig::Apple {
+                                account: "${DEPLO_DISTRIBUTION_APPLE_ACCOUNT}".to_string(),
+                                password: "${DEPLO_DISTRIBUTION_APPLE_PASSWORD}".to_string()
+                            }
+                        }
+                    ),
+                    "unity_android" => vec!(
+                        Self::make_unity_build_step(UnityPlatformBuildConfig::Android{
+                            keystore_password: "${DEPLO_BUILD_UNITY_ANDROID_KEYSTORE_PASSWORD}".to_string(),
+                            keyalias_name: "${DEPLO_BUILD_UNITY_ANDROID_KEYSTORE_NAME}".to_string(),
+                            keyalias_password: "${DEPLO_BUILD_UNITY_ANDROID_KEYALIAS_PASSWORD}".to_string(),
+                            keystore_path: "${DEPLO_BUILD_UNITY_ANDROID_KEYSTORE_PATH}".to_string(),
+                            use_expansion_file: false
+                        }),
+                        Step::Distribution {
+                            config: DistributionConfig::Google {
+                                key: "${DEPLO_DISTRIBUTION_GOOGLE_ACCESS_KEY}".to_string()
+                            }
+                        }
+                    ),
+                    "cra" => vec!(
+                        Self::make_build_step(BuildConfig::CreateReactApp{}),
+                        Step::Distribution {
+                            config: DistributionConfig::Storage {
+                                bucket_name: "${DEPLO_DISTRIBUTION_STORAGE_BUCKET_NAME}".to_string()
+                            }
+                        }
+                    ),
                     _ => return Err(Box::new(DeployError {
                         cause: format!("invalid deploy type: {:?}", kind)
                     }))
@@ -240,38 +343,27 @@ impl<'a> Plan<'a> {
         }
         Ok(())
     }
-    pub fn has_store_deployment(&self) -> Result<bool, Box<dyn Error>> {
-        for step in &self.data.steps {
-            match step {
-                Step::Script { code:_, runner:_, env:_, workdir:_ } => {},
-                Step::Container { target:_, image:_, port:_, extra_ports:_, env:_, options:_ } => {
-                    return Ok(false)
-                },
-                Step::Storage { copymap:_ } => {
-                    return Ok(false)
-                },
-                Step::Store { kind:_ } => {
-                    return Ok(true)
-                }
-            }
+    pub fn has_deployment_of(&self, kind: &str) -> Result<bool, Box<dyn Error>> {
+        match kind {
+            "service" => {},
+            "storage" => {},
+            "distribution" => {},
+            _ => return Err(Box::new(DeployError {
+                cause: format!("invalid deployment kind {}", kind)
+            }))
         }
-        return Err(Box::new(DeployError {
-            cause: format!("no container/storage are deployed in {}.toml", self.service)
-        }))
-    }
-    pub fn has_bluegreen_deployment(&self) -> Result<bool, Box<dyn Error>> {
         for step in &self.data.steps {
             match step {
-                Step::Script { code:_, runner:_, env:_, workdir:_ } => {},
                 Step::Container { target:_, image:_, port:_, extra_ports:_, env:_, options:_ } => {
-                    return Ok(true)
+                    return Ok(kind == "service" || kind == "any")
                 },
                 Step::Storage { copymap:_ } => {
-                    return Ok(false)
+                    return Ok(kind == "storage" || kind == "any")
                 },
-                Step::Store { kind:_ } => {
-                    return Ok(false)
-                }
+                Step::Distribution { config:_ } => {
+                    return Ok(kind == "distribution" || kind == "any")
+                },
+                _ => {}
             }
         }
         return Err(Box::new(DeployError {
@@ -281,18 +373,12 @@ impl<'a> Plan<'a> {
     pub fn ports(&self) -> Result<Option<HashMap<String, u32>>, Box<dyn Error>> {
         for step in &self.data.steps {
             match step {
-                Step::Script { code:_, runner:_, env:_, workdir:_ } => {},
                 Step::Container { target:_, image:_, port, extra_ports, env:_, options:_ } => {
                     let mut ports = extra_ports.clone().unwrap_or(hashmap!{});
                     ports.entry("".to_string()).or_insert(*port);
                     return Ok(Some(ports))
                 },
-                Step::Storage { copymap:_ } => {
-                    return Ok(None)
-                },
-                Step::Store { kind:_ } => {
-                    return Ok(None)
-                }
+                _ => return Ok(None)
             }
         }
         return Err(Box::new(DeployError {
@@ -310,7 +396,6 @@ impl<'a> Plan<'a> {
         let mut deployment_found = false;
         for step in &self.data.steps {
             match step {
-                Step::Script { code:_, runner:_, env:_, workdir:_ } => {},
                 Step::Container { target:_, image:_, port:_, extra_ports:_, env:_, options:_ } => {
                     if deployment_found { return Err(err) }
                     deployment_found = true;
@@ -319,18 +404,19 @@ impl<'a> Plan<'a> {
                     if deployment_found { return Err(err) }
                     deployment_found = true;
                 },
-                Step::Store { kind:_ } => {
+                Step::Distribution { config:_ } => {
                     if deployment_found { return Err(err) }
                     deployment_found = true;
-                }
+                },
+                _ => {}
             }
         }
         Ok(())
     }
     fn load_plandata(path_or_text: &str) -> Result<PlanData, Box<dyn Error>> {
         let data = match fs::read_to_string(path_or_text) {
-            Ok(text) => toml::from_str::<PlanData>(&text)?,
-            Err(_) => match toml::from_str::<PlanData>(&path_or_text) {
+            Ok(text) => toml::from_str::<PlanData>(&util::envsubst(&text))?,
+            Err(_) => match toml::from_str::<PlanData>(&util::envsubst(&path_or_text)) {
                 Ok(p) => p,
                 Err(err) => return Err(Box::new(DeployError {
                     cause: format!(

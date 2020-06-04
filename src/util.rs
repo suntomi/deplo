@@ -68,3 +68,19 @@ macro_rules! macro_escalate  {
     }
 }
 pub use macro_escalate as escalate;
+
+// envsubst
+use regex::{Regex,Captures};
+use std::collections::HashMap;
+
+pub fn envsubst(src: &str) -> String {
+    let envs: HashMap<String, String> = std::env::vars().collect();
+    let re = Regex::new(r"\$\{([^\}]+)\}").unwrap();
+    let content = re.replace_all(src, |caps: &Captures| {
+        match envs.get(&caps[1]) {
+            Some(s) => s.replace("\n", r"\n").replace(r"\", r"\\").replace(r#"""#, r#"\""#),
+            None => return caps[1].to_string()
+        }
+    });
+    return content.to_string()
+}

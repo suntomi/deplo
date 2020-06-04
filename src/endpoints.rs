@@ -140,7 +140,7 @@ impl Endpoints {
                     None => continue
                 };
                 let plan = plan::Plan::load(config, service)?;
-                if plan.has_bluegreen_deployment()? {
+                if plan.has_deployment_of("service")? {
                     change = ChangeType::Path;
                 }
             }

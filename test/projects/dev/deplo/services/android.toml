@@ -1,3 +1,28 @@
 [[steps]]
-type = 'Store'
-kind = 'PlayStore'
+type = 'Build'
+org_name = '${DEPLO_ORG_NAME}'
+app_name = '${DEPLO_APP_NAME'
+app_id = '${DEPLO_APP_ID}'
+project_path = './client'
+
+[steps.config]
+type = 'Unity'
+unity_version = '${DEPLO_BUILD_UNITY_VERSION}'
+serial_code = '${DEPLO_BUILD_UNITY_SERIAL_CODE}'
+account = '${DEPLO_BUILD_UNITY_ACCOUNT_EMAIL}'
+password = '${DEPLO_BUILD_UNITY_ACCOUNT_PASSWORD}'
+
+[steps.config.platform]
+type = 'Android'
+keystore_password = '${DEPLO_BUILD_UNITY_ANDROID_KEYSTORE_PASSWORD}'
+keyalias_name = '${DEPLO_BUILD_UNITY_ANDROID_KEYSTORE_NAME}'
+keyalias_password = '${DEPLO_BUILD_UNITY_ANDROID_KEYALIAS_PASSWORD}'
+keystore_path = '${DEPLO_BUILD_UNITY_ANDROID_KEYSTORE_PATH}'
+use_expansion_file = false
+
+[[steps]]
+type = 'Distribution'
+
+[steps.config]
+type = 'Google'
+key = '${DEPLO_DISTRIBUTION_GOOGLE_ACCESS_KEY}'

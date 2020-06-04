@@ -34,7 +34,7 @@ pub trait Cloud<'a> {
     fn push_container_image(&self, src: &str, target: &str) -> Result<String, Box<dyn Error>>;
     fn deploy_container(
         &self, plan: &plan::Plan,
-        target: &plan::DeployTarget,
+        target: &plan::ContainerDeployTarget,
         // note: ports always contain single entry corresponding to the empty string key
         image: &str, ports: &HashMap<String, u32>, 
         env: &HashMap<String, String>,

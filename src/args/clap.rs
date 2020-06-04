@@ -104,7 +104,7 @@ lazy_static! {
                         .long("type")
                         .help("specify service type")
                         .possible_values(
-                            &["container", "storage", "store"]
+                            &["container", "storage", "unity_ios", "unity_android"]
                         )
                         .required(true))
                 )

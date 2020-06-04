@@ -145,7 +145,7 @@ impl<'a, S: shell::Shell<'a>> Gcp<'a, S> {
             for (ep, v) in &r.versions {
                 let s = r.endpoint_service_map.get(ep).unwrap(); //should exist
                 let plan = plan::Plan::load(self.config, s)?;
-                if !plan.has_bluegreen_deployment()? {
+                if !plan.has_deployment_of("service")? {
                     continue
                 }
                 let key = format!("{}-{}", ep, v);
@@ -178,7 +178,7 @@ impl<'a, S: shell::Shell<'a>> Gcp<'a, S> {
                 }
                 processed.entry(ep).or_insert(true);
                 let plan = plan::Plan::load(self.config, s)?;
-                if !plan.has_bluegreen_deployment()? {
+                if !plan.has_deployment_of("service")? {
                     rules.push(format!("/{}/*={}", ep, self.backend_bucket_name(&plan)));
                 }
             }
@@ -717,22 +717,22 @@ impl<'a, S: shell::Shell<'a>> cloud::Cloud<'a> for Gcp<'a, S> {
     }
     fn deploy_container(
         &self, plan: &plan::Plan,
-        target: &plan::DeployTarget, 
+        target: &plan::ContainerDeployTarget, 
         // note: ports always contain single entry corresponding to the empty string key
         image: &str, ports: &HashMap<String, u32>,
         env: &HashMap<String, String>,
         options: &HashMap<String, String>
     ) -> Result<(), Box<dyn Error>> {
         match target {
-            plan::DeployTarget::Instance => {
+            plan::ContainerDeployTarget::Instance => {
                 self.deploy_instance_group(plan, image, ports, env, options)?;
-                for (name, port) in ports {
+                for (name, _) in ports {
                     self.deploy_backend_service(plan, name)?;
                 }
             },
-            plan::DeployTarget::Kubernetes => {
+            plan::ContainerDeployTarget::Kubernetes => {
             },
-            plan::DeployTarget::Serverless => {
+            plan::ContainerDeployTarget::Serverless => {
                 self.deploy_serverless(plan, image, env, options)?;
             }
         }
@@ -871,7 +871,7 @@ impl<'a, S: shell::Shell<'a>> cloud::Cloud<'a> for Gcp<'a, S> {
                 None => continue
             };
             let plan = plan::Plan::load(self.config, service)?;
-            if !plan.has_bluegreen_deployment()? {
+            if !plan.has_deployment_of("service")? {
                 log::debug!("[{}] does not change path. skipped", service);
                 continue
             }

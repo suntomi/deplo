@@ -9,10 +9,10 @@
   "next": {
     "paths": null,
     "endpoint_service_map": {
-      "api": "api",
       "admin": "api",
       "ios": "ios",
-      "android": "android"
+      "android": "android",
+      "api": "api"
     },
     "versions": {
       "api": 2,
@@ -24,9 +24,9 @@
       "paths": null,
       "endpoint_service_map": {
         "api": "api",
-        "admin": "api",
         "ios": "ios",
-        "android": "android"
+        "android": "android",
+        "admin": "api"
       },
       "versions": {
         "api": 2,

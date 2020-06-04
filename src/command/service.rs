@@ -16,7 +16,7 @@ pub struct Service<'a, S: shell::Shell<'a> = shell::Default<'a>> {
 
 impl<'a, S: shell::Shell<'a>> Service<'a, S> {
     fn create<A: args::Args>(&self, args: &A) -> Result<(), Box<dyn Error>> {
-        log::info!("service create invoked");
+        log::debug!("service create invoked");
         let p = plan::Plan::<'a>::create(
             self.config, 
             // both required argument
@@ -33,7 +33,7 @@ impl<'a, S: shell::Shell<'a>> Service<'a, S> {
         }
     }
     fn deploy<A: args::Args>(&self, args: &A) -> Result<(), Box<dyn Error>> {
-        log::info!("service deploy invoked");      
+        log::debug!("service deploy invoked");      
         let p = plan::Plan::<'a>::load(
             self.config, 
             // both required argument
@@ -44,21 +44,21 @@ impl<'a, S: shell::Shell<'a>> Service<'a, S> {
             Some(ports) => {
                 for (n, _) in &ports {
                     let name = if n.is_empty() { &p.service } else { n };
-                    self.config.update_service_endpoint_version(name)?;
+                    self.config.update_service_endpoint_version(name, &p)?;
                 }
             },
             None => {
-                self.config.update_service_endpoint_version(&p.service)?;
+                self.config.update_service_endpoint_version(&p.service, &p)?;
             }
         }
         Ok(())
     }
     fn cutover<A: args::Args>(&self, _: &A) -> Result<(), Box<dyn Error>> {
-        log::info!("service cutover invoked");      
+        log::debug!("service cutover invoked");      
         lb::deploy(self.config)
     }
     fn cleanup<A: args::Args>(&self, _: &A) -> Result<(), Box<dyn Error>> {
-        log::info!("service cleanup invoked");      
+        log::debug!("service cleanup invoked");      
         lb::cleanup(self.config)
     }
 }

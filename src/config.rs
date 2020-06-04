@@ -9,7 +9,6 @@ use simple_logger;
 use serde::{Deserialize, Serialize};
 use dotenv::dotenv;
 use maplit::hashmap;
-use regex::{Regex,Captures};
 use glob::glob;
 
 use crate::args;
@@ -19,7 +18,7 @@ use crate::tf;
 use crate::ci;
 use crate::endpoints;
 use crate::plan;
-use crate::util::escalate;
+use crate::util::{escalate,envsubst};
 
 #[derive(Debug)]
 pub struct ConfigError {
@@ -89,22 +88,6 @@ impl fmt::Display for CIConfig {
             Self::Circle{key:_} => write!(f, "circle"),
         }
     }    
-}
-#[derive(Serialize, Deserialize)]
-#[serde(tag = "type")]
-pub enum StoreConfig {
-    Apple {
-        account: String,
-        password: String
-    },
-    Google {
-        key: String
-    }
-}
-#[derive(Serialize, Deserialize, Debug)]
-pub enum StoreKind {
-    AppStore,
-    PlayStore,
 }
 #[derive(Serialize, Deserialize)]
 #[serde(tag = "type")]
@@ -178,44 +161,6 @@ pub struct CloudConfig {
     pub terraformer: TerraformerConfig,
 }
 #[derive(Serialize, Deserialize)]
-#[serde(tag = "type")]
-pub enum PlatformBuildConfig {
-    Android {
-        keystore_password: String,
-        keyalias_name: String,
-        keyalias_password: String,
-        keystore_path: String,
-        use_expansion_file: bool,            
-    },
-    IOS {
-        team_id: String,
-        numeric_team_id: String,
-        signing_password: String,
-        signing_plist_path: String,
-        signing_p12_path: String,
-        singing_provision_path: String,
-    }
-}
-#[derive(Serialize, Deserialize)]
-pub struct ClientConfig {
-    pub org_name: String,
-    pub app_name: String,
-    pub app_code: String,
-    pub app_id: String,
-    pub client_project_path: String,
-    pub artifact_path: String,
-    pub version_config_path: String,
-
-    pub unity_path: String,
-    pub serial_code: String,
-    pub account: String,
-    pub password: String,
-
-    pub platform_build_configs: Vec<PlatformBuildConfig>,
-
-    pub stores: Vec<StoreConfig>,
-}
-#[derive(Serialize, Deserialize)]
 pub struct CommonConfig {
     pub project_id: String,
     pub deplo_image: String,
@@ -245,22 +190,14 @@ pub struct Config<'a> {
     pub cloud: CloudConfig,
     pub vcs: VCSConfig,
     pub ci: CIConfig,
-    pub client: ClientConfig,
     pub deploy: DeployConfig
 }
 
 impl<'a> Config<'a> {
     // static factory methods 
     pub fn load(path: &str) -> Result<Config, Box<dyn Error>> {
-        let envs: HashMap<String, String> = std::env::vars().collect();
-        let re = Regex::new(r"\$\{([^\}]+)\}").unwrap();
         let src = fs::read_to_string(path).unwrap();
-        let content = re.replace_all(&src, |caps: &Captures| {
-            match envs.get(&caps[1]) {
-                Some(s) => s.replace("\n", r"\n").replace(r"\", r"\\").replace(r#"""#, r#"\""#),
-                None => return caps[1].to_string()
-            }
-        });
+        let content = envsubst(&src);
         match toml::from_str(&content) {
             Ok(c) => Ok(c),
             Err(err) => escalate!(Box::new(err))
@@ -381,11 +318,21 @@ impl<'a> Config<'a> {
     pub fn next_service_endpoint_version(&self, endpoint: &str) -> Result<u32, Box<dyn Error>> {
         Ok(self.service_endpoint_version(endpoint)? + 1)
     }
-    pub fn update_service_endpoint_version(&self, endpoint: &str) -> Result<u32, Box<dyn Error>> {
+    pub fn update_service_endpoint_version(
+        &self, endpoint: &str, plan: &plan::Plan
+    ) -> Result<u32, Box<dyn Error>> {
         endpoints::Endpoints::modify(&self, &self.endpoints_file_path(None), |eps| {
             let latest_version = eps.get_latest_version(endpoint);
             let v = eps.next.versions.entry(endpoint.to_string()).or_insert(0);
             *v = latest_version + 1;
+            // if confirm_deploy is not set and this is deployment of distribution, 
+            // automatically update min_front_version with new version
+            if !eps.confirm_deploy.unwrap_or(false) && 
+                plan.has_deployment_of("distribution")? &&
+                endpoint == &plan.service {
+                let fv = eps.min_front_versions.entry(endpoint.to_string()).or_insert(0);
+                *fv = *v;
+            }
             return Ok(*v);
         })
     }
@@ -454,7 +401,7 @@ impl<'a> Config<'a> {
                                 services.entry(plan.service.clone()).or_insert(plan.service.clone());
                             }
                         }
-                        if plan.has_store_deployment()? {
+                        if plan.has_deployment_of("distribution")? {
                             plan.service.clone()
                         } else {
                             "".to_string()
