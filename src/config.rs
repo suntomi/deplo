@@ -339,9 +339,9 @@ impl<'a> Config<'a> {
     pub fn endpoints_file_path(&self, release_target: Option<&str>) -> path::PathBuf {
         let p = self.endpoints_path();
         if let Some(e) = release_target {
-            return p.join(format!("{}.toml", e));
+            return p.join(format!("{}.json", e));
         } else if let Some(e) = self.release_target() {
-            return p.join(format!("{}.toml", e));
+            return p.join(format!("{}.json", e));
         } else {
             panic!("should be on release target branch")
         }
@@ -374,10 +374,7 @@ impl<'a> Config<'a> {
     }
     pub fn service_endpoint_version(&'a self, endpoint: &str) -> Result<u32, Box<dyn Error>> {
         match endpoints::Endpoints::load(&self, &self.endpoints_file_path(None)) {
-            Ok(ep) => match ep.releases.get("curr").unwrap().versions.get(&endpoint.to_string()) {
-                Some(v) => Ok(*v),
-                None => Ok(0), // not deployed yet
-            },
+            Ok(eps) => Ok(eps.get_latest_version(endpoint)),
             Err(err) => escalate!(err)
         }
     }
@@ -386,10 +383,9 @@ impl<'a> Config<'a> {
     }
     pub fn update_service_endpoint_version(&self, endpoint: &str) -> Result<u32, Box<dyn Error>> {
         endpoints::Endpoints::modify(&self, &self.endpoints_file_path(None), |eps| {
-            let current_version = eps.get_version("curr", endpoint);
-            let r = eps.releases.get_mut("next").unwrap();
-            let v = r.versions.entry(endpoint.to_string()).or_insert(0);
-            *v = current_version + 1;
+            let latest_version = eps.get_latest_version(endpoint);
+            let v = eps.next.versions.entry(endpoint.to_string()).or_insert(0);
+            *v = latest_version + 1;
             return Ok(*v);
         })
     }

@@ -140,53 +140,25 @@ impl<'a, S: shell::Shell<'a>> Gcp<'a, S> {
     }
     fn service_path_rule(&self, endpoints: &endpoints::Endpoints) -> Result<String, Box<dyn Error>> {
         let mut rules = vec!();
-        let mut processed: HashMap<String, bool> = hashmap!{};
-        let endpoint_names = endpoints.releases.get("next").unwrap().versions.keys();
-        for ep in endpoint_names {
-            if processed.contains_key(&*ep) {
-                log::info!("service_path_rule {} is already processed", ep);
-                continue;
-            }
-            let service = match self.config.find_service_by_endpoint(ep) {
-                Some(s) => s,
-                None => continue
-            };
-            let plan = plan::Plan::load(self.config, service)?;
-            if plan.has_bluegreen_deployment()? {
-                let current_version = endpoints.get_version("curr", ep);
-                let next_version = endpoints.get_version("next", ep);
-                let prev_version = endpoints.get_version("prev", ep);
-                let ports = plan.ports()?.expect("container deployment should have at least an exposed port");
-                for (name, _) in &ports {
-                    let path = if name.is_empty() { service } else { name };
-                    let curr_backend_service = self.backend_service_name(&plan, name, current_version);
-                    let next_backend_service = self.backend_service_name(&plan, name, next_version);
-                    let prev_backend_service = self.backend_service_name(&plan, name, prev_version);
-                    if current_version == next_version {
-                        if next_version == 0 {
-                            // no service deployed. so no path_rule here. 
-                            continue
-                        } else if next_version == prev_version {
-                            // all same version, only single backend required
-                            rules.push(format!("/{}/{}/*={}", path, next_version, next_backend_service));
-                        } else {
-                            // prev version still points old endpoint. anchor prev
-                            rules.push(format!("/{}/{}/*={},/{}/{}/*={}", 
-                                path, next_version, next_backend_service,
-                                path, prev_version, prev_backend_service));
-                        }
-                    } else {
-                        if current_version == 0 {
-                            // next_version is first version to deploy 
-                            rules.push(format!("/{}/{}/*={}", path, next_version, next_backend_service));
-                        } else {
-                            rules.push(format!("/{}/{}/*={},/{}/{}/*={}", 
-                                path, current_version, curr_backend_service, 
-                                path, next_version, next_backend_service));
-                        }
-                    }
-                    processed.entry(path.to_string()).or_insert(true);
+        let mut processed = hashmap!{};
+        for r in &endpoints.releases {
+            for (ep, v) in &r.versions {
+                let s = r.endpoint_service_map.get(ep).unwrap(); //should exist
+                let plan = plan::Plan::load(self.config, s)?;
+                if !plan.has_bluegreen_deployment()? {
+                    continue
                 }
+                let key = format!("{}-{}", ep, v);
+                match processed.get(&key) {
+                    Some(_) => continue,
+                    None => {}
+                }
+                processed.entry(key).or_insert(true);
+                let backend_sevice_name = self.backend_service_name(&plan, 
+                    if ep == s { "" } else { ep }, 
+                    *v
+                );
+                rules.push(format!("/{}/{}/*={}", ep, v, backend_sevice_name));
             }
         }
         Ok(rules.join(","))
@@ -195,16 +167,20 @@ impl<'a, S: shell::Shell<'a>> Gcp<'a, S> {
         &self, endpoints: &endpoints::Endpoints, endpoints_version: u32
     ) -> Result<String, Box<dyn Error>> {
         let mut rules = vec!();
-        let endpoint_names = endpoints.releases.get("curr").unwrap().versions.keys();
+        let mut processed = hashmap!{};
         rules.push(format!("/meta/*={}", self.metadata_backend_bucket_name(endpoints_version)));
-        for ep in endpoint_names {
-            let service = match self.config.find_service_by_endpoint(ep) {
-                Some(s) => s,
-                None => continue
-            };
-            let plan = plan::Plan::load(self.config, service)?;
-            if !plan.has_bluegreen_deployment()? {
-                rules.push(format!("/{}/*={}", ep, self.backend_bucket_name(&plan)));
+        for r in &endpoints.releases {
+            for (ep, _) in &r.versions {
+                let s = r.endpoint_service_map.get(ep).unwrap(); //should exist
+                match processed.get(ep) {
+                    Some(_) => continue,
+                    None => {}
+                }
+                processed.entry(ep).or_insert(true);
+                let plan = plan::Plan::load(self.config, s)?;
+                if !plan.has_bluegreen_deployment()? {
+                    rules.push(format!("/{}/*={}", ep, self.backend_bucket_name(&plan)));
+                }
             }
         }
         Ok(rules.join(","))
@@ -855,7 +831,7 @@ impl<'a, S: shell::Shell<'a>> cloud::Cloud<'a> for Gcp<'a, S> {
                 let name = if ep == &plan.service { "" } else { ep };
                 log::warn!("TODO: support manually set default backend bucket case");
                 format!("--default-service={}", 
-                    self.backend_service_name(&plan, name, endpoints.get_version("next", ep))
+                    self.backend_service_name(&plan, name, endpoints.next.get_version(ep))
                 )
             },
             None => {
@@ -864,7 +840,7 @@ impl<'a, S: shell::Shell<'a>> cloud::Cloud<'a> for Gcp<'a, S> {
         };
         let endpoints_version = maybe_endpoints_version.unwrap_or(endpoints.version);
         log::info!("--- update path matcher ({}/{}/{})", target, default_backend_option, endpoints_version);
-        let target_host = &endpoints.prefix;
+        let target_host = &endpoints.host;
         let url_map_name = self.url_map_name();
         let path_matcher_name = self.path_matcher_name(endpoints_version);
         let service_path_rule = self.service_path_rule(&endpoints)?;
@@ -888,7 +864,7 @@ impl<'a, S: shell::Shell<'a>> cloud::Cloud<'a> for Gcp<'a, S> {
         ), &hashmap!{}, false)?;
     
         log::info!("--- waiting for new urlmap having applied");
-        let endpoint_names = endpoints.releases.get("next").unwrap().versions.keys();
+        let endpoint_names = endpoints.next.versions.keys();
         for ep in endpoint_names {
             let service = match self.config.find_service_by_endpoint(ep) {
                 Some(s) => s,
@@ -899,7 +875,7 @@ impl<'a, S: shell::Shell<'a>> cloud::Cloud<'a> for Gcp<'a, S> {
                 log::debug!("[{}] does not change path. skipped", service);
                 continue
             }
-            let next_version = endpoints.get_version("next", ep);
+            let next_version = endpoints.next.get_version(ep);
             if next_version <= 0 {
                 continue
             }

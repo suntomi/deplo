@@ -15,7 +15,7 @@ fn meta_pr(config: &config::Config, title: &str, label: &str) -> Result<(), Box<
     vcs.push(
         &remote_branch, &format!("{}: update meta (by {})", label, hash),
         &vec!(&format!(
-            "{}/endpoints/{}.toml", 
+            "{}/endpoints/{}.json", 
             config.root_path().to_string_lossy(), 
             config.release_target().expect("should be on release branch")
         )),
@@ -43,7 +43,7 @@ fn try_commit_meta(config: &config::Config) -> Result<bool, Box<dyn Error>> {
     vcs.push(
         &remote_branch, &format!("update meta (by {})", hash),
         &vec!(&format!(
-            "{}/endpoints/{}.toml", 
+            "{}/endpoints/{}.json", 
             config.root_path().to_string_lossy(), 
             config.release_target().expect("should be on release branch")
         )),
@@ -68,9 +68,9 @@ fn deploy_meta(
             version: mv
         },
         &hashmap! {
-            format!("{}/endpoints/{}.toml", config.root_path().to_string_lossy(), release_target) => 
+            format!("{}/endpoints/{}.json", config.root_path().to_string_lossy(), release_target) => 
             cloud::DeployStorageOption {
-                destination: format!("{}/meta/data.toml", bucket_name),
+                destination: format!("{}/meta/data.json", bucket_name),
                 permission: None,
                 excludes: None,
                 max_age: Some(300)
@@ -105,12 +105,7 @@ pub fn deploy(
             log::info!("--- cascade versions confirm_deploy:{} endpoints_deploy_state:{}", 
                 confirm_deploy, endpoints_deploy_state
             );
-            endpoints.cascade_versions(config, None, false)?;
-            if !confirm_deploy {
-                // update prev to prevent older incompatible client from accessing
-                // for production, this is pending to later pull request merging (see below)
-                endpoints.cascade_versions(config, Some("prev"), true)?;
-            }
+            endpoints.cascade_versions(config)?;
             if change_type == endpoints::ChangeType::Path {
                 log::info!("--- {}: meta version up {} => {} due to urlmap changes", 
                     target, current_metaver, current_metaver + 1
@@ -137,8 +132,6 @@ pub fn deploy(
         }
     } else if endpoints::DeployState::BeforeCleanup == endpoints_deploy_state {
         endpoints.deploy_state = None;
-        // update prev to prevent older incompatible client from accessing
-        endpoints.cascade_versions(config, Some("prev"), true)?;
         meta_pr(config, "update $target.json: cleanup load balancer", "cutover_commit")?;
         // TODO: if possible we create rollback PR. 
         // any better way other than creating dev.rollback.json on confirm_cascade?

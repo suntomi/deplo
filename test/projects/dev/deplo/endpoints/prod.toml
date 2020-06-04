@@ -1,8 +1,0 @@
-version = 0
-prefix = 'prod.deplo.suntomi.dev'
-default = 'api'
-
-[paths]
-[releases.curr.versions]
-[releases.prev.versions]
-[releases.next.versions]
