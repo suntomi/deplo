@@ -379,7 +379,15 @@ impl<'a> Config<'a> {
                 Ok(path) => {
                     log::debug!("verify config: load at path {}", path.to_string_lossy());
                     let store_deployment_name = {
-                        let plan = plan::Plan::load_by_path(&self, &path)?;
+                        let plan = match plan::Plan::load_by_path(&self, &path) {
+                            Ok(p) => p,
+                            Err(err) => return escalate!(Box::new(ConfigError {
+                                cause: format!(
+                                    "verify config error loading {} by {:?}", 
+                                    path.to_string_lossy(), err
+                                )
+                            }))
+                        };
                         match plan.ports()? {
                             Some(ports) => {
                                 for (n, _) in &ports {
