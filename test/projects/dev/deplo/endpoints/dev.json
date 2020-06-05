@@ -5,32 +5,50 @@
   "latest_front_only": null,
   "default": "api",
   "paths": null,
-  "min_front_versions": {},
+  "min_front_versions": {
+    "ios": 1,
+    "android": 1
+  },
   "next": {
     "paths": null,
     "endpoint_service_map": {
-      "admin": "api",
-      "ios": "ios",
       "android": "android",
-      "api": "api"
+      "api": "api",
+      "ios": "ios"
     },
     "versions": {
+      "admin": 2,
       "api": 2,
-      "admin": 2
+      "android": 1,
+      "ios": 1
     }
   },
   "releases": [
     {
       "paths": null,
       "endpoint_service_map": {
-        "api": "api",
-        "ios": "ios",
         "android": "android",
-        "admin": "api"
+        "api": "api",
+        "ios": "ios"
       },
       "versions": {
+        "admin": 2,
         "api": 2,
-        "admin": 2
+        "android": 1,
+        "ios": 1
+      }
+    },
+    {
+      "paths": null,
+      "endpoint_service_map": {
+        "api": "api",
+        "admin": "api",
+        "android": "android",
+        "ios": "ios"
+      },
+      "versions": {
+        "admin": 2,
+        "api": 2
       }
     },
     {
@@ -40,8 +58,8 @@
         "api": "api"
       },
       "versions": {
-        "admin": 1,
-        "api": 1
+        "api": 1,
+        "admin": 1
       }
     }
   ],
