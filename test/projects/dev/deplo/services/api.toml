@@ -1,17 +1,17 @@
 [[steps]]
-type = 'Script'
-workdir = 'api'
-code = '''
+type = "Script"
+workdir = "api"
+code = """
 #!/bin/bash
 cargo build --release
 mv /tmp/target/release/apisv docker/apisv
 docker build -t deplo-sandbox/apisv docker
-'''
+"""
 
 [[steps]]
-type = 'Container'
-image = 'deplo-sandbox/apisv'
-target = 'Instance'
+type = "Container"
+image = "deplo-sandbox/apisv"
+target = "Instance"
 port = 80
 [steps.extra_ports]
 admin = 10000

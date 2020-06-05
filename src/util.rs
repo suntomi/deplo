@@ -79,7 +79,7 @@ pub fn envsubst(src: &str) -> String {
     let content = re.replace_all(src, |caps: &Captures| {
         match envs.get(&caps[1]) {
             Some(s) => s.replace("\n", r"\n").replace(r"\", r"\\").replace(r#"""#, r#"\""#),
-            None => return caps[1].to_string()
+            None => return format!("${{{}}}", &caps[1])
         }
     });
     return content.to_string()

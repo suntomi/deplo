@@ -70,7 +70,7 @@ pub enum UnityPlatformBuildConfig {
 }
 #[derive(Serialize, Deserialize, Debug)]
 #[serde(tag = "type")]
-pub enum BuildConfig {
+pub enum Builder {
     Unity {
         unity_version: String,
         serial_code: String,
@@ -108,7 +108,7 @@ enum Step {
         app_id: String,
         project_path: String,
         artifact_path: Option<String>,
-        config: BuildConfig,
+        builder: Builder,
     },
     Distribution {
         config: DistributionConfig,
@@ -181,7 +181,7 @@ pub struct Plan<'a> {
 }
 impl<'a> Plan<'a> {
     fn make_unity_build_step(platform_build_config: UnityPlatformBuildConfig) -> Step {
-        Self::make_build_step(BuildConfig::Unity {
+        Self::make_build_step(Builder::Unity {
             unity_version: "${DEPLO_BUILD_UNITY_VERSION}".to_string(),
             serial_code: "${DEPLO_BUILD_UNITY_SERIAL_CODE}".to_string(),
             account: "${DEPLO_BUILD_UNITY_ACCOUNT_EMAIL}".to_string(),
@@ -189,14 +189,14 @@ impl<'a> Plan<'a> {
             platform: platform_build_config
         })
     }
-    fn make_build_step(config: BuildConfig) -> Step {
+    fn make_build_step(builder: Builder) -> Step {
         return Step::Build {
             org_name: "${DEPLO_ORG_NAME}".to_string(),
-            app_name: "${DEPLO_APP_NAME".to_string(),
+            app_name: "${DEPLO_APP_NAME}".to_string(),
             app_id: "${DEPLO_APP_ID}".to_string(),
             project_path: "./client".to_string(),
             artifact_path: None,
-            config
+            builder
         }
     }
     pub fn create(
@@ -266,7 +266,7 @@ impl<'a> Plan<'a> {
                         }
                     ),
                     "cra" => vec!(
-                        Self::make_build_step(BuildConfig::CreateReactApp{}),
+                        Self::make_build_step(Builder::CreateReactApp{}),
                         Step::Distribution {
                             config: DistributionConfig::Storage {
                                 bucket_name: "${DEPLO_DISTRIBUTION_STORAGE_BUCKET_NAME}".to_string()
@@ -428,7 +428,10 @@ impl<'a> Plan<'a> {
         Ok(data)
     }
     fn save_plandata(&self, path: &str) -> Result<(), Box<dyn Error>> {
-        let as_text = toml::to_string_pretty(&self.data)?;
+        let mut as_text = String::new();
+        let mut ser = toml::Serializer::new(&mut as_text);
+        ser.pretty_string_literal(false);
+        self.data.serialize(&mut ser)?;
         match fs::write(path, &as_text) {
             Ok(_) => Ok(()),
             Err(err) => Err(Box::new(err))
