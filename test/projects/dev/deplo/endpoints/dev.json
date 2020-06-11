@@ -1,5 +1,5 @@
 {
-  "version": 2,
+  "version": 3,
   "host": "dev.deplo.suntomi.dev",
   "confirm_deploy": null,
   "latest_front_only": null,
@@ -12,41 +12,32 @@
   "next": {
     "paths": null,
     "endpoint_service_map": {
-      "android": "android",
       "admin": "api",
+      "android": "android",
       "api": "api",
       "ios": "ios"
     },
     "versions": {
       "admin": 2,
-      "api": 2,
       "android": 1,
-      "ios": 1
+      "ios": 1,
+      "api": 2
     }
   },
   "releases": [
     {
       "paths": null,
       "endpoint_service_map": {
-        "api": "api",
         "admin": "api",
         "android": "android",
+        "api": "api",
         "ios": "ios"
       },
       "versions": {
         "admin": 2,
+        "android": 1,
+        "ios": 1,
         "api": 2
-      }
-    },
-    {
-      "paths": null,
-      "endpoint_service_map": {
-        "admin": "api",
-        "api": "api"
-      },
-      "versions": {
-        "api": 1,
-        "admin": 1
       }
     }
   ],
