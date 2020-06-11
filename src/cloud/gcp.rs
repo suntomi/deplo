@@ -602,6 +602,10 @@ impl<'a, S: shell::Shell<'a>> Gcp<'a, S> {
                 None => continue
             }
         }
+        if endpoints.deploy_state != None {
+            log::info!("--- skip cleanup of metadata buckets, because deploy on going");
+            return Ok(())
+        }
         let bucket_output = self.shell.eval_output_of(
             // to keep linefeed, we don't use -j option for jq. (usually -jr used)
             r#"gcloud compute backend-buckets list --format=json | jq -r ".[].bucketName""#,
@@ -698,6 +702,27 @@ impl<'a, S: shell::Shell<'a>> cloud::Cloud<'a> for Gcp<'a, S> {
                 }))
             }
         }
+        // install gcloud command, if not installed
+        match fs::metadata("/deplo-tools/cloud/google-cloud-sdk") {
+            Ok(_) => {},
+            Err(_) => {
+                self.shell.eval(r#"
+                    curl https://dl.google.com/dl/cloudsdk/channels/rapid/downloads/google-cloud-sdk-$CLOUDSDK_VERSION-linux-x86_64.tar.gz \
+                        --output google-cloud-sdk.zip && tar -zxf google-cloud-sdk.zip && rm google-cloud-sdk.zip && mv google-cloud-sdk $INSTALL_PATH/ && \
+                    $INSTALL_PATH/google-cloud-sdk/install.sh --usage-reporting=true --path-update=true --bash-completion=true --rc-path=/.bashrc \
+                        --additional-components kubectl alpha beta bigtable && \
+                    $INSTALL_PATH/google-cloud-sdk/bin/gcloud config set --installation component_manager/disable_update_check true && \
+                    sed -i -- 's/\"disable_updater\": false/\"disable_updater\": true/g' /google-cloud-sdk/lib/googlecloudsdk/core/config.json && \
+                    ln -s $INSTALL_PATH/google-cloud-sdk /usr/lib
+                "#, &hashmap!{
+                    "HOME".to_string() => "/".to_string(),
+                    "CLOUDSDK_PYTHON_SITEPACKAGES".to_string() => "1".to_string(),
+                    "CLOUDSDK_VERSION".to_string() => "292.0.0".to_string(),
+                    "INSTALL_PATH".to_string() => format!("{}/cloud", std::env::var("DEPLO_TOOLS_PATH")?)
+                }, false)?;
+            }
+        };
+
         Ok(())        
     }
     fn cleanup_dependency(&self) -> Result<(), Box<dyn Error>> {

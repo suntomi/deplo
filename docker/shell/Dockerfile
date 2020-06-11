@@ -7,7 +7,7 @@ RUN curl https://sh.rustup.rs -sSf | \
     # 1.44がreleaseされたらbetaは外す. (https://github.com/rust-lang/rust/issues/40174#issuecomment-618999438)
     sh /dev/stdin -y --default-toolchain beta \
     --target x86_64-apple-darwin
-ENV PATH=$PATH:$HOME/.cargo/bin
+ENV PATH=$HOME/.cargo/bin:$PATH
 
 # store build artifacts at container local FS for faster build
 ENV CARGO_BUILD_TARGET_DIR=/tmp/target

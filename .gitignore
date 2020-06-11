@@ -1,2 +1,4 @@
 target
 .env*
+.deplo-tools/cloud/*
+!.deplo-tools/cloud/.gitkeep
