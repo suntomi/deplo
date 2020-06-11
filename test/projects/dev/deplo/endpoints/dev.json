@@ -1,45 +1,61 @@
 {
-  "version": 4,
+  "version": 5,
   "host": "dev.deplo.suntomi.dev",
   "confirm_deploy": true,
   "certify_latest_dist_only": null,
+  "backport_target_branch": null,
   "default": "api",
   "paths": null,
   "min_certified_dist_versions": {
-    "ios": 1,
-    "android": 1
+    "android": 1,
+    "ios": 1
   },
   "next": {
     "paths": null,
     "endpoint_service_map": {
-      "android": "android",
-      "api": "api",
       "admin": "api",
-      "ios": "ios"
+      "ios": "ios",
+      "android": "android",
+      "api": "api"
     },
     "versions": {
-      "ios": 1,
-      "api": 3,
-      "admin": 3,
-      "android": 1
+      "android": 1,
+      "api": 4,
+      "admin": 4,
+      "ios": 2
     }
   },
   "releases": [
     {
       "paths": null,
       "endpoint_service_map": {
+        "admin": "api",
+        "ios": "ios",
+        "android": "android",
+        "api": "api"
+      },
+      "versions": {
+        "android": 1,
+        "api": 4,
+        "admin": 4,
+        "ios": 2
+      }
+    },
+    {
+      "paths": null,
+      "endpoint_service_map": {
+        "admin": "api",
         "android": "android",
         "api": "api",
-        "admin": "api",
         "ios": "ios"
       },
       "versions": {
-        "ios": 1,
-        "api": 3,
         "admin": 3,
-        "android": 1
+        "ios": 1,
+        "android": 1,
+        "api": 3
       }
     }
   ],
-  "deploy_state": null
+  "deploy_state": "ConfirmCleanup"
 }
