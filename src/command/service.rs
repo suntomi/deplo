@@ -55,7 +55,7 @@ impl<'a, S: shell::Shell<'a>> Service<'a, S> {
     }
     fn cutover<A: args::Args>(&self, _: &A) -> Result<(), Box<dyn Error>> {
         log::debug!("service cutover invoked");      
-        lb::deploy(self.config)
+        lb::deploy(self.config, false)
     }
 }
 

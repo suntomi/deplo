@@ -51,7 +51,7 @@ pub trait Cloud<'a> {
     ) -> Result<(), Box<dyn Error>>;
     // load balancer
     fn update_path_matcher(
-        &self, endpoints: &endpoints::Endpoints, next_endpoints_version: Option<u32>
+        &self, endpoints: &endpoints::Endpoints
     ) -> Result<(), Box<dyn Error>>;
 }
 

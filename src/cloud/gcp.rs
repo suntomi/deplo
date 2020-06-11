@@ -927,7 +927,7 @@ impl<'a, S: shell::Shell<'a>> cloud::Cloud<'a> for Gcp<'a, S> {
     }
 
     fn update_path_matcher(
-        &self, endpoints: &endpoints::Endpoints, maybe_endpoints_version: Option<u32>
+        &self, endpoints: &endpoints::Endpoints
     ) -> Result<(), Box<dyn Error>> {
         let target = self.config.release_target().expect("should be on release branch");
         let default_backend_option = match &endpoints.default {
@@ -943,7 +943,7 @@ impl<'a, S: shell::Shell<'a>> cloud::Cloud<'a> for Gcp<'a, S> {
                 format!("--default-backend-bucket={}", self.config.default_backend())
             }
         };
-        let endpoints_version = maybe_endpoints_version.unwrap_or(endpoints.version);
+        let endpoints_version = endpoints.version;
         log::info!("--- update path matcher ({}/{}/{})", target, default_backend_option, endpoints_version);
         let target_host = &endpoints.host;
         let url_map_name = self.url_map_name();

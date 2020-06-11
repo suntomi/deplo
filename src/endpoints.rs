@@ -14,15 +14,15 @@ use crate::util::escalate;
 #[derive(Serialize, Deserialize, PartialEq, Clone)]
 pub enum DeployState {
     Invalid,
-    ConfirmCascade,
-    BeforeCascade,
+    ConfirmCleanup,
+    AfterCleanup,
 }
 impl fmt::Display for DeployState {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::Invalid => write!(f, "invalid"),
-            Self::ConfirmCascade => write!(f, "confirm_cascade"),
-            Self::BeforeCascade => write!(f, "before_cascade"),
+            Self::ConfirmCleanup => write!(f, "confirm_cleanup"),
+            Self::AfterCleanup => write!(f, "after_cleanup"),
         }
     }
 }
@@ -74,6 +74,7 @@ pub struct Endpoints {
     pub host: String,
     pub confirm_deploy: Option<bool>,
     pub certify_latest_dist_only: Option<bool>,
+    pub backport_target_branch: Option<String>,
     pub default: Option<String>,
     pub paths: Option<HashMap<String, String>>,
     pub min_certified_dist_versions: HashMap<String, u32>,
@@ -89,6 +90,7 @@ impl Endpoints {
             host: host.to_string(),
             confirm_deploy: None,
             certify_latest_dist_only: None,
+            backport_target_branch: None,
             default: None,
             paths: None,
             min_certified_dist_versions: hashmap!{},
@@ -128,7 +130,7 @@ impl Endpoints {
         ep.save(&path)?;
         Ok(r)
     }
-    pub fn path_will_change(&self, config: &config::Config) -> Result<ChangeType, Box<dyn Error>> {
+    pub fn change_type(&self, config: &config::Config) -> Result<ChangeType, Box<dyn Error>> {
         let mut change = ChangeType::None;
         let vs = &self.next.versions;
         for (ep, _) in vs {
@@ -150,13 +152,12 @@ impl Endpoints {
     }
     pub fn cascade_releases(
         &mut self, config: &config::Config
-    ) -> Result<bool, Box<dyn Error>> {
+    ) -> Result<(), Box<dyn Error>> {
         self.next.endpoint_service_map = config.runtime.endpoint_service_map.clone();
         self.releases.insert(0, self.next.clone());
-        let collected = self.gc_releases();
         self.persist(config)?;
 
-        Ok(collected)
+        Ok(())
     }
     pub fn version_up(&mut self, config: &config::Config) -> Result<(), Box<dyn Error>> {
         self.version += 1;
@@ -188,8 +189,9 @@ impl Endpoints {
         self.persist(config)?;
         Ok(())
     }
-
-    fn gc_releases(&mut self) -> bool {
+    pub fn gc_releases(
+        &mut self, config: &config::Config
+    ) -> Result<bool, Box<dyn Error>> {
         let mut marked_releases: Vec<Release> = vec!();
         for r in &self.releases {
             let mut referred = false;
@@ -223,8 +225,10 @@ impl Endpoints {
         }
         let collected = marked_releases.len() != self.releases.len();
         self.releases = marked_releases;
-        return collected;
+        self.persist(config)?;
+        return Ok(collected);
     }
+
     fn verify(&self, _: &config::Config) -> Result<(), Box<dyn Error>> {
         Ok(())
     }
