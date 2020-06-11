@@ -46,7 +46,7 @@ dev:
 sh:
 	docker run --rm -ti -w /workdir \
 		-v $(CURDIR):/workdir \
-		-v $(CURDIR)/.deplo-tools:/deplo-tools \
+		-v $(CURDIR)/.deplo-tools:/deplo-tools:delegated \
 		-v $(HOME)/.cargo/registry:/.cargo/registry \
 		-v /var/run/docker.sock:/var/run/docker.sock \
 		suntomi/deplo_shell sh
