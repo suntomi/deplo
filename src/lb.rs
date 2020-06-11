@@ -100,11 +100,12 @@ pub fn deploy(
     if change_type != endpoints::ChangeType::None {
         let deployed = !confirm_deploy ||
             endpoints::DeployState::ConfirmCleanup == endpoints_deploy_state;
-        // push next release as latest release
-        endpoints.cascade_releases(config)?;
         if deployed {
             log::info!("--- cascade versions confirm_deploy:{} endpoints_deploy_state:{}", 
                 confirm_deploy, endpoints_deploy_state);
+            // push next release as latest release
+            endpoints.cascade_releases(config)?;
+            // and collect releases which is not referenced by distributions
             if endpoints.gc_releases(config)? {
                 // if true, means some releases are collected and path will be changed
                 change_type = endpoints::ChangeType::Path;
@@ -113,7 +114,7 @@ pub fn deploy(
         } else {
             log::info!("--- set pending cleanup for prod deployment");
             endpoints.set_deploy_state(config, Some(endpoints::DeployState::ConfirmCleanup))?;
-            // before PR, pushed next release as also seen in load balancer, because some of workflow
+            // before PR, next release as also seen in load balancer, because some of workflow
             // requires QA in real environment (eg. game)
         }
         if change_type == endpoints::ChangeType::Path {

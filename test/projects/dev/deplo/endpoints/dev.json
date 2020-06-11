@@ -29,21 +29,6 @@
     {
       "paths": null,
       "endpoint_service_map": {
-        "ios": "ios",
-        "api": "api",
-        "admin": "api",
-        "android": "android"
-      },
-      "versions": {
-        "android": 2,
-        "admin": 4,
-        "ios": 2,
-        "api": 4
-      }
-    },
-    {
-      "paths": null,
-      "endpoint_service_map": {
         "admin": "api",
         "api": "api",
         "ios": "ios",
