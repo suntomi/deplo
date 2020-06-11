@@ -73,10 +73,10 @@ pub struct Endpoints {
     pub version: u32,
     pub host: String,
     pub confirm_deploy: Option<bool>,
-    pub latest_front_only: Option<bool>,
+    pub certify_latest_dist_only: Option<bool>,
     pub default: Option<String>,
     pub paths: Option<HashMap<String, String>>,
-    pub min_front_versions: HashMap<String, u32>,
+    pub min_certified_dist_versions: HashMap<String, u32>,
     pub next: Release,
     pub releases: Vec<Release>,
     pub deploy_state: Option<DeployState>,
@@ -88,10 +88,10 @@ impl Endpoints {
             version: 0,
             host: host.to_string(),
             confirm_deploy: None,
-            latest_front_only: None,
+            certify_latest_dist_only: None,
             default: None,
             paths: None,
-            min_front_versions: hashmap!{},
+            min_certified_dist_versions: hashmap!{},
             next: Release {
                 paths: None,
                 endpoint_service_map: hashmap!{},
@@ -193,7 +193,7 @@ impl Endpoints {
         let mut marked_releases: Vec<Release> = vec!();
         for r in &self.releases {
             let mut referred = false;
-            for (service, min_version) in &self.min_front_versions {
+            for (service, min_version) in &self.min_certified_dist_versions {
                 if r.get_version(service) >= *min_version {
                     referred = true;
                     break;
@@ -201,13 +201,13 @@ impl Endpoints {
             }
             if referred {
                 // if version is same as last pushed release
-                // for all services in min_front_versions,
+                // for all services in min_certified_dist_versions,
                 // that release will not marked, because higher version tuple
                 // can handle these versions of front services
                 if marked_releases.len() > 0 {
                     let last_pushed = &marked_releases[marked_releases.len() - 1];
                     let mut front_versions_same = true;
-                    for (service, _) in &self.min_front_versions {
+                    for (service, _) in &self.min_certified_dist_versions {
                         if last_pushed.get_version(service) != r.get_version(service) {
                             front_versions_same = false;
                         }

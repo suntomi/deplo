@@ -327,10 +327,12 @@ impl<'a> Config<'a> {
             *v = latest_version + 1;
             // if confirm_deploy is not set and this is deployment of distribution, 
             // automatically update min_front_version with new version
-            if !eps.confirm_deploy.unwrap_or(false) && 
+            if eps.certify_latest_dist_only.unwrap_or(false) && 
                 plan.has_deployment_of("distribution")? &&
                 endpoint == &plan.service {
-                let fv = eps.min_front_versions.entry(endpoint.to_string()).or_insert(0);
+                let fv = eps.min_certified_dist_versions
+                    .entry(endpoint.to_string()).or_insert(0);
+                // set next version
                 *fv = *v;
             }
             return Ok(*v);
