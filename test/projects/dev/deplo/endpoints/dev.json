@@ -7,38 +7,38 @@
   "default": "api",
   "paths": null,
   "min_certified_dist_versions": {
-    "ios": 1,
-    "android": 1
+    "android": 1,
+    "ios": 1
   },
   "next": {
     "paths": null,
     "endpoint_service_map": {
-      "admin": "api",
       "ios": "ios",
-      "android": "android",
-      "api": "api"
+      "api": "api",
+      "admin": "api",
+      "android": "android"
     },
     "versions": {
-      "api": 4,
-      "ios": 2,
+      "android": 2,
       "admin": 4,
-      "android": 1
+      "ios": 2,
+      "api": 4
     }
   },
   "releases": [
     {
       "paths": null,
       "endpoint_service_map": {
-        "admin": "api",
         "ios": "ios",
-        "android": "android",
-        "api": "api"
+        "api": "api",
+        "admin": "api",
+        "android": "android"
       },
       "versions": {
-        "api": 4,
-        "ios": 2,
+        "android": 2,
         "admin": 4,
-        "android": 1
+        "ios": 2,
+        "api": 4
       }
     },
     {
@@ -46,16 +46,31 @@
       "endpoint_service_map": {
         "admin": "api",
         "api": "api",
-        "android": "android",
-        "ios": "ios"
+        "ios": "ios",
+        "android": "android"
       },
       "versions": {
         "android": 1,
+        "api": 4,
+        "admin": 4,
+        "ios": 2
+      }
+    },
+    {
+      "paths": null,
+      "endpoint_service_map": {
+        "api": "api",
+        "android": "android",
+        "admin": "api",
+        "ios": "ios"
+      },
+      "versions": {
         "admin": 3,
         "ios": 1,
-        "api": 3
+        "api": 3,
+        "android": 1
       }
     }
   ],
-  "deploy_state": null
+  "deploy_state": "ConfirmCleanup"
 }
