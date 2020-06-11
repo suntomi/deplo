@@ -190,7 +190,7 @@ impl Endpoints {
     }
 
     fn gc_releases(&mut self) -> bool {
-        let mut marked_releases = vec!();
+        let mut marked_releases: Vec<Release> = vec!();
         for r in &self.releases {
             let mut referred = false;
             for (service, min_version) in &self.min_front_versions {
@@ -200,6 +200,22 @@ impl Endpoints {
                 }
             }
             if referred {
+                // if version is same as last pushed release
+                // for all services in min_front_versions,
+                // that release will not marked, because higher version tuple
+                // can handle these versions of front services
+                if marked_releases.len() > 0 {
+                    let last_pushed = &marked_releases[marked_releases.len() - 1];
+                    let mut front_versions_same = true;
+                    for (service, _) in &self.min_front_versions {
+                        if last_pushed.get_version(service) != r.get_version(service) {
+                            front_versions_same = false;
+                        }
+                    }
+                    if front_versions_same {
+                        continue;
+                    }
+                }
                 marked_releases.push(r.clone());
             } else {
                 log::debug!("release {:?} collected", r);
