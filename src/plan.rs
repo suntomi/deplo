@@ -11,7 +11,7 @@ use glob::glob;
 use crate::config;
 use crate::shell;
 use crate::cloud;
-use crate::util;
+use crate::util::{escalate, envsubst};
 
 #[derive(Debug)]
 pub struct DeployError {
@@ -137,7 +137,7 @@ impl Step {
                 shell.set_cwd::<String>(None)?;
                 match r {
                     Ok(_) => Ok(()),
-                    Err(err) => Err(Box::new(err))
+                    Err(err) => escalate!(Box::new(err))
                 }
             },
             Self::Container { target, image, port:_, extra_ports:_, env, options } => {
@@ -273,7 +273,7 @@ impl<'a> Plan<'a> {
                             }
                         }
                     ),
-                    _ => return Err(Box::new(DeployError {
+                    _ => return escalate!(Box::new(DeployError {
                         cause: format!("invalid deploy type: {:?}", kind)
                     }))
                 }
@@ -301,7 +301,7 @@ impl<'a> Plan<'a> {
                 plan.verify()?;
                 return Ok(plan)
             }
-            None => return Err(Box::new(DeployError {
+            None => return escalate!(Box::new(DeployError {
                 cause: format!("invalid path string: {:?}", path)
             }))
         }
@@ -321,10 +321,10 @@ impl<'a> Plan<'a> {
                         None => {}
                     }
                 },
-                Err(e) => return Err(Box::new(e))
+                Err(e) => return escalate!(Box::new(e))
             }
         }
-        Err(Box::new(DeployError {
+        escalate!(Box::new(DeployError {
             cause: format!("plan contains endpoint:{} does not found", endpoint)
         }))
     }
@@ -332,7 +332,7 @@ impl<'a> Plan<'a> {
         let pathbuf = self.config.services_path().join(format!("{}.toml", self.service));
         match pathbuf.to_str() {
             Some(path) => return self.save_plandata(path),
-            None => return Err(Box::new(DeployError {
+            None => return escalate!(Box::new(DeployError {
                 cause: format!("invalid path string: {:?}", pathbuf)
             }))
         }
@@ -366,7 +366,7 @@ impl<'a> Plan<'a> {
                 _ => {}
             }
         }
-        return Err(Box::new(DeployError {
+        return escalate!(Box::new(DeployError {
             cause: format!("no container/storage are deployed in {}.toml", self.service)
         }))
     }
@@ -378,10 +378,12 @@ impl<'a> Plan<'a> {
                     ports.entry("".to_string()).or_insert(*port);
                     return Ok(Some(ports))
                 },
-                _ => return Ok(None)
+                Step::Storage { copymap:_ } => return Ok(None),
+                Step::Distribution { config:_ } => return Ok(None),
+                _ => {}
             }
         }
-        return Err(Box::new(DeployError {
+        return escalate!(Box::new(DeployError {
             cause: format!("either storage/container deployment should exist in {}.toml", self.service)
         }))
     }
@@ -415,10 +417,10 @@ impl<'a> Plan<'a> {
     }
     fn load_plandata(path_or_text: &str) -> Result<PlanData, Box<dyn Error>> {
         let data = match fs::read_to_string(path_or_text) {
-            Ok(text) => toml::from_str::<PlanData>(&util::envsubst(&text))?,
-            Err(_) => match toml::from_str::<PlanData>(&util::envsubst(&path_or_text)) {
+            Ok(text) => toml::from_str::<PlanData>(&envsubst(&text))?,
+            Err(_) => match toml::from_str::<PlanData>(&envsubst(&path_or_text)) {
                 Ok(p) => p,
-                Err(err) => return Err(Box::new(DeployError {
+                Err(err) => return escalate!(Box::new(DeployError {
                     cause: format!(
                         "load_plandata: cannot load plan data from {} by {}", path_or_text, err
                     )
@@ -434,7 +436,7 @@ impl<'a> Plan<'a> {
         self.data.serialize(&mut ser)?;
         match fs::write(path, &as_text) {
             Ok(_) => Ok(()),
-            Err(err) => Err(Box::new(err))
+            Err(err) => escalate!(Box::new(err))
         }
     }
 }

@@ -16,7 +16,6 @@ pub enum DeployState {
     Invalid,
     ConfirmCascade,
     BeforeCascade,
-    BeforeCleanup,
 }
 impl fmt::Display for DeployState {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -24,7 +23,6 @@ impl fmt::Display for DeployState {
             Self::Invalid => write!(f, "invalid"),
             Self::ConfirmCascade => write!(f, "confirm_cascade"),
             Self::BeforeCascade => write!(f, "before_cascade"),
-            Self::BeforeCleanup => write!(f, "before_cleanup"),
         }
     }
 }
@@ -46,7 +44,7 @@ impl fmt::Display for ChangeType {
 }
 
 
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct Release {
     pub paths: Option<HashMap<String, String>>,
     pub endpoint_service_map: HashMap<String, String>,
@@ -58,6 +56,9 @@ impl Release {
             Some(v) => *v,
             None => 0
         }
+    }
+    pub fn has_service(&self, service: &str, version: u32) -> bool {
+        return self.get_version(service) == version
     }
 }
 
@@ -147,14 +148,15 @@ impl Endpoints {
         }
         return Ok(change)
     }
-    pub fn cascade_versions(
+    pub fn cascade_releases(
         &mut self, config: &config::Config
-    ) -> Result<(), Box<dyn Error>> {
+    ) -> Result<bool, Box<dyn Error>> {
         self.next.endpoint_service_map = config.runtime.endpoint_service_map.clone();
         self.releases.insert(0, self.next.clone());
+        let collected = self.gc_releases();
         self.persist(config)?;
 
-        Ok(())
+        Ok(collected)
     }
     pub fn version_up(&mut self, config: &config::Config) -> Result<(), Box<dyn Error>> {
         self.version += 1;
@@ -168,7 +170,45 @@ impl Endpoints {
             0
         }
     }
+    pub fn service_is_active(&self, service: &str, version: u32) -> bool {
+        if self.next.has_service(service, version) {
+            return true;
+        }
+        for r in &self.releases {
+            if r.has_service(service, version) {
+                return true;
+            }
+        }
+        return false;
+    }
+    pub fn set_deploy_state(
+        &mut self, config: &config::Config, deploy_state: Option<DeployState>
+    ) -> Result<(), Box<dyn Error>> {
+        self.deploy_state = deploy_state;
+        self.persist(config)?;
+        Ok(())
+    }
 
+    fn gc_releases(&mut self) -> bool {
+        let mut marked_releases = vec!();
+        for r in &self.releases {
+            let mut referred = false;
+            for (service, min_version) in &self.min_front_versions {
+                if r.get_version(service) >= *min_version {
+                    referred = true;
+                    break;
+                }
+            }
+            if referred {
+                marked_releases.push(r.clone());
+            } else {
+                log::debug!("release {:?} collected", r);
+            }
+        }
+        let collected = marked_releases.len() != self.releases.len();
+        self.releases = marked_releases;
+        return collected;
+    }
     fn verify(&self, _: &config::Config) -> Result<(), Box<dyn Error>> {
         Ok(())
     }

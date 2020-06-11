@@ -57,10 +57,6 @@ impl<'a, S: shell::Shell<'a>> Service<'a, S> {
         log::debug!("service cutover invoked");      
         lb::deploy(self.config)
     }
-    fn cleanup<A: args::Args>(&self, _: &A) -> Result<(), Box<dyn Error>> {
-        log::debug!("service cleanup invoked");      
-        lb::cleanup(self.config)
-    }
 }
 
 impl<'a, S: shell::Shell<'a>, A: args::Args> command::Command<'a, A> for Service<'a, S> {
@@ -75,7 +71,6 @@ impl<'a, S: shell::Shell<'a>, A: args::Args> command::Command<'a, A> for Service
             Some(("create", subargs)) => return self.create(&subargs),
             Some(("deploy", subargs)) => return self.deploy(&subargs),
             Some(("cutover", subargs)) => return self.cutover(&subargs),
-            Some(("cleanup", subargs)) => return self.cleanup(&subargs),
             Some((name, _)) => return Err(args.error(
                 &format!("no such subcommand: [{}]", name) 
             )),

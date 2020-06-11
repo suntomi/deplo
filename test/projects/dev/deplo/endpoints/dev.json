@@ -13,6 +13,7 @@
     "paths": null,
     "endpoint_service_map": {
       "android": "android",
+      "admin": "api",
       "api": "api",
       "ios": "ios"
     },
@@ -24,20 +25,6 @@
     }
   },
   "releases": [
-    {
-      "paths": null,
-      "endpoint_service_map": {
-        "android": "android",
-        "api": "api",
-        "ios": "ios"
-      },
-      "versions": {
-        "admin": 2,
-        "api": 2,
-        "android": 1,
-        "ios": 1
-      }
-    },
     {
       "paths": null,
       "endpoint_service_map": {

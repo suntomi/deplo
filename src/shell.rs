@@ -44,3 +44,18 @@ impl Error for ShellError {
         None
     }
 }
+
+#[macro_export]
+macro_rules! macro_ignore_exit_code {
+    ($exec:expr) => {
+        match $exec {
+            Ok(_) => {},
+            Err(err) => match err {
+                shell::ShellError::ExitStatus{ status:_ } => {},
+                _ => return escalate!(Box::new(err))
+            }
+        }
+    };
+}
+
+pub use macro_ignore_exit_code as ignore_exit_code;

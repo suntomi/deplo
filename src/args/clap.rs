@@ -118,13 +118,8 @@ lazy_static! {
                 )    
                 .subcommand(
                     App::new("cutover")
-                    .about("direct traffic to new version. \
+                    .about("direct traffic to new version and remove unused cloud resources. \
                         use after services updated with deplo service deploy")
-                )    
-                .subcommand(
-                    App::new("cleanup")
-                    .about("cleanup unused service deployment. \
-                        use after services updated with deplo service cutover")
                 )    
         )
         .get_matches();

@@ -12,6 +12,7 @@ use crate::endpoints;
 use crate::shell;
 use crate::cloud;
 use crate::plan;
+use crate::util::escalate;
 
 pub struct Gcp<'a, S: shell::Shell<'a> = shell::Default<'a>> {
     pub config: &'a config::Config<'a>,
@@ -43,7 +44,7 @@ impl<'a, S: shell::Shell<'a>> Gcp<'a, S> {
                 echo '{}' | jq -jr ".client_email"
             "#, key), &hashmap!{})?)
         }
-        return Err(Box::new(config::ConfigError{
+        return escalate!(Box::new(config::ConfigError{
             cause: format!("should have GCP config for config.cloud.provider, but {}", config.cloud.provider)
         }))
     }
@@ -53,7 +54,7 @@ impl<'a, S: shell::Shell<'a>> Gcp<'a, S> {
                 echo '{}' | jq -jr ".project_id"
             "#, key), &hashmap!{})?)
         }
-        return Err(Box::new(config::ConfigError{
+        return escalate!(Box::new(config::ConfigError{
             cause: format!("should have GCP config for config.cloud.provider, but {}", config.cloud.provider)
         }))
     }
@@ -141,7 +142,11 @@ impl<'a, S: shell::Shell<'a>> Gcp<'a, S> {
     fn service_path_rule(&self, endpoints: &endpoints::Endpoints) -> Result<String, Box<dyn Error>> {
         let mut rules = vec!();
         let mut processed = hashmap!{};
-        for r in &endpoints.releases {
+        // service path rule should include unreleased paths 
+        // (BeforeCascade case when Endpoints::confirm_deploy is true)
+        let mut releases = endpoints.releases.iter().collect::<Vec<&endpoints::Release>>();
+        releases.push(&endpoints.next);
+        for r in &releases {
             for (ep, v) in &r.versions {
                 let s = r.endpoint_service_map.get(ep).unwrap(); //should exist
                 let plan = plan::Plan::load(self.config, s)?;
@@ -178,7 +183,7 @@ impl<'a, S: shell::Shell<'a>> Gcp<'a, S> {
                 }
                 processed.entry(ep).or_insert(true);
                 let plan = plan::Plan::load(self.config, s)?;
-                if !plan.has_deployment_of("service")? {
+                if plan.has_deployment_of("storage")? {
                     rules.push(format!("/{}/*={}", ep, self.backend_bucket_name(&plan)));
                 }
             }
@@ -268,7 +273,7 @@ impl<'a, S: shell::Shell<'a>> Gcp<'a, S> {
             jq -jr ".[]|select(.metadata.name == \"{}\")
         "#, service_name), &hashmap!{})?;
         if out.is_empty() {
-            return Err(Box::new(cloud::CloudError{
+            return escalate!(Box::new(cloud::CloudError{
                 cause: format!(
                     "invalid service_name:{} correspond service does not exist", 
                     service_name)
@@ -533,6 +538,102 @@ impl<'a, S: shell::Shell<'a>> Gcp<'a, S> {
         }
         return Ok(())
     }
+    fn cleanup_resources(
+        &self, endpoints: &endpoints::Endpoints
+    ) -> Result<(), Box<dyn Error>> {
+        log::info!("---- cleanup_load_balancer");
+        let service_output = self.shell.eval_output_of(
+            // to keep linefeed, we don't use -j option for jq. (usually -jr used)
+            r#"gcloud compute instance-templates list --format=json | jq -r ".[].name""#,
+            &hashmap!{}
+        )?;
+        let existing_instance_templates: Vec<&str> = service_output.split('\n').collect();
+        let resource_location_flag = format!("--region={}", self.config.cloud_region());
+        let re_services = Regex::new(r#"instance-template\-([^\-]+)\-([^\-]+)"#).unwrap();
+        let template_name_err = |t| {
+            Box::new(cloud::CloudError{
+                cause: format!("[{}]:invalid resource name", t)
+            })
+        };
+        for t in existing_instance_templates {
+            match re_services.captures(&t) {
+                Some(c) => {
+                    let service = match c.get(1) {
+                        Some(s) => s.as_str(),
+                        None => return escalate!(template_name_err(t))
+                    };
+                    let version: u32 = match c.get(2) {
+                        Some(v) => match v.as_str().parse() {
+                            Ok(n) => n,
+                            Err(err) => return escalate!(Box::new(err))
+                        }
+                        None => return escalate!(template_name_err(t))
+                    };
+                    if !endpoints.service_is_active(service, version) {
+                        // remove GC'ed cloud resource
+                        let plan = plan::Plan::load(self.config, service)?;
+                        for (ep, _) in &plan.ports()?.unwrap() {
+                            // 1. outdated backend service
+                            shell::ignore_exit_code!(self.shell.exec(&vec!(
+                                "gcloud", "compute", "backend-services" ,"delete",
+                                &self.backend_service_name(&plan, ep, version), "--global", "--quiet"
+                            ), &hashmap!{}, false));
+                            // 2. remove outdated health check
+                            shell::ignore_exit_code!(self.shell.exec(&vec!(
+                                "gcloud", "compute", "health-checks", "delete",
+                                &self.health_check_name(&plan, ep, version), "--quiet"
+                            ), &hashmap!{}, false));
+                        }
+                        // then, remove outdated instance group
+                        shell::ignore_exit_code!(self.shell.exec(&vec!(
+                            "gcloud", "compute", "instance-groups", "managed", "delete",
+                             &self.instance_group_name(&plan, version),
+                             &resource_location_flag, "--quiet"
+                        ), &hashmap!{}, false));
+                        // then, delete instance template
+                        shell::ignore_exit_code!(self.shell.exec(&vec!(
+                            "gcloud", "compute", "instance-templates", "delete",
+                            &self.instance_template_name(&plan, version), "--quiet"
+                        ), &hashmap!{}, false));
+                    }
+                },
+                None => continue
+            }
+        }
+        let bucket_output = self.shell.eval_output_of(
+            // to keep linefeed, we don't use -j option for jq. (usually -jr used)
+            r#"gcloud compute backend-buckets list --format=json | jq -r ".[].bucketName""#,
+            &hashmap!{}
+        )?;
+        let existing_buckets: Vec<&str> = bucket_output.split('\n').collect();
+        let re_meta_buckets = Regex::new(r#"backend\-bucket\-metadata\-([^\-]+)"#).unwrap();
+        for b in existing_buckets {
+            match re_meta_buckets.captures(&b) {
+                Some(c) => {
+                    let version: u32 = match c.get(1) {
+                        Some(v) => match v.as_str().parse() {
+                            Ok(n) => n,
+                            Err(err) => return escalate!(Box::new(err))
+                        },
+                        None => return escalate!(template_name_err(b))
+                    };
+                    if version < endpoints.version {
+                        // delete backend buckets first
+                        shell::ignore_exit_code!(self.shell.exec(&vec!(
+                            "gcloud", "compute", "backend-buckets", "delete",
+                            &self.metadata_backend_bucket_name(version), "--quiet"
+                        ), &hashmap!{}, false));
+                        // then, delete actual bucket
+                        shell::ignore_exit_code!(self.shell.exec(&vec!(
+                            "gsutil", "rm", "-r", &format!("gs://{}", b)
+                        ), &hashmap!{}, false));
+                    }
+                },
+                None => {}
+            }
+        }
+        Ok(())
+    }
     fn get_zone_and_project<'b>(&'b self, dns_zone: &'b str) -> (&'b str, &'b str) {
         let parsed: Vec<&str> = dns_zone.split("@").collect();
         return if parsed.len() > 1 {
@@ -579,7 +680,7 @@ impl<'a, S: shell::Shell<'a>> cloud::Cloud<'a> for Gcp<'a, S> {
                         "gcloud", "services", "enable", "cloudresourcemanager.googleapis.com"
                     ), &hashmap!{}, false)?;
                 } else {
-                    return Err(Box::new(cloud::CloudError{
+                    return escalate!(Box::new(cloud::CloudError{
                         cause: format!(
                             "should have GCP config but have: {}", 
                             self.config.cloud.provider
@@ -588,7 +689,7 @@ impl<'a, S: shell::Shell<'a>> cloud::Cloud<'a> for Gcp<'a, S> {
                 }
             }
             Err(std::env::VarError::NotUnicode(f)) => {
-                return Err(Box::new(cloud::CloudError{
+                return escalate!(Box::new(cloud::CloudError{
                     cause: format!("invalid GOOGLE_APPLICATION_CREDENTIALS value {:?}", f)
                 }))
             }
@@ -608,7 +709,7 @@ impl<'a, S: shell::Shell<'a>> cloud::Cloud<'a> for Gcp<'a, S> {
             Ok(_) => Ok(()),
             Err(err) => match err {
                 shell::ShellError::ExitStatus{ status:_ } => Ok(()),
-                _ => Err(Box::new(err))
+                _ => escalate!(Box::new(err))
             }
         }
     }
@@ -627,7 +728,7 @@ impl<'a, S: shell::Shell<'a>> cloud::Cloud<'a> for Gcp<'a, S> {
                     Ok(_) => {},
                     Err(err) => match err {
                         shell::ShellError::ExitStatus{ status:_ } => {},
-                        _ => return Err(Box::new(err))
+                        _ => return escalate!(Box::new(err))
                     }            
                 }
                 return Ok(format!("\
@@ -667,7 +768,7 @@ impl<'a, S: shell::Shell<'a>> cloud::Cloud<'a> for Gcp<'a, S> {
                 );
             }
             _ => {
-                Err(Box::new(cloud::CloudError{
+                escalate!(Box::new(cloud::CloudError{
                     cause: format!("invalid terraformer config name: {}", name)
                 }))
             }
@@ -682,7 +783,7 @@ impl<'a, S: shell::Shell<'a>> cloud::Cloud<'a> for Gcp<'a, S> {
             jq -jr ".[]|select(.name==\"{}\").dnsName"
         "#, zone_and_project.1, zone_and_project.0), &hashmap!{})?;
         if r.is_empty() {
-            return Err(Box::new(cloud::CloudError{
+            return escalate!(Box::new(cloud::CloudError{
                 cause: format!("no such zone: {} [{}]", zone, r)
             }));
         }
@@ -705,7 +806,7 @@ impl<'a, S: shell::Shell<'a>> cloud::Cloud<'a> for Gcp<'a, S> {
                     key, repository_url
                 ), &hashmap!{}, false)?;
             },
-            _ => return Err(Box::new(cloud::CloudError{
+            _ => return escalate!(Box::new(cloud::CloudError{
                 cause: format!("invalid provider config: {}. gcp config requred", 
                     self.config.cloud.provider)
             }))
@@ -752,7 +853,7 @@ impl<'a, S: shell::Shell<'a>> cloud::Cloud<'a> for Gcp<'a, S> {
             Ok(_) => Ok(()),
             Err(err) => match err {
                 shell::ShellError::ExitStatus{ status:_ } => Ok(()),
-                _ => return Err(Box::new(err))
+                _ => return escalate!(Box::new(err))
             }            
         }
     }
@@ -770,11 +871,11 @@ impl<'a, S: shell::Shell<'a>> cloud::Cloud<'a> for Gcp<'a, S> {
                         self.create_bucket(bn)?; 
                         bn.to_string()
                     },
-                    None => return Err(Box::new(cloud::CloudError{
+                    None => return escalate!(Box::new(cloud::CloudError{
                         cause: format!("invalid dst config: {}", dst)
                     }))
                 },
-                None => return Err(Box::new(cloud::CloudError{
+                None => return escalate!(Box::new(cloud::CloudError{
                     cause: format!("invalid dst config: {}", dst)
                 }))
             };
@@ -891,7 +992,7 @@ impl<'a, S: shell::Shell<'a>> cloud::Cloud<'a> for Gcp<'a, S> {
                 } else {
                     count += 1;
                     if count > 360 {
-                        return Err(Box::new(cloud::CloudError{
+                        return escalate!(Box::new(cloud::CloudError{
                             cause: format!("[{}]:too long to active. abort", service)
                         }))
                     }
@@ -900,6 +1001,7 @@ impl<'a, S: shell::Shell<'a>> cloud::Cloud<'a> for Gcp<'a, S> {
                 std::thread::sleep(std::time::Duration::from_secs(5));
             }
         }
-        Ok(())
+        // cleanup unused cloud resources
+        self.cleanup_resources(endpoints)
     }
 }

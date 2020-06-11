@@ -87,9 +87,8 @@ pub fn deploy(
         config,
         &config.endpoints_file_path(Some(target))
     )?;
-    log::info!("endpoint loaded");
     let current_metaver = endpoints.version;
-    let change_type = endpoints.path_will_change(config)?;
+    let mut change_type = endpoints.path_will_change(config)?;
     let endpoints_deploy_state = match &endpoints.deploy_state {
         Some(ds) => ds.clone(),
         None => endpoints::DeployState::Invalid
@@ -100,28 +99,24 @@ pub fn deploy(
         change_type, endpoints_deploy_state
     );
     if change_type != endpoints::ChangeType::None {
-        if !confirm_deploy || 
-            endpoints::DeployState::ConfirmCascade == endpoints_deploy_state {
+        if !confirm_deploy || endpoints::DeployState::ConfirmCascade == endpoints_deploy_state {
             log::info!("--- cascade versions confirm_deploy:{} endpoints_deploy_state:{}", 
                 confirm_deploy, endpoints_deploy_state
             );
-            endpoints.cascade_versions(config)?;
+            if endpoints.cascade_releases(config)? {
+                // if true, means some releases are collected and path will be changed
+                change_type = endpoints::ChangeType::Path;
+            }
             if change_type == endpoints::ChangeType::Path {
                 log::info!("--- {}: meta version up {} => {} due to urlmap changes", 
                     target, current_metaver, current_metaver + 1
                 );
                 endpoints.version_up(config)?;
             }
-            // next_metaver= (use version in metadata)
-            if endpoints::DeployState::ConfirmCascade == endpoints_deploy_state {
-                endpoints.deploy_state = Some(endpoints::DeployState::BeforeCleanup);
-            }
-        } else if endpoints::DeployState::BeforeCascade == endpoints_deploy_state {
-            endpoints.deploy_state = Some(endpoints::DeployState::ConfirmCascade);
-            return meta_pr(config, "update $target.json: cascade versions", "cutover");
+            endpoints.set_deploy_state(config, None)?;
         } else {
             log::info!("--- set pending cleanup for prod deployment");
-            endpoints.deploy_state = Some(endpoints::DeployState::BeforeCascade);
+            endpoints.set_deploy_state(config, Some(endpoints::DeployState::ConfirmCascade))?;
             next_metaver = Some(current_metaver+1);
         }
         log::info!("--- deploy metadata bucket");
@@ -130,26 +125,9 @@ pub fn deploy(
         if change_type == endpoints::ChangeType::Path {
             config.cloud_service()?.update_path_matcher(&endpoints, next_metaver)?;
         }
-    } else if endpoints::DeployState::BeforeCleanup == endpoints_deploy_state {
-        endpoints.deploy_state = None;
-        meta_pr(config, "update $target.json: cleanup load balancer", "cutover_commit")?;
-        // TODO: if possible we create rollback PR. 
-        // any better way other than creating dev.rollback.json on confirm_cascade?
-        return Ok(())
-    } else if confirm_deploy {
-        log::info!("--- deploy metadata bucket at before_cleanup");
-        deploy_meta(config, target, &endpoints, next_metaver)?;
-        config.cloud_service()?.update_path_matcher(&endpoints, next_metaver)?;
-        backport_pr(config)?;
     }
     // if any change, commit to github
     try_commit_meta(config)?;
 
-    Ok(())
-}
-
-pub fn cleanup(
-    config: &config::Config
-) -> Result<(), Box<dyn Error>> {
     Ok(())
 }
