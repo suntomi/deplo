@@ -549,7 +549,9 @@ impl<'a, S: shell::Shell<'a>> Gcp<'a, S> {
         )?;
         let existing_instance_templates: Vec<&str> = service_output.split('\n').collect();
         let resource_location_flag = format!("--region={}", self.config.cloud_region());
-        let re_services = Regex::new(r#"instance-template\-([^\-]+)\-([^\-]+)"#).unwrap();
+        let re_services = Regex::new(
+            &self.config.canonical_name(&r#"instance-template\-([^\-]+)\-([^\-]+)"#)
+        ).unwrap();
         let template_name_err = |t| {
             Box::new(cloud::CloudError{
                 cause: format!("[{}]:invalid resource name", t)
@@ -606,7 +608,9 @@ impl<'a, S: shell::Shell<'a>> Gcp<'a, S> {
             &hashmap!{}
         )?;
         let existing_buckets: Vec<&str> = bucket_output.split('\n').collect();
-        let re_meta_buckets = Regex::new(r#"backend\-bucket\-metadata\-([^\-]+)"#).unwrap();
+        let re_meta_buckets = Regex::new(
+            &self.config.canonical_name(&r#"metadata\-([^\-]+)"#)
+        ).unwrap();
         for b in existing_buckets {
             match re_meta_buckets.captures(&b) {
                 Some(c) => {
