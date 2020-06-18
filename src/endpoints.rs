@@ -194,10 +194,10 @@ impl Endpoints {
     ) -> Result<bool, Box<dyn Error>> {
         let mut marked_releases: Vec<Release> = vec!();
         for r in &self.releases {
-            let mut referred = false;
+            let mut referred = true;
             for (service, min_version) in &self.min_certified_dist_versions {
-                if r.get_version(service) >= *min_version {
-                    referred = true;
+                if r.get_version(service) < *min_version {
+                    referred = false;
                     break;
                 }
             }
