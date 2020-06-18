@@ -1,3 +1,4 @@
+use std::fs;
 use std::error::Error;
 use std::result::Result;
 
@@ -18,6 +19,16 @@ impl<'a> ci::CI<'a> for GhAction<'a> {
         });
     }
     fn init(&self) -> Result<(), Box<dyn Error>> {
+        let repository_root = self.config.vcs_service()?.repository_root()?;
+        let deplo_yml_path = format!("{}/.github/workflows/deplo.yml", repository_root);
+        let target_branches = self.config.common.release_targets
+            .values().map(|s| &**s)
+            .collect::<Vec<&str>>().join(",");
+        fs::create_dir_all(&format!("{}/.github/workflows", repository_root))?;
+        fs::write(&deplo_yml_path, format!(
+            include_str!("../../rsc/ci/ghaction/deplo.yml.tmpl"), 
+            target_branches, target_branches, config::DEPLO_GIT_HASH
+        ))?;
         Ok(())
     }
     fn run_job(&self, job_name: &str) -> Result<String, Box<dyn Error>> {

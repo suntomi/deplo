@@ -4,4 +4,4 @@ dns_zone_project = "suntomi"
 project_id = "deplo-sandbox"
 region = "asia-northeast1"
 resource_prefix = "deplo"
-envs = ["prod","dev"]
+envs = ["dev","prod"]

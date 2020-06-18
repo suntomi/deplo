@@ -6,7 +6,7 @@ no_confirm_for_prod_deploy = false
 
 [common.release_targets]
 dev = "master"
-prod = "release/.*"
+prod = "release"
 
 [cloud.provider]
 type = "GCP"
@@ -26,8 +26,9 @@ account = "suntomi-bot"
 key = "${DEPLO_VCS_ACCESS_KEY}"
 
 [ci]
-type = "Circle"
-key = "${DEPLO_CI_ACCESS_KEY}"
+type = "GhAction"
+account = "suntomi-bot"
+key = "${DEPLO_VCS_ACCESS_KEY}"
 
 [deploy.pr]
 "client/.*" = "deplo service deploy client"

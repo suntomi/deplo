@@ -2,7 +2,30 @@ executors:
   deplo:
     working_directory: /workdir
     docker:
-      - image: suntomi/deplo:20f560cf5af333a6443b672c5e3099a013fad50e
+      - image: suntomi/deplo:954aaa81a7350f77d7c9e472edd62a18c62c6458
+
+commands:
+  fetch_repo:
+    steps:
+      - restore_cache:
+          keys:
+            - deplo-git-v1-{{ arch }}-{{ .Branch }}-{{ .Revision }}
+            - deplo-git-v1-{{ arch }}-{{ .Branch }}-
+            - deplo-git-v1-{{ arch }}-
+      - checkout
+      - run:
+          name: 'pull files in git LFS'
+          command: |
+            GIT_SSH_COMMAND='ssh -i /.ssh/id_rsa -o UserKnownHostsFile=/.ssh/known_hosts' \
+              git lfs pull && git lfs checkout
+      - run:
+          name: 'maintain git'
+          command: git gc
+      - save_cache:
+          key: deplo-git-v1-{{ arch }}-{{ .Branch }}-{{ .Revision }}
+          paths:
+            - ".git"
+
 jobs:
   main:
     executor: deplo
