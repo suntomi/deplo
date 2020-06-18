@@ -93,6 +93,10 @@ lazy_static! {
                     .required(true))
         )
         .subcommand(
+            App::new("ci")
+                .about("entry point of CI/CD process")
+        )
+        .subcommand(
             App::new("service")
                 .about("control service, which represent single deployment unit")
                 .subcommand(

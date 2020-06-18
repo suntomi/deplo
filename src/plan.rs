@@ -11,7 +11,7 @@ use glob::glob;
 use crate::config;
 use crate::shell;
 use crate::cloud;
-use crate::util::{escalate, envsubst};
+use crate::util::{escalate, envsubst, defer};
 
 #[derive(Debug)]
 pub struct DeployError {
@@ -86,7 +86,6 @@ pub enum Builder {
 enum Step {
     Script {
         code: String,
-        runner: Option<String>,
         workdir: Option<String>,
         env: Option<HashMap<String, String>>,
     },
@@ -117,28 +116,10 @@ enum Step {
 impl Step {
     pub fn exec<'a, S: shell::Shell<'a>>(&self, plan: &Plan<'a>) -> Result<(), Box<dyn Error>> {
         match self {
-            Self::Script { code, runner, env, workdir } => {
-                let default = "bash".to_string();
-                let runner_command = runner.as_ref().unwrap_or(&default);
+            Self::Script { code, env, workdir } => {
                 let mut shell = S::new(plan.config);
                 shell.set_cwd(workdir.as_ref())?;
-                let r = match fs::metadata(code) {
-                    Ok(_) => shell.exec(
-                        &vec!(runner_command, code), 
-                        env.as_ref().unwrap_or(&hashmap!{}), false
-                    ),
-                    Err(_) => {
-                        shell.eval(
-                            &format!("echo \'{}\' | {}", code, runner_command), 
-                            env.as_ref().unwrap_or(&hashmap!{}), false
-                        )
-                    }
-                };
-                shell.set_cwd::<String>(None)?;
-                match r {
-                    Ok(_) => Ok(()),
-                    Err(err) => escalate!(Box::new(err))
-                }
+                shell.run_code_or_file(code, env.as_ref().unwrap_or(&hashmap!{}))
             },
             Self::Container { target, image, port:_, extra_ports:_, env, options } => {
                 let config = plan.config;
@@ -219,7 +200,6 @@ impl<'a> Plan<'a> {
                                 echo 'convert data'\n\
                                 bash data/convert.sh\n\
                                 ".to_string(),
-                            runner: None,
                             workdir: None,
                             env: Some(hashmap!{}),
                         }),
@@ -233,7 +213,6 @@ impl<'a> Plan<'a> {
                                 echo 'build conteiner'\n\
                                 docker build -t your/image rsc/docker/base\n\
                                 ".to_string(),
-                            runner: None,
                             workdir: None,
                             env: Some(hashmap!{}),
                         }, Step::Container {

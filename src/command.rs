@@ -31,6 +31,7 @@ pub mod destroy;
 pub mod infra;
 pub mod exec;
 pub mod service;
+pub mod ci;
 
 // factorys
 fn factory_by<'a, S: args::Args, T: Command<'a, S> + 'a>(
@@ -49,6 +50,7 @@ pub fn factory<'a, S: args::Args>(
         "infra" => factory_by::<S, infra::Infra>(config),
         "exec" => factory_by::<S, exec::Exec>(config),
         "service" => factory_by::<S, service::Service>(config),
+        "ci" => factory_by::<S, ci::CI>(config),
         _ => return Err(Box::new(CommandError {
             cause: format!("add factory matching pattern for [{}]", name)
         }))

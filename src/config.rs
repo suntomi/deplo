@@ -83,6 +83,14 @@ pub enum CIConfig {
         key: String
     }
 }
+impl CIConfig {
+    pub fn type_matched(&self, t: &str) -> bool {
+        match self {
+            Self::GhAction{key:_,account:_} => t == "GhAction",
+            Self::Circle{key:_} => t == "Circle"
+        }
+    }
+}
 impl fmt::Display for CIConfig {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
@@ -369,6 +377,9 @@ impl<'a> Config<'a> {
     }
     pub fn find_service_by_endpoint(&self, endpoint: &str) -> Option<&String> {
         self.runtime.endpoint_service_map.get(endpoint)
+    }
+    pub fn has_action_config(&self) -> bool {
+        self.action.pr.len() + self.action.deploy.len() > 0
     }
     
     fn verify(&mut self) -> Result<(), Box<dyn Error>> {

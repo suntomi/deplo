@@ -1,9 +1,11 @@
 use std::fmt;
+use std::fs;
 use std::path::Path;
 use std::collections::HashMap;
 use std::error::Error;
 
 use crate::config;
+use crate::util::escalate;
 
 pub mod native; 
 
@@ -18,6 +20,22 @@ pub trait Shell<'a> {
     }
     fn eval_output_of(&self, code: &str, envs: &HashMap<String, String>) -> Result<String, ShellError> {
         return self.output_of(&vec!("sh", "-c", code), envs);
+    }
+    fn run_code_or_file(
+        &self, code_or_file: &str, envs: &HashMap<String, String>
+    ) -> Result<(), Box<dyn Error>> {
+        let r = match fs::metadata(code_or_file) {
+            Ok(_) => self.exec(
+                &vec!(code_or_file), envs, false
+            ),
+            Err(_) => self.eval(
+                &format!("echo \'{}\' | bash", code_or_file), envs, false
+            )
+        };
+        match r {
+            Ok(_) => Ok(()),
+            Err(err) => escalate!(Box::new(err))
+        }
     }
 }
 pub type Default<'a> = native::Native<'a>;
