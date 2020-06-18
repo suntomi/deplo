@@ -1,18 +1,18 @@
-[[steps]]
+[[deploy.steps]]
 type = "Build"
 org_name = "${DEPLO_ORG_NAME}"
 app_name = "${DEPLO_APP_NAME}"
 app_id = "${DEPLO_APP_ID}"
 project_path = "./client"
 
-[steps.builder]
+[deploy.steps.builder]
 type = "Unity"
 unity_version = "${DEPLO_BUILD_UNITY_VERSION}"
 serial_code = "${DEPLO_BUILD_UNITY_SERIAL_CODE}"
 account = "${DEPLO_BUILD_UNITY_ACCOUNT_EMAIL}"
 password = "${DEPLO_BUILD_UNITY_ACCOUNT_PASSWORD}"
 
-[steps.builder.platform]
+[deploy.steps.builder.platform]
 type = "IOS"
 team_id = "${DEPLO_BUILD_UNITY_IOS_TEAM_ID}"
 numeric_team_id = "${DEPLO_BUILD_UNITY_IOS_NUMERIC_TEAM_ID}"
@@ -21,10 +21,10 @@ signing_plist_path = "${DEPLO_BUILD_UNITY_IOS_SIGNING_FILES_PATH}/distribution.p
 signing_p12_path = "${DEPLO_BUILD_UNITY_IOS_SIGNING_FILES_PATH}/distribution.p12"
 singing_provision_path = "${DEPLO_BUILD_UNITY_IOS_SIGNING_FILES_PATH}/appstore.mobileprovision"
 
-[[steps]]
+[[deploy.steps]]
 type = "Distribution"
 
-[steps.config]
+[deploy.steps.config]
 type = "Apple"
 account = "${DEPLO_DISTRIBUTION_APPLE_ACCOUNT}"
 password = "${DEPLO_DISTRIBUTION_APPLE_PASSWORD}"

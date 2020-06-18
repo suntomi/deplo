@@ -113,12 +113,28 @@ lazy_static! {
                 )
                 .subcommand(
                     App::new("deploy")
-                    .about("deploy service")
+                    .about("deploy service. deploy.steps of plan file are used")
                     .arg(Arg::new("name")
                         .help("service name")
                         .index(1)
                         .required(true))
-                )    
+                )
+                .subcommand(
+                    App::new("pr")
+                    .about("build service pr.steps of plan file are used")
+                    .arg(Arg::new("name")
+                        .help("service name")
+                        .index(1)
+                        .required(true))
+                )
+                .subcommand(
+                    App::new("action")
+                    .about("trigger action of service. used steps are auto detected.")
+                    .arg(Arg::new("name")
+                        .help("service name")
+                        .index(1)
+                        .required(true))
+                )
                 .subcommand(
                     App::new("cutover")
                     .about("direct traffic to new version and remove unused cloud resources. \

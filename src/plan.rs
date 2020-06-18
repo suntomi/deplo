@@ -168,10 +168,15 @@ impl Step {
         }
     }
 }
+#[derive(Serialize, Deserialize, Debug)]
+pub struct Sequence {
+    steps: Vec<Step>,
+}
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct PlanData {
-    steps: Vec<Step>,
+    pr: Sequence,
+    deploy: Sequence
 }
 
 pub struct Plan<'a> {
@@ -207,75 +212,80 @@ impl<'a> Plan<'a> {
             service: service.to_string(),
             config,
             data: PlanData {
-                steps: match kind {
-                    "container" => vec!(Step::Script {
-                        code: "#!/bin/bash\n\
-                               echo 'build conteiner'\n\
-                               docker build -t your/image rsc/docker/base\n\
-                              ".to_string(),
-                        runner: None,
-                        workdir: None,
-                        env: Some(hashmap!{}),
-                    }, Step::Container {
-                        image: "your/image".to_string(),
-                        target: ContainerDeployTarget::Instance,
-                        port: 80,
-                        extra_ports: None,
-                        env: Some(hashmap!{}),
-                        options: Some(hashmap!{}),
-                    }), 
-                    "storage" => vec!(Step::Storage {
-                        copymap: hashmap! {
-                            "source_dir/copyfiles/*.".to_string() => 
-                            cloud::DeployStorageOption {
-                                destination: "target_bucket/folder/subfolder".to_string(),
-                                permission: None,
-                                max_age: None,
-                                excludes: None
-                            }
-                        },
-                    }),
-                    "unity_ios" => vec!(
-                        Self::make_unity_build_step(UnityPlatformBuildConfig::IOS{
-                            team_id: "${DEPLO_BUILD_UNITY_IOS_TEAM_ID}".to_string(),
-                            numeric_team_id: "${DEPLO_BUILD_UNITY_IOS_NUMERIC_TEAM_ID}".to_string(),
-                            signing_password: "${DEPLO_BUILD_UNITY_IOS_P12_SIGNING_PASSWORD}".to_string(),
-                            signing_plist_path: "${DEPLO_BUILD_UNITY_IOS_SIGNING_FILES_PATH}/distribution.plist".to_string(),
-                            signing_p12_path: "${DEPLO_BUILD_UNITY_IOS_SIGNING_FILES_PATH}/distribution.p12".to_string(),
-                            singing_provision_path: "${DEPLO_BUILD_UNITY_IOS_SIGNING_FILES_PATH}/appstore.mobileprovision".to_string(),
+                pr: Sequence {
+                    steps: vec!()
+                },
+                deploy: Sequence {
+                    steps: match kind {
+                        "container" => vec!(Step::Script {
+                            code: "#!/bin/bash\n\
+                                echo 'build conteiner'\n\
+                                docker build -t your/image rsc/docker/base\n\
+                                ".to_string(),
+                            runner: None,
+                            workdir: None,
+                            env: Some(hashmap!{}),
+                        }, Step::Container {
+                            image: "your/image".to_string(),
+                            target: ContainerDeployTarget::Instance,
+                            port: 80,
+                            extra_ports: None,
+                            env: Some(hashmap!{}),
+                            options: Some(hashmap!{}),
+                        }), 
+                        "storage" => vec!(Step::Storage {
+                            copymap: hashmap! {
+                                "source_dir/copyfiles/*.".to_string() => 
+                                cloud::DeployStorageOption {
+                                    destination: "target_bucket/folder/subfolder".to_string(),
+                                    permission: None,
+                                    max_age: None,
+                                    excludes: None
+                                }
+                            },
                         }),
-                        Step::Distribution {
-                            config: DistributionConfig::Apple {
-                                account: "${DEPLO_DISTRIBUTION_APPLE_ACCOUNT}".to_string(),
-                                password: "${DEPLO_DISTRIBUTION_APPLE_PASSWORD}".to_string()
+                        "unity_ios" => vec!(
+                            Self::make_unity_build_step(UnityPlatformBuildConfig::IOS{
+                                team_id: "${DEPLO_BUILD_UNITY_IOS_TEAM_ID}".to_string(),
+                                numeric_team_id: "${DEPLO_BUILD_UNITY_IOS_NUMERIC_TEAM_ID}".to_string(),
+                                signing_password: "${DEPLO_BUILD_UNITY_IOS_P12_SIGNING_PASSWORD}".to_string(),
+                                signing_plist_path: "${DEPLO_BUILD_UNITY_IOS_SIGNING_FILES_PATH}/distribution.plist".to_string(),
+                                signing_p12_path: "${DEPLO_BUILD_UNITY_IOS_SIGNING_FILES_PATH}/distribution.p12".to_string(),
+                                singing_provision_path: "${DEPLO_BUILD_UNITY_IOS_SIGNING_FILES_PATH}/appstore.mobileprovision".to_string(),
+                            }),
+                            Step::Distribution {
+                                config: DistributionConfig::Apple {
+                                    account: "${DEPLO_DISTRIBUTION_APPLE_ACCOUNT}".to_string(),
+                                    password: "${DEPLO_DISTRIBUTION_APPLE_PASSWORD}".to_string()
+                                }
                             }
-                        }
-                    ),
-                    "unity_android" => vec!(
-                        Self::make_unity_build_step(UnityPlatformBuildConfig::Android{
-                            keystore_password: "${DEPLO_BUILD_UNITY_ANDROID_KEYSTORE_PASSWORD}".to_string(),
-                            keyalias_name: "${DEPLO_BUILD_UNITY_ANDROID_KEYSTORE_NAME}".to_string(),
-                            keyalias_password: "${DEPLO_BUILD_UNITY_ANDROID_KEYALIAS_PASSWORD}".to_string(),
-                            keystore_path: "${DEPLO_BUILD_UNITY_ANDROID_KEYSTORE_PATH}".to_string(),
-                            use_expansion_file: false
-                        }),
-                        Step::Distribution {
-                            config: DistributionConfig::Google {
-                                key: "${DEPLO_DISTRIBUTION_GOOGLE_ACCESS_KEY}".to_string()
+                        ),
+                        "unity_android" => vec!(
+                            Self::make_unity_build_step(UnityPlatformBuildConfig::Android{
+                                keystore_password: "${DEPLO_BUILD_UNITY_ANDROID_KEYSTORE_PASSWORD}".to_string(),
+                                keyalias_name: "${DEPLO_BUILD_UNITY_ANDROID_KEYSTORE_NAME}".to_string(),
+                                keyalias_password: "${DEPLO_BUILD_UNITY_ANDROID_KEYALIAS_PASSWORD}".to_string(),
+                                keystore_path: "${DEPLO_BUILD_UNITY_ANDROID_KEYSTORE_PATH}".to_string(),
+                                use_expansion_file: false
+                            }),
+                            Step::Distribution {
+                                config: DistributionConfig::Google {
+                                    key: "${DEPLO_DISTRIBUTION_GOOGLE_ACCESS_KEY}".to_string()
+                                }
                             }
-                        }
-                    ),
-                    "cra" => vec!(
-                        Self::make_build_step(Builder::CreateReactApp{}),
-                        Step::Distribution {
-                            config: DistributionConfig::Storage {
-                                bucket_name: "${DEPLO_DISTRIBUTION_STORAGE_BUCKET_NAME}".to_string()
+                        ),
+                        "cra" => vec!(
+                            Self::make_build_step(Builder::CreateReactApp{}),
+                            Step::Distribution {
+                                config: DistributionConfig::Storage {
+                                    bucket_name: "${DEPLO_DISTRIBUTION_STORAGE_BUCKET_NAME}".to_string()
+                                }
                             }
-                        }
-                    ),
-                    _ => return escalate!(Box::new(DeployError {
-                        cause: format!("invalid deploy type: {:?}", kind)
-                    }))
+                        ),
+                        _ => return escalate!(Box::new(DeployError {
+                            cause: format!("invalid deploy type: {:?}", kind)
+                        }))
+                    }
                 }
             }
         })
@@ -337,8 +347,8 @@ impl<'a> Plan<'a> {
             }))
         }
     }
-    pub fn exec<S: shell::Shell<'a>>(&self) -> Result<(), Box<dyn Error>> {
-        for step in &self.data.steps {
+    pub fn exec<S: shell::Shell<'a>>(&self, pr: bool) -> Result<(), Box<dyn Error>> {
+        for step in if pr { &self.data.pr.steps } else { &self.data.deploy.steps } {
             step.exec::<S>(self)?
         }
         Ok(())
@@ -352,7 +362,7 @@ impl<'a> Plan<'a> {
                 cause: format!("invalid deployment kind {}", kind)
             }))
         }
-        for step in &self.data.steps {
+        for step in &self.data.deploy.steps {
             match step {
                 Step::Container { target:_, image:_, port:_, extra_ports:_, env:_, options:_ } => {
                     return Ok(kind == "service" || kind == "any")
@@ -371,7 +381,7 @@ impl<'a> Plan<'a> {
         }))
     }
     pub fn ports(&self) -> Result<Option<HashMap<String, u32>>, Box<dyn Error>> {
-        for step in &self.data.steps {
+        for step in &self.data.deploy.steps {
             match step {
                 Step::Container { target:_, image:_, port, extra_ports, env:_, options:_ } => {
                     let mut ports = extra_ports.clone().unwrap_or(hashmap!{});
@@ -391,26 +401,32 @@ impl<'a> Plan<'a> {
     fn verify(&self) -> Result<(), Box<dyn Error>> {
         let err = Box::new(DeployError {
             cause: format!(
-                "only one storage/container/store deployment can exist in {}.toml", 
+                "only a storage/container/store deployment can exist in release steps of {}.toml", 
                 self.service
             )
         });
         let mut deployment_found = false;
-        for step in &self.data.steps {
-            match step {
-                Step::Container { target:_, image:_, port:_, extra_ports:_, env:_, options:_ } => {
-                    if deployment_found { return Err(err) }
-                    deployment_found = true;
-                },
-                Step::Storage { copymap:_ } => {
-                    if deployment_found { return Err(err) }
-                    deployment_found = true;
-                },
-                Step::Distribution { config:_ } => {
-                    if deployment_found { return Err(err) }
-                    deployment_found = true;
-                },
-                _ => {}
+        for steps in vec!(&self.data.deploy.steps, &self.data.pr.steps) {
+            let pr = steps as *const _ == &self.data.pr.steps as *const _;
+            for step in steps {
+                match step {
+                    Step::Container { target:_, image:_, port:_, extra_ports:_, env:_, options:_ } => {
+                        if pr { return Err(err) }
+                        if deployment_found { return Err(err) }
+                        deployment_found = true;
+                    },
+                    Step::Storage { copymap:_ } => {
+                        if pr { return Err(err) }
+                        if deployment_found { return Err(err) }
+                        deployment_found = true;
+                    },
+                    Step::Distribution { config:_ } => {
+                        if pr { return Err(err) }
+                        if deployment_found { return Err(err) }
+                        deployment_found = true;
+                    },
+                    _ => {}
+                }
             }
         }
         Ok(())

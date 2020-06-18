@@ -4,6 +4,7 @@ use std::result::Result;
 
 use crate::config;
 use crate::ci;
+use crate::util::escalate;
 
 pub struct Circle<'a> {
     pub config: &'a config::Config<'a>,
@@ -26,6 +27,17 @@ impl<'a> ci::CI<'a> for Circle<'a> {
             include_str!("../../rsc/ci/circle/config.yml.tmpl"), config::DEPLO_GIT_HASH
         ))?;
         Ok(())
+    }
+    fn pull_request_url(&self) -> Result<Option<String>, Box<dyn Error>> {
+        match std::env::var("CIRCLE_PULL_REQUEST") {
+            Ok(v) => Ok(Some(v)),
+            Err(e) => {
+                match e {
+                    std::env::VarError::NotPresent => Ok(None),
+                    _ => return escalate!(Box::new(e))
+                }
+            }
+        }
     }
     fn run_job(&self, job_name: &str) -> Result<String, Box<dyn Error>> {
         Ok("".to_string())

@@ -30,8 +30,10 @@ type = "GhAction"
 account = "suntomi-bot"
 key = "${DEPLO_VCS_ACCESS_KEY}"
 
-[deploy.pr]
-"client/.*" = "deplo service deploy client"
+[action.pr]
+"data/.*" = "deplo service action data"
 
-[deploy.release]
-"api/.*" = "deplo service deploy api"
+[action.deploy]
+"api/.*" = "deplo service action api"
+"client/.*" = "deplo service action client"
+"data/.*" = "deplo service action data"

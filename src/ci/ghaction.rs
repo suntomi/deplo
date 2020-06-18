@@ -4,6 +4,7 @@ use std::result::Result;
 
 use crate::config;
 use crate::ci;
+use crate::util::escalate;
 
 pub struct GhAction<'a> {
     pub config: &'a config::Config<'a>,
@@ -30,6 +31,17 @@ impl<'a> ci::CI<'a> for GhAction<'a> {
             target_branches, target_branches, config::DEPLO_GIT_HASH
         ))?;
         Ok(())
+    }
+    fn pull_request_url(&self) -> Result<Option<String>, Box<dyn Error>> {
+        match std::env::var("DEPLO_GHACTION_PULL_REQUEST_URL") {
+            Ok(v) => Ok(Some(v)),
+            Err(e) => {
+                match e {
+                    std::env::VarError::NotPresent => Ok(None),
+                    _ => return escalate!(Box::new(e))
+                }
+            }
+        }
     }
     fn run_job(&self, job_name: &str) -> Result<String, Box<dyn Error>> {
         Ok("".to_string())

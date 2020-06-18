@@ -171,9 +171,9 @@ pub struct CommonConfig {
     pub release_targets: HashMap<String, String>,
 }
 #[derive(Serialize, Deserialize)]
-pub struct DeployConfig {
+pub struct ActionConfig {
     pub pr: HashMap<String, String>,
-    pub release: HashMap<String, String>,
+    pub deploy: HashMap<String, String>,
 }
 #[derive(Default)]
 pub struct RuntimeConfig<'a> {
@@ -192,7 +192,7 @@ pub struct Config<'a> {
     pub cloud: CloudConfig,
     pub vcs: VCSConfig,
     pub ci: CIConfig,
-    pub deploy: DeployConfig
+    pub action: ActionConfig
 }
 
 impl<'a> Config<'a> {
