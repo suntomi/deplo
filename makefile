@@ -7,6 +7,7 @@ LINUX_TARGET=x86_64-unknown-linux-musl
 DARWIN_TARGET=x86_64-apple-darwin
 RESOURCE_FILE_PATH=$(CURDIR)/rsc
 IMAGE_BUILD_ROOT_PATH=$(CURDIR)/docker/release
+GIT_HASH=$(shell git rev-parse HEAD)
 ifeq ($(REL), 1)
 BUILD_PROFILE=release
 RELEASE=--release
@@ -36,6 +37,10 @@ image: base build
 	mkdir -p $(IMAGE_BUILD_ROOT_PATH)/rsc/bin
 	cp $(DEPLO_DARWIN) $(IMAGE_BUILD_ROOT_PATH)/rsc/bin/deplo_darwin
 	docker build -t suntomi/deplo $(IMAGE_BUILD_ROOT_PATH)
+
+deploy:
+	docker tag suntomi/deplo:latest suntomi/deplo:$(GIT_HASH)
+	docker push suntomi/deplo:$(GIT_HASH)
 
 run:
 	docker run --rm -ti -v $(CURDIR):/workdir -w /workdir suntomi/deplo $(CMD)

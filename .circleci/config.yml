@@ -25,11 +25,27 @@ commands:
           key: deplo-git-v1-{{ arch }}-{{ .Branch }}-{{ .Revision }}
           paths:
             - ".git"
+  load_deplo_tools:
+    steps:
+      - restore_cache:
+        keys:
+          - deplo-tools-v1-{{ arch }}-{{ .Branch }}-{{ .Revision }}
+          - deplo-tools-v1-{{ arch }}-{{ .Branch }}-
+          - deplo-tools-v1-{{ arch }}-
+  save_deplo_tools:
+    steps:
+    - save_cache:
+        key: deplo-tools-v1-{{ arch }}-{{ .Branch }}-{{ .Revision }}
+        paths:
+          - "/deplo-tools"
 
 jobs:
   main:
     executor: deplo
     steps:
+      - fetch_repo
+      - load_deplo_tools
       - run:
         name: 'running CI jobs'
         command: deplo ci
+      - save_deplo_tools
