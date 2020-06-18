@@ -17,5 +17,6 @@ jobs:
         lfs: true
       - name: Run Deplo
         env:
+          DEPLO_CI_TYPE: GhAction
           DEPLO_GHACTION_PULL_REQUEST_URL: ${{ github.event.pull_request.comments_url }}
         run: deplo ci

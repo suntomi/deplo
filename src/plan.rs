@@ -213,7 +213,18 @@ impl<'a> Plan<'a> {
             config,
             data: PlanData {
                 pr: Sequence {
-                    steps: vec!()
+                    steps: match kind {
+                        "storage" => vec!(Step::Script {
+                            code: "#!/bin/bash\n\
+                                echo 'convert data'\n\
+                                bash data/convert.sh\n\
+                                ".to_string(),
+                            runner: None,
+                            workdir: None,
+                            env: Some(hashmap!{}),
+                        }),
+                        _ => vec!()
+                    }
                 },
                 deploy: Sequence {
                     steps: match kind {

@@ -15,3 +15,8 @@ target = "Instance"
 port = 80
 [deploy.steps.extra_ports]
 admin = 10000
+
+
+# add steps if you need to do something on pull request
+[pr]
+steps = []

@@ -26,9 +26,8 @@ account = "suntomi-bot"
 key = "${DEPLO_VCS_ACCESS_KEY}"
 
 [ci]
-type = "GhAction"
-account = "suntomi-bot"
-key = "${DEPLO_VCS_ACCESS_KEY}"
+type = "Circle"
+key = "${DEPLO_CI_ACCESS_KEY}"
 
 [action.pr]
 "data/.*" = "deplo service action data"

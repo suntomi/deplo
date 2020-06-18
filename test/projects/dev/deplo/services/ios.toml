@@ -28,3 +28,8 @@ type = "Distribution"
 type = "Apple"
 account = "${DEPLO_DISTRIBUTION_APPLE_ACCOUNT}"
 password = "${DEPLO_DISTRIBUTION_APPLE_PASSWORD}"
+
+
+# add steps if you need to do something on pull request
+[pr]
+steps = []

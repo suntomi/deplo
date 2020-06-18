@@ -26,3 +26,8 @@ type = "Distribution"
 [deploy.steps.config]
 type = "Google"
 key = "${DEPLO_DISTRIBUTION_GOOGLE_ACCESS_KEY}"
+
+
+# add steps if you need to do something on pull request
+[pr]
+steps = []

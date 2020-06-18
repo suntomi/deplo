@@ -42,6 +42,8 @@ commands:
 jobs:
   main:
     executor: deplo
+    environment:
+      DEPLO_CI_TYPE: Circle
     steps:
       - fetch_repo
       - load_deplo_tools
