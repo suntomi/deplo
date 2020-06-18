@@ -20,6 +20,8 @@ use crate::endpoints;
 use crate::plan;
 use crate::util::{escalate,envsubst};
 
+pub const DEPLO_GIT_HASH: &'static str = env!("GIT_HASH");
+
 #[derive(Debug)]
 pub struct ConfigError {
     pub cause: String
@@ -116,7 +118,7 @@ impl fmt::Display for VCSConfig {
 pub enum TerraformerConfig {
     Terraform {
         backend_bucket: String,
-        bucket_prefix: Option<String>,
+        resource_prefix: Option<String>,
         dns_zone: String,
         region: String,
     }
@@ -126,7 +128,7 @@ impl TerraformerConfig {
         match self {
             Self::Terraform { 
                 backend_bucket: _,
-                bucket_prefix: _,
+                resource_prefix: _,
                 dns_zone,
                 region: _
             } => &dns_zone
@@ -136,7 +138,7 @@ impl TerraformerConfig {
         match self {
             Self::Terraform { 
                 backend_bucket: _,
-                bucket_prefix: _,
+                resource_prefix: _,
                 dns_zone: _,
                 region
             } => &region
@@ -148,7 +150,7 @@ impl fmt::Display for TerraformerConfig {
         match self {
             Self::Terraform { 
                 backend_bucket: _,
-                bucket_prefix: _,
+                resource_prefix: _,
                 dns_zone: _,
                 region: _
             } => write!(f, "terraform")

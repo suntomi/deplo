@@ -5,6 +5,7 @@ use super::config;
 
 pub trait CI<'a> {
     fn new(config: &'a config::Config) -> Result<Self, Box<dyn Error>> where Self : Sized;
+    fn init(&self) -> Result<(), Box<dyn Error>>;
     fn run_job(&self, job_name: &str) -> Result<String, Box<dyn Error>>;
     fn wait_job(&self, job_id: &str) -> Result<(), Box<dyn Error>>;
     fn wait_job_by_name(&self, job_id: &str) -> Result<(), Box<dyn Error>>;

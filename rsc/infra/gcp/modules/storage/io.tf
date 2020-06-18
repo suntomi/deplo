@@ -1,7 +1,4 @@
-variable "project" {
-  type = string
-}
-variable "bucket_prefix" {
+variable "prefix" {
   type = string
   default = ""
 }

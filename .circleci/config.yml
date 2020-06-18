@@ -1,0 +1,12 @@
+executors:
+  deplo:
+    working_directory: /workdir
+    docker:
+      - image: suntomi/deplo:20f560cf5af333a6443b672c5e3099a013fad50e
+jobs:
+  main:
+    executor: deplo
+    steps:
+      - run:
+        name: 'running CI jobs'
+        command: deplo ci

@@ -749,7 +749,7 @@ impl<'a, S: shell::Shell<'a>> cloud::Cloud<'a> for Gcp<'a, S> {
     fn cleanup_dependency(&self) -> Result<(), Box<dyn Error>> {
         let config::TerraformerConfig::Terraform {
             backend_bucket,
-            bucket_prefix: _,
+            resource_prefix: _,
             dns_zone: _,
             region: _
         } = &self.config.cloud.terraformer;
@@ -768,7 +768,7 @@ impl<'a, S: shell::Shell<'a>> cloud::Cloud<'a> for Gcp<'a, S> {
             "terraform.backend" => {
                 let config::TerraformerConfig::Terraform {
                     backend_bucket,
-                    bucket_prefix: _,
+                    resource_prefix,
                     dns_zone: _,
                     region: _
                 } = &self.config.cloud.terraformer;
@@ -785,12 +785,12 @@ impl<'a, S: shell::Shell<'a>> cloud::Cloud<'a> for Gcp<'a, S> {
                     bucket = \"{}\"\n\
                     prefix = \"{}\"\n\
                     credentials = \"/tmp/gcp-secret.json\"\n\
-                ", backend_bucket, self.config.common.project_id));
+                ", backend_bucket, resource_prefix.as_ref().unwrap_or(&self.config.common.project_id)));
             },
             "terraform.tfvars" => {
                 let config::TerraformerConfig::Terraform {
                     backend_bucket:_,
-                    bucket_prefix,
+                    resource_prefix,
                     dns_zone,
                     region
                 } = &self.config.cloud.terraformer;
@@ -804,13 +804,13 @@ impl<'a, S: shell::Shell<'a>> cloud::Cloud<'a> for Gcp<'a, S> {
                             dns_zone_project = \"{}\"\n\
                             project_id = \"{}\"\n\
                             region = \"{}\"\n\
-                            bucket_prefix = \"{}\"\n\
+                            resource_prefix = \"{}\"\n\
                             envs = [\"{}\"]\n\
                         ",
                         &root_domain_dns_name[..root_domain_dns_name.len()-1], 
                         zone_and_project.0, zone_and_project.1, 
                         self.config.common.project_id, region, 
-                        bucket_prefix.as_ref().unwrap_or(&"".to_string()), 
+                        resource_prefix.as_ref().unwrap_or(&"".to_string()), 
                         self.config.common.release_targets
                             .keys().map(|s| &**s)
                             .collect::<Vec<&str>>().join(r#"",""#)

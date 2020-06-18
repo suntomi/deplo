@@ -51,7 +51,7 @@ pub fn factory<'a>(
     match &config.cloud.terraformer {
         config::TerraformerConfig::Terraform {
             backend_bucket: _,
-            bucket_prefix: _,
+            resource_prefix: _,
             dns_zone: _,
             region: _
         } => {

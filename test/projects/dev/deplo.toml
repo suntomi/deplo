@@ -1,5 +1,5 @@
 [common]
-project_id = "deplo"
+project_id = "deplo-sandbox"
 deplo_image = "suntomi/deplo"
 data_dir = "deplo"
 no_confirm_for_prod_deploy = false
@@ -15,7 +15,7 @@ key = "${DEPLO_CLOUD_ACCESS_KEY}"
 [cloud.terraformer]
 type = "Terraform"
 backend_bucket = "deplo-terraform-state"
-bucket_prefix = "deplo"
+resource_prefix = "deplo"
 dns_zone = "suntomi-zone@suntomi"
 region = "asia-northeast1"
 

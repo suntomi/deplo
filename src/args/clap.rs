@@ -38,7 +38,10 @@ lazy_static! {
             .multiple(true)
             .value_name("CATEGORY")
             .help("Activate debug feature (vcs:deploy:tf:ci)")
-            .takes_value(true))
+            .takes_value(true)
+            .possible_values(
+                &["skip_rebase", "infra_debug"]
+            ))    
         .arg(Arg::with_name("verbosity")
             .short('v')
             .long("verbose")
@@ -56,7 +59,7 @@ lazy_static! {
                 .arg(Arg::new("reinit")
                     .long("reinit")
                     .help("initialize again")
-                    .required(true))
+                    .required(false))
         )
         .subcommand(
             App::new("destroy")

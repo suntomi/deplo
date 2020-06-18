@@ -17,6 +17,9 @@ impl<'a> ci::CI<'a> for GhAction<'a> {
             diff: vcs.rebase_with_remote_counterpart(&vcs.current_branch()?)?
         });
     }
+    fn init(&self) -> Result<(), Box<dyn Error>> {
+        Ok(())
+    }
     fn run_job(&self, job_name: &str) -> Result<String, Box<dyn Error>> {
         Ok("".to_string())
     }

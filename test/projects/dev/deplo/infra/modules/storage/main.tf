@@ -1,7 +1,3 @@
-locals {
-  bucket_prefix = "${length(var.bucket_prefix) > 0 ? var.bucket_prefix : var.project}"
-}
-
 resource "null_resource" "dependency_getter" {
   provisioner "local-exec" {
     command = "echo ${length(var.dependencies)}"
@@ -9,11 +5,11 @@ resource "null_resource" "dependency_getter" {
 }
 
 resource "google_storage_bucket" "bucket_404" {
-  name     = "${local.bucket_prefix}-service-404"
+  name     = "${var.prefix}-service-404"
 }
 
 resource "google_compute_backend_bucket" "bucket_404" {
-  name        = "${var.project}-backend-bucket-404"
+  name        = "${var.prefix}-backend-bucket-404"
   bucket_name = google_storage_bucket.bucket_404.name
   enable_cdn  = true
 }
@@ -25,7 +21,7 @@ resource "google_storage_bucket_acl" "public_bucket_404" {
 
 resource "google_storage_bucket" "custom_buckets" {
   for_each = toset(var.custom_buckets)
-  name = "${local.bucket_prefix}-${each.value}"
+  name = "${var.prefix}-${each.value}"
 }
 
 resource "google_compute_backend_bucket" "custom_buckets" {
@@ -57,5 +53,5 @@ resource "google_storage_bucket_access_control" "custom_access_controls" {
   for_each       = toset(local.flatten_custom_access_controls)
   entity = "user-${element(split("/", each.value), 0)}"
   role   = element(split("/", each.value), 1)
-  bucket = "${local.bucket_prefix}-${element(split("/", each.value), 2)}"
+  bucket = "${var.prefix}-${element(split("/", each.value), 2)}"
 }

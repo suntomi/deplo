@@ -6,7 +6,7 @@ variable "dns_zone" {}
 variable "dns_zone_project" {}
 variable "project_id" {}
 variable "region" {}
-variable "bucket_prefix" {}
+variable "resource_prefix" {}
 variable "envs" {
   type = list(string)
 }
@@ -34,6 +34,10 @@ provider "google-beta" {
   version     = "~> 3.22.0"
 }
 
+locals {
+  resource_prefix = "${length(var.resource_prefix) > 0 ? var.resource_prefix : var.project_id}"
+}
+
 //
 // api
 //
@@ -46,8 +50,7 @@ module "api" {
 //
 module "storage" {
   source = "./modules/storage"
-  project = var.project_id
-  bucket_prefix = var.bucket_prefix
+  prefix = local.resource_prefix
 
   dependencies = [
     module.api.ready
@@ -61,7 +64,7 @@ module "vpc" {
   source = "./modules/vpc"
 
   envs = var.envs
-  project = var.project_id
+  prefix = local.resource_prefix
   region = var.region
 
   dependencies = [
@@ -76,8 +79,8 @@ module "lb" {
   source = "./modules/lb"
 
   envs = var.envs
-  project = var.project_id
-  root_domain = "${var.project_id}.${var.root_domain}"
+  prefix = local.resource_prefix
+  root_domain = "${local.resource_prefix}.${var.root_domain}"
   dns_zone = var.dns_zone
   dns_zone_project = var.dns_zone_project
   default_backend_url = module.storage.bucket_404_url

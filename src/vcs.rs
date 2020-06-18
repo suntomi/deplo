@@ -9,6 +9,7 @@ pub trait VCS<'a> {
     fn release_target(&self) -> Option<String>;
     fn current_branch(&self) -> Result<String, Box<dyn Error>>;
     fn commit_hash(&self) -> Result<String, Box<dyn Error>>;
+    fn repository_root(&self) -> Result<String, Box<dyn Error>>;
     fn rebase_with_remote_counterpart(&self, branch: &str) -> Result<String, Box<dyn Error>>;
     fn push(
         &self, remote_branch: &str, msg: &str, patterns: &Vec<&str>, option: &HashMap<&str, &str>

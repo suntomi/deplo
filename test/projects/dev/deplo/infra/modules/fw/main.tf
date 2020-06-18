@@ -1,6 +1,6 @@
 resource "google_compute_security_policy" "policy" {
   for_each = toset(keys(var.rules))
-  name = "${var.project}-${var.env}-fw-rules-${each.value}"
+  name = "${var.prefix}-${var.env}-fw-rules-${each.value}"
 
   dynamic "rule" {
     for_each = toset(keys(var.rules[each.value]))

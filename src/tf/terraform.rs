@@ -1,5 +1,6 @@
 use std::error::Error;
 use std::fs;
+use std::collections::HashMap;
 use std::result::Result;
 
 use maplit::hashmap;
@@ -12,6 +13,16 @@ use crate::tf;
 pub struct Terraform<'a, S: shell::Shell<'a> = shell::Default<'a>> {
     pub config: &'a config::Config<'a>,
     pub shell: S,
+}
+
+impl<'a, S: shell::Shell<'a>> Terraform<'a, S> {
+    fn run_env(&self) -> HashMap<String, String> {
+        if self.config.has_debug_option("infra_debug") {
+            hashmap!{ "TF_LOG".to_string() => "DEBUG".to_string() }
+        } else {
+            hashmap!{}
+        }
+    }
 }
 
 impl<'a, S: shell::Shell<'a>> tf::Terraformer<'a> for Terraform<'a, S> {
@@ -31,13 +42,13 @@ impl<'a, S: shell::Shell<'a>> tf::Terraformer<'a> for Terraform<'a, S> {
         self.shell.exec(&vec!(
             "terraform", "init", "-input=false", "-backend-config=backend",
             "-var-file=tfvars"
-        ), &hashmap!{}, false)?;
+        ), &self.run_env(), false)?;
         Ok(())
     }
     fn destroy(&self, _: &Box<dyn cloud::Cloud<'a> + 'a>) {
         match self.shell.exec(&vec!(
             "terraform", "destroy", "-var-file=tfvars"
-        ), &hashmap!{}, false) {
+        ), &self.run_env(), false) {
             Ok(_) => {},
             Err(err) => {
                 log::error!("\
@@ -77,13 +88,13 @@ impl<'a, S: shell::Shell<'a>> tf::Terraformer<'a> for Terraform<'a, S> {
         self.shell.exec(&vec!(
             "terraform", "plan", "--out", "/tmp/exec.tfplan",
             "-var-file=tfvars"
-        ), &hashmap!{}, false)?;
+        ), &self.run_env(), false)?;
         Ok(())
     }
     fn apply(&self) -> Result<(), Box<dyn Error>> {
         self.shell.exec(&vec!(
             "terraform", "apply", "/tmp/exec.tfplan"
-        ), &hashmap!{}, false)?;
+        ), &self.run_env(), false)?;
         Ok(())
     }
 }

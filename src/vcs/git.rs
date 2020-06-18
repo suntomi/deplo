@@ -32,6 +32,7 @@ pub trait GitFeatures<'a> {
     fn current_branch(&self) -> Result<String, Box<dyn Error>>;
     fn commit_hash(&self) -> Result<String, Box<dyn Error>>;
     fn remote_origin(&self) -> Result<String, Box<dyn Error>>;
+    fn repository_root(&self) -> Result<String, Box<dyn Error>>;
     fn rebase_with_remote_counterpart(
         &self, url: &str, remote_branch: &str
     ) -> Result<String, Box<dyn Error>>;
@@ -78,6 +79,11 @@ impl<'a, S: shell::Shell<'a>> GitFeatures<'a> for Git<'a, S> {
     fn remote_origin(&self) -> Result<String, Box<dyn Error>> {
         Ok(self.shell.output_of(&vec!(
             "git", "config", "--get", "remote.origin.url"
+        ), &hashmap!{})?)
+    }
+    fn repository_root(&self) -> Result<String, Box<dyn Error>> {
+        Ok(self.shell.output_of(&vec!(
+            "git", "rev-parse", "--show-toplevel"
         ), &hashmap!{})?)
     }
     fn push(

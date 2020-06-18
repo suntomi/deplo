@@ -32,7 +32,7 @@ resource "google_dns_record_set" "caa" {
 
 resource "google_compute_global_forwarding_rule" "default" {
   for_each   = toset(var.envs)
-  name       = "${var.project}-${each.value}-https"
+  name       = "${var.prefix}-${each.value}-https"
   target     = google_compute_target_https_proxy.default[each.value].self_link
   ip_address = google_compute_global_address.default[each.value].address
   port_range = "443"
@@ -41,7 +41,7 @@ resource "google_compute_global_forwarding_rule" "default" {
 
 resource "google_compute_global_address" "default" {
   for_each   = toset(var.envs)
-  name       = "${var.project}-${each.value}-global-address"
+  name       = "${var.prefix}-${each.value}-global-address"
   ip_version = var.ip_version
 
   depends_on = [
@@ -52,7 +52,7 @@ resource "google_compute_global_address" "default" {
 # HTTPS proxy  when ssl is true
 resource "google_compute_target_https_proxy" "default" {
   for_each   = toset(var.envs)
-  name             = "${var.project}-${each.value}-https-proxy"
+  name             = "${var.prefix}-${each.value}-https-proxy"
   url_map          = google_compute_url_map.default[each.value].self_link
   ssl_certificates = [google_compute_managed_ssl_certificate.default[each.value].self_link]
 }
@@ -61,7 +61,7 @@ resource "google_compute_managed_ssl_certificate" "default" {
   provider = google-beta
 
   for_each = toset(var.envs)
-  name = "${var.project}-${each.value}-cert"
+  name = "${var.prefix}-${each.value}-cert"
   managed {
     domains = [google_dns_record_set.a[each.value].name]
   }
@@ -69,7 +69,7 @@ resource "google_compute_managed_ssl_certificate" "default" {
 
 resource "google_compute_url_map" "default" {
   for_each        = toset(var.envs)
-  name            = "${var.project}-${each.value}-url-map"
+  name            = "${var.prefix}-${each.value}-url-map"
   default_service = var.default_backend_url
 
   lifecycle {

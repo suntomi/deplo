@@ -6,7 +6,7 @@ resource "null_resource" "dependency_getter" {
 
 resource "google_compute_network" "vpc-network" {
   for_each = toset(var.envs)
-  name = "${var.project}-${each.value}-vpc-network"  
+  name = "${var.prefix}-${each.value}-vpc-network"  
 
   depends_on = [
     null_resource.dependency_getter
@@ -14,7 +14,7 @@ resource "google_compute_network" "vpc-network" {
 }
 resource "google_compute_firewall" "default" {
   for_each = toset(var.envs)
-  name    = "${var.project}-${each.value}-fw-allow-ssh"
+  name    = "${var.prefix}-${each.value}-fw-allow-ssh"
   network = google_compute_network.vpc-network[each.value].name
 
   allow {
@@ -27,7 +27,7 @@ resource "google_compute_firewall" "default" {
 
 resource "google_compute_firewall" "health-check" {
   for_each = toset(var.envs)
-  name    = "${var.project}-${each.value}-fw-allow-health-check"
+  name    = "${var.prefix}-${each.value}-fw-allow-health-check"
   network = google_compute_network.vpc-network[each.value].name
 
   allow {
@@ -41,7 +41,7 @@ resource "google_compute_firewall" "health-check" {
 
 resource "google_compute_firewall" "allow-internal" {
   for_each = toset(var.envs)
-  name    = "${var.project}-${each.value}-fw-allow-internal"
+  name    = "${var.prefix}-${each.value}-fw-allow-internal"
   network = google_compute_network.vpc-network[each.value].name
   description = "Allow internal traffic on the default network"
 
@@ -56,12 +56,13 @@ resource "google_compute_firewall" "allow-internal" {
   allow {
     protocol = "icmp"
   }
-  source_ranges = ["10.128.0.0/9"] # google_compute_networkで自動作成されるIP範囲
+  # ip range which created automatically by google_compute_network
+  source_ranges = ["10.128.0.0/9"]
 }
 
 resource "google_compute_global_address" "private_ip_range" {
   for_each      = toset(var.envs)
-  name          = "${var.project}-${each.value}-private-ip-range"
+  name          = "${var.prefix}-${each.value}-private-ip-range"
   purpose       = "VPC_PEERING"
   address_type  = "INTERNAL"
   prefix_length = 16

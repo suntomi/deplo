@@ -65,6 +65,9 @@ impl<'a, GIT: (git::GitFeatures<'a>) + (git::GitHubFeatures<'a>)> vcs::VCS<'a> f
     fn commit_hash(&self) -> Result<String, Box<dyn Error>> {
         self.git.commit_hash()
     }
+    fn repository_root(&self) -> Result<String, Box<dyn Error>> {
+        self.git.repository_root()
+    }
     fn push(
         &self, branch: &str, msg: &str, patterns: &Vec<&str>, options: &HashMap<&str, &str>
     ) -> Result<bool, Box<dyn Error>> {
