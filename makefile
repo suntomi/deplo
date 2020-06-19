@@ -20,6 +20,7 @@ DEPLO_DARWIN=$(CURDIR)/target/$(DARWIN_TARGET)/$(BUILD_PROFILE)/deplo
 
 
 build:
+	[ -z "$(shell git diff --name-status)" ] || (echo "you have uncommited changes" && exit 1)
 	cross build $(RELEASE) --target $(LINUX_TARGET)
 	cross build $(RELEASE) --target $(DARWIN_TARGET)
 
