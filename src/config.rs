@@ -237,12 +237,13 @@ impl<'a> Config<'a> {
             },
             None => match dotenv() {
                 Ok(_) => {},
-                Err(err) => {
-                    log::warn!(".env not present or cannot load by error [{:?}], this usually means:\n\
-                                1. command will be run with incorrect parameter or\n\
-                                2. secrets are directly written in deplo.toml\n\
-                                please use .env to store secrets, or use -e flag to specify its path", 
-                                err)
+                Err(err) => match std::env::var("DEPLO_CI_TYPE") {
+                    Ok(_) => {},
+                    Err(_) => log::warn!(".env not present or cannot load by error [{:?}], this usually means:\n\
+                        1. command will be run with incorrect parameter or\n\
+                        2. secrets are directly written in deplo.toml\n\
+                        please use .env to store secrets, or use -e flag to specify its path", 
+                        err)
                 } 
             },
         };
