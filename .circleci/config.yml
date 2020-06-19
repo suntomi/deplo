@@ -10,7 +10,7 @@ executors:
   deplo:
     working_directory: /workdir
     docker:
-      - image: suntomi/deplo:7d81cb885acf812dabe891fc6f91198566b61671
+      - image: suntomi/deplo:4e6c4925dcd63aec082d781c03ee719de9963e3a
 
 commands:
   fetch_repo:
@@ -36,10 +36,10 @@ commands:
   load_deplo_tools:
     steps:
       - restore_cache:
-        keys:
-          - deplo-tools-v1-{{ arch }}-{{ .Branch }}-{{ .Revision }}
-          - deplo-tools-v1-{{ arch }}-{{ .Branch }}-
-          - deplo-tools-v1-{{ arch }}-
+          keys:
+            - deplo-tools-v1-{{ arch }}-{{ .Branch }}-{{ .Revision }}
+            - deplo-tools-v1-{{ arch }}-{{ .Branch }}-
+            - deplo-tools-v1-{{ arch }}-
   save_deplo_tools:
     steps:
     - save_cache:
@@ -56,6 +56,6 @@ jobs:
       - fetch_repo
       - load_deplo_tools
       - run:
-        name: 'running CI jobs'
-        command: /deplo -w test/projects/dev ci
+          name: 'running CI jobs'
+          command: /deplo -vvv -w test/projects/dev ci
       - save_deplo_tools
