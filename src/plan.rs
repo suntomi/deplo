@@ -11,7 +11,7 @@ use glob::glob;
 use crate::config;
 use crate::shell;
 use crate::cloud;
-use crate::util::{escalate, envsubst, defer};
+use crate::util::{escalate, envsubst};
 
 #[derive(Debug)]
 pub struct DeployError {

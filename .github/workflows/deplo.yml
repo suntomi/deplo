@@ -20,4 +20,4 @@ jobs:
         env:
           DEPLO_CI_TYPE: GhAction
           DEPLO_GHACTION_PULL_REQUEST_URL: ${{ github.event.pull_request.comments_url }}
-        run: /deplo -vvv -w test/projects/dev ci
+        run: /deplo -vvv -e "${{ secrets.DEPLO_DOTENV }}" -w test/projects/dev ci

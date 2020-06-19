@@ -14,7 +14,7 @@ log = "0.4.8"
 simple_logger = "1.6.0"
 maplit = "1.0.2"
 lazy_static = "1.4.0"
-dotenv = "0.15.0"
+dotenv = { git = "https://github.com/umegaya/dotenv/" }
 regex = "1"
 fs_extra = "1.1.0"
 chrono = "0.4.11"

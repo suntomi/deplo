@@ -232,8 +232,9 @@ impl<'a> Config<'a> {
         }).unwrap();
         // load dotenv
         match args.value_of("dotenv") {
-            Some(dotenv_path) => {
-                dotenv::from_filename(dotenv_path).unwrap();
+            Some(dotenv_path) => match fs::metadata(dotenv_path) {
+                Ok(_) => { dotenv::from_filename(dotenv_path).unwrap(); },
+                Err(_) => { dotenv::from_readable(dotenv_path.as_bytes()).unwrap(); },
             },
             None => match dotenv() {
                 Ok(_) => {},
