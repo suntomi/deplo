@@ -1,4 +1,5 @@
 use std::error::Error;
+use std::path;
 
 use log;
 use maplit::hashmap;
@@ -45,7 +46,12 @@ impl<'a, S: shell::Shell<'a>, A: args::Args> command::Command<'a, A> for CI<'a, 
         };
         if config.len() > 0 {
             for (patterns, code) in config {
-                if self.ci.changed(&patterns.split(',').collect()) {
+                let ps = &patterns.split(',').map(|p| {
+                    std::env::current_dir().unwrap()
+                        .join(p)
+                        .to_string_lossy().to_string()
+                }).collect::<Vec<String>>();
+                if self.ci.changed(&ps.iter().map(std::ops::Deref::deref).collect()) {
                     self.shell.run_code_or_file(&code, &hashmap!{})?;
                 }
             }
@@ -57,11 +63,14 @@ impl<'a, S: shell::Shell<'a>, A: args::Args> command::Command<'a, A> for CI<'a, 
             for entry in glob(&self.config.services_path().join("*.toml").to_string_lossy())? {
                 match entry {
                     Ok(path) => {
-                        let stem = path.file_stem().unwrap().to_string_lossy();
+                        let stem = path.file_stem().unwrap().to_string_lossy().to_string();
                         log::debug!("plan file path:{},stem:{}", path.to_string_lossy(), stem);
-                        if self.ci.changed(&vec!(&format!("{}/.*", stem))) {
-                            self.shell.eval(&format!("deplo service action {}", stem), &hashmap!{}, false)?;
-                        }                        
+                        match std::env::current_dir()?.join(&stem).join(".*").to_str() {
+                            Some(p) => if self.ci.changed(&vec!(p)) {
+                                self.shell.eval(&format!("deplo service action {}", stem), &hashmap!{}, false)?;
+                            },
+                            None => {}
+                        }
                     },
                     Err(e) => return escalate!(Box::new(e))
                 }             

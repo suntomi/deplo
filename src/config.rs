@@ -191,6 +191,7 @@ pub struct RuntimeConfig<'a> {
     pub store_deployments: Vec<String>,
     pub endpoint_service_map: HashMap<String, String>,
     pub release_target: Option<String>,
+    pub workdir: Option<String>,
 }
 #[derive(Serialize, Deserialize)]
 pub struct Config<'a> {
@@ -215,7 +216,8 @@ impl<'a> Config<'a> {
     }
     pub fn create<A: args::Args>(args: &A) -> Result<Config, Box<dyn Error>> {
         // apply working directory
-        match args.value_of("workdir") {
+        let may_workdir = args.value_of("workdir");
+        match may_workdir {
             Some(wd) => { std::env::set_current_dir(&wd)?; },
             None => {}
         }
@@ -261,7 +263,8 @@ impl<'a> Config<'a> {
                 // to prevent `assignment of borrowed value` error below.
                 let vcs = c.vcs_service()?;
                 vcs.release_target()
-            }
+            },
+            workdir: may_workdir.map(String::from),
         };
         // verify all configuration files, including endoints/plans
         c.verify()?;

@@ -18,4 +18,4 @@ jobs:
       - name: Run Deplo
         env:
           DEPLO_GHACTION_PULL_REQUEST_URL: ${{ github.event.pull_request.comments_url }}
-        run: deplo ci
+        run: deplo {} ci

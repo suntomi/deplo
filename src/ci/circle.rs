@@ -24,7 +24,8 @@ impl<'a> ci::CI<'a> for Circle<'a> {
         let circle_yml_path = format!("{}/.circleci/config.yml", repository_root);
         fs::create_dir_all(&format!("{}/.circleci", repository_root))?;
         fs::write(&circle_yml_path, format!(
-            include_str!("../../rsc/ci/circle/config.yml.tmpl"), config::DEPLO_GIT_HASH
+            include_str!("../../rsc/ci/circle/config.yml.tmpl"),
+            config::DEPLO_GIT_HASH, self.config.runtime.workdir.as_ref().unwrap_or(&"".to_string())
         ))?;
         Ok(())
     }

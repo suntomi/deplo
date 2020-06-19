@@ -28,7 +28,8 @@ impl<'a> ci::CI<'a> for GhAction<'a> {
         fs::create_dir_all(&format!("{}/.github/workflows", repository_root))?;
         fs::write(&deplo_yml_path, format!(
             include_str!("../../rsc/ci/ghaction/deplo.yml.tmpl"), 
-            target_branches, target_branches, config::DEPLO_GIT_HASH
+            target_branches, target_branches, config::DEPLO_GIT_HASH,
+            self.config.runtime.workdir.as_ref().unwrap_or(&"".to_string())
         ))?;
         Ok(())
     }
