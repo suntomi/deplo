@@ -14,9 +14,10 @@ jobs:
     container: suntomi/deplo:7d81cb885acf812dabe891fc6f91198566b61671
     steps:
       - uses: actions/checkout@v2
-        lfs: true
+        with:
+          lfs: true
       - name: Run Deplo
         env:
           DEPLO_CI_TYPE: GhAction
           DEPLO_GHACTION_PULL_REQUEST_URL: ${{ github.event.pull_request.comments_url }}
-        run: deplo -w test/projects/dev ci
+        run: /deplo -w test/projects/dev ci

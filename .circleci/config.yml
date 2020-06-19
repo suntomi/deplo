@@ -1,3 +1,11 @@
+version: 2.1
+
+workflows:
+  version: 2
+  deplo:
+    jobs:
+      - deplo
+
 executors:
   deplo:
     working_directory: /workdir
@@ -40,7 +48,7 @@ commands:
           - "/deplo-tools"
 
 jobs:
-  main:
+  deplo:
     executor: deplo
     environment:
       DEPLO_CI_TYPE: Circle
@@ -49,5 +57,5 @@ jobs:
       - load_deplo_tools
       - run:
         name: 'running CI jobs'
-        command: deplo -w test/projects/dev ci
+        command: /deplo -w test/projects/dev ci
       - save_deplo_tools
