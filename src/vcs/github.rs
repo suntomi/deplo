@@ -17,7 +17,7 @@ impl<'a, GIT: (git::GitFeatures<'a>) + (git::GitHubFeatures<'a>)> Github<'a, GIT
     fn push_url(&self) -> Result<String, Box<dyn Error>> {
         if let config::VCSConfig::Github{ email:_, account, key } = &self.config.vcs {
             let remote_origin = self.git.remote_origin()?;
-            let re = regex::Regex::new(r".[^:]+:([^/]+)/([^/]+)").unwrap();
+            let re = regex::Regex::new(r"[^:]+[:/]([^/\.]+)/([^/\.]+)").unwrap();
             let user_and_repo = match re.captures(&remote_origin) {
                 Some(c) => (c.get(1).map_or("", |m| m.as_str()), c.get(2).map_or("", |m| m.as_str())),
                 None => return Err(Box::new(vcs::VCSError {
