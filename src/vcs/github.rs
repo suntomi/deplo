@@ -18,12 +18,7 @@ impl<'a, GIT: (git::GitFeatures<'a>) + (git::GitHubFeatures<'a>)> Github<'a, GIT
         if let config::VCSConfig::Github{ email:_, account, key } = &self.config.vcs {
             let remote_origin = self.git.remote_origin()?;
             let re = regex::Regex::new(r"[^:]+[:/]([^/\.]+)/([^/\.]+)").unwrap();
-            let user_and_repo = match re.captures(&remote_origin) {
-                Some(c) => (c.get(1).map_or("", |m| m.as_str()), c.get(2).map_or("", |m| m.as_str())),
-                None => return Err(Box::new(vcs::VCSError {
-                    cause: format!("invalid remote origin url: {}", remote_origin)
-                }))
-            };
+            let user_and_repo = (self as &dyn vcs::VCS<'a>).user_and_repo()?;
             Ok(format!("https://{}:{}@github.com/{}/{}", account, key, user_and_repo.0, user_and_repo.1))
         } else {
             Err(Box::new(vcs::VCSError {
@@ -77,5 +72,19 @@ impl<'a, GIT: (git::GitFeatures<'a>) + (git::GitHubFeatures<'a>)> vcs::VCS<'a> f
         &self, title: &str, head_branch: &str, base_branch: &str, options: &HashMap<&str, &str>
     ) -> Result<(), Box<dyn Error>> {
         self.git.pr(title, head_branch, base_branch, options)
+    }
+    fn user_and_repo(&self) -> Result<(String, String), Box<dyn Error>> {
+        let remote_origin = self.git.remote_origin()?;
+        let re = regex::Regex::new(r"[^:]+[:/]([^/\.]+)/([^/\.]+)").unwrap();
+        let user_and_repo = match re.captures(&remote_origin) {
+            Some(c) => (
+                c.get(1).map_or("".to_string(), |m| m.as_str().to_string()), 
+                c.get(2).map_or("".to_string(), |m| m.as_str().to_string())
+            ),
+            None => return Err(Box::new(vcs::VCSError {
+                cause: format!("invalid remote origin url: {}", remote_origin)
+            }))
+        };
+        Ok(user_and_repo)
     }
 }

@@ -1,9 +1,12 @@
 use std::error::Error;
-use std::path;
+use std::fs;
+use std::io::{BufReader, BufRead};
 
 use log;
 use maplit::hashmap;
 use glob::glob;
+use dotenv::dotenv;
+use regex::Regex;
 
 use crate::args;
 use crate::ci;
@@ -17,16 +20,8 @@ pub struct CI<'a, S: shell::Shell<'a> = shell::Default<'a>> {
     pub ci: Box<dyn ci::CI<'a> + 'a>,
     pub shell: S
 }
-
-impl<'a, S: shell::Shell<'a>, A: args::Args> command::Command<'a, A> for CI<'a, S> {
-    fn new(config: &'a config::Config) -> Result<CI<'a, S>, Box<dyn Error>> {
-        return Ok(CI::<'a, S> {
-            config: config,
-            ci: config.ci_service()?,
-            shell: S::new(config)
-        });
-    }
-    fn run(&self, args: &A) -> Result<(), Box<dyn Error>> {
+impl<'a, S: shell::Shell<'a>> CI<'a, S> {
+    fn kick<A: args::Args>(&self, args: &A) -> Result<(), Box<dyn Error>> {
         log::info!("ci command invoked");
         if !match std::env::var("DEPLO_CI_TYPE") {
             Ok(v) => self.config.ci.type_matched(&v),
@@ -78,5 +73,62 @@ impl<'a, S: shell::Shell<'a>, A: args::Args> command::Command<'a, A> for CI<'a, 
 
         }
         Ok(())
+    }
+    fn setenv<A: args::Args>(&self, args: &A) -> Result<(), Box<dyn Error>> {
+        let dotenv_file_content = match args.value_of("dotenv") {
+            Some(dotenv_path) => match fs::metadata(dotenv_path) {
+                Ok(_) => match fs::read_to_string(dotenv_path) {
+                    Ok(content) => content,
+                    Err(err) => return escalate!(Box::new(err))
+                },
+                Err(_) => dotenv_path.to_string(),
+            },
+            None => match dotenv() {
+                Ok(dotenv_path) => match fs::read_to_string(dotenv_path) {
+                    Ok(content) => content,
+                    Err(err) => return escalate!(Box::new(err))
+                },
+                Err(err) => return escalate!(
+                    args.error(&format!("no .env file found err:{:?}", err))
+                ),
+            }
+        };
+        let r = BufReader::new(dotenv_file_content.as_bytes());
+        let re = Regex::new(r#"^([^=]+)=(.+)$"#).unwrap();
+        for read_result in r.lines() {
+            match read_result {
+                Ok(line) => match re.captures(&line) {
+                    Some(c) => {
+                        self.ci.set_secret(
+                            c.get(1).map(|m| m.as_str()).unwrap(), 
+                            c.get(2).map(|m| m.as_str()).unwrap().trim_matches('"')
+                        )?;
+                    },
+                    None => {},
+                },
+                Err(_) => {}
+            }
+        }
+        return Ok(())
+    }
+}
+
+impl<'a, S: shell::Shell<'a>, A: args::Args> command::Command<'a, A> for CI<'a, S> {
+    fn new(config: &'a config::Config) -> Result<CI<'a, S>, Box<dyn Error>> {
+        return Ok(CI::<'a, S> {
+            config: config,
+            ci: config.ci_service()?,
+            shell: S::new(config)
+        });
+    }
+    fn run(&self, args: &A) -> Result<(), Box<dyn Error>> {
+        match args.subcommand() {
+            Some(("kick", subargs)) => return self.kick(&subargs),
+            Some(("setenv", subargs)) => return self.setenv(&subargs),
+            Some((name, _)) => return escalate!(args.error(
+                &format!("no such subcommand: [{}]", name) 
+            )),
+            None => return escalate!(args.error("no subcommand specified"))
+        }
     }
 }

@@ -2,20 +2,32 @@ use std::fs;
 use std::error::Error;
 use std::result::Result;
 
+use maplit::hashmap;
+use serde::{Deserialize, Serialize};
+
 use crate::config;
 use crate::ci;
-use crate::util::escalate;
+use crate::shell;
+use crate::util::{escalate,seal};
 
-pub struct GhAction<'a> {
-    pub config: &'a config::Config<'a>,
-    pub diff: String
+#[derive(Serialize, Deserialize)]
+struct RepositoryPublicKeyResponse {
+    key: String,
+    key_id: String,
 }
 
-impl<'a> ci::CI<'a> for GhAction<'a> {
-    fn new(config: &'a config::Config) -> Result<GhAction<'a>, Box<dyn Error>> {
+pub struct GhAction<'a, S: shell::Shell<'a> = shell::Default<'a>> {
+    pub config: &'a config::Config<'a>,
+    pub diff: String,
+    pub shell: S,
+}
+
+impl<'a, S: shell::Shell<'a>> ci::CI<'a> for GhAction<'a, S> {
+    fn new(config: &'a config::Config) -> Result<GhAction<'a, S>, Box<dyn Error>> {
         let vcs = config.vcs_service()?;
         return Ok(GhAction::<'a> {
             config: config,
+            shell: S::new(config),
             diff: vcs.rebase_with_remote_counterpart(&vcs.current_branch()?)?
         });
     }
@@ -55,5 +67,42 @@ impl<'a> ci::CI<'a> for GhAction<'a> {
     }
     fn changed(&self, patterns: &Vec<&str>) -> bool {
         true
+    }
+    fn set_secret(&self, key: &str, val: &str) -> Result<(), Box<dyn Error>> {
+        let token = match &self.config.ci {
+            config::CIConfig::GhAction { account:_, key } => { key },
+            config::CIConfig::Circle{ key:_ } => { 
+                return escalate!(Box::new(ci::CIError {
+                    cause: "should have ghaction CI config but circle config provided".to_string()
+                }));
+            }
+        };
+        let user_and_repo = self.config.vcs_service()?.user_and_repo()?;
+        let public_key_info = serde_json::from_str::<RepositoryPublicKeyResponse>(
+            &self.shell.eval_output_of(&format!(r#"
+                curl https://api.github.com/repos/{}/{}/actions/secrets/public-key?access_token={}
+            "#, user_and_repo.0, user_and_repo.1, token), &hashmap!{})?
+        )?;
+        let json = format!("{{\"encrypted_value\":\"{}\",\"key_id\":\"{}\"}}", 
+            seal(val, &public_key_info.key)?, 
+            public_key_info.key_id
+        );
+        let status = self.shell.exec(&vec!(
+            "curl", "-X", "PUT",
+            &format!(
+                "https://api.github.com/repos/{}/{}/actions/secrets/{}?access_token={}",
+                user_and_repo.0, user_and_repo.1, key, token
+            ),
+            "-H", "Content-Type: application/json",
+            "-H", "Accept: application/json",
+            "-d", &json, "-w", "%{http_code}", "-o", "/dev/null"
+        ), &hashmap!{}, true)?.parse::<u32>()?;
+        if status >= 200 && status < 300 {
+            Ok(())
+        } else {
+            return escalate!(Box::new(ci::CIError {
+                cause: format!("fail to set secret to Circle CI with status code:{}", status)
+            }));
+        }
     }
 }

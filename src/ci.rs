@@ -11,6 +11,7 @@ pub trait CI<'a> {
     fn wait_job(&self, job_id: &str) -> Result<(), Box<dyn Error>>;
     fn wait_job_by_name(&self, job_id: &str) -> Result<(), Box<dyn Error>>;
     fn changed(&self, patterns: &Vec<&str>) -> bool;
+    fn set_secret(&self, key: &str, val: &str) -> Result<(), Box<dyn Error>>;
 }
 
 #[derive(Debug)]

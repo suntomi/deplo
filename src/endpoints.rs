@@ -111,7 +111,7 @@ impl Endpoints {
                 Ok(ep)
             },
             Err(err) => escalate!(Box::new(err))
-        }        
+        }
     }
     pub fn save<P: AsRef<path::Path>>(&self, path: P) -> Result<(), Box<dyn Error>> {
         let as_text = serde_json::to_string_pretty(&self)?;

@@ -84,3 +84,48 @@ pub fn envsubst(src: &str) -> String {
     });
     return content.to_string()
 }
+
+// seal
+use rand;
+use base64;
+use crypto_box::{SalsaBox, PublicKey, SecretKey, aead::Aead};
+
+#[derive(Debug)]
+pub struct CryptoError {
+    pub cause: String
+}
+impl fmt::Display for CryptoError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.cause)
+    }
+}
+impl Error for CryptoError {
+    fn source(&self) -> Option<&(dyn Error + 'static)> {
+        None
+    }
+}
+pub fn seal(plaintext: &str, pkey_encoded: &str) -> Result<String, Box<dyn Error>> {
+    let mut rng = rand::thread_rng();
+    let secret_key = SecretKey::generate(&mut rng);
+    let vec_pkey_decoded = base64::decode(pkey_encoded)?;
+    if vec_pkey_decoded.len() != 32 {
+        return escalate!(Box::new(CryptoError {
+            cause: format!("given encoded public key length wrong {}", vec_pkey_decoded.len())
+        }));
+    }
+    let mut pkey_decoded: [u8; 32] = [0; 32];
+    for i in 0..31 { pkey_decoded[i] = vec_pkey_decoded[i]; };
+    let public_key = PublicKey::from(pkey_decoded);
+    let bx = SalsaBox::new(&public_key, &secret_key);
+    let nonce = crypto_box::generate_nonce(&mut rng);
+    let encrypted_bin = match bx.encrypt(&nonce, plaintext.as_bytes()) {
+        Ok(vec) => vec,
+        Err(e) => return escalate!(Box::new(CryptoError {
+            cause: format!("encrypt failure {:?}", e)
+        }))
+    };
+    let mut result_vec = vec!();
+    result_vec.extend_from_slice(&secret_key.to_bytes());
+    result_vec.extend(encrypted_bin);
+    Ok(base64::encode(result_vec))
+}

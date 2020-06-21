@@ -57,5 +57,5 @@ jobs:
       - load_deplo_tools
       - run:
           name: 'running CI jobs'
-          command: /deplo -vvv -e "$(echo "$DEPLO_DOTENV" | base64 -d)" -w test/projects/dev ci
+          command: /deplo -vvv -w test/projects/dev ci kick
       - save_deplo_tools

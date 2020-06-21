@@ -17,6 +17,7 @@ pub trait VCS<'a> {
     fn pr(
         &self, title: &str, head_branch: &str, base_branch: &str, option: &HashMap<&str, &str>
     ) -> Result<(), Box<dyn Error>>;
+    fn user_and_repo(&self) -> Result<(String, String), Box<dyn Error>>;
 }
 
 #[derive(Debug)]

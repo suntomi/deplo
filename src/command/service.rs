@@ -8,6 +8,7 @@ use crate::command;
 use crate::shell;
 use crate::lb;
 use crate::plan;
+use crate::util::escalate;
 
 #[derive(PartialEq, Clone)]
 pub enum ActionType {
@@ -83,10 +84,10 @@ impl<'a, S: shell::Shell<'a>, A: args::Args> command::Command<'a, A> for Service
             Some(("pr", subargs)) => return self.action(&subargs, Some(ActionType::PullRequest)),
             Some(("action", subargs)) => return self.action(&subargs, None),
             Some(("cutover", subargs)) => return self.cutover(&subargs),
-            Some((name, _)) => return Err(args.error(
+            Some((name, _)) => return escalate!(args.error(
                 &format!("no such subcommand: [{}]", name) 
             )),
-            None => return Err(args.error("no subcommand specified"))
+            None => return escalate!(args.error("no subcommand specified"))
         }
     }
 }

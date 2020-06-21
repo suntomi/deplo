@@ -4,6 +4,7 @@ use crate::args;
 use crate::config;
 use crate::command;
 use crate::shell;
+use crate::util::escalate;
 
 pub struct Infra<'a, S: shell::Shell<'a> = shell::Default<'a>> {
     pub config: &'a config::Config<'a>,
@@ -43,10 +44,10 @@ impl<'a, S: shell::Shell<'a>, A: args::Args> command::Command<'a, A> for Infra<'
             Some(("plan", subargs)) => return self.plan(&subargs),
             Some(("apply", subargs)) => return self.apply(&subargs),
             Some(("rsc", subargs)) => return self.resource(&subargs),
-            Some((name, _)) => return Err(args.error(
+            Some((name, _)) => return escalate!(args.error(
                 &format!("no such subcommand: [{}]", name) 
             )),
-            None => return Err(args.error("no subcommand specified"))
+            None => return escalate!(args.error("no subcommand specified"))
         }
     }
 }

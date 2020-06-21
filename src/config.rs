@@ -237,7 +237,7 @@ impl<'a> Config<'a> {
                 Err(_) => { dotenv::from_readable(dotenv_path.as_bytes()).unwrap(); },
             },
             None => match dotenv() {
-                Ok(_) => {},
+                Ok(path) => log::debug!("using .env file at {}", path.to_string_lossy()),
                 Err(err) => match std::env::var("DEPLO_CI_TYPE") {
                     Ok(_) => {},
                     Err(_) => log::warn!(".env not present or cannot load by error [{:?}], this usually means:\n\

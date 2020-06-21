@@ -94,7 +94,15 @@ lazy_static! {
         )
         .subcommand(
             App::new("ci")
-                .about("entry point of CI/CD process")
+                .about("handling CI input/control CI settings")
+                .subcommand(
+                    App::new("kick")
+                    .about("entry point of CI/CD process")
+                )
+                .subcommand(
+                    App::new("setenv")
+                    .about("upload current .env contents as CI service secrets")
+                )
         )
         .subcommand(
             App::new("service")

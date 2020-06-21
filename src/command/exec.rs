@@ -7,6 +7,7 @@ use crate::args;
 use crate::config;
 use crate::command;
 use crate::shell;
+use crate::util::escalate;
 
 pub struct Exec<'a, S: shell::Shell<'a> = shell::Default<'a>> {
     pub config: &'a config::Config<'a>,
@@ -26,10 +27,10 @@ impl<'a, S: shell::Shell<'a>, A: args::Args> command::Command<'a, A> for Exec<'a
             Some(subargs) => {
                 return match self.shell.exec(&subargs, &hashmap!{}, false) {
                     Ok(_) => Ok(()),
-                    Err(err) => Err(Box::new(err))
+                    Err(err) => escalate!(Box::new(err))
                 }
             },
-            None => Err(args.error("no argument for exec"))
+            None => escalate!(args.error("no argument for exec"))
         }
     }
 }
