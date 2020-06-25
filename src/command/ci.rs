@@ -21,8 +21,8 @@ pub struct CI<'a, S: shell::Shell<'a> = shell::Default<'a>> {
     pub shell: S
 }
 impl<'a, S: shell::Shell<'a>> CI<'a, S> {
-    fn kick<A: args::Args>(&self, args: &A) -> Result<(), Box<dyn Error>> {
-        log::info!("ci command invoked");
+    fn kick<A: args::Args>(&self, _: &A) -> Result<(), Box<dyn Error>> {
+        log::info!("kick command invoked");
         if !match std::env::var("DEPLO_CI_TYPE") {
             Ok(v) => self.config.ci.type_matched(&v),
             Err(e) => match e {
