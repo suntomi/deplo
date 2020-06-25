@@ -3,10 +3,6 @@ FROM alpine:3.11
 # install common dependencies
 RUN apk --update add git make python unzip expect curl bash openssh
 
-# defiine on-demand command install path
-ENV DEPLO_TOOLS_PATH=/deplo-tools
-ENV PATH $DEPLO_TOOLS_PATH/cloud/google-cloud-sdk/bin:/bin:$PATH
-
 # common utils
 # to avoid dynamic link issue, install hub from edge
 RUN apk add --no-cache -X http://dl-cdn.alpinelinux.org/alpine/edge/testing hub
@@ -34,4 +30,9 @@ USER root
 RUN curl -o /docker.tgz https://download.docker.com/linux/static/stable/x86_64/docker-$DOCKER_VERSION.tgz && \
 	tar -zxvf /docker.tgz && cp /docker/docker* /usr/bin && rm -rf /docker /docker.tgz
 
+# define HOME
 ENV HOME /
+
+# defiine on-demand command install path
+ENV DEPLO_TOOLS_PATH=/deplo-tools
+RUN mkdir -p ${DEPLO_TOOLS_PATH}/cloud

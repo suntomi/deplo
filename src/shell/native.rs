@@ -35,12 +35,12 @@ impl<'a> shell::Shell<'a> for Native<'a> {
         ent.and_modify(|e| *e = val.clone()).or_insert(val);
         Ok(())
     }
-    fn output_of(&self, args: &Vec<&str>, envs: &HashMap<String, String>) -> Result<String, shell::ShellError> {
+    fn output_of(&self, args: &Vec<&str>, envs: &HashMap<&str, &str>) -> Result<String, shell::ShellError> {
         let mut cmd = self.create_command(args, envs, true);
         return Native::get_output(&mut cmd);
     }
     fn exec(
-        &self, args: &Vec<&str>, envs: &HashMap<String, String>, capture: bool
+        &self, args: &Vec<&str>, envs: &HashMap<&str, &str>, capture: bool
     ) -> Result<String, shell::ShellError> {
         if self.config.runtime.dryrun {
             let cmd = args.join(" ");
@@ -53,7 +53,7 @@ impl<'a> shell::Shell<'a> for Native<'a> {
     }
 }
 impl <'a> Native<'a> {
-    fn create_command(&self, args: &Vec<&str>, envs: &HashMap<String, String>, capture: bool) -> Command {
+    fn create_command(&self, args: &Vec<&str>, envs: &HashMap<&str, &str>, capture: bool) -> Command {
         let mut c = Command::new(args[0]);
         c.args(&args[1..]);
         c.envs(envs);

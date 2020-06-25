@@ -129,3 +129,12 @@ pub fn seal(plaintext: &str, pkey_encoded: &str) -> Result<String, Box<dyn Error
     result_vec.extend(encrypted_bin);
     Ok(base64::encode(result_vec))
 }
+
+// ref
+pub fn to_kv_ref<'a>(h: &'a HashMap<String, String>) -> HashMap<&'a str, &'a str> {
+    let mut ret = HashMap::<&'a str, &'a str>::new();
+    for (k, v) in h {
+        ret.entry(k).or_insert(v);
+    }
+    return ret;
+}

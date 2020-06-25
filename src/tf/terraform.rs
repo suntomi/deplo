@@ -16,9 +16,9 @@ pub struct Terraform<'a, S: shell::Shell<'a> = shell::Default<'a>> {
 }
 
 impl<'a, S: shell::Shell<'a>> Terraform<'a, S> {
-    fn run_env(&self) -> HashMap<String, String> {
+    fn run_env(&self) -> HashMap<&str, &str> {
         if self.config.has_debug_option("infra_debug") {
-            hashmap!{ "TF_LOG".to_string() => "DEBUG".to_string() }
+            hashmap!{ "TF_LOG" => "DEBUG" }
         } else {
             hashmap!{}
         }

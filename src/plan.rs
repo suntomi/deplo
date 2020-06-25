@@ -11,7 +11,7 @@ use glob::glob;
 use crate::config;
 use crate::shell;
 use crate::cloud;
-use crate::util::{escalate, envsubst};
+use crate::util::{escalate, envsubst, to_kv_ref};
 
 #[derive(Debug)]
 pub struct DeployError {
@@ -119,7 +119,7 @@ impl Step {
             Self::Script { code, env, workdir } => {
                 let mut shell = S::new(plan.config);
                 shell.set_cwd(workdir.as_ref())?;
-                shell.run_code_or_file(code, env.as_ref().unwrap_or(&hashmap!{}))
+                shell.run_code_or_file(code, &to_kv_ref(env.as_ref().unwrap_or(&hashmap!{})))
             },
             Self::Container { target, image, port:_, extra_ports:_, env, options } => {
                 let config = plan.config;

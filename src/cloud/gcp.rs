@@ -664,9 +664,16 @@ impl<'a, S: shell::Shell<'a>> cloud::Cloud<'a> for Gcp<'a, S> {
     }
     fn setup_dependency(&self) -> Result<(), Box<dyn Error>> {
         // install gcloud command, if not installed
-        match fs::metadata("/deplo-tools/cloud/google-cloud-sdk") {
+        let install_path = format!("{}/cloud/google-cloud-sdk", std::env::var("DEPLO_TOOLS_PATH")?);
+        match fs::metadata(&install_path) {
             Ok(_) => {
-                log::debug!("gcloud already installed");
+                log::debug!("gcloud already installed at {}", &install_path);
+                self.shell.eval(r#"
+                    ln -s $INSTALL_PATH /usr/lib
+                "#, &hashmap!{
+                    "HOME" => "/",
+                    "INSTALL_PATH" => &install_path
+                }, false)?;
             },
             Err(_) => {
                 // it takes sooooooo long time on container in docker mac
@@ -694,16 +701,17 @@ impl<'a, S: shell::Shell<'a>> cloud::Cloud<'a> for Gcp<'a, S> {
 
                     echo "make link..."
                     rm google-cloud-sdk.zip
-                    mv google-cloud-sdk $INSTALL_PATH/
-                    ln -s $INSTALL_PATH/google-cloud-sdk /usr/lib
+                    mv google-cloud-sdk $DEPLO_TOOLS_PATH/cloud
+                    ln -s $INSTALL_PATH /usr/lib
                 "#, &hashmap!{
-                    "HOME".to_string() => "/".to_string(),
-                    "CLOUDSDK_PYTHON_SITEPACKAGES".to_string() => "1".to_string(),
-                    "CLOUDSDK_VERSION".to_string() => "292.0.0".to_string(),
-                    "INSTALL_PATH".to_string() => format!("{}/cloud", std::env::var("DEPLO_TOOLS_PATH")?)
+                    "CLOUDSDK_PYTHON_SITEPACKAGES" => "1",
+                    "CLOUDSDK_VERSION" => "292.0.0",
+                    "INSTALL_PATH" => &install_path
                 }, false)?;
             }
         };
+        // modify path
+        std::env::set_var("PATH", &format!("{}/bin:{}", &install_path, std::env::var("PATH")?));
         // ensure project setting is valid
         match std::env::var("GOOGLE_APPLICATION_CREDENTIALS") {
             Ok(_) => {},

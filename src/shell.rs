@@ -13,16 +13,16 @@ pub trait Shell<'a> {
     fn new(config: &'a config::Config) -> Self;
     fn set_cwd<P: AsRef<Path>>(&mut self, dir: Option<&P>) -> Result<(), Box<dyn Error>>;
     fn set_env(&mut self, key: &'a str, val: String) -> Result<(), Box<dyn Error>>;
-    fn output_of(&self, args: &Vec<&str>, envs: &HashMap<String, String>) -> Result<String, ShellError>;
-    fn exec(&self, args: &Vec<&str>, envs: &HashMap<String, String>, capture: bool) -> Result<String, ShellError>;
-    fn eval(&self, code: &str, envs: &HashMap<String, String>, capture: bool) -> Result<String, ShellError> {
+    fn output_of(&self, args: &Vec<&str>, envs: &HashMap<&str, &str>) -> Result<String, ShellError>;
+    fn exec(&self, args: &Vec<&str>, envs: &HashMap<&str, &str>, capture: bool) -> Result<String, ShellError>;
+    fn eval(&self, code: &str, envs: &HashMap<&str, &str>, capture: bool) -> Result<String, ShellError> {
         return self.exec(&vec!("sh", "-c", code), envs, capture);
     }
-    fn eval_output_of(&self, code: &str, envs: &HashMap<String, String>) -> Result<String, ShellError> {
+    fn eval_output_of(&self, code: &str, envs: &HashMap<&str, &str>) -> Result<String, ShellError> {
         return self.output_of(&vec!("sh", "-c", code), envs);
     }
     fn run_code_or_file(
-        &self, code_or_file: &str, envs: &HashMap<String, String>
+        &self, code_or_file: &str, envs: &HashMap<&str, &str>
     ) -> Result<(), Box<dyn Error>> {
         let r = match fs::metadata(code_or_file) {
             Ok(_) => self.exec(
