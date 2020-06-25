@@ -702,7 +702,9 @@ impl<'a, S: shell::Shell<'a>> cloud::Cloud<'a> for Gcp<'a, S> {
                     echo "make link..."
                     rm google-cloud-sdk.zip
                     mv google-cloud-sdk $DEPLO_TOOLS_PATH/cloud
-                    ln -s $INSTALL_PATH /usr/lib
+                    if [ ! -e "/usr/lib/google-cloud-sdk" ]; then
+                        ln -s $INSTALL_PATH /usr/lib
+                    fi
                 "#, &hashmap!{
                     "CLOUDSDK_PYTHON_SITEPACKAGES" => "1",
                     "CLOUDSDK_VERSION" => "292.0.0",
