@@ -1,7 +1,7 @@
 FROM alpine:3.11
 
 # install common dependencies
-RUN apk --update add git make python unzip expect curl bash
+RUN apk --update add git make python unzip expect curl bash openssh
 
 # defiine on-demand command install path
 ENV DEPLO_TOOLS_PATH=/deplo-tools
