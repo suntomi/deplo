@@ -16,8 +16,6 @@ pub struct Github<'a, GIT: (git::GitFeatures<'a>) + (git::GitHubFeatures<'a>) = 
 impl<'a, GIT: (git::GitFeatures<'a>) + (git::GitHubFeatures<'a>)> Github<'a, GIT> {
     fn push_url(&self) -> Result<String, Box<dyn Error>> {
         if let config::VCSConfig::Github{ email:_, account, key } = &self.config.vcs {
-            let remote_origin = self.git.remote_origin()?;
-            let re = regex::Regex::new(r"[^:]+[:/]([^/\.]+)/([^/\.]+)").unwrap();
             let user_and_repo = (self as &dyn vcs::VCS<'a>).user_and_repo()?;
             Ok(format!("https://{}:{}@github.com/{}/{}", account, key, user_and_repo.0, user_and_repo.1))
         } else {

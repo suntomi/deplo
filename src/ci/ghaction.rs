@@ -18,17 +18,18 @@ struct RepositoryPublicKeyResponse {
 
 pub struct GhAction<'a, S: shell::Shell<'a> = shell::Default<'a>> {
     pub config: &'a config::Config<'a>,
-    pub diff: String,
+    pub diff: Vec<String>,
     pub shell: S,
 }
 
 impl<'a, S: shell::Shell<'a>> ci::CI<'a> for GhAction<'a, S> {
     fn new(config: &'a config::Config) -> Result<GhAction<'a, S>, Box<dyn Error>> {
         let vcs = config.vcs_service()?;
+        let diff = vcs.rebase_with_remote_counterpart(&vcs.current_branch()?)?;
         return Ok(GhAction::<'a> {
             config: config,
             shell: S::new(config),
-            diff: vcs.rebase_with_remote_counterpart(&vcs.current_branch()?)?
+            diff: diff.split('\n').map(|e| e.to_string()).collect()
         });
     }
     fn init(&self) -> Result<(), Box<dyn Error>> {
@@ -65,8 +66,8 @@ impl<'a, S: shell::Shell<'a>> ci::CI<'a> for GhAction<'a, S> {
     fn wait_job_by_name(&self, job_name: &str) -> Result<(), Box<dyn Error>> {
         Ok(())
     }
-    fn changed(&self, patterns: &Vec<&str>) -> bool {
-        true
+    fn diff<'b>(&'b self) -> &'b Vec<String> {
+        &self.diff
     }
     fn set_secret(&self, key: &str, val: &str) -> Result<(), Box<dyn Error>> {
         let token = match &self.config.ci {
