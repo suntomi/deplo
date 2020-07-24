@@ -10,7 +10,7 @@ use crate::config;
 use crate::shell;
 
 pub struct Native<'a> {
-    pub config: &'a config::Config<'a>,
+    pub config: &'a config::Config,
     pub cwd: Option<String>,
     pub envs: HashMap<String, String>,
 }

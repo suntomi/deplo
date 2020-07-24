@@ -7,7 +7,7 @@ use crate::shell;
 use crate::util::escalate;
 
 pub struct Infra<'a, S: shell::Shell<'a> = shell::Default<'a>> {
-    pub config: &'a config::Config<'a>,
+    pub config: &'a config::Config,
     pub shell: S
 }
 
@@ -38,8 +38,6 @@ impl<'a, S: shell::Shell<'a>, A: args::Args> command::Command<'a, A> for Infra<'
         });
     }
     fn run(&self, args: &A) -> Result<(), Box<dyn Error>> {
-        // ensure underlying cloud provider initialized
-        let _ = self.config.cloud_service()?;
         match args.subcommand() {
             Some(("plan", subargs)) => return self.plan(&subargs),
             Some(("apply", subargs)) => return self.apply(&subargs),

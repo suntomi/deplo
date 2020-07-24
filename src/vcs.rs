@@ -2,6 +2,8 @@ use std::error::Error;
 use std::collections::HashMap;
 use std::fmt;
 
+use regex::Regex;
+
 use super::config;
 
 pub trait VCS<'a> {
@@ -18,6 +20,23 @@ pub trait VCS<'a> {
         &self, title: &str, head_branch: &str, base_branch: &str, option: &HashMap<&str, &str>
     ) -> Result<(), Box<dyn Error>>;
     fn user_and_repo(&self) -> Result<(String, String), Box<dyn Error>>;
+    fn diff<'b>(&'b self) -> &'b Vec<String>;
+    fn changed<'b>(&'b self, patterns: &Vec<&str>) -> bool {
+        let difflines = self.diff();
+        for pattern in patterns {
+            match Regex::new(pattern) {
+                Ok(re) => for diff in difflines {
+                    if re.is_match(diff) {
+                        return true
+                    }
+                },
+                Err(err) => {
+                    panic!("pattern[{}] is invalid regular expression err:{:?}", pattern, err);
+                }
+            }
+        }
+        false
+    }
 }
 
 #[derive(Debug)]

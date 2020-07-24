@@ -7,7 +7,7 @@ use crate::config;
 use crate::cloud;
 use crate::endpoints;
 
-fn meta_pr(config: &config::Config, title: &str, label: &str) -> Result<(), Box<dyn Error>> {
+fn meta_pr<'a>(config: &config::Config, title: &str, label: &str) -> Result<(), Box<dyn Error>> {
     let vcs = config.vcs_service()?;
     let hash = vcs.commit_hash()?;
     let local_branch = vcs.current_branch()?;
@@ -28,7 +28,7 @@ fn meta_pr(config: &config::Config, title: &str, label: &str) -> Result<(), Box<
         &remote_branch, &local_branch, &hashmap! {}
     )
 }
-fn backport_pr(config: &config::Config, target_branch: &str) -> Result<(), Box<dyn Error>> {
+fn backport_pr<'a>(config: &config::Config, target_branch: &str) -> Result<(), Box<dyn Error>> {
     let vcs = config.vcs_service()?;
     // TODO: detect source branch (currently fixed to master)
     vcs.pr(
@@ -36,7 +36,7 @@ fn backport_pr(config: &config::Config, target_branch: &str) -> Result<(), Box<d
         &vcs.current_branch()?, target_branch, &hashmap! {}
     )
 }
-fn try_commit_meta(config: &config::Config) -> Result<bool, Box<dyn Error>> {
+fn try_commit_meta<'a>(config: &config::Config) -> Result<bool, Box<dyn Error>> {
     let vcs = config.vcs_service()?;
     let hash = vcs.commit_hash()?;
     let remote_branch = vcs.current_branch()?;
@@ -58,14 +58,18 @@ fn metadata_bucket_name(
     config.canonical_name(&format!("metadata-{}",  metaver))
 }
 fn deploy_meta(
-    config: &config::Config, release_target: &str, endpoints: &endpoints::Endpoints
+    config: &config::Config, 
+    release_target: &str, 
+    cloud_account_name: &str,
+    endpoints: &endpoints::Endpoints
 ) -> Result<(), Box<dyn Error>> {
-    let cloud = config.cloud_service()?;
+    let cloud = config.cloud_service(&cloud_account_name)?;
     let mv = endpoints.version;
     let bucket_name = metadata_bucket_name(config, mv);
     cloud.deploy_storage(
         cloud::StorageKind::Metadata {
-            version: mv
+            version: mv,
+            lb_name: &endpoints.lb_name
         },
         &hashmap! {
             format!("{}/endpoints/{}.json", config.root_path().to_string_lossy(), release_target) => 
@@ -79,15 +83,17 @@ fn deploy_meta(
     )
 }
 
-pub fn deploy(
+pub fn deploy_single_load_balancer(
     config: &config::Config,
+    lb_name: &str,
     enable_backport: bool
 ) -> Result<(), Box<dyn Error>> {
     let target = config.release_target().expect("should be on release branch");
     let mut endpoints = endpoints::Endpoints::load(
         config,
-        &config.endpoints_file_path(Some(target))
+        &config.endpoints_file_path(lb_name, Some(target))
     )?;
+    let cloud_account_name = endpoints.cloud_account_name(config);
     let current_metaver = endpoints.version;
     let mut change_type = endpoints.change_type(config)?;
     let endpoints_deploy_state = match &endpoints.deploy_state {
@@ -123,10 +129,10 @@ pub fn deploy(
             endpoints.version_up(config)?;
         }
         log::info!("--- deploy metadata bucket");
-        deploy_meta(config, target, &endpoints)?;
+        deploy_meta(config, target, cloud_account_name, &endpoints)?;
 
         if change_type == endpoints::ChangeType::Path {
-            config.cloud_service()?.update_path_matcher(&endpoints)?;
+            config.cloud_service(cloud_account_name)?.update_path_matcher(&endpoints)?;
         }
 
         if deployed {
@@ -142,6 +148,17 @@ pub fn deploy(
         if let Some(b) = &endpoints.backport_target_branch {
             backport_pr(config, b)?;
         }
+    }
+
+    Ok(())
+}
+
+pub fn deploy(
+    config: &config::Config,
+    enable_backport: bool
+) -> Result<(), Box<dyn Error>> {
+    for (lb_name, _) in &config.lb {
+        deploy_single_load_balancer(config, lb_name, enable_backport)?
     }
 
     Ok(())

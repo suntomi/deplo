@@ -71,6 +71,7 @@ impl PartialEq for Release {
 #[derive(Serialize, Deserialize)]
 pub struct Endpoints {
     pub version: u32,
+    pub lb_name: String,
     pub host: String,
     pub confirm_deploy: Option<bool>,
     pub certify_latest_dist_only: Option<bool>,
@@ -84,9 +85,10 @@ pub struct Endpoints {
 }
 
 impl Endpoints {
-    pub fn new(host: &str) -> Endpoints {
+    pub fn new(lb_name: &str, host: &str) -> Endpoints {
         Endpoints {
             version: 0,
+            lb_name: lb_name.to_string(),
             host: host.to_string(),
             confirm_deploy: None,
             certify_latest_dist_only: None,
@@ -119,7 +121,7 @@ impl Endpoints {
         Ok(())
     }
     pub fn persist(&self, config: &config::Config) -> Result<(), Box<dyn Error>> {
-        self.save(config.endpoints_file_path(Some(self.target())))
+        self.save(config.endpoints_file_path(&self.lb_name, Some(self.target())))
     }
     pub fn modify<P: AsRef<path::Path>, F, R: Sized>(
         config: &config::Config, path: P, f: F
@@ -130,7 +132,10 @@ impl Endpoints {
         ep.save(&path)?;
         Ok(r)
     }
-    pub fn change_type(&self, config: &config::Config) -> Result<ChangeType, Box<dyn Error>> {
+    pub fn cloud_account_name<'a>(&self, config: &'a config::Config) -> &'a str {
+        config.lb_config(&self.lb_name).account_name()
+    }
+    pub fn change_type<'a>(&self, config: &config::Config) -> Result<ChangeType, Box<dyn Error>> {
         let mut change = ChangeType::None;
         let vs = &self.next.versions;
         for (ep, _) in vs {

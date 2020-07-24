@@ -21,14 +21,14 @@ macro_rules! setup_remote {
 }
 
 pub struct Git<'a, S: shell::Shell<'a> = shell::Default<'a>> {
-    config: &'a config::Config<'a>,
+    config: &'a config::Config,
     username: String,
     email: String,
     shell: S,
 }
 
 pub trait GitFeatures<'a> {
-    fn new(username: &str, email: &str, config: &'a config::Config<'a>) -> Self;
+    fn new(username: &str, email: &str, config: &'a config::Config) -> Self;
     fn current_branch(&self) -> Result<String, Box<dyn Error>>;
     fn commit_hash(&self) -> Result<String, Box<dyn Error>>;
     fn remote_origin(&self) -> Result<String, Box<dyn Error>>;
@@ -58,7 +58,7 @@ impl<'a, S: shell::Shell<'a>> Git<'a, S> {
 }
 
 impl<'a, S: shell::Shell<'a>> GitFeatures<'a> for Git<'a, S> {
-    fn new(username: &str, email: &str, config: &'a config::Config<'a>) -> Git<'a, S> {
+    fn new(username: &str, email: &str, config: &'a config::Config) -> Git<'a, S> {
         return Git::<'a, S> {
             config,
             username: username.to_string(),

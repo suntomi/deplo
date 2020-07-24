@@ -8,7 +8,9 @@ no_confirm_for_prod_deploy = false
 dev = "master"
 prod = "release"
 
-[cloud.provider]
+# you can use multiple cloud provider with [cloud.accounts.$account_name]
+# cloud.accounts.default should always exists
+[cloud.accounts.default]
 type = "GCP"
 key = "${DEPLO_CLOUD_ACCESS_KEY}"
 
@@ -19,20 +21,31 @@ resource_prefix = "deplo"
 dns_zone = "suntomi-zone@suntomi"
 region = "asia-northeast1"
 
+[lb.admin]
+account = "default"
+
 [vcs]
 type = "Github"
 email = "${DEPLO_VCS_ACCESS_EMAIL}"
 account = "suntomi-bot"
 key = "${DEPLO_VCS_ACCESS_KEY}"
 
-[ci]
+# you can use multiple ci service with [ci.$account_name]
+# cloud.ci.default should always exists
+[ci.default]
 type = "Circle"
 key = "${DEPLO_CI_ACCESS_KEY}"
-
-[action.pr]
+[ci.default.action.pr]
+"data/.*" = "deplo service action data"
+[ci.default.action.deploy]
 "data/.*" = "deplo service action data"
 
-[action.deploy]
+[ci.github]
+type = "GhAction"
+account = "suntomi-bot"
+key = "${DEPLO_VCS_ACCESS_KEY}"
+[ci.github.action.pr]
+"client/.*" = "deplo service action client"
+[ci.github.action.deploy]
 "api/.*" = "deplo service action api"
 "client/.*" = "deplo service action client"
-"data/.*" = "deplo service action data"

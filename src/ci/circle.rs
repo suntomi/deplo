@@ -10,19 +10,18 @@ use crate::shell;
 use crate::util::escalate;
 
 pub struct Circle<'a, S: shell::Shell<'a> = shell::Default<'a>> {
-    pub config: &'a config::Config<'a>,
-    pub diff: Vec<String>,
+    pub config: &'a config::Config,
+    pub ci_provider_config: &'a config::CIConfig,
     pub shell: S,
 }
 
 impl<'a, S: shell::Shell<'a>> ci::CI<'a> for Circle<'a, S> {
-    fn new(config: &'a config::Config) -> Result<Circle<'a, S>, Box<dyn Error>> {
-        let vcs = config.vcs_service()?;
-        let diff = vcs.rebase_with_remote_counterpart(&vcs.current_branch()?)?;
+    fn new(config: &'a config::Config, account_name: &str) -> Result<Circle<'a, S>, Box<dyn Error>> {
+        let ci_provider_config = config.ci_config(account_name);
         return Ok(Circle::<'a, S> {
             config: config,
+            ci_provider_config,
             shell: S::new(config),
-            diff: diff.split('\n').map(|e| e.to_string()).collect(),
         });
     }
     fn init(&self) -> Result<(), Box<dyn Error>> {
@@ -55,13 +54,10 @@ impl<'a, S: shell::Shell<'a>> ci::CI<'a> for Circle<'a, S> {
     fn wait_job_by_name(&self, job_name: &str) -> Result<(), Box<dyn Error>> {
         Ok(())
     }
-    fn diff<'b>(&'b self) -> &'b Vec<String> {
-        &self.diff
-    }
     fn set_secret(&self, key: &str, val: &str) -> Result<(), Box<dyn Error>> {
-        let token = match &self.config.ci {
-            config::CIConfig::Circle { key } => { key },
-            config::CIConfig::GhAction{ account:_, key:_ } => { 
+        let token = match &self.ci_provider_config {
+            config::CIConfig::Circle { key, action:_ } => { key },
+            config::CIConfig::GhAction{ account:_, key:_, action:_ } => { 
                 return escalate!(Box::new(ci::CIError {
                     cause: "should have circle CI config but ghaction config provided".to_string()
                 }));

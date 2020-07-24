@@ -17,7 +17,7 @@ pub enum ActionType {
 }
 
 pub struct Service<'a, S: shell::Shell<'a> = shell::Default<'a>> {
-    pub config: &'a config::Config<'a>,
+    pub config: &'a config::Config,
     pub shell: S
 }
 
@@ -41,7 +41,8 @@ impl<'a, S: shell::Shell<'a>> Service<'a, S> {
     }
     fn action<A: args::Args>(&self, args: &A, kind: Option<ActionType>) -> Result<(), Box<dyn Error>> {
         log::debug!("service deploy invoked");      
-        let ci = self.config.ci_service()?;
+        let (account_name, _) = self.config.ci_config_by_env();
+        let ci = self.config.ci_service(account_name)?;
         let p = plan::Plan::<'a>::load(
             self.config, 
             // both required argument
@@ -55,11 +56,11 @@ impl<'a, S: shell::Shell<'a>> Service<'a, S> {
             Some(ports) => {
                 for (n, _) in &ports {
                     let name = if n.is_empty() { &p.service } else { n };
-                    self.config.update_service_endpoint_version(name, &p)?;
+                    self.config.update_endpoint_version(p.lb_name(), name, &p)?;
                 }
             },
             None => {
-                self.config.update_service_endpoint_version(&p.service, &p)?;
+                self.config.update_endpoint_version(p.lb_name(), &p.service, &p)?;
             }
         }
         Ok(())

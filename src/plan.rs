@@ -123,12 +123,12 @@ impl Step {
             },
             Self::Container { target, image, port:_, extra_ports:_, env, options } => {
                 let config = plan.config;
-                let cloud = config.cloud_service()?;
+                let cloud = config.cloud_service(plan.cloud_account_name())?;
                 // deploy image to cloud container registry
                 let pushed_image_tag = cloud.push_container_image(&image, 
                     &format!("{}:{}", 
                         &config.canonical_name(&plan.service), 
-                        config.next_service_endpoint_version(&plan.service)?)
+                        config.next_endpoint_version(plan.lb_name(), &plan.service)?)
                 )?;
                 // deploy to autoscaling group or serverless platform
                 let ports = plan.ports()?.expect("container deployment should have at least an exposed port");
@@ -140,7 +140,7 @@ impl Step {
             },
             Self::Storage { copymap } => {
                 let config = plan.config;
-                let cloud = config.cloud_service()?;
+                let cloud = config.cloud_service(plan.cloud_account_name())?;
                 return cloud.deploy_storage(cloud::StorageKind::Service{plan}, &copymap);
             },
             _ => {
@@ -156,13 +156,14 @@ pub struct Sequence {
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct PlanData {
+    lb: Option<String>,
     pr: Sequence,
     deploy: Sequence
 }
 
 pub struct Plan<'a> {
     pub service: String,
-    config: &'a config::Config<'a>,
+    config: &'a config::Config,
     data: PlanData
 }
 impl<'a> Plan<'a> {
@@ -193,6 +194,7 @@ impl<'a> Plan<'a> {
             service: service.to_string(),
             config,
             data: PlanData {
+                lb: None,
                 pr: Sequence {
                     steps: match kind {
                         "storage" => vec!(Step::Script {
@@ -343,6 +345,12 @@ impl<'a> Plan<'a> {
         }
         Ok(())
     }
+    pub fn lb_name<'b>(&'b self) -> &'b str {
+        match &(self.data.lb) {
+            Some(n) => n,
+            None => "default"
+        }
+    }
     pub fn has_deployment_of(&self, kind: &str) -> Result<bool, Box<dyn Error>> {
         match kind {
             "service" => {},
@@ -444,5 +452,8 @@ impl<'a> Plan<'a> {
             Ok(_) => Ok(()),
             Err(err) => escalate!(Box::new(err))
         }
+    }
+    fn cloud_account_name(&self) -> &'a str {
+        return self.config.lb_config(self.lb_name()).account_name()
     }
 }

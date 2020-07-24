@@ -10,7 +10,7 @@ use crate::shell;
 use crate::util::escalate;
 
 pub struct Exec<'a, S: shell::Shell<'a> = shell::Default<'a>> {
-    pub config: &'a config::Config<'a>,
+    pub config: &'a config::Config,
     pub shell: S
 }
 

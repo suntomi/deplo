@@ -53,15 +53,13 @@ pub enum CloudProviderConfig {
     }
 }
 impl CloudProviderConfig {
-    fn infra_code_path(&self, config: &Config) -> path::PathBuf {
-        let base = config.resource_root_path().join("infra");
+    fn code(&self) -> String {
         match self {
-            Self::GCP{key:_} => base.join("gcp"),
-            Self::AWS{key_id:_, secret_key:_} => base.join("aws"),
-            Self::ALI{key_id:_, secret_key:_} => base.join("ali"),
+            Self::GCP{key:_} => "GCP".to_string(),
+            Self::AWS{key_id:_, secret_key:_} => "AWS".to_string(),
+            Self::ALI{key_id:_, secret_key:_} => "ALI".to_string(),
         }
     }
-
 }
 impl fmt::Display for CloudProviderConfig {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -73,29 +71,42 @@ impl fmt::Display for CloudProviderConfig {
     }    
 }
 #[derive(Serialize, Deserialize)]
+pub struct ActionConfig {
+    pub pr: HashMap<String, String>,
+    pub deploy: HashMap<String, String>,
+}
+#[derive(Serialize, Deserialize)]
 #[serde(tag = "type")]
 pub enum CIConfig {
     GhAction {
         account: String,
-        key: String
+        key: String,
+        action: ActionConfig
     },
     Circle {
-        key: String
+        key: String,
+        action: ActionConfig
     }
 }
 impl CIConfig {
     pub fn type_matched(&self, t: &str) -> bool {
         match self {
-            Self::GhAction{key:_,account:_} => t == "GhAction",
-            Self::Circle{key:_} => t == "Circle"
+            Self::GhAction{key:_,account:_, action:_} => t == "GhAction",
+            Self::Circle{key:_, action:_} => t == "Circle"
+        }
+    }
+    pub fn action<'a>(&'a self) -> &'a ActionConfig {
+        match &self {
+            Self::GhAction{key:_,account:_, action} => action,
+            Self::Circle{key:_, action} => action
         }
     }
 }
 impl fmt::Display for CIConfig {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::GhAction{key:_,account:_} => write!(f, "github-action"),
-            Self::Circle{key:_} => write!(f, "circle"),
+            Self::GhAction{key:_,account:_, action:_} => write!(f, "github-action"),
+            Self::Circle{key:_, action:_} => write!(f, "circle"),
         }
     }    
 }
@@ -167,8 +178,37 @@ impl fmt::Display for TerraformerConfig {
 }
 #[derive(Serialize, Deserialize)]
 pub struct CloudConfig {
-    pub provider: CloudProviderConfig,
+    pub accounts: HashMap<String, CloudProviderConfig>,
     pub terraformer: TerraformerConfig,
+}
+impl CloudConfig {
+    pub fn account<'b>(&'b self, name: &str) -> &'b CloudProviderConfig {
+        match &self.accounts.get(name) {
+            Some(a) => a,
+            None => panic!("provider corresponding to account {} does not exist", name)
+        }
+    }
+    fn infra_code_dest_root_path(&self, config: &Config) -> path::PathBuf {
+        path::Path::new(&config.common.data_dir).join("infra")
+    }
+    fn infra_code_dest_path(&self, config: &Config, provider_code: &str) -> path::PathBuf {
+        self.infra_code_dest_root_path(config).join(provider_code)
+    }
+    fn infra_code_path(&self, config: &Config, provider_code: &str) -> path::PathBuf {
+        config.resource_root_path().join("infra").join(provider_code)
+    }
+}
+#[derive(Serialize, Deserialize)]
+pub struct LoadBalancerConfig {
+    pub account: Option<String>
+}
+impl LoadBalancerConfig {
+    pub fn account_name<'a>(&'a self) -> &'a str {
+        match &self.account {
+            Some(a) => a,
+            None => "default"
+        }
+    }
 }
 #[derive(Serialize, Deserialize)]
 pub struct CommonConfig {
@@ -178,33 +218,38 @@ pub struct CommonConfig {
     pub no_confirm_for_prod_deploy: bool,
     pub release_targets: HashMap<String, String>,
 }
-#[derive(Serialize, Deserialize)]
-pub struct ActionConfig {
-    pub pr: HashMap<String, String>,
-    pub deploy: HashMap<String, String>,
-}
 #[derive(Default)]
-pub struct RuntimeConfig<'a> {
+pub struct RuntimeConfig {
     pub verbosity: u64,
     pub dryrun: bool,
-    pub debug: Vec<&'a str>,
+    pub debug: Vec<String>,
     pub store_deployments: Vec<String>,
     pub endpoint_service_map: HashMap<String, String>,
     pub release_target: Option<String>,
     pub workdir: Option<String>,
 }
 #[derive(Serialize, Deserialize)]
-pub struct Config<'a> {
+pub struct Config {
     #[serde(skip)]
-    pub runtime: RuntimeConfig<'a>,
+    pub runtime: RuntimeConfig,
     pub common: CommonConfig,
     pub cloud: CloudConfig,
     pub vcs: VCSConfig,
-    pub ci: CIConfig,
-    pub action: ActionConfig
+    pub lb: HashMap<String, LoadBalancerConfig>,
+    pub ci: HashMap<String, CIConfig>,
+    pub action: ActionConfig,
+
+    // object cache
+    /* #[serde(skip)]
+    pub ci_caches: HashMap<String, Box<dyn ci::CI<'a> + 'a>>,
+    #[serde(skip)]
+    pub cloud_caches: HashMap<String, Box<dyn cloud::Cloud<'a> + 'a>>,
+    #[serde(skip)]
+    // HACK: I don't know the way to have uninitialized box object...
+    vcs_cache: Vec<Box<dyn vcs::VCS<'a> + 'a>> */
 }
 
-impl<'a> Config<'a> {
+impl Config {
     // static factory methods 
     pub fn load(path: &str) -> Result<Config, Box<dyn Error>> {
         let src = fs::read_to_string(path).unwrap();
@@ -256,7 +301,7 @@ impl<'a> Config<'a> {
             endpoint_service_map: hashmap!{},
             dryrun: args.occurence_of("dryrun") > 0,
             debug: match args.values_of("debug") {
-                Some(s) => s,
+                Some(s) => s.iter().map(|e| e.to_string()).collect(),
                 None => vec!{}
             },
             release_target: {
@@ -271,8 +316,8 @@ impl<'a> Config<'a> {
         // verify all configuration files, including endoints/plans
         c.verify()?;
         // create service objects and invoke associated setup
-        let _ = c.ci_service()?;
-        let _ = c.cloud_service()?;
+        // let _ = c.ci_service()?;
+        // let _ = c.cloud_service()?;
         
         return Ok(c);
     }
@@ -288,8 +333,11 @@ impl<'a> Config<'a> {
     pub fn endpoints_path(&self) -> path::PathBuf {
         return path::Path::new(&self.common.data_dir).join("endpoints");
     }
-    pub fn endpoints_file_path(&self, release_target: Option<&str>) -> path::PathBuf {
-        let p = self.endpoints_path();
+    pub fn endpoints_file_path(&self, lb_name: &str, release_target: Option<&str>) -> path::PathBuf {
+        let mut p = self.endpoints_path();
+        if lb_name != "default" {
+            p = p.join(lb_name)
+        }
         if let Some(e) = release_target {
             return p.join(format!("{}.json", e));
         } else if let Some(e) = self.release_target() {
@@ -299,44 +347,47 @@ impl<'a> Config<'a> {
         }
     }
     pub fn project_id(&self) -> &str {
-        return &self.common.project_id
+        &self.common.project_id
     }
     pub fn root_domain(&self) -> Result<String, Box<dyn Error>> {
-        let cloud = self.cloud_service()?;
+        let cloud = self.cloud_service("default")?;
         let dns_name = cloud.root_domain_dns_name(&self.cloud.terraformer.dns_zone())?;
         Ok(format!("{}.{}", self.common.project_id, dns_name[..dns_name.len()-1].to_string()))
     }
     pub fn release_target(&self) -> Option<&str> {
-        return match &self.runtime.release_target {
+        match &self.runtime.release_target {
             Some(s) => Some(&s),
             None => None
         }
     }
-    pub fn infra_code_source_path(&self) -> path::PathBuf {
-        return self.cloud.provider.infra_code_path(&self);
+    pub fn infra_code_source_path(&self, provider_code: &str) -> path::PathBuf {
+        self.cloud.infra_code_path(&self, provider_code)
     }
-    pub fn infra_code_dest_path(&self) -> path::PathBuf {
-        return path::Path::new(&self.common.data_dir).join("infra");
+    pub fn infra_code_dest_path(&self, provider_code: &str) -> path::PathBuf {
+        self.cloud.infra_code_dest_path(&self, provider_code)
+    }
+    pub fn infra_code_dest_root_path(&self) -> path::PathBuf {
+        self.cloud.infra_code_dest_root_path(&self)
     }
     pub fn canonical_name(&self, prefixed_name: &str) -> String {
-        return format!("{}-{}-{}", self.project_id(), 
+        format!("{}-{}-{}", self.project_id(), 
             self.release_target().expect("should be on release target branch"),
             prefixed_name
         )
     }
-    pub fn service_endpoint_version(&'a self, endpoint: &str) -> Result<u32, Box<dyn Error>> {
-        match endpoints::Endpoints::load(&self, &self.endpoints_file_path(None)) {
+    pub fn endpoint_version(&self, lb_name: &str, endpoint: &str) -> Result<u32, Box<dyn Error>> {
+        match endpoints::Endpoints::load(&self, &self.endpoints_file_path(lb_name, None)) {
             Ok(eps) => Ok(eps.get_latest_version(endpoint)),
             Err(err) => escalate!(err)
         }
     }
-    pub fn next_service_endpoint_version(&self, endpoint: &str) -> Result<u32, Box<dyn Error>> {
-        Ok(self.service_endpoint_version(endpoint)? + 1)
+    pub fn next_endpoint_version(&self, lb_name: &str, endpoint: &str) -> Result<u32, Box<dyn Error>> {
+        Ok(self.endpoint_version(lb_name, endpoint)? + 1)
     }
-    pub fn update_service_endpoint_version(
-        &self, endpoint: &str, plan: &plan::Plan
+    pub fn update_endpoint_version(
+        &self, lb_name: &str, endpoint: &str, plan: &plan::Plan
     ) -> Result<u32, Box<dyn Error>> {
-        endpoints::Endpoints::modify(&self, &self.endpoints_file_path(None), |eps| {
+        endpoints::Endpoints::modify(&self, &self.endpoints_file_path(lb_name, None), |eps| {
             let latest_version = eps.get_latest_version(endpoint);
             let v = eps.next.versions.entry(endpoint.to_string()).or_insert(0);
             *v = latest_version + 1;
@@ -356,37 +407,107 @@ impl<'a> Config<'a> {
     pub fn default_backend(&self) -> String {
         format!("{}-backend-bucket-404", self.common.project_id)
     }
-    pub fn cloud_service(&'a self) -> Result<Box<dyn cloud::Cloud<'a> + 'a>, Box<dyn Error>> {
-        return cloud::factory(&self);
+    pub fn lb_config<'a>(&'a self, lb_name: &str) -> &'a LoadBalancerConfig {
+        match self.lb.get(lb_name) {
+            Some(c) => &c,
+            None => panic!("no lb config for {}", lb_name)
+        }
     }
-    pub fn terraformer(&'a self) -> Result<Box<dyn tf::Terraformer<'a> + 'a>, Box<dyn Error>> {
+    pub fn cloud_service<'a>(&'a self, account_name: &str) -> Result<Box<dyn cloud::Cloud<'a> + 'a>, Box<dyn Error>> {
+        return cloud::factory(self, account_name)/* match self.cloud_caches.get(account_name) {
+            Some(cloud) => Ok(cloud),
+            None => escalate!(Box::new(ConfigError{ 
+                cause: format!("no cloud service for {}", account_name) 
+            }))
+        } */
+    }
+    pub fn cloud_provider_and_configs<'a>(&'a self) -> HashMap<String, Vec<&'a CloudProviderConfig>> {
+        let mut h = HashMap::<String, Vec<&'a CloudProviderConfig>>::new();
+        for (account_name, provider_config) in &self.cloud.accounts {
+            let code = provider_config.code();
+            match h.get_mut(&code) {
+                Some(v) => { v.push(provider_config); },
+                None => { h.insert(code, vec!(provider_config)); }
+            }
+        }
+        return h
+    }
+    pub fn terraformer<'a>(&'a self) -> Result<Box<dyn tf::Terraformer<'a> + 'a>, Box<dyn Error>> {
         return tf::factory(&self);
     }
-    pub fn ci_service(&'a self) -> Result<Box<dyn ci::CI<'a> + 'a>, Box<dyn Error>> {
-        return ci::factory(&self);
+    pub fn ci_config<'a>(&'a self, account_name: &str) -> &'a CIConfig {
+        match &self.ci.get(account_name) {
+            Some(c) => c,
+            None => panic!("provider corresponding to account {} does not exist", account_name)
+        }
     }
-    pub fn cloud_region(&'a self) -> &str {
+    pub fn ci_config_by_env<'b>(&'b self) -> (&'b str, &'b CIConfig) {
+        match std::env::var("DEPLO_CI_TYPE") {
+            Ok(v) => { 
+                for (account_name, config) in &self.ci {
+                    if config.type_matched(&v) { return (account_name, config) }
+                }
+                panic!("DEPLO_CI_TYPE = {}, but does not have corresponding CI Config", v)
+            },
+            // TODO: returns merged action
+            Err(e) => panic!("DEPLO_CI_TYPE is not defined, should be development mode")
+        }
+    }
+    pub fn ci_service<'a>(&'a self, account_name: &str) -> Result<Box<dyn ci::CI<'a> + 'a>, Box<dyn Error>> {
+        return ci::factory(self, account_name) /* match self.ci_caches.get(account_name) {
+            Some(ci) => Ok(ci),
+            None => escalate!(Box::new(ConfigError{ 
+                cause: format!("no ci service for {}", account_name) 
+            }))
+        } */
+    }
+    /* pub fn ensure_ci_initialization(&'a mut self) -> Result<(), Box<dyn Error>> {
+        // default always should exist
+        let _ = &self.ci.get("default").unwrap();
+        for (account, _) in &self.ci {
+            self.ci_caches.insert(account.to_string(), ci::factory(&self, account)?);
+        }
+        Ok(())
+    }
+    pub fn ensure_cloud_initialization(&'a mut self) -> Result<(), Box<dyn Error>> {
+        // default always should exist
+        let _ = &self.cloud.accounts.get("default").unwrap();
+        for (account, _) in &self.cloud.accounts {
+            self.cloud_caches.insert(account.to_string(), cloud::factory(&self, account)?);
+        }
+        Ok(())
+    }
+    pub fn ensure_vcs_initialization(&'a mut self) -> Result<(), Box<dyn Error>> {
+        let vcs = vcs::factory(&self)?;
+        self.vcs_cache.push(vcs);
+        Ok(())
+    } */
+    pub fn cloud_region<'a>(&'a self) -> &'a str {
         return self.cloud.terraformer.region();
     }
     pub fn cloud_resource_name(&self, path: &str) -> Result<String, Box<dyn Error>> {
         return self.terraformer()?.eval(path);
     }
-    pub fn vcs_service(&'a self) -> Result<Box<dyn vcs::VCS<'a> + 'a>, Box<dyn Error>> {
-        return vcs::factory(&self);
+    pub fn vcs_service<'a>(&'a self) -> Result<Box<dyn vcs::VCS<'a> + 'a>, Box<dyn Error>> {
+        return vcs::factory(self)
+        /* if self.vcs_cache.len() > 0 {
+            Ok(&self.vcs_cache[0])
+        } else {
+            escalate!(Box::new(ConfigError{ 
+                cause: format!("no vcs service") 
+            }))            
+        } */
     }
     pub fn has_debug_option(&self, name: &str) -> bool {
-        match self.runtime.debug.iter().position(|&e| e == name) {
+        match self.runtime.debug.iter().position(|e| e == name) {
             Some(_) => true,
             None => false
         }
     }
     pub fn find_service_by_endpoint(&self, endpoint: &str) -> Option<&String> {
         self.runtime.endpoint_service_map.get(endpoint)
-    }
-    pub fn has_action_config(&self) -> bool {
-        self.action.pr.len() + self.action.deploy.len() > 0
-    }
-    
+    }    
+
     fn verify(&mut self) -> Result<(), Box<dyn Error>> {
         log::debug!("verify config");
         // global configuration verificaiton

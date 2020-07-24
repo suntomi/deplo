@@ -9,8 +9,9 @@ use crate::vcs;
 use super::git;
 
 pub struct Github<'a, GIT: (git::GitFeatures<'a>) + (git::GitHubFeatures<'a>) = git::Git<'a>> {
-    pub config: &'a config::Config<'a>,
+    pub config: &'a config::Config,
     pub git: GIT,
+    pub diff: Vec<String>
 }
 
 impl<'a, GIT: (git::GitFeatures<'a>) + (git::GitHubFeatures<'a>)> Github<'a, GIT> {
@@ -29,10 +30,14 @@ impl<'a, GIT: (git::GitFeatures<'a>) + (git::GitHubFeatures<'a>)> Github<'a, GIT
 impl<'a, GIT: (git::GitFeatures<'a>) + (git::GitHubFeatures<'a>)> vcs::VCS<'a> for Github<'a, GIT> {
     fn new(config: &'a config::Config) -> Result<Github<'a, GIT>, Box<dyn Error>> {
         if let config::VCSConfig::Github{ account, key:_, email } = &config.vcs {
-            return Ok(Github::<'a> {
+            let mut gh = Github::<'a> {
                 config: config,
+                diff: vec!(),
                 git: GIT::new(account, email, config)
-            });
+            };
+            let diff = gh.git.rebase_with_remote_counterpart(&gh.push_url()?, &gh.git.current_branch()?)?;
+            gh.diff = diff.split('\n').map(|e| e.to_string()).collect();
+            return Ok(gh)
         } 
         return Err(Box::new(vcs::VCSError {
             cause: format!("should have github config but {}", config.vcs)
@@ -84,5 +89,8 @@ impl<'a, GIT: (git::GitFeatures<'a>) + (git::GitHubFeatures<'a>)> vcs::VCS<'a> f
             }))
         };
         Ok(user_and_repo)
+    }
+    fn diff<'b>(&'b self) -> &'b Vec<String> {
+        &self.diff
     }
 }
