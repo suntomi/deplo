@@ -6,8 +6,8 @@ use regex::Regex;
 
 use super::config;
 
-pub trait VCS<'a> {
-    fn new(config: &'a config::Config) -> Result<Self, Box<dyn Error>> where Self : Sized;
+pub trait VCS {
+    fn new(config: &config::Container) -> Result<Self, Box<dyn Error>> where Self : Sized;
     fn release_target(&self) -> Option<String>;
     fn current_branch(&self) -> Result<String, Box<dyn Error>>;
     fn commit_hash(&self) -> Result<String, Box<dyn Error>>;
@@ -59,22 +59,22 @@ pub mod git;
 pub mod github;
 
 // factorys
-fn factory_by<'a, T: VCS<'a> + 'a>(
-    config: &'a config::Config
-) -> Result<Box<dyn VCS<'a> + 'a>, Box<dyn Error>> {
+fn factory_by<'a, T: VCS + 'a>(
+    config: &config::Container
+) -> Result<Box<dyn VCS + 'a>, Box<dyn Error>> {
     let cmd = T::new(config).unwrap();
-    return Ok(Box::new(cmd) as Box<dyn VCS<'a> + 'a>);
+    return Ok(Box::new(cmd) as Box<dyn VCS + 'a>);
 }
 
 pub fn factory<'a>(
-    config: &'a config::Config
-) -> Result<Box<dyn VCS<'a> + 'a>, Box<dyn Error>> {
-    match &config.vcs {
+    config: &config::Container
+) -> Result<Box<dyn VCS + 'a>, Box<dyn Error>> {
+    match &config.borrow().vcs {
         config::VCSConfig::Github { email:_,  account:_, key:_ } => {
             return factory_by::<github::Github>(config);
         },
         _ => return Err(Box::new(VCSError {
-            cause: format!("add factory matching pattern for [{}]", config.vcs)
+            cause: format!("add factory matching pattern for [{}]", config.borrow().vcs)
         }))
     };
 }

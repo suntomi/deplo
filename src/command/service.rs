@@ -16,16 +16,16 @@ pub enum ActionType {
     PullRequest,
 }
 
-pub struct Service<'a, S: shell::Shell<'a> = shell::Default<'a>> {
-    pub config: &'a config::Config,
+pub struct Service<S: shell::Shell = shell::Default> {
+    pub config: config::Container,
     pub shell: S
 }
 
-impl<'a, S: shell::Shell<'a>> Service<'a, S> {
+impl<S: shell::Shell> Service<S> {
     fn create<A: args::Args>(&self, args: &A) -> Result<(), Box<dyn Error>> {
         log::debug!("service create invoked");
-        let p = plan::Plan::<'a>::create(
-            self.config, 
+        let p = plan::Plan::create(
+            &self.config, 
             // both required argument
             args.value_of("name").unwrap(), 
             args.value_of("type").unwrap()
@@ -40,11 +40,12 @@ impl<'a, S: shell::Shell<'a>> Service<'a, S> {
         }
     }
     fn action<A: args::Args>(&self, args: &A, kind: Option<ActionType>) -> Result<(), Box<dyn Error>> {
-        log::debug!("service deploy invoked");      
-        let (account_name, _) = self.config.ci_config_by_env();
-        let ci = self.config.ci_service(account_name)?;
-        let p = plan::Plan::<'a>::load(
-            self.config, 
+        log::debug!("service deploy invoked");
+        let config = self.config.borrow();        
+        let (account_name, _) = config.ci_config_by_env();
+        let ci = config.ci_service(account_name)?;
+        let p = plan::Plan::load(
+            &self.config, 
             // both required argument
             args.value_of("name").unwrap()
         )?;
@@ -56,25 +57,25 @@ impl<'a, S: shell::Shell<'a>> Service<'a, S> {
             Some(ports) => {
                 for (n, _) in &ports {
                     let name = if n.is_empty() { &p.service } else { n };
-                    self.config.update_endpoint_version(p.lb_name(), name, &p)?;
+                    config::Config::update_endpoint_version(&self.config, p.lb_name(), name, &p)?;
                 }
             },
             None => {
-                self.config.update_endpoint_version(p.lb_name(), &p.service, &p)?;
+                config::Config::update_endpoint_version(&self.config, p.lb_name(), &p.service, &p)?;
             }
         }
         Ok(())
     }
     fn cutover<A: args::Args>(&self, _: &A) -> Result<(), Box<dyn Error>> {
         log::debug!("service cutover invoked");      
-        lb::deploy(self.config, false)
+        lb::deploy(&self.config, false)
     }
 }
 
-impl<'a, S: shell::Shell<'a>, A: args::Args> command::Command<'a, A> for Service<'a, S> {
-    fn new(config: &'a config::Config) -> Result<Service<'a, S>, Box<dyn Error>> {
-        return Ok(Service::<'a, S> {
-            config: config,
+impl<S: shell::Shell, A: args::Args> command::Command<A> for Service<S> {
+    fn new(config: &config::Container) -> Result<Service<S>, Box<dyn Error>> {
+        return Ok(Service::<S> {
+            config: config.clone(),
             shell: S::new(config)
         });
     }

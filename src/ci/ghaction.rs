@@ -16,32 +16,32 @@ struct RepositoryPublicKeyResponse {
     key_id: String,
 }
 
-pub struct GhAction<'a, S: shell::Shell<'a> = shell::Default<'a>> {
-    pub config: &'a config::Config,
-    pub ci_provider_config: &'a config::CIConfig,
+pub struct GhAction<S: shell::Shell = shell::Default> {
+    pub config: config::Container,
+    pub account_name: String,
     pub shell: S,
 }
 
-impl<'a, S: shell::Shell<'a>> ci::CI<'a> for GhAction<'a, S> {
-    fn new(config: &'a config::Config, account_name: &str) -> Result<GhAction<'a, S>, Box<dyn Error>> {
-        let ci_provider_config = config.ci_config(account_name);
-        return Ok(GhAction::<'a> {
-            config: config,
-            ci_provider_config,
+impl<S: shell::Shell> ci::CI for GhAction<S> {
+    fn new(config: &config::Container, account_name: &str) -> Result<GhAction<S>, Box<dyn Error>> {
+        return Ok(GhAction::<S> {
+            config: config.clone(),
+            account_name: account_name.to_string(),
             shell: S::new(config)
         });
     }
     fn init(&self) -> Result<(), Box<dyn Error>> {
-        let repository_root = self.config.vcs_service()?.repository_root()?;
+        let config = self.config.borrow();
+        let repository_root = config.vcs_service()?.repository_root()?;
         let deplo_yml_path = format!("{}/.github/workflows/deplo.yml", repository_root);
-        let target_branches = self.config.common.release_targets
+        let target_branches = config.common.release_targets
             .values().map(|s| &**s)
             .collect::<Vec<&str>>().join(",");
         fs::create_dir_all(&format!("{}/.github/workflows", repository_root))?;
         fs::write(&deplo_yml_path, format!(
             include_str!("../../rsc/ci/ghaction/deplo.yml.tmpl"), 
             target_branches, target_branches, config::DEPLO_GIT_HASH,
-            self.config.runtime.workdir.as_ref().unwrap_or(&"".to_string())
+            config.runtime.workdir.as_ref().unwrap_or(&"".to_string())
         ))?;
         Ok(())
     }
@@ -66,7 +66,8 @@ impl<'a, S: shell::Shell<'a>> ci::CI<'a> for GhAction<'a, S> {
         Ok(())
     }
     fn set_secret(&self, key: &str, val: &str) -> Result<(), Box<dyn Error>> {
-        let token = match &self.ci_provider_config {
+        let config = self.config.borrow();
+        let token = match &config.ci_config(&self.account_name) {
             config::CIConfig::GhAction { account:_, key, action:_ } => { key },
             config::CIConfig::Circle{ key:_, action:_ } => { 
                 return escalate!(Box::new(ci::CIError {
@@ -74,7 +75,7 @@ impl<'a, S: shell::Shell<'a>> ci::CI<'a> for GhAction<'a, S> {
                 }));
             }
         };
-        let user_and_repo = self.config.vcs_service()?.user_and_repo()?;
+        let user_and_repo = config.vcs_service()?.user_and_repo()?;
         let public_key_info = serde_json::from_str::<RepositoryPublicKeyResponse>(
             &self.shell.eval_output_of(&format!(r#"
                 curl https://api.github.com/repos/{}/{}/actions/secrets/public-key?access_token={}

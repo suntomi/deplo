@@ -9,15 +9,15 @@ use maplit::hashmap;
 use crate::config;
 use crate::shell;
 
-pub struct Native<'a> {
-    pub config: &'a config::Config,
+pub struct Native {
+    pub config: config::Container,
     pub cwd: Option<String>,
     pub envs: HashMap<String, String>,
 }
-impl<'a> shell::Shell<'a> for Native<'a> {
-    fn new(config: &'a config::Config) -> Self {
+impl<'a> shell::Shell for Native {
+    fn new(config: &config::Container) -> Self {
         return Native {
-            config: config,
+            config: config.clone(),
             cwd: None,
             envs: hashmap!{}
         }
@@ -42,7 +42,7 @@ impl<'a> shell::Shell<'a> for Native<'a> {
     fn exec(
         &self, args: &Vec<&str>, envs: &HashMap<&str, &str>, capture: bool
     ) -> Result<String, shell::ShellError> {
-        if self.config.runtime.dryrun {
+        if self.config.borrow().runtime.dryrun {
             let cmd = args.join(" ");
             println!("dryrun: {}", cmd);
             return Ok(cmd);
@@ -52,7 +52,7 @@ impl<'a> shell::Shell<'a> for Native<'a> {
         }
     }
 }
-impl <'a> Native<'a> {
+impl Native {
     fn create_command(&self, args: &Vec<&str>, envs: &HashMap<&str, &str>, capture: bool) -> Command {
         let mut c = Command::new(args[0]);
         c.args(&args[1..]);

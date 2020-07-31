@@ -20,15 +20,15 @@ macro_rules! setup_remote {
     };
 }
 
-pub struct Git<'a, S: shell::Shell<'a> = shell::Default<'a>> {
-    config: &'a config::Config,
+pub struct Git<S: shell::Shell = shell::Default> {
+    config: config::Container,
     username: String,
     email: String,
     shell: S,
 }
 
-pub trait GitFeatures<'a> {
-    fn new(username: &str, email: &str, config: &'a config::Config) -> Self;
+pub trait GitFeatures {
+    fn new(username: &str, email: &str, config: &config::Container) -> Self;
     fn current_branch(&self) -> Result<String, Box<dyn Error>>;
     fn commit_hash(&self) -> Result<String, Box<dyn Error>>;
     fn remote_origin(&self) -> Result<String, Box<dyn Error>>;
@@ -42,13 +42,13 @@ pub trait GitFeatures<'a> {
     ) -> Result<bool, Box<dyn Error>>;
 }
 
-pub trait GitHubFeatures<'a> {
+pub trait GitHubFeatures {
     fn pr(
         &self, title: &str, head_branch: &str, base_branch: &str, options: &HashMap<&str, &str>
     ) -> Result<(), Box<dyn Error>>;    
 }
 
-impl<'a, S: shell::Shell<'a>> Git<'a, S> {
+impl<S: shell::Shell> Git<S> {
     fn setup_author(&self) -> Result<(), Box<dyn Error>> {
         log::info!("git: setup {}/{}", self.email, self.username);
         self.shell.exec(&vec!("git", "config", "--global", "user.email", &self.email), &hashmap!{}, false)?;
@@ -57,10 +57,10 @@ impl<'a, S: shell::Shell<'a>> Git<'a, S> {
     }
 }
 
-impl<'a, S: shell::Shell<'a>> GitFeatures<'a> for Git<'a, S> {
-    fn new(username: &str, email: &str, config: &'a config::Config) -> Git<'a, S> {
-        return Git::<'a, S> {
-            config,
+impl<S: shell::Shell> GitFeatures for Git<S> {
+    fn new(username: &str, email: &str, config: &config::Container) -> Git<S> {
+        return Git::<S> {
+            config: config.clone(),
             username: username.to_string(),
             email: email.to_string(),
             shell: S::new(config)
@@ -90,6 +90,7 @@ impl<'a, S: shell::Shell<'a>> GitFeatures<'a> for Git<'a, S> {
         &self, url: &str, remote_branch: &str, msg: &str, 
         patterns: &Vec<&str>, options: &HashMap<&str, &str> 
     ) -> Result<bool, Box<dyn Error>> {
+        let config = self.config.borrow();        
         let use_lfs = match options.get("use-lfs") {
             Some(v) => *v == "yes",
             None => false
@@ -120,7 +121,7 @@ impl<'a, S: shell::Shell<'a>> GitFeatures<'a> for Git<'a, S> {
             }
 			self.shell.exec(&vec!("git", "commit", "-m", msg), &hashmap!{}, false)?;
 			log::info!("commit done: [{}]", msg);
-			match self.config.release_target() {
+			match config.release_target() {
                 Some(_) => {
                     setup_remote!(self, url);
                     let b = self.current_branch()?;
@@ -150,9 +151,10 @@ impl<'a, S: shell::Shell<'a>> GitFeatures<'a> for Git<'a, S> {
     fn rebase_with_remote_counterpart(
         &self, url: &str, remote_branch: &str
     ) -> Result<String, Box<dyn Error>> {
+        let config = self.config.borrow();
         // user and email
         self.setup_author()?;
-        if self.config.has_debug_option("skip_rebase") {
+        if config.has_debug_option("skip_rebase") {
             return Ok(self.shell.output_of(
                 &vec!("git", "diff", "--name-only", "HEAD^1...HEAD"),
                 &hashmap!{}
@@ -194,7 +196,7 @@ impl<'a, S: shell::Shell<'a>> GitFeatures<'a> for Git<'a, S> {
     }
 }
 
-impl<'a, S: shell::Shell<'a>> GitHubFeatures<'a> for Git<'a, S> {
+impl<S: shell::Shell> GitHubFeatures for Git<S> {
     fn pr(
         &self, title: &str, head_branch: &str, base_branch: &str, options: &HashMap<&str, &str>
     ) -> Result<(), Box<dyn Error>> {

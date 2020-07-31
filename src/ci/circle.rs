@@ -9,28 +9,28 @@ use crate::ci;
 use crate::shell;
 use crate::util::escalate;
 
-pub struct Circle<'a, S: shell::Shell<'a> = shell::Default<'a>> {
-    pub config: &'a config::Config,
-    pub ci_provider_config: &'a config::CIConfig,
+pub struct Circle<S: shell::Shell = shell::Default> {
+    pub config: config::Container,
+    pub account_name: String,
     pub shell: S,
 }
 
-impl<'a, S: shell::Shell<'a>> ci::CI<'a> for Circle<'a, S> {
-    fn new(config: &'a config::Config, account_name: &str) -> Result<Circle<'a, S>, Box<dyn Error>> {
-        let ci_provider_config = config.ci_config(account_name);
-        return Ok(Circle::<'a, S> {
-            config: config,
-            ci_provider_config,
+impl<'a, S: shell::Shell> ci::CI for Circle<S> {
+    fn new(config: &config::Container, account_name: &str) -> Result<Circle<S>, Box<dyn Error>> {
+        return Ok(Circle::<S> {
+            config: config.clone(),
+            account_name: account_name.to_string(),
             shell: S::new(config),
         });
     }
     fn init(&self) -> Result<(), Box<dyn Error>> {
-        let repository_root = self.config.vcs_service()?.repository_root()?;
+        let config = self.config.borrow();
+        let repository_root = config.vcs_service()?.repository_root()?;
         let circle_yml_path = format!("{}/.circleci/config.yml", repository_root);
         fs::create_dir_all(&format!("{}/.circleci", repository_root))?;
         fs::write(&circle_yml_path, format!(
             include_str!("../../rsc/ci/circle/config.yml.tmpl"),
-            config::DEPLO_GIT_HASH, self.config.runtime.workdir.as_ref().unwrap_or(&"".to_string())
+            config::DEPLO_GIT_HASH, config.runtime.workdir.as_ref().unwrap_or(&"".to_string())
         ))?;
         Ok(())
     }
@@ -55,7 +55,8 @@ impl<'a, S: shell::Shell<'a>> ci::CI<'a> for Circle<'a, S> {
         Ok(())
     }
     fn set_secret(&self, key: &str, val: &str) -> Result<(), Box<dyn Error>> {
-        let token = match &self.ci_provider_config {
+        let config = self.config.borrow();
+        let token = match &config.ci_config(&self.account_name) {
             config::CIConfig::Circle { key, action:_ } => { key },
             config::CIConfig::GhAction{ account:_, key:_, action:_ } => { 
                 return escalate!(Box::new(ci::CIError {
@@ -64,7 +65,7 @@ impl<'a, S: shell::Shell<'a>> ci::CI<'a> for Circle<'a, S> {
             }
         };
         let json = format!("{{\"name\":\"{}\",\"value\":\"{}\"}}", key, val);
-        let user_and_repo = self.config.vcs_service()?.user_and_repo()?;
+        let user_and_repo = config.vcs_service()?.user_and_repo()?;
         let status = self.shell.exec(&vec!(
             "curl", "-X", "POST", "-u", &format!("{}:", token),
             &format!(

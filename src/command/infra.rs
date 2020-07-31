@@ -6,22 +6,25 @@ use crate::command;
 use crate::shell;
 use crate::util::escalate;
 
-pub struct Infra<'a, S: shell::Shell<'a> = shell::Default<'a>> {
-    pub config: &'a config::Config,
+pub struct Infra<S: shell::Shell = shell::Default> {
+    pub config: config::Container,
     pub shell: S
 }
 
-impl<'a, S: shell::Shell<'a>> Infra<'a, S> {
+impl<S: shell::Shell> Infra<S> {
     fn plan<A: args::Args>(&self, _: &A) -> Result<(), Box<dyn Error>> {
-        let tf = self.config.terraformer()?;
+        let config = self.config.borrow();
+        let tf = config.terraformer()?;
         tf.plan()
     }
     fn apply<A: args::Args>(&self, _: &A) -> Result<(), Box<dyn Error>> {
-        let tf = self.config.terraformer()?;
+        let config = self.config.borrow();
+        let tf = config.terraformer()?;
         tf.apply()
     }
     fn resource<A: args::Args>(&self, args: &A) -> Result<(), Box<dyn Error>> {
-        let tf = self.config.terraformer()?;
+        let config = self.config.borrow();
+        let tf = config.terraformer()?;
         match args.value_of("path") {
             Some(path) => print!("{}",tf.eval(&path)?),
             None => print!("{}",tf.rclist()?.join("\n")),
@@ -30,10 +33,10 @@ impl<'a, S: shell::Shell<'a>> Infra<'a, S> {
     }
 }
 
-impl<'a, S: shell::Shell<'a>, A: args::Args> command::Command<'a, A> for Infra<'a, S> {
-    fn new(config: &'a config::Config) -> Result<Infra<'a, S>, Box<dyn Error>> {
-        return Ok(Infra::<'a, S> {
-            config: config,
+impl<'a, S: shell::Shell, A: args::Args> command::Command<A> for Infra<S> {
+    fn new(config: &config::Container) -> Result<Infra<S>, Box<dyn Error>> {
+        return Ok(Infra::<S> {
+            config: config.clone(),
             shell: S::new(config)
         });
     }

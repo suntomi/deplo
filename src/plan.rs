@@ -114,21 +114,21 @@ enum Step {
     }
 }
 impl Step {
-    pub fn exec<'a, S: shell::Shell<'a>>(&self, plan: &Plan<'a>) -> Result<(), Box<dyn Error>> {
+    pub fn exec<S: shell::Shell>(&self, plan: &Plan) -> Result<(), Box<dyn Error>> {
+        let config = plan.config.borrow();
         match self {
             Self::Script { code, env, workdir } => {
-                let mut shell = S::new(plan.config);
+                let mut shell = S::new(&plan.config);
                 shell.set_cwd(workdir.as_ref())?;
                 shell.run_code_or_file(code, &to_kv_ref(env.as_ref().unwrap_or(&hashmap!{})))
             },
             Self::Container { target, image, port:_, extra_ports:_, env, options } => {
-                let config = plan.config;
-                let cloud = config.cloud_service(plan.cloud_account_name())?;
+                let cloud = config.cloud_service(&plan.cloud_account_name())?;
                 // deploy image to cloud container registry
                 let pushed_image_tag = cloud.push_container_image(&image, 
                     &format!("{}:{}", 
                         &config.canonical_name(&plan.service), 
-                        config.next_endpoint_version(plan.lb_name(), &plan.service)?)
+                        config::Config::next_endpoint_version(&plan.config, plan.lb_name(), &plan.service)?)
                 )?;
                 // deploy to autoscaling group or serverless platform
                 let ports = plan.ports()?.expect("container deployment should have at least an exposed port");
@@ -139,8 +139,7 @@ impl Step {
                 );
             },
             Self::Storage { copymap } => {
-                let config = plan.config;
-                let cloud = config.cloud_service(plan.cloud_account_name())?;
+                let cloud = config.cloud_service(&plan.cloud_account_name())?;
                 return cloud.deploy_storage(cloud::StorageKind::Service{plan}, &copymap);
             },
             _ => {
@@ -161,12 +160,12 @@ pub struct PlanData {
     deploy: Sequence
 }
 
-pub struct Plan<'a> {
+pub struct Plan {
     pub service: String,
-    config: &'a config::Config,
+    config: config::Container,
     data: PlanData
 }
-impl<'a> Plan<'a> {
+impl Plan {
     fn make_unity_build_step(platform_build_config: UnityPlatformBuildConfig) -> Step {
         Self::make_build_step(Builder::Unity {
             unity_version: "${DEPLO_BUILD_UNITY_VERSION}".to_string(),
@@ -187,12 +186,12 @@ impl<'a> Plan<'a> {
         }
     }
     pub fn create(
-        config: &'a config::Config, 
+        config: &config::Container, 
         service: &str, kind: &str
-    ) -> Result<Plan<'a>, Box<dyn Error>> {
-        Ok(Plan::<'a> {
+    ) -> Result<Plan, Box<dyn Error>> {
+        Ok(Plan {
             service: service.to_string(),
-            config,
+            config: config.clone(),
             data: PlanData {
                 lb: None,
                 pr: Sequence {
@@ -283,21 +282,21 @@ impl<'a> Plan<'a> {
         })
     }
     pub fn load(
-        config: &'a config::Config, 
+        config: &config::Container, 
         service: &str
-    ) -> Result<Plan<'a>, Box<dyn Error>> {
-        let path = config.services_path().join(format!("{}.toml", service));
-        Plan::<'a>::load_by_path(config, &path)
+    ) -> Result<Self, Box<dyn Error>> {
+        let path = config.borrow().services_path().join(format!("{}.toml", service));
+        Self::load_by_path(config, &path)
     }
     pub fn load_by_path(
-        config: &'a config::Config, path: &path::PathBuf
-    ) -> Result<Plan<'a>, Box<dyn Error>> {
+        config: &config::Container, path: &path::PathBuf
+    ) -> Result<Self, Box<dyn Error>> {
         let service = path.file_stem().unwrap();
         match path.to_str() {
             Some(path) => {
-                let plan = Plan::<'a> {
+                let plan = Self {
                     service: service.to_string_lossy().to_string(),
-                    config,
+                    config: config.clone(),
                     data: Self::load_plandata(path)?
                 };
                 plan.verify()?;
@@ -309,12 +308,12 @@ impl<'a> Plan<'a> {
         }
     }
     pub fn find_by_endpoint(
-        config: &'a config::Config, endpoint: &str
-    ) -> Result<Plan<'a>, Box<dyn Error>> {
-        for entry in glob(&config.services_path().join("*.toml").to_string_lossy())? {
+        config: &config::Container, endpoint: &str
+    ) -> Result<Self, Box<dyn Error>> {
+        for entry in glob(&config.borrow().services_path().join("*.toml").to_string_lossy())? {
             match entry {
                 Ok(path) => {
-                    let plan = Plan::<'a>::load_by_path(config, &path)?;
+                    let plan = Self::load_by_path(config, &path)?;
                     match plan.ports()? {
                         Some(ports) => match ports.get(endpoint) {
                             Some(_) => return Ok(plan),
@@ -331,7 +330,8 @@ impl<'a> Plan<'a> {
         }))
     }
     pub fn save(&self) -> Result<(), Box<dyn Error>> {
-        let pathbuf = self.config.services_path().join(format!("{}.toml", self.service));
+        let config = self.config.borrow();
+        let pathbuf = config.services_path().join(format!("{}.toml", self.service));
         match pathbuf.to_str() {
             Some(path) => return self.save_plandata(path),
             None => return escalate!(Box::new(DeployError {
@@ -339,7 +339,7 @@ impl<'a> Plan<'a> {
             }))
         }
     }
-    pub fn exec<S: shell::Shell<'a>>(&self, pr: bool) -> Result<(), Box<dyn Error>> {
+    pub fn exec<S: shell::Shell>(&self, pr: bool) -> Result<(), Box<dyn Error>> {
         for step in if pr { &self.data.pr.steps } else { &self.data.deploy.steps } {
             step.exec::<S>(self)?
         }
@@ -453,7 +453,8 @@ impl<'a> Plan<'a> {
             Err(err) => escalate!(Box::new(err))
         }
     }
-    fn cloud_account_name(&self) -> &'a str {
-        return self.config.lb_config(self.lb_name()).account_name()
+    fn cloud_account_name(&self) -> String {
+        let config = self.config.borrow();
+        config.lb_config(self.lb_name()).account_name().to_string()
     }
 }

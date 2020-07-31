@@ -105,7 +105,7 @@ impl Endpoints {
             deploy_state: None,
         }
     }
-    pub fn load<P: AsRef<path::Path>>(config: &config::Config, path: P) -> Result<Endpoints, Box<dyn Error>> {
+    pub fn load<P: AsRef<path::Path>>(config: &config::Container, path: P) -> Result<Endpoints, Box<dyn Error>> {
         match fs::read_to_string(path) {
             Ok(content) => {
                 let ep = serde_json::from_str::<Endpoints>(&content)?;
@@ -120,11 +120,11 @@ impl Endpoints {
         fs::write(&path, &as_text)?;
         Ok(())
     }
-    pub fn persist(&self, config: &config::Config) -> Result<(), Box<dyn Error>> {
+    fn persist(&self, config: &config::Ref) -> Result<(), Box<dyn Error>> {
         self.save(config.endpoints_file_path(&self.lb_name, Some(self.target())))
     }
     pub fn modify<P: AsRef<path::Path>, F, R: Sized>(
-        config: &config::Config, path: P, f: F
+        config: &config::Container, path: P, f: F
     ) -> Result<R, Box<dyn Error>> 
     where F: Fn(&mut Endpoints) -> Result<R, Box<dyn Error>> {
         let mut ep = Self::load(config, &path)?;
@@ -132,10 +132,11 @@ impl Endpoints {
         ep.save(&path)?;
         Ok(r)
     }
-    pub fn cloud_account_name<'a>(&self, config: &'a config::Config) -> &'a str {
-        config.lb_config(&self.lb_name).account_name()
+    pub fn cloud_account_name(&self, config: &config::Ref) -> String {
+        config.lb_config(&self.lb_name).account_name().to_string()
     }
-    pub fn change_type<'a>(&self, config: &config::Config) -> Result<ChangeType, Box<dyn Error>> {
+    pub fn change_type<'a>(&self, config: &config::Container) -> Result<ChangeType, Box<dyn Error>> {
+        let config_ref = config.borrow();
         let mut change = ChangeType::None;
         let vs = &self.next.versions;
         for (ep, _) in vs {
@@ -143,11 +144,11 @@ impl Endpoints {
                 if change != ChangeType::Path {
                     change = ChangeType::Version;
                 }
-                let service = match config.find_service_by_endpoint(ep) {
+                let service = match config_ref.find_service_by_endpoint(ep) {
                     Some(s) => s,
                     None => continue
                 };
-                let plan = plan::Plan::load(config, service)?;
+                let plan = plan::Plan::load(&config, service)?;
                 if plan.has_deployment_of("service")? {
                     change = ChangeType::Path;
                 }
@@ -156,7 +157,7 @@ impl Endpoints {
         return Ok(change)
     }
     pub fn cascade_releases(
-        &mut self, config: &config::Config
+        &mut self, config: &config::Ref
     ) -> Result<(), Box<dyn Error>> {
         self.next.endpoint_service_map = config.runtime.endpoint_service_map.clone();
         self.releases.insert(0, self.next.clone());
@@ -164,7 +165,7 @@ impl Endpoints {
 
         Ok(())
     }
-    pub fn version_up(&mut self, config: &config::Config) -> Result<(), Box<dyn Error>> {
+    pub fn version_up(&mut self, config: &config::Ref) -> Result<(), Box<dyn Error>> {
         self.version += 1;
         self.persist(config)?;
         Ok(())
@@ -188,14 +189,14 @@ impl Endpoints {
         return false;
     }
     pub fn set_deploy_state(
-        &mut self, config: &config::Config, deploy_state: Option<DeployState>
+        &mut self, config: &config::Ref, deploy_state: Option<DeployState>
     ) -> Result<(), Box<dyn Error>> {
         self.deploy_state = deploy_state;
         self.persist(config)?;
         Ok(())
     }
     pub fn gc_releases(
-        &mut self, config: &config::Config
+        &mut self, config: &config::Ref
     ) -> Result<bool, Box<dyn Error>> {
         let mut marked_releases: Vec<Release> = vec!();
         for r in &self.releases {
@@ -234,7 +235,7 @@ impl Endpoints {
         return Ok(collected);
     }
 
-    fn verify(&self, _: &config::Config) -> Result<(), Box<dyn Error>> {
+    fn verify(&self, _: &config::Container) -> Result<(), Box<dyn Error>> {
         Ok(())
     }
     fn target<'a>(&'a self) -> &'a str {

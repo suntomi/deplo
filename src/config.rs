@@ -2,6 +2,8 @@ use std::fs;
 use std::fmt;
 use std::path;
 use std::error::Error;
+use std::rc::Rc;
+use std::cell::{RefCell};
 use std::collections::{HashMap};
 
 use log;
@@ -240,13 +242,25 @@ pub struct Config {
     pub action: ActionConfig,
 
     // object cache
-    /* #[serde(skip)]
-    pub ci_caches: HashMap<String, Box<dyn ci::CI<'a> + 'a>>,
     #[serde(skip)]
-    pub cloud_caches: HashMap<String, Box<dyn cloud::Cloud<'a> + 'a>>,
+    pub ci_caches: HashMap<String, Box<dyn ci::CI>>,
     #[serde(skip)]
+    pub cloud_caches: HashMap<String, Box<dyn cloud::Cloud>>,
     // HACK: I don't know the way to have uninitialized box object...
-    vcs_cache: Vec<Box<dyn vcs::VCS<'a> + 'a>> */
+    #[serde(skip)]
+    vcs_cache: Vec<Box<dyn vcs::VCS>>,
+    #[serde(skip)]
+    tf_cache: Vec<Box<dyn tf::Terraformer>>
+}
+pub type Ref<'a>= std::cell::Ref<'a, Config>;
+#[derive(Clone)]
+pub struct Container {
+    ptr: Rc<RefCell<Config>>
+}
+impl Container { 
+    pub fn borrow(&self) -> Ref<'_> {
+        self.ptr.borrow()
+    }
 }
 
 impl Config {
@@ -259,7 +273,7 @@ impl Config {
             Err(err) => escalate!(Box::new(err))
         }
     }
-    pub fn create<A: args::Args>(args: &A) -> Result<Config, Box<dyn Error>> {
+    pub fn create<A: args::Args>(args: &A) -> Result<Container, Box<dyn Error>> {
         // apply working directory
         let may_workdir = args.value_of("workdir");
         match may_workdir {
@@ -294,31 +308,48 @@ impl Config {
             },
         };
         // println!("DEPLO_CLOUD_ACCESS_KEY:{}", std::env::var("DEPLO_CLOUD_ACCESS_KEY").unwrap());    
-        let mut c = Config::load(args.value_of("config").unwrap_or("./deplo.toml")).unwrap();
-        c.runtime = RuntimeConfig {
-            verbosity,
-            store_deployments: vec!(),
-            endpoint_service_map: hashmap!{},
-            dryrun: args.occurence_of("dryrun") > 0,
-            debug: match args.values_of("debug") {
-                Some(s) => s.iter().map(|e| e.to_string()).collect(),
-                None => vec!{}
-            },
-            release_target: {
-                // because vcs_service create object which have reference of `c` ,
-                // scope of `vcs` should be narrower than this function,
-                // to prevent `assignment of borrowed value` error below.
-                let vcs = c.vcs_service()?;
-                vcs.release_target()
-            },
-            workdir: may_workdir.map(String::from),
+        let c = Container{
+            ptr: Rc::new(RefCell::new(
+                Config::load(args.value_of("config").unwrap_or("./deplo.toml")).unwrap()
+            ))
         };
+        // setup runtime configuration (except release_target)
+        {
+            let mut mutc = c.ptr.borrow_mut();
+            mutc.runtime = RuntimeConfig {
+                verbosity,
+                store_deployments: vec!(),
+                endpoint_service_map: hashmap!{},
+                dryrun: args.occurence_of("dryrun") > 0,
+                debug: match args.values_of("debug") {
+                    Some(s) => s.iter().map(|e| e.to_string()).collect(),
+                    None => vec!{}
+                },
+                release_target: None, // set after
+                workdir: may_workdir.map(String::from),
+            };
+        }
         // verify all configuration files, including endoints/plans
-        c.verify()?;
-        // create service objects and invoke associated setup
-        // let _ = c.ci_service()?;
-        // let _ = c.cloud_service()?;
-        
+        {
+            let mut mutc = c.ptr.borrow_mut();
+            let (endpoint_service_map, store_deployments) = Self::verify(&c)?;
+            mutc.runtime.endpoint_service_map = endpoint_service_map;
+            mutc.runtime.store_deployments = store_deployments;
+        }
+        // setup module cache
+        Self::ensure_ci_init(&c)?;
+        Self::ensure_cloud_init(&c)?;
+        Self::ensure_vcs_init(&c)?;
+        Self::ensure_tf_init(&c)?;
+        // set release target
+        {
+            let mut mutc = c.ptr.borrow_mut();
+            // because vcs_service create object which have reference of `c` ,
+            // scope of `vcs` should be narrower than this function,
+            // to prevent `assignment of borrowed value` error below.
+            let vcs = mutc.vcs_service()?;
+            mutc.runtime.release_target = vcs.release_target();
+        }
         return Ok(c);
     }
     pub fn root_path(&self) -> &path::Path {
@@ -375,19 +406,19 @@ impl Config {
             prefixed_name
         )
     }
-    pub fn endpoint_version(&self, lb_name: &str, endpoint: &str) -> Result<u32, Box<dyn Error>> {
-        match endpoints::Endpoints::load(&self, &self.endpoints_file_path(lb_name, None)) {
+    pub fn endpoint_version(c: &Container, lb_name: &str, endpoint: &str) -> Result<u32, Box<dyn Error>> {
+        match endpoints::Endpoints::load(c, c.borrow().endpoints_file_path(lb_name, None)) {
             Ok(eps) => Ok(eps.get_latest_version(endpoint)),
             Err(err) => escalate!(err)
         }
     }
-    pub fn next_endpoint_version(&self, lb_name: &str, endpoint: &str) -> Result<u32, Box<dyn Error>> {
-        Ok(self.endpoint_version(lb_name, endpoint)? + 1)
+    pub fn next_endpoint_version(c: &Container, lb_name: &str, endpoint: &str) -> Result<u32, Box<dyn Error>> {
+        Ok(Self::endpoint_version(c, lb_name, endpoint)? + 1)
     }
     pub fn update_endpoint_version(
-        &self, lb_name: &str, endpoint: &str, plan: &plan::Plan
+        c: &Container, lb_name: &str, endpoint: &str, plan: &plan::Plan
     ) -> Result<u32, Box<dyn Error>> {
-        endpoints::Endpoints::modify(&self, &self.endpoints_file_path(lb_name, None), |eps| {
+        endpoints::Endpoints::modify(c, c.borrow().endpoints_file_path(lb_name, None), |eps| {
             let latest_version = eps.get_latest_version(endpoint);
             let v = eps.next.versions.entry(endpoint.to_string()).or_insert(0);
             *v = latest_version + 1;
@@ -413,17 +444,17 @@ impl Config {
             None => panic!("no lb config for {}", lb_name)
         }
     }
-    pub fn cloud_service<'a>(&'a self, account_name: &str) -> Result<Box<dyn cloud::Cloud<'a> + 'a>, Box<dyn Error>> {
-        return cloud::factory(self, account_name)/* match self.cloud_caches.get(account_name) {
+    pub fn cloud_service<'a>(&'a self, account_name: &str) -> Result<&'a Box<dyn cloud::Cloud>, Box<dyn Error>> {
+        return match self.cloud_caches.get(account_name) {
             Some(cloud) => Ok(cloud),
             None => escalate!(Box::new(ConfigError{ 
                 cause: format!("no cloud service for {}", account_name) 
             }))
-        } */
+        }
     }
     pub fn cloud_provider_and_configs<'a>(&'a self) -> HashMap<String, Vec<&'a CloudProviderConfig>> {
         let mut h = HashMap::<String, Vec<&'a CloudProviderConfig>>::new();
-        for (account_name, provider_config) in &self.cloud.accounts {
+        for (_, provider_config) in &self.cloud.accounts {
             let code = provider_config.code();
             match h.get_mut(&code) {
                 Some(v) => { v.push(provider_config); },
@@ -432,8 +463,14 @@ impl Config {
         }
         return h
     }
-    pub fn terraformer<'a>(&'a self) -> Result<Box<dyn tf::Terraformer<'a> + 'a>, Box<dyn Error>> {
-        return tf::factory(&self);
+    pub fn terraformer<'a>(&'a self) -> Result<&'a Box<dyn tf::Terraformer>, Box<dyn Error>> {
+        return if self.tf_cache.len() > 0 {
+            Ok(&self.tf_cache[0])
+        } else {
+            escalate!(Box::new(ConfigError{ 
+                cause: format!("no tf service") 
+            }))            
+        }
     }
     pub fn ci_config<'a>(&'a self, account_name: &str) -> &'a CIConfig {
         match &self.ci.get(account_name) {
@@ -450,53 +487,75 @@ impl Config {
                 panic!("DEPLO_CI_TYPE = {}, but does not have corresponding CI Config", v)
             },
             // TODO: returns merged action
-            Err(e) => panic!("DEPLO_CI_TYPE is not defined, should be development mode")
+            Err(e) => panic!("DEPLO_CI_TYPE is not defined, should be development mode {}", e)
         }
     }
-    pub fn ci_service<'a>(&'a self, account_name: &str) -> Result<Box<dyn ci::CI<'a> + 'a>, Box<dyn Error>> {
-        return ci::factory(self, account_name) /* match self.ci_caches.get(account_name) {
+    pub fn ci_service<'a>(&'a self, account_name: &str) -> Result<&'a Box<dyn ci::CI>, Box<dyn Error>> {
+        return match self.ci_caches.get(account_name) {
             Some(ci) => Ok(ci),
             None => escalate!(Box::new(ConfigError{ 
                 cause: format!("no ci service for {}", account_name) 
             }))
-        } */
+        } 
     }
-    /* pub fn ensure_ci_initialization(&'a mut self) -> Result<(), Box<dyn Error>> {
-        // default always should exist
-        let _ = &self.ci.get("default").unwrap();
-        for (account, _) in &self.ci {
-            self.ci_caches.insert(account.to_string(), ci::factory(&self, account)?);
+    pub fn ensure_ci_init(c: &Container) -> Result<(), Box<dyn Error>> {
+        let mut caches = hashmap!{};
+        {
+            let immc = c.borrow();
+            // default always should exist
+            let _ = &immc.ci.get("default").unwrap();
+            for (account, _) in &immc.ci {
+                caches.insert(account.to_string(), ci::factory(c, account)?);
+            }
+        }
+        {
+            let mut mutc = c.ptr.borrow_mut();
+            mutc.ci_caches = caches;
         }
         Ok(())
     }
-    pub fn ensure_cloud_initialization(&'a mut self) -> Result<(), Box<dyn Error>> {
-        // default always should exist
-        let _ = &self.cloud.accounts.get("default").unwrap();
-        for (account, _) in &self.cloud.accounts {
-            self.cloud_caches.insert(account.to_string(), cloud::factory(&self, account)?);
+    pub fn ensure_cloud_init(c: &Container) -> Result<(), Box<dyn Error>> {
+        let mut caches = hashmap!{};
+        {
+            let immc = c.borrow();
+            // default always should exist
+            let _ = &immc.cloud.accounts.get("default").unwrap();
+            for (account, _) in &immc.cloud.accounts {
+                caches.insert(account.to_string(), cloud::factory(c, account)?);
+            }
+        }
+        {
+            let mut mutc = c.ptr.borrow_mut();
+            mutc.cloud_caches = caches;
         }
         Ok(())
     }
-    pub fn ensure_vcs_initialization(&'a mut self) -> Result<(), Box<dyn Error>> {
-        let vcs = vcs::factory(&self)?;
-        self.vcs_cache.push(vcs);
+    pub fn ensure_vcs_init(c: &Container) -> Result<(), Box<dyn Error>> {
+        let mut mutc = c.ptr.borrow_mut();
+        let vcs = vcs::factory(c)?;
+        mutc.vcs_cache.push(vcs);
         Ok(())
-    } */
+    }
+    pub fn ensure_tf_init(c: &Container) -> Result<(), Box<dyn Error>> {
+        let mut mutc = c.ptr.borrow_mut();
+        let tf = tf::factory(c)?;
+        mutc.tf_cache.push(tf);
+        Ok(())
+    }    
     pub fn cloud_region<'a>(&'a self) -> &'a str {
         return self.cloud.terraformer.region();
     }
     pub fn cloud_resource_name(&self, path: &str) -> Result<String, Box<dyn Error>> {
         return self.terraformer()?.eval(path);
     }
-    pub fn vcs_service<'a>(&'a self) -> Result<Box<dyn vcs::VCS<'a> + 'a>, Box<dyn Error>> {
-        return vcs::factory(self)
-        /* if self.vcs_cache.len() > 0 {
+    pub fn vcs_service<'a>(&'a self) -> Result<&'a Box<dyn vcs::VCS>, Box<dyn Error>> {
+        return if self.vcs_cache.len() > 0 {
             Ok(&self.vcs_cache[0])
         } else {
             escalate!(Box::new(ConfigError{ 
                 cause: format!("no vcs service") 
             }))            
-        } */
+        }
     }
     pub fn has_debug_option(&self, name: &str) -> bool {
         match self.runtime.debug.iter().position(|e| e == name) {
@@ -508,19 +567,20 @@ impl Config {
         self.runtime.endpoint_service_map.get(endpoint)
     }    
 
-    fn verify(&mut self) -> Result<(), Box<dyn Error>> {
+    fn verify(c: &Container) -> Result<(HashMap<String,String>,Vec<String>), Box<dyn Error>> {
         log::debug!("verify config");
         // global configuration verificaiton
         // 1. all endpoints/plans can be loaded without error 
         //    (loading endpoints/plans verify consistency of its content)
         // 2. keys in each plan's extra_ports is project-unique
-        let mut services = hashmap!{};
-        for entry in glob(&self.services_path().join("*.toml").to_string_lossy())? {
+        let mut endpoint_service_map = hashmap!{};
+        let mut store_deployments = vec!();
+        for entry in glob(&c.borrow().services_path().join("*.toml").to_string_lossy())? {
             match entry {
                 Ok(path) => {
                     log::debug!("verify config: load at path {}", path.to_string_lossy());
                     let store_deployment_name = {
-                        let plan = match plan::Plan::load_by_path(&self, &path) {
+                        let plan = match plan::Plan::load_by_path(&c, &path) {
                             Ok(p) => p,
                             Err(err) => return escalate!(Box::new(ConfigError {
                                 cause: format!(
@@ -533,7 +593,7 @@ impl Config {
                             Some(ports) => {
                                 for (n, _) in &ports {
                                     let name = if n.is_empty() { &plan.service } else { n };
-                                    match services.get(name) {
+                                    match endpoint_service_map.get(name) {
                                         Some(service_name) => return Err(Box::new(ConfigError {
                                             cause: format!(
                                                 "endpoint name:{} both exists in plan {}.toml and {}.toml",
@@ -541,13 +601,13 @@ impl Config {
                                             )
                                         })),
                                         None => {
-                                            services.entry(name.to_string()).or_insert(plan.service.clone());
+                                            endpoint_service_map.entry(name.to_string()).or_insert(plan.service.clone());
                                         }
                                     }
                                 }
                             },
                             None => {
-                                services.entry(plan.service.clone()).or_insert(plan.service.clone());
+                                endpoint_service_map.entry(plan.service.clone()).or_insert(plan.service.clone());
                             }
                         }
                         if plan.has_deployment_of("distribution")? {
@@ -557,13 +617,12 @@ impl Config {
                         }
                     };
                     if !store_deployment_name.is_empty() {
-                        self.runtime.store_deployments.push(store_deployment_name);
+                        store_deployments.push(store_deployment_name);
                     }
                 },
                 Err(e) => return Err(Box::new(e))
             }
         }
-        self.runtime.endpoint_service_map = services;
-        Ok(())
+        Ok((endpoint_service_map, store_deployments))
     }
 }

@@ -17,16 +17,16 @@ pub struct DeployStorageOption {
 }
 pub enum StorageKind<'a> {
     Service {
-        plan: &'a plan::Plan<'a>
+        plan: &'a plan::Plan
     },
     Metadata {
         lb_name: &'a str,
         version: u32
     }
 }
-pub trait Cloud<'a> {
+pub trait Cloud {
     fn new(
-        config: &'a config::Config, account_name: &str
+        config: &config::Container, account_name: &str
     ) -> Result<Self, Box<dyn Error>> where Self : Sized;
     fn setup_dependency(&self) -> Result<(), Box<dyn Error>>;
     fn cleanup_dependency(&self) -> Result<(), Box<dyn Error>>;
@@ -36,7 +36,7 @@ pub trait Cloud<'a> {
     // container 
     fn push_container_image(&self, src: &str, target: &str) -> Result<String, Box<dyn Error>>;
     fn deploy_container(
-        &self, plan: &plan::Plan<'a>,
+        &self, plan: &plan::Plan,
         target: &plan::ContainerDeployTarget,
         // note: ports always contain single entry corresponding to the empty string key
         image: &str, ports: &HashMap<String, u32>, 
@@ -78,20 +78,20 @@ pub mod gcp;
 
 
 // factorys
-fn factory_by<'a, T: Cloud<'a> + 'a>(
-    config: &'a config::Config,
+fn factory_by<'a, T: Cloud + 'a>(
+    config: &config::Container,
     account_name: &str
-) -> Result<Box<dyn Cloud<'a> + 'a>, Box<dyn Error>> {
+) -> Result<Box<dyn Cloud + 'a>, Box<dyn Error>> {
     let cmd = T::new(config, account_name).unwrap();
     cmd.setup_dependency()?;
-    return Ok(Box::new(cmd) as Box<dyn Cloud<'a> + 'a>);
+    return Ok(Box::new(cmd) as Box<dyn Cloud + 'a>);
 }
 
 pub fn factory<'a>(
-    config: &'a config::Config,
+    config: &config::Container,
     account_name: &str
-) -> Result<Box<dyn Cloud<'a> + 'a>, Box<dyn Error>> {
-    match &config.cloud.account(account_name) {
+) -> Result<Box<dyn Cloud + 'a>, Box<dyn Error>> {
+    match &config.borrow().cloud.account(account_name) {
         config::CloudProviderConfig::GCP {key:_} => {
             return factory_by::<gcp::Gcp>(config, account_name);
         },

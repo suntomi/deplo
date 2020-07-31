@@ -9,35 +9,34 @@ use dotenv::dotenv;
 use regex::Regex;
 
 use crate::args;
-use crate::ci;
-use crate::vcs;
 use crate::config;
 use crate::command;
 use crate::shell;
 use crate::util::escalate;
 
-pub struct CI<'a, S: shell::Shell<'a> = shell::Default<'a>> {
-    pub config: &'a config::Config,
-    pub ci_config: &'a config::CIConfig,
-    pub ci: Box<dyn ci::CI<'a> + 'a>,
-    pub vcs: Box<dyn vcs::VCS<'a> + 'a>,
+pub struct CI<S: shell::Shell = shell::Default> {
+    pub config: config::Container,
     pub shell: S
 }
-impl<'a, S: shell::Shell<'a>> CI<'a, S> {
+impl<S: shell::Shell> CI<S> {
     fn kick<A: args::Args>(&self, _: &A) -> Result<(), Box<dyn Error>> {
         log::info!("kick command invoked");
-        let config = match self.ci.pull_request_url()? {
-            Some(_) => &self.ci_config.action().pr,
-            None => &self.ci_config.action().deploy,
+        let config = self.config.borrow();
+        let (account_name, ci_config) = config.ci_config_by_env();
+        let ci = config.ci_service(account_name)?;
+        let action_config = match ci.pull_request_url()? {
+            Some(_) => &ci_config.action().pr,
+            None => &ci_config.action().deploy,
         };
-        if config.len() > 0 {
-            for (patterns, code) in config {
+        let vcs = config.vcs_service()?;
+        if action_config.len() > 0 {
+            for (patterns, code) in action_config {
                 let ps = &patterns.split(',').map(|p| {
                     std::env::current_dir().unwrap()
                         .join(p)
                         .to_string_lossy().to_string()
                 }).collect::<Vec<String>>();
-                if self.vcs.changed(&ps.iter().map(std::ops::Deref::deref).collect()) {
+                if vcs.changed(&ps.iter().map(std::ops::Deref::deref).collect()) {
                     self.shell.run_code_or_file(&code, &hashmap!{})?;
                 }
             }
@@ -46,13 +45,13 @@ impl<'a, S: shell::Shell<'a>> CI<'a, S> {
             // which path is start with the same name of plan file's basename
             // eg. if we have plan file which name is 'foo.toml', deplo check diff with 
             // pattern 'foo/.*' and if diff exists, call 'deplo service adtion foo'
-            for entry in glob(&self.config.services_path().join("*.toml").to_string_lossy())? {
+            for entry in glob(&config.services_path().join("*.toml").to_string_lossy())? {
                 match entry {
                     Ok(path) => {
                         let stem = path.file_stem().unwrap().to_string_lossy().to_string();
                         log::debug!("plan file path:{},stem:{}", path.to_string_lossy(), stem);
                         match std::env::current_dir()?.join(&stem).join(".*").to_str() {
-                            Some(p) => if self.vcs.changed(&vec!(p)) {
+                            Some(p) => if vcs.changed(&vec!(p)) {
                                 self.shell.eval(&format!("deplo service action {}", stem), &hashmap!{}, false)?;
                             },
                             None => {}
@@ -65,6 +64,9 @@ impl<'a, S: shell::Shell<'a>> CI<'a, S> {
         Ok(())
     }
     fn setenv<A: args::Args>(&self, args: &A) -> Result<(), Box<dyn Error>> {
+        let config = self.config.borrow();
+        let (account_name, _) = config.ci_config_by_env();
+        let ci = config.ci_service(account_name)?;
         let dotenv_file_content = match args.value_of("dotenv") {
             Some(dotenv_path) => match fs::metadata(dotenv_path) {
                 Ok(_) => match fs::read_to_string(dotenv_path) {
@@ -89,7 +91,7 @@ impl<'a, S: shell::Shell<'a>> CI<'a, S> {
             match read_result {
                 Ok(line) => match re.captures(&line) {
                     Some(c) => {
-                        self.ci.set_secret(
+                        ci.set_secret(
                             c.get(1).map(|m| m.as_str()).unwrap(), 
                             c.get(2).map(|m| m.as_str()).unwrap().trim_matches('"')
                         )?;
@@ -103,14 +105,10 @@ impl<'a, S: shell::Shell<'a>> CI<'a, S> {
     }
 }
 
-impl<'a, S: shell::Shell<'a>, A: args::Args> command::Command<'a, A> for CI<'a, S> {
-    fn new(config: &'a config::Config) -> Result<CI<'a, S>, Box<dyn Error>> {
-        let (account_name, ci_config) = config.ci_config_by_env();
-        return Ok(CI::<'a, S> {
-            config,
-            ci_config,
-            ci: config.ci_service(account_name)?,
-            vcs: config.vcs_service()?,
+impl<S: shell::Shell, A: args::Args> command::Command<A> for CI<S> {
+    fn new(config: &config::Container) -> Result<CI<S>, Box<dyn Error>> {
+        return Ok(CI::<S> {
+            config: config.clone(),
             shell: S::new(config)
         });
     }

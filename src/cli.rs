@@ -27,10 +27,10 @@ impl Error for CliError {
 }
 
 
-pub fn run<'a, A: args::Args>(args: &A, config: &'a config::Config) -> Result<(), Box<dyn Error>> {
+pub fn run<'a, A: args::Args>(args: &A, config: &config::Container) -> Result<(), Box<dyn Error>> {
     match args.subcommand() {
         Some((name, subargs)) => {
-            let cmd = match command::factory(name, config) {
+            let cmd = match command::factory(name, &config) {
                 Ok(cmd) => match cmd {
                     Some(cmd) => cmd,
                     None => return Err(Box::new(CliError{ 

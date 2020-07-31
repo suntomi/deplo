@@ -9,10 +9,10 @@ use crate::util::escalate;
 
 pub mod native; 
 
-pub trait Shell<'a> {
-    fn new(config: &'a config::Config) -> Self;
+pub trait Shell {
+    fn new(config: &config::Container) -> Self;
     fn set_cwd<P: AsRef<Path>>(&mut self, dir: Option<&P>) -> Result<(), Box<dyn Error>>;
-    fn set_env(&mut self, key: &'a str, val: String) -> Result<(), Box<dyn Error>>;
+    fn set_env(&mut self, key: &str, val: String) -> Result<(), Box<dyn Error>>;
     fn output_of(&self, args: &Vec<&str>, envs: &HashMap<&str, &str>) -> Result<String, ShellError>;
     fn exec(&self, args: &Vec<&str>, envs: &HashMap<&str, &str>, capture: bool) -> Result<String, ShellError>;
     fn eval(&self, code: &str, envs: &HashMap<&str, &str>, capture: bool) -> Result<String, ShellError> {
@@ -38,7 +38,7 @@ pub trait Shell<'a> {
         }
     }
 }
-pub type Default<'a> = native::Native<'a>;
+pub type Default = native::Native;
 
 #[derive(Debug)]
 pub enum ShellError {
