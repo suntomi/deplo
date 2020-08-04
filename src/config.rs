@@ -52,6 +52,9 @@ pub enum CloudProviderConfig {
     ALI {
         key_id: String,
         secret_key: String
+    },
+    AZR {
+        key: String
     }
 }
 impl CloudProviderConfig {
@@ -60,6 +63,7 @@ impl CloudProviderConfig {
             Self::GCP{key:_} => "GCP".to_string(),
             Self::AWS{key_id:_, secret_key:_} => "AWS".to_string(),
             Self::ALI{key_id:_, secret_key:_} => "ALI".to_string(),
+            Self::AZR{key:_} => "AZR".to_string(),
         }
     }
 }
@@ -69,6 +73,7 @@ impl fmt::Display for CloudProviderConfig {
             Self::GCP{key:_} => write!(f, "gcp"),
             Self::AWS{key_id:_, secret_key:_} => write!(f, "aws"),
             Self::ALI{key_id:_, secret_key:_} => write!(f, "ali"),
+            Self::AZR{key:_} => write!(f, "azr"),
         }
     }    
 }
