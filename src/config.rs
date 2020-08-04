@@ -239,7 +239,6 @@ pub struct Config {
     pub vcs: VCSConfig,
     pub lb: HashMap<String, LoadBalancerConfig>,
     pub ci: HashMap<String, CIConfig>,
-    pub action: ActionConfig,
 
     // object cache
     #[serde(skip)]
@@ -330,9 +329,9 @@ impl Config {
             };
         }
         // verify all configuration files, including endoints/plans
+        let (endpoint_service_map, store_deployments) = Self::verify(&c)?;
         {
             let mut mutc = c.ptr.borrow_mut();
-            let (endpoint_service_map, store_deployments) = Self::verify(&c)?;
             mutc.runtime.endpoint_service_map = endpoint_service_map;
             mutc.runtime.store_deployments = store_deployments;
         }

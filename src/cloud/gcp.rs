@@ -706,12 +706,20 @@ impl<'a, S: shell::Shell> cloud::Cloud for Gcp<S> {
         match fs::metadata(&install_path) {
             Ok(_) => {
                 log::debug!("gcloud already installed at {}", &install_path);
-                self.shell.eval(r#"
-                    ln -s $INSTALL_PATH /usr/lib
-                "#, &hashmap!{
-                    "HOME" => "/",
-                    "INSTALL_PATH" => &install_path
-                }, false)?;
+                let linked_path = "/usr/lib/google-cloud-sdk";
+                match fs::metadata(linked_path) {
+                    Ok(_) => {
+                        log::debug!("and linked to {}", linked_path);
+                    },
+                    Err(_) => {
+                        self.shell.eval(r#"
+                            ln -s $INSTALL_PATH /usr/lib
+                        "#, &hashmap!{
+                            "HOME" => "/",
+                            "INSTALL_PATH" => &install_path
+                        }, false)?;
+                    }
+                }
             },
             Err(_) => {
                 // it takes sooooooo long time on container in docker mac
