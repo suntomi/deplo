@@ -72,7 +72,8 @@ fn deploy_meta(
                 destination: format!("{}/meta/data.json", bucket_name),
                 permission: None,
                 excludes: None,
-                max_age: Some(300)
+                max_age: Some(300),
+                region: None // metadata's region is default region for the corresponding account
             }
         }
     )

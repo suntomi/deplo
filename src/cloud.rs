@@ -13,7 +13,8 @@ pub struct DeployStorageOption {
     pub permission: Option<String>,
     pub max_age: Option<u32>,
     pub excludes: Option<String>, //valid on directory copy
-    pub destination: String
+    pub destination: String,
+    pub region: Option<String>
 }
 pub enum StorageKind<'a> {
     Service {
@@ -28,13 +29,15 @@ pub trait Cloud {
     fn new(
         config: &config::Container, account_name: &str
     ) -> Result<Self, Box<dyn Error>> where Self : Sized;
-    fn setup_dependency(&self) -> Result<(), Box<dyn Error>>;
+    fn init(&self, reinit: bool) -> Result<(), Box<dyn Error>>;
     fn cleanup_dependency(&self) -> Result<(), Box<dyn Error>>;
     fn generate_terraformer_config(&self, name: &str) -> Result<String, Box<dyn Error>>;
     // dns
-    fn root_domain_dns_name(&self, zone: &str) -> Result<String, Box<dyn Error>>;
+    fn root_domain_dns_name(&self) -> Result<String, Box<dyn Error>>;
     // container 
-    fn push_container_image(&self, src: &str, target: &str) -> Result<String, Box<dyn Error>>;
+    fn push_container_image(
+        &self, src: &str, target: &str, options: &HashMap<String, String>
+    ) -> Result<String, Box<dyn Error>>;
     fn deploy_container(
         &self, plan: &plan::Plan,
         target: &plan::ContainerDeployTarget,
@@ -45,7 +48,7 @@ pub trait Cloud {
     ) -> Result<(), Box<dyn Error>>;
     // storage
     fn create_bucket(
-        &self, bucket_name: &str
+        &self, bucket_name: &str, options: &DeployStorageOption
     ) -> Result<(), Box<dyn Error>>;
     fn deploy_storage<'b>(
         &self, kind: StorageKind<'b>, 
@@ -83,7 +86,6 @@ fn factory_by<'a, T: Cloud + 'a>(
     account_name: &str
 ) -> Result<Box<dyn Cloud + 'a>, Box<dyn Error>> {
     let cmd = T::new(config, account_name).unwrap();
-    cmd.setup_dependency()?;
     return Ok(Box::new(cmd) as Box<dyn Cloud + 'a>);
 }
 
@@ -92,7 +94,7 @@ pub fn factory<'a>(
     account_name: &str
 ) -> Result<Box<dyn Cloud + 'a>, Box<dyn Error>> {
     match &config.borrow().cloud.account(account_name) {
-        config::CloudProviderConfig::GCP {key:_} => {
+        config::CloudProviderConfig::GCP {key:_, project_id:_, dns_zone:_, region:_} => {
             return factory_by::<gcp::Gcp>(config, account_name);
         },
         _ => return Err(Box::new(CloudError {

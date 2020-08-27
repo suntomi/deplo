@@ -1,3 +1,4 @@
+gcp = {
 root_domain = "suntomi.dev"
 dns_zone = "suntomi-zone"
 dns_zone_project = "suntomi"
@@ -5,3 +6,6 @@ project_id = "deplo-sandbox"
 region = "asia-northeast1"
 resource_prefix = "deplo"
 envs = ["dev","prod"]
+lbs = ["admin","default"]
+}
+                        

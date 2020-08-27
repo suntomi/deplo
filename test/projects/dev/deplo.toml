@@ -1,5 +1,5 @@
 [common]
-project_id = "deplo-sandbox"
+project_namespace = "deplo"
 deplo_image = "suntomi/deplo"
 data_dir = "deplo"
 no_confirm_for_prod_deploy = false
@@ -13,13 +13,15 @@ prod = "release"
 [cloud.accounts.default]
 type = "GCP"
 key = "${DEPLO_CLOUD_ACCESS_KEY}"
+project_id = "deplo-sandbox"
+# if your dns zone is managed by your project-id, omit after @part. 
+# our dns zone exists in suntomi project, which is differnt from deplo-sandbox, we use @ notation
+dns_zone = "suntomi-zone@suntomi"
+region = "asia-northeast1"
 
 [cloud.terraformer]
 type = "Terraform"
 backend_bucket = "deplo-terraform-state"
-resource_prefix = "deplo"
-dns_zone = "suntomi-zone@suntomi"
-region = "asia-northeast1"
 
 [lb.admin]
 account = "default"

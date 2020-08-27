@@ -2,7 +2,7 @@ executors:
   deplo:
     working_directory: /workdir
     docker:
-      - image: suntomi/deplo:{}
+      - image: {}:{}
 
 commands:
   fetch_repo:
@@ -47,5 +47,5 @@ jobs:
       - load_deplo_tools
       - run:
         name: 'running CI jobs'
-        command: deplo {} ci
+        command: deplo -w {} ci
       - save_deplo_tools

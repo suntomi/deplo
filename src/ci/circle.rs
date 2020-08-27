@@ -23,13 +23,14 @@ impl<'a, S: shell::Shell> ci::CI for Circle<S> {
             shell: S::new(config),
         });
     }
-    fn init(&self) -> Result<(), Box<dyn Error>> {
+    fn init(&self, _: bool) -> Result<(), Box<dyn Error>> {
         let config = self.config.borrow();
         let repository_root = config.vcs_service()?.repository_root()?;
         let circle_yml_path = format!("{}/.circleci/config.yml", repository_root);
         fs::create_dir_all(&format!("{}/.circleci", repository_root))?;
         fs::write(&circle_yml_path, format!(
             include_str!("../../rsc/ci/circle/config.yml.tmpl"),
+            config.common.deplo_image,
             config::DEPLO_GIT_HASH, config.runtime.workdir.as_ref().unwrap_or(&"".to_string())
         ))?;
         Ok(())

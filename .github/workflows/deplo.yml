@@ -11,25 +11,11 @@ jobs:
     name: running CI jobs
     # This job runs on Linux
     runs-on: ubuntu-latest
-    container: suntomi/deplo:c27be81c06c93e5efe753c6ce60f3008a6d35e1b
+    container: suntomi/deplo:1db5c94372a0f58d2fb94e86db2247165399a13b
     steps:
       - uses: actions/checkout@v2
-        with:
-          lfs: true
+        lfs: true
       - name: Run Deplo
         env:
-          DEPLO_CI_TYPE: GhAction
-          DEPLO_GHACTION_PULL_REQUEST_URL: ${{ github.event.pull_request.comments_url }}
-        run: /deplo -vvv -w test/projects/dev ci kick
-      - name: Start SSH via Ngrok
-        if: ${{ failure() }}
-        run: curl -sL https://gist.githubusercontent.com/retyui/7115bb6acf151351a143ec8f96a7c561/raw/7099b9db76729dc5761da72aa8525f632d8875c9/debug-github-actions.sh | bash
-        env:
-          # After sign up on the https://ngrok.com/
-          # You can find this token here: https://dashboard.ngrok.com/get-started/setup
-          NGROK_TOKEN: ${{ secrets.DEPLO_NGROK_TOKEN }}
-          # This password you will use when authorizing via SSH
-          USER_PASS: ${{ secrets.DEPLO_SSH_USER_PASS_VIA_NGROK }}
-      - name: Don't kill instance
-        if: ${{ failure() }}
-        run: sleep 1h # Prevent to killing instance after failure
+          DEPLO_GHACTION_PULL_REQUEST_URL: ${ github.event.pull_request.comments_url }
+        run: deplo -w test/projects/dev ci

@@ -41,39 +41,50 @@ impl Error for ConfigError {
 
 #[derive(Serialize, Deserialize)]
 #[serde(tag = "type")]
+// now unified DNS zone for multiple cloud provider, is not supported. 
+// you must have dedicated DNS zone for each provider which required to setup load balancer.
+// I assume you can use CNAME to unify domain.
 pub enum CloudProviderConfig {
     GCP {
-        key: String
+        key: String,
+        project_id: String,
+        dns_zone: String,
+        region: String
     },
     AWS {
         key_id: String,
-        secret_key: String
+        secret_key: String,
+        dns_zone: String,
+        region: String
     },
     ALI {
         key_id: String,
-        secret_key: String
+        secret_key: String,
+        region: String
     },
     AZR {
-        key: String
+        subscription_id: String,
+        tenant_id: String,
+        region: String
     }
 }
 impl CloudProviderConfig {
     fn code(&self) -> String {
         match self {
-            Self::GCP{key:_} => "GCP".to_string(),
-            Self::AWS{key_id:_, secret_key:_} => "AWS".to_string(),
-            Self::ALI{key_id:_, secret_key:_} => "ALI".to_string(),
-            Self::AZR{key:_} => "AZR".to_string(),
+            Self::GCP{key:_,project_id:_,dns_zone:_,region:_} => "GCP".to_string(),
+            Self::AWS{key_id:_, secret_key:_,dns_zone:_,region:_} => "AWS".to_string(),
+            Self::ALI{key_id:_, secret_key:_,region:_} => "ALI".to_string(),
+            Self::AZR{subscription_id:_,tenant_id:_,region:_} => "AZR".to_string(),
         }
     }
 }
 impl fmt::Display for CloudProviderConfig {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::GCP{key:_} => write!(f, "gcp"),
-            Self::AWS{key_id:_, secret_key:_} => write!(f, "aws"),
-            Self::ALI{key_id:_, secret_key:_} => write!(f, "ali"),
-            Self::AZR{key:_} => write!(f, "azr"),
+            Self::GCP{key:_,project_id:_,dns_zone:_,region:_} => write!(f, "gcp"),
+            Self::AWS{key_id:_, secret_key:_,dns_zone:_,region:_} => write!(f, "aws"),
+            Self::ALI{key_id:_, secret_key:_,region:_} => write!(f, "ali"),
+            Self::AZR{subscription_id:_,tenant_id:_,region:_} => write!(f, "azr"),
         }
     }    
 }
@@ -143,42 +154,18 @@ impl fmt::Display for VCSConfig {
 #[serde(tag = "type")]
 pub enum TerraformerConfig {
     Terraform {
+        backend: Option<String>,
         backend_bucket: String,
         resource_prefix: Option<String>,
-        dns_zone: String,
-        region: String,
-    }
-}
-impl TerraformerConfig {
-    pub fn dns_zone(&self) -> &str {
-        match self {
-            Self::Terraform { 
-                backend_bucket: _,
-                resource_prefix: _,
-                dns_zone,
-                region: _
-            } => &dns_zone
-        }
-    }
-    pub fn region(&self) -> &str {
-        match self {
-            Self::Terraform { 
-                backend_bucket: _,
-                resource_prefix: _,
-                dns_zone: _,
-                region
-            } => &region
-        }
     }
 }
 impl fmt::Display for TerraformerConfig {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::Terraform { 
+                backend: _,
                 backend_bucket: _,
-                resource_prefix: _,
-                dns_zone: _,
-                region: _
+                resource_prefix: _
             } => write!(f, "terraform")
         }
     }    
@@ -219,7 +206,7 @@ impl LoadBalancerConfig {
 }
 #[derive(Serialize, Deserialize)]
 pub struct CommonConfig {
-    pub project_id: String,
+    pub project_namespace: String,
     pub deplo_image: String,
     pub data_dir: String,
     pub no_confirm_for_prod_deploy: bool,
@@ -317,6 +304,17 @@ impl Config {
                 Config::load(args.value_of("config").unwrap_or("./deplo.toml")).unwrap()
             ))
         };
+        // fill missing default configuration
+        {
+            let mut mutc = c.ptr.borrow_mut();
+            match mutc.lb.get("default") {
+                Some(_) => {},
+                None => {
+                    // default load balancer which uses default account (and its provider)
+                    mutc.lb.insert("default".to_string(), LoadBalancerConfig{ account: None });
+                }
+            }
+        }
         // setup runtime configuration (except release_target)
         {
             let mut mutc = c.ptr.borrow_mut();
@@ -347,12 +345,16 @@ impl Config {
         Self::ensure_tf_init(&c)?;
         // set release target
         {
-            let mut mutc = c.ptr.borrow_mut();
             // because vcs_service create object which have reference of `c` ,
             // scope of `vcs` should be narrower than this function,
             // to prevent `assignment of borrowed value` error below.
-            let vcs = mutc.vcs_service()?;
-            mutc.runtime.release_target = vcs.release_target();
+            let release_target = {
+                let immc = c.ptr.borrow();
+                let vcs = immc.vcs_service()?;
+                vcs.release_target()
+            };
+            let mut mutc = c.ptr.borrow_mut();
+            mutc.runtime.release_target = release_target;
         }
         return Ok(c);
     }
@@ -381,13 +383,13 @@ impl Config {
             panic!("should be on release target branch")
         }
     }
-    pub fn project_id(&self) -> &str {
-        &self.common.project_id
+    pub fn project_namespace(&self) -> &str {
+        &self.common.project_namespace
     }
     pub fn root_domain(&self) -> Result<String, Box<dyn Error>> {
         let cloud = self.cloud_service("default")?;
-        let dns_name = cloud.root_domain_dns_name(&self.cloud.terraformer.dns_zone())?;
-        Ok(format!("{}.{}", self.common.project_id, dns_name[..dns_name.len()-1].to_string()))
+        let dns_name = cloud.root_domain_dns_name()?;
+        Ok(format!("{}.{}", self.project_namespace(), dns_name[..dns_name.len()-1].to_string()))
     }
     pub fn release_target(&self) -> Option<&str> {
         match &self.runtime.release_target {
@@ -405,7 +407,7 @@ impl Config {
         self.cloud.infra_code_dest_root_path(&self)
     }
     pub fn canonical_name(&self, prefixed_name: &str) -> String {
-        format!("{}-{}-{}", self.project_id(), 
+        format!("{}-{}-{}", self.project_namespace(), 
             self.release_target().expect("should be on release target branch"),
             prefixed_name
         )
@@ -440,7 +442,7 @@ impl Config {
         })
     }
     pub fn default_backend(&self) -> String {
-        format!("{}-backend-bucket-404", self.common.project_id)
+        format!("{}-backend-bucket-404", self.project_namespace())
     }
     pub fn lb_config<'a>(&'a self, lb_name: &str) -> &'a LoadBalancerConfig {
         match self.lb.get(lb_name) {
@@ -456,16 +458,27 @@ impl Config {
             }))
         }
     }
-    pub fn cloud_provider_and_configs<'a>(&'a self) -> HashMap<String, Vec<&'a CloudProviderConfig>> {
-        let mut h = HashMap::<String, Vec<&'a CloudProviderConfig>>::new();
+    pub fn cloud_provider_and_configs<'a>(&'a self) -> HashMap<String, &'a CloudProviderConfig> {
+        let mut h = HashMap::<String, &'a CloudProviderConfig>::new();
         for (_, provider_config) in &self.cloud.accounts {
             let code = provider_config.code();
             match h.get_mut(&code) {
-                Some(v) => { v.push(provider_config); },
-                None => { h.insert(code, vec!(provider_config)); }
+                Some(v) => { 
+                    panic!("currently multiple account for same provider {} is not supported", code)
+                },
+                None => { h.insert(code, provider_config); }
             }
         }
         return h
+    }
+    pub fn account_name_from_provider_config<'a>(&'a self, config: &CloudProviderConfig) -> Option<&'a str> {
+        for (name, provider_config) in &self.cloud.accounts {
+            let code = provider_config.code();
+            if code == config.code() {
+                return Some(name)
+            }
+        }
+        return None
     }
     pub fn terraformer<'a>(&'a self) -> Result<&'a Box<dyn tf::Terraformer>, Box<dyn Error>> {
         return if self.tf_cache.len() > 0 {
@@ -535,20 +548,17 @@ impl Config {
         Ok(())
     }
     pub fn ensure_vcs_init(c: &Container) -> Result<(), Box<dyn Error>> {
-        let mut mutc = c.ptr.borrow_mut();
         let vcs = vcs::factory(c)?;
+        let mut mutc = c.ptr.borrow_mut();
         mutc.vcs_cache.push(vcs);
         Ok(())
     }
     pub fn ensure_tf_init(c: &Container) -> Result<(), Box<dyn Error>> {
-        let mut mutc = c.ptr.borrow_mut();
         let tf = tf::factory(c)?;
+        let mut mutc = c.ptr.borrow_mut();
         mutc.tf_cache.push(tf);
         Ok(())
     }    
-    pub fn cloud_region<'a>(&'a self) -> &'a str {
-        return self.cloud.terraformer.region();
-    }
     pub fn cloud_resource_name(&self, path: &str) -> Result<String, Box<dyn Error>> {
         return self.terraformer()?.eval(path);
     }

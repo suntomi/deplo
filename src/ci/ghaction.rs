@@ -30,7 +30,7 @@ impl<S: shell::Shell> ci::CI for GhAction<S> {
             shell: S::new(config)
         });
     }
-    fn init(&self) -> Result<(), Box<dyn Error>> {
+    fn init(&self, _: bool) -> Result<(), Box<dyn Error>> {
         let config = self.config.borrow();
         let repository_root = config.vcs_service()?.repository_root()?;
         let deplo_yml_path = format!("{}/.github/workflows/deplo.yml", repository_root);
@@ -40,7 +40,8 @@ impl<S: shell::Shell> ci::CI for GhAction<S> {
         fs::create_dir_all(&format!("{}/.github/workflows", repository_root))?;
         fs::write(&deplo_yml_path, format!(
             include_str!("../../rsc/ci/ghaction/deplo.yml.tmpl"), 
-            target_branches, target_branches, config::DEPLO_GIT_HASH,
+            target_branches, target_branches, 
+            config.common.deplo_image, config::DEPLO_GIT_HASH,
             config.runtime.workdir.as_ref().unwrap_or(&"".to_string())
         ))?;
         Ok(())

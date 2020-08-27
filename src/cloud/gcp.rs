@@ -19,32 +19,34 @@ pub struct Gcp<S: shell::Shell = shell::Default> {
     pub account_name: String,
     pub service_account: String,
     pub gcp_project_id: String,
+    pub dns_zone: String,
+    pub default_region: String,
     pub shell: S,
 }
 
 impl<S: shell::Shell> Gcp<S> {
     // helpers
-    fn container_repository_url(&self) -> Option<String> {
-        let config = self.config.borrow();
-        let region = config.cloud_region();
+    fn container_repository_url(&self, region: Option<&String>) -> Option<String> {
+        let region = region.unwrap_or(&self.default_region);
         let re = Regex::new(r"([^-]+)-").unwrap();
-        return match re.captures(region) {
+        return match re.captures(&region) {
             Some(c) => Some(
                 format!("{}.gcr.io", c.get(1).map_or("", |m| m.as_str()).to_string())
             ),
             None => None
         }
     }
-    fn storage_region(&self) -> String {
-        let config = self.config.borrow();
-        let region = config.cloud_region();
+    fn storage_region(&self, region: Option<&String>) -> String {
+        let region = region.unwrap_or(&self.default_region);
         let re = Regex::new(r"([^-]+)-").unwrap();
-        return re.captures(region).unwrap().get(1).map_or("", |m| m.as_str()).to_string();
+        return re.captures(&region).unwrap().get(1).map_or("", |m| m.as_str()).to_string();
     }
     fn service_account(
         cloud_provider_config: &config::CloudProviderConfig, shell: &S
     ) -> Result<String, Box<dyn Error>> {
-        if let config::CloudProviderConfig::GCP{key} = cloud_provider_config {
+        if let config::CloudProviderConfig::GCP{
+            key, project_id:_,dns_zone:_,region:_
+        } = cloud_provider_config {
             return Ok(shell.eval_output_of(&format!(r#"
                 echo '{}' | jq -jr ".client_email"
             "#, key), &hashmap!{})?)
@@ -53,17 +55,8 @@ impl<S: shell::Shell> Gcp<S> {
             cause: format!("should have GCP config for config.cloud.provider, but {}", cloud_provider_config)
         }))
     }
-    fn gcp_project_id(
-        cloud_provider_config: &config::CloudProviderConfig, shell: &S
-    ) -> Result<String, Box<dyn Error>> {
-        if let config::CloudProviderConfig::GCP{key} = cloud_provider_config {
-            return Ok(shell.eval_output_of(&format!(r#"
-                echo '{}' | jq -jr ".project_id"
-            "#, key), &hashmap!{})?)
-        }
-        return escalate!(Box::new(config::ConfigError{
-            cause: format!("should have GCP config for config.cloud.provider, but {}", cloud_provider_config)
-        }))
+    fn deploy_region<'a>(&'a self, options: &'a HashMap<String, String>) -> &'a str {
+        options.get("region").unwrap_or(&self.default_region)
     }
     fn instance_template_name(&self, plan: &plan::Plan, version: u32) -> String {
         return self.config.borrow().canonical_name(&format!("instance-template-{}-{}", plan.service, version))
@@ -359,7 +352,7 @@ impl<S: shell::Shell> Gcp<S> {
         let config = self.config.borrow();
         // settings
         let scaling_config = options.get("scaling_options").unwrap_or(&DEFAULT_SCALING_CONFIG);
-        let resource_location_flag = format!("--region={}", config.cloud_region());
+        let resource_location_flag = format!("--region={}", self.deploy_region(options));
         let node_distribution = options.get("node_distribution").unwrap_or(&resource_location_flag);
         let container_options = options.get("container_options").unwrap_or(&DEFAULT_CONTINER_OPTIONS);
         // endpoint version for the service name is used for service version, 
@@ -450,9 +443,8 @@ impl<S: shell::Shell> Gcp<S> {
     // deploy container to backend service
     fn deploy_backend_service(
         &self, plan: &plan::Plan,
-        name: &str
+        name: &str, options: &HashMap<String, String>
     ) -> Result<(), Box<dyn Error>> {
-        let config = self.config.borrow();
         // endpoint version for the service name is used for service version, 
         // TODO: better separation between endpoint and service version
         let service_version = config::Config::next_endpoint_version(&self.config, plan.lb_name(), &plan.service)?;
@@ -460,7 +452,7 @@ impl<S: shell::Shell> Gcp<S> {
         let backend_service_port_name = &backend_service_name;
         let health_check_name = self.health_check_name(plan, name, service_version);
         let instance_group_name = self.instance_group_name(plan, service_version);
-        let instance_group_type = format!("--instance-group-region={}", config.cloud_region());
+        let instance_group_type = format!("--instance-group-region={}", self.deploy_region(options));
     
         log::info!("---- deploy_backend_sevice");
         let hc_id = self.shell.eval_output_of(&format!(r#"gcloud compute health-checks list --format=json | 
@@ -522,7 +514,7 @@ impl<S: shell::Shell> Gcp<S> {
         let config = self.config.borrow();
         // settings
         let service_name = self.serverless_service_name(plan);
-        let region = config.cloud_region();
+        let region = self.deploy_region(options);
         // endpoint version for the service name is used for service version, 
         // TODO: better separation between endpoint and service version
         let service_version = config::Config::next_endpoint_version(&self.config, plan.lb_name(), &plan.service)?;
@@ -582,7 +574,7 @@ impl<S: shell::Shell> Gcp<S> {
             &hashmap!{}
         )?;
         let existing_instance_templates: Vec<&str> = service_output.split('\n').collect();
-        let resource_location_flag = format!("--region={}", config.cloud_region());
+        let resource_location_flag = format!("--region={}", self.default_region);
         let re_services = Regex::new(
             &config.canonical_name(&r#"instance-template\-([^\-]+)\-([^\-]+)"#)
         ).unwrap();
@@ -621,10 +613,12 @@ impl<S: shell::Shell> Gcp<S> {
                             ), &hashmap!{}, false));
                         }
                         // then, remove outdated instance group
+                        let default_deploy_options = hashmap!{};
+                        let deploy_options = plan.try_get_container_options().unwrap_or(&default_deploy_options);
                         shell::ignore_exit_code!(self.shell.exec(&vec!(
                             "gcloud", "compute", "instance-groups", "managed", "delete",
                              &self.instance_group_name(&plan, version),
-                             &resource_location_flag, "--quiet"
+                             &format!("--region={}", self.deploy_region(deploy_options)), "--quiet"
                         ), &hashmap!{}, false));
                         // then, delete instance template
                         shell::ignore_exit_code!(self.shell.exec(&vec!(
@@ -676,8 +670,8 @@ impl<S: shell::Shell> Gcp<S> {
         }
         Ok(())
     }
-    fn get_zone_and_project<'b>(&'b self, dns_zone: &'b str) -> (&'b str, &'b str) {
-        let parsed: Vec<&str> = dns_zone.split("@").collect();
+    fn get_zone_and_project<'b>(&'b self) -> (&'b str, &'b str) {
+        let parsed: Vec<&str> = self.dns_zone.split("@").collect();
         return if parsed.len() > 1 {
             (parsed[0], parsed[1])
         } else {
@@ -691,18 +685,31 @@ impl<'a, S: shell::Shell> cloud::Cloud for Gcp<S> {
         let shell = S::new(config);
         let config_ref = config.borrow();
         let cloud_provider_config = config_ref.cloud.accounts.get(account_name).unwrap();
-        return Ok(Gcp::<S> {
-            config: config.clone(),
-            account_name: account_name.to_string(),
-            service_account: Gcp::<S>::service_account(cloud_provider_config, &shell)?,
-            gcp_project_id: Gcp::<S>::gcp_project_id(cloud_provider_config, &shell)?,
-            shell
-        });
+        if let config::CloudProviderConfig::GCP{
+            key:_, project_id, dns_zone, region
+        } = cloud_provider_config {
+            return Ok(Gcp::<S> {
+                config: config.clone(),
+                account_name: account_name.to_string(),
+                default_region: region.to_string(),
+                dns_zone: dns_zone.to_string(),
+                service_account: Gcp::<S>::service_account(cloud_provider_config, &shell)?,
+                gcp_project_id: project_id.to_string(),
+                shell
+            });
+        }
+        return escalate!(Box::new(config::ConfigError{
+            cause: format!("should have GCP config for config.cloud.provider, but {}", cloud_provider_config)
+        }))
     }
-    fn setup_dependency(&self) -> Result<(), Box<dyn Error>> {
+    fn init(&self, _: bool) -> Result<(), Box<dyn Error>> {
         let config = self.config.borrow();
         // install gcloud command, if not installed
         let install_path = format!("{}/cloud/google-cloud-sdk", std::env::var("DEPLO_TOOLS_PATH")?);
+        // if reinit {
+        //     log::info!("remove gcloud installation for reinitialize");
+        //     fs::remove_dir_all(&install_path).unwrap_or(());
+        // }
         match fs::metadata(&install_path) {
             Ok(_) => {
                 log::debug!("gcloud already installed at {}", &install_path);
@@ -766,7 +773,7 @@ impl<'a, S: shell::Shell> cloud::Cloud for Gcp<S> {
             Ok(_) => {},
             Err(std::env::VarError::NotPresent) => { 
                 if let config::CloudProviderConfig::GCP{
-                    key,
+                    key, project_id:_,dns_zone:_, region
                 } = &cloud_provider_config {
                     fs::write("/tmp/gcp-secret.json", key)?;
                     // setup env for apps which uses gcloud library
@@ -780,7 +787,7 @@ impl<'a, S: shell::Shell> cloud::Cloud for Gcp<S> {
                         "gcloud config set project {} && \
                         gcloud config set compute/region {} && \
                         gcloud config set run/region {}",
-                        &self.gcp_project_id, &config.cloud_region(), &config.cloud_region()
+                        &self.gcp_project_id, region, region
                     ), &hashmap!{}, false)?;
                     self.shell.exec(&vec!(
                         "gcloud", "services", "enable", "cloudresourcemanager.googleapis.com"
@@ -806,10 +813,9 @@ impl<'a, S: shell::Shell> cloud::Cloud for Gcp<S> {
     fn cleanup_dependency(&self) -> Result<(), Box<dyn Error>> {
         let config = self.config.borrow();
         let config::TerraformerConfig::Terraform {
+            backend: _,
             backend_bucket,
-            resource_prefix: _,
-            dns_zone: _,
-            region: _
+            resource_prefix: _
         } = &config.cloud.terraformer;
         return match self.shell.exec(
             &vec!("gsutil", "rb", &format!("gs://{}", backend_bucket)), 
@@ -826,10 +832,9 @@ impl<'a, S: shell::Shell> cloud::Cloud for Gcp<S> {
         match name {
             "terraform.backend" => {
                 let config::TerraformerConfig::Terraform {
+                    backend: _,
                     backend_bucket,
-                    resource_prefix,
-                    dns_zone: _,
-                    region: _
+                    resource_prefix
                 } = &config.cloud.terraformer;
                 match self.shell.exec(
                     &vec!("gsutil", "mb", &format!("gs://{}", backend_bucket)), 
@@ -844,38 +849,64 @@ impl<'a, S: shell::Shell> cloud::Cloud for Gcp<S> {
                     bucket = \"{}\"\n\
                     prefix = \"{}\"\n\
                     credentials = \"/tmp/gcp-secret.json\"\n\
-                ", backend_bucket, resource_prefix.as_ref().unwrap_or(&config.common.project_id)));
+                ", backend_bucket, resource_prefix.as_ref().unwrap_or(
+                    &config.project_namespace().to_string()
+                )));
             },
             "terraform.tfvars" => {
                 let config::TerraformerConfig::Terraform {
+                    backend: _,
                     backend_bucket:_,
-                    resource_prefix,
-                    dns_zone,
-                    region
+                    resource_prefix
                 } = &config.cloud.terraformer;
-                let root_domain_dns_name = self.root_domain_dns_name(&dns_zone)?;
-                let zone_and_project = self.get_zone_and_project(&dns_zone);
+                let root_domain_dns_name = self.root_domain_dns_name()?;
+                let zone_and_project = self.get_zone_and_project();
                 return Ok(
                     format!(
                         "\
-                            root_domain = \"{}\"\n\
-                            dns_zone = \"{}\"\n\
-                            dns_zone_project = \"{}\"\n\
-                            project_id = \"{}\"\n\
-                            region = \"{}\"\n\
-                            resource_prefix = \"{}\"\n\
-                            envs = [\"{}\"]\n\
+                            gcp = {{\n\
+                                root_domain = \"{}\"\n\
+                                dns_zone = \"{}\"\n\
+                                dns_zone_project = \"{}\"\n\
+                                project_id = \"{}\"\n\
+                                region = \"{}\"\n\
+                                resource_prefix = \"{}\"\n\
+                                envs = [\"{}\"]\n\
+                                lbs = [\"{}\"]\n\
+                            }}
                         ",
                         &root_domain_dns_name[..root_domain_dns_name.len()-1], 
                         zone_and_project.0, zone_and_project.1, 
-                        config.common.project_id, region, 
-                        resource_prefix.as_ref().unwrap_or(&"".to_string()), 
+                        self.gcp_project_id, self.default_region, 
+                        resource_prefix.as_ref().unwrap_or(&config.project_namespace().to_string()), 
                         config.common.release_targets
+                            .keys().map(|s| &**s)
+                            .collect::<Vec<&str>>().join(r#"",""#),
+                        config.lb
                             .keys().map(|s| &**s)
                             .collect::<Vec<&str>>().join(r#"",""#)
                     )
                 );
-            }
+            },
+            "terraform.main.tf" => {
+                let config::TerraformerConfig::Terraform {
+                    backend,
+                    backend_bucket:_,
+                    resource_prefix:_
+                } = &config.cloud.terraformer;
+                return Ok(
+                    format!(
+                        "\
+                            terraform {{\n\
+                                backend \"{}\" {{\n\
+                                //configured by config/backend\n\
+                                }}\n\
+                            }}\n\
+                        ",
+                        backend.as_ref().unwrap_or(&"gcs".to_string())
+                    )
+                );
+            }            
             _ => {
                 escalate!(Box::new(cloud::CloudError{
                     cause: format!("invalid terraformer config name: {}", name)
@@ -885,15 +916,15 @@ impl<'a, S: shell::Shell> cloud::Cloud for Gcp<S> {
     }
 
     // dns
-    fn root_domain_dns_name(&self, zone: &str) -> Result<String, Box<dyn Error>> {
-        let zone_and_project = self.get_zone_and_project(zone);
+    fn root_domain_dns_name(&self) -> Result<String, Box<dyn Error>> {
+        let zone_and_project = self.get_zone_and_project();
         let r = self.shell.eval_output_of(&format!(r#"
             gcloud dns managed-zones list --project={} --format=json |
             jq -jr ".[]|select(.name==\"{}\").dnsName"
         "#, zone_and_project.1, zone_and_project.0), &hashmap!{})?;
         if r.is_empty() {
             return escalate!(Box::new(cloud::CloudError{
-                cause: format!("no such zone: {} [{}]", zone, r)
+                cause: format!("no such zone: {:?} [{}]", zone_and_project, r)
             }));
         }
         return Ok(r)
@@ -901,17 +932,17 @@ impl<'a, S: shell::Shell> cloud::Cloud for Gcp<S> {
 
     // container
     fn push_container_image(
-        &self, src: &str, target: &str
+        &self, src: &str, target: &str, options: &HashMap<String, String>
     ) -> Result<String, Box<dyn Error>> {
         let config = self.config.borrow();
         self.shell.exec(&vec!("docker", "tag", src, target), &hashmap!{}, false)?;
-        let repository_url = self.container_repository_url().expect(
-            &format!("invalid region:{}", config.cloud_region())
+        let repository_url = self.container_repository_url(options.get("region")).expect(
+            &format!("invalid region:{}", self.deploy_region(options))
         );
         let cloud_provider_config = config.cloud.accounts.get(&self.account_name).unwrap();
         // authentication
         match &cloud_provider_config {
-            config::CloudProviderConfig::GCP{key} => {
+            config::CloudProviderConfig::GCP{key, project_id:_, dns_zone:_, region:_} => {
                 self.shell.eval(&format!(
                     "echo '{}' | docker login -u _json_key --password-stdin https://{}",
                     key, repository_url
@@ -938,7 +969,7 @@ impl<'a, S: shell::Shell> cloud::Cloud for Gcp<S> {
             plan::ContainerDeployTarget::Instance => {
                 self.deploy_instance_group(plan, image, ports, env, options)?;
                 for (name, _) in ports {
-                    self.deploy_backend_service(plan, name)?;
+                    self.deploy_backend_service(plan, name, options)?;
                 }
             },
             plan::ContainerDeployTarget::Kubernetes => {
@@ -952,11 +983,11 @@ impl<'a, S: shell::Shell> cloud::Cloud for Gcp<S> {
 
     // storage
     fn create_bucket(
-        &self, bucket_name: &str
+        &self, bucket_name: &str, options: &cloud::DeployStorageOption
     ) -> Result<(), Box<dyn Error>> {
         match self.shell.exec(
             &vec!("gsutil", "mb", 
-                "-l", &self.storage_region(), 
+                "-l", &self.storage_region(options.region.as_ref()), 
                 &format!("gs://{}", bucket_name)
             ), 
             &hashmap!{}, false) {
@@ -978,7 +1009,7 @@ impl<'a, S: shell::Shell> cloud::Cloud for Gcp<S> {
                 Some(c) => match c.get(1) {
                     Some(m) => { 
                         let bn = m.as_str();
-                        self.create_bucket(bn)?; 
+                        self.create_bucket(bn, config)?; 
                         bn.to_string()
                     },
                     None => return escalate!(Box::new(cloud::CloudError{

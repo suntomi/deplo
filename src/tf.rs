@@ -6,7 +6,7 @@ use crate::cloud;
 
 pub trait Terraformer {
     fn new(config: &config::Container) -> Result<Self, Box<dyn Error>> where Self : Sized;
-    fn init(&self, cloud: &Box<dyn cloud::Cloud>) -> Result<(), Box<dyn Error>>;
+    fn init(&self, main_cloud: &Box<dyn cloud::Cloud>, reinit: bool) -> Result<(), Box<dyn Error>>;
     fn destroy(&self, cloud: &Box<dyn cloud::Cloud>);
     fn plan(&self) -> Result<(), Box<dyn Error>>;
     fn apply(&self) -> Result<(), Box<dyn Error>>;
@@ -50,10 +50,9 @@ pub fn factory<'a>(
 ) -> Result<Box<dyn Terraformer + 'a>, Box<dyn Error>> {
     match &config.borrow().cloud.terraformer {
         config::TerraformerConfig::Terraform {
+            backend:_,
             backend_bucket: _,
-            resource_prefix: _,
-            dns_zone: _,
-            region: _
+            resource_prefix: _
         } => {
             return factory_by::<terraform::Terraform>(config);
         }

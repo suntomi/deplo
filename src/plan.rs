@@ -125,10 +125,12 @@ impl Step {
             Self::Container { target, image, port:_, extra_ports:_, env, options } => {
                 let cloud = config.cloud_service(&plan.cloud_account_name())?;
                 // deploy image to cloud container registry
-                let pushed_image_tag = cloud.push_container_image(&image, 
+                let pushed_image_tag = cloud.push_container_image(
+                    &image, 
                     &format!("{}:{}", 
                         &config.canonical_name(&plan.service), 
-                        config::Config::next_endpoint_version(&plan.config, plan.lb_name(), &plan.service)?)
+                        config::Config::next_endpoint_version(&plan.config, plan.lb_name(), &plan.service)?),
+                    options.as_ref().unwrap_or(&hashmap!{})
                 )?;
                 // deploy to autoscaling group or serverless platform
                 let ports = plan.ports()?.expect("container deployment should have at least an exposed port");
@@ -231,7 +233,8 @@ impl Plan {
                                     destination: "target_bucket/folder/subfolder".to_string(),
                                     permission: None,
                                     max_age: None,
-                                    excludes: None
+                                    excludes: None,
+                                    region: None
                                 }
                             },
                         }),
@@ -395,7 +398,18 @@ impl Plan {
             cause: format!("either storage/container deployment should exist in {}.toml", self.service)
         }))
     }
-
+    pub fn try_get_container_options<'a>(&'a self) -> Option<&'a HashMap<String, String>> {
+        for step in &self.data.deploy.steps {
+            match step {
+                Step::Container { target:_, image:_, port:_, extra_ports:_, env:_, options } => {
+                    return options.as_ref()
+                }
+                _ => {}
+            }
+        }
+        return None
+    }
+    
     fn verify(&self) -> Result<(), Box<dyn Error>> {
         let err = Box::new(DeployError {
             cause: format!(
