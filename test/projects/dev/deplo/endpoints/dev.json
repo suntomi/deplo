@@ -1,18 +1,61 @@
 {
-  "version": 0,
-  "lb_name": "default",
+  "version": 7,
   "host": "dev.deplo.suntomi.dev",
-  "confirm_deploy": null,
-  "certify_latest_dist_only": null,
+  "confirm_deploy": true,
+  "certify_latest_dist_only": true,
   "backport_target_branch": null,
-  "default": null,
+  "default": "api",
   "paths": null,
-  "min_certified_dist_versions": {},
+  "min_certified_dist_versions": {
+    "ios": 2,
+    "android": 2
+  },
   "next": {
     "paths": null,
-    "endpoint_service_map": {},
-    "versions": {}
+    "endpoint_service_map": {
+      "android": "android",
+      "ios": "ios",
+      "api": "api",
+      "admin": "api"
+    },
+    "versions": {
+      "api": 4,
+      "admin": 4,
+      "android": 2,
+      "ios": 2
+    }
   },
-  "releases": [],
+  "releases": [
+    {
+      "paths": null,
+      "endpoint_service_map": {
+        "android": "android",
+        "ios": "ios",
+        "api": "api",
+        "admin": "api"
+      },
+      "versions": {
+        "api": 4,
+        "admin": 4,
+        "android": 2,
+        "ios": 2
+      }
+    },
+    {
+      "paths": null,
+      "endpoint_service_map": {
+        "android": "android",
+        "admin": "api",
+        "api": "api",
+        "ios": "ios"
+      },
+      "versions": {
+        "api": 4,
+        "admin": 4,
+        "android": 1,
+        "ios": 2
+      }
+    }
+  ],
   "deploy_state": null
 }
