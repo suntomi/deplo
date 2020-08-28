@@ -132,8 +132,8 @@ impl Endpoints {
         ep.save(&path)?;
         Ok(r)
     }
-    pub fn cloud_account_name(&self, config: &config::Ref) -> String {
-        config.lb_config(&self.lb_name).account_name().to_string()
+    pub fn cloud_account_name(&self, config: &config::Container) -> String {
+        config.borrow().lb_config(&self.lb_name).account_name().to_string()
     }
     pub fn change_type<'a>(&self, config: &config::Container) -> Result<ChangeType, Box<dyn Error>> {
         let config_ref = config.borrow();
@@ -157,11 +157,27 @@ impl Endpoints {
         return Ok(change)
     }
     pub fn cascade_releases(
-        &mut self, config: &config::Ref
+        &mut self, config: &config::Container
     ) -> Result<(), Box<dyn Error>> {
-        self.next.endpoint_service_map = config.runtime.endpoint_service_map.clone();
+        let config_ref = config.borrow();
+        let lb_name = self.lb_name.clone();
+        // check some services moved to other load balancers
+        self.next.versions.retain(|ep,_| {
+            let plan = match plan::Plan::find_by_endpoint(config, &ep) {
+                Ok(p) => p,
+                Err(_) => return false
+            };
+            match plan.ports() {
+                Ok(ports) => match ports.unwrap_or(hashmap!{}).get(ep) {
+                    Some(port) => port.get_lb_name(&plan) == lb_name,
+                    None => false
+                },
+                Err(_) => false
+            }            
+        });
+        self.next.endpoint_service_map = config_ref.runtime.endpoint_service_map.clone();
         self.releases.insert(0, self.next.clone());
-        self.persist(config)?;
+        self.persist(&config_ref)?;
 
         Ok(())
     }

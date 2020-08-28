@@ -658,6 +658,8 @@ impl Config {
         // 1. all endpoints/plans can be loaded without error 
         //    (loading endpoints/plans verify consistency of its content)
         // 2. keys in each plan's extra_services is project-unique
+        // 3. ports belongs to same service must belong to load balancers of same cloud provider
+        let config = c.borrow();
         let mut endpoint_service_map = hashmap!{};
         let mut store_deployments = vec!();
         for entry in glob(&c.borrow().services_path().join("*.toml").to_string_lossy())? {

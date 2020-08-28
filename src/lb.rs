@@ -82,11 +82,12 @@ fn deploy_meta(
 
 fn deploy_single_load_balancer(
     target: &str,
-    config: &config::Ref,
+    config: &config::Container,
     endpoints: &mut endpoints::Endpoints,
     original_change_type: endpoints::ChangeType,
     enable_backport: bool
 ) -> Result<(), Box<dyn Error>> {
+    let config_ref = config.borrow();
     let cloud_account_name = endpoints.cloud_account_name(config);
     let current_metaver = endpoints.version;
     let mut change_type = original_change_type;
@@ -106,38 +107,38 @@ fn deploy_single_load_balancer(
             // push next release as latest release
             endpoints.cascade_releases(config)?;
             // and collect releases which is not referenced by distributions
-            if endpoints.gc_releases(config)? {
+            if endpoints.gc_releases(&config_ref)? {
                 // if true, means some releases are collected and path will be changed
                 change_type = endpoints::ChangeType::Path;
             }
-            endpoints.set_deploy_state(config, None)?;
+            endpoints.set_deploy_state(&config_ref, None)?;
         } else {
             log::info!("--- set pending cleanup for prod deployment");
-            endpoints.set_deploy_state(config, Some(endpoints::DeployState::ConfirmCleanup))?;
+            endpoints.set_deploy_state(&config_ref, Some(endpoints::DeployState::ConfirmCleanup))?;
             // before PR, next release as also seen in load balancer, because some of workflow
             // requires QA in real environment (eg. game)
         }
         if change_type == endpoints::ChangeType::Path {
             log::info!("--- {}: meta version up {} => {} due to urlmap changes", 
                 target, current_metaver, current_metaver + 1);
-            endpoints.version_up(&config)?;
+            endpoints.version_up(&config_ref)?;
         }
         log::info!("--- deploy metadata bucket");
-        deploy_meta(config, target, &cloud_account_name, &endpoints)?;
+        deploy_meta(&config_ref, target, &cloud_account_name, &endpoints)?;
 
         if change_type == endpoints::ChangeType::Path {
-            &config.cloud_service(&cloud_account_name)?.update_path_matcher(&endpoints)?;
+            &config_ref.cloud_service(&cloud_account_name)?.update_path_matcher(&endpoints)?;
         }
 
         if deployed {
             // if any change, commit to github
-            try_commit_meta(config)?;
+            try_commit_meta(&config_ref)?;
         } else {
-            meta_pr(config, &format!("update {}.json: cutover new release", target), "cutover")?;
+            meta_pr(&config_ref, &format!("update {}.json: cutover new release", target), "cutover")?;
         }
     } else if enable_backport {
         if let Some(b) = &endpoints.backport_target_branch {
-            backport_pr(config, b)?;
+            backport_pr(&config_ref, b)?;
         }
     }
 
@@ -156,7 +157,7 @@ pub fn deploy(
             &config_ref.endpoints_file_path(lb_name, Some(target))
         )?;
         let ct = endpoints.change_type(&config)?;
-        deploy_single_load_balancer(target, &config_ref, &mut endpoints, ct, enable_backport)?
+        deploy_single_load_balancer(target, config, &mut endpoints, ct, enable_backport)?
     }
 
     Ok(())

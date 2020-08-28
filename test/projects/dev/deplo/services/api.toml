@@ -15,7 +15,7 @@ target = "Instance"
 port = 80
 [deploy.steps.extra_services.admin]
 port = 10000
-lb = "admin"
+lb_name = "admin"
 [deploy.steps.extra_services.metrics]
 port = 10001
 

@@ -86,6 +86,12 @@ pub struct Port {
     pub port: u32,
     pub lb_name: Option<String>,
 }
+impl Port {
+    pub fn get_lb_name(&self, plan: &Plan) -> String {
+        let default_lb_name = &plan.lb_name().to_string();
+        self.lb_name.as_ref().unwrap_or(default_lb_name).to_string()
+    }
+}
 #[derive(Serialize, Deserialize, Debug)]
 #[serde(tag = "type")]
 enum Step {
@@ -318,7 +324,7 @@ impl Plan {
     pub fn find_by_endpoint(
         config: &config::Container, endpoint: &str
     ) -> Result<Self, Box<dyn Error>> {
-        for entry in glob(&config.borrow().services_path().join("*.toml").to_string_lossy())? {
+            for entry in glob(&config.borrow().services_path().join("*.toml").to_string_lossy())? {
             match entry {
                 Ok(path) => {
                     let plan = Self::load_by_path(config, &path)?;

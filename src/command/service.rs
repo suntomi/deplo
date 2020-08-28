@@ -46,26 +46,25 @@ impl<S: shell::Shell> Service<S> {
         let config = self.config.borrow();        
         let (account_name, _) = config.ci_config_by_env();
         let ci = config.ci_service(account_name)?;
-        let p = plan::Plan::load(
+        let plan = plan::Plan::load(
             &self.config, 
             // both required argument
             args.value_of("name").unwrap()
         )?;
-        p.exec::<S>(kind.unwrap_or(match ci.pull_request_url()? {
+        plan.exec::<S>(kind.unwrap_or(match ci.pull_request_url()? {
             Some(_) => ActionType::PullRequest,
             _ => ActionType::Deploy
         }) == ActionType::PullRequest)?;
-        match p.ports()? {
+        match plan.ports()? {
             Some(ports) => {
                 for (n, port) in &ports {
-                    let name = if n.is_empty() { &p.service } else { n };
-                    let default_lb_name = &p.lb_name().to_string();
-                    let lb_name = port.lb_name.as_ref().unwrap_or(default_lb_name);
-                    config::Config::update_endpoint_version(&self.config, lb_name, name, &p)?;
+                    let name = if n.is_empty() { &plan.service } else { n };
+                    let lb_name = port.get_lb_name(&plan);
+                    config::Config::update_endpoint_version(&self.config, &lb_name, name, &plan)?;
                 }
             },
             None => { // non-container deployment (storage / destribution / etc...)
-                config::Config::update_endpoint_version(&self.config, p.lb_name(), &p.service, &p)?;
+                config::Config::update_endpoint_version(&self.config, plan.lb_name(), &plan.service, &plan)?;
             }
         }
         Ok(())
