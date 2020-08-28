@@ -160,3 +160,9 @@ pub fn deploy(
 
     Ok(())
 }
+
+pub fn cleanup(
+    _: &config::Container
+) -> Result<(), Box<dyn Error>> {
+    Ok(())
+}

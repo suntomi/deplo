@@ -8,6 +8,7 @@ use serde::{Deserialize, Serialize};
 use crate::config;
 use crate::ci;
 use crate::shell;
+use crate::module;
 use crate::util::{escalate,seal};
 
 #[derive(Serialize, Deserialize)]
@@ -22,15 +23,8 @@ pub struct GhAction<S: shell::Shell = shell::Default> {
     pub shell: S,
 }
 
-impl<S: shell::Shell> ci::CI for GhAction<S> {
-    fn new(config: &config::Container, account_name: &str) -> Result<GhAction<S>, Box<dyn Error>> {
-        return Ok(GhAction::<S> {
-            config: config.clone(),
-            account_name: account_name.to_string(),
-            shell: S::new(config)
-        });
-    }
-    fn init(&self, _: bool) -> Result<(), Box<dyn Error>> {
+impl<'a, S: shell::Shell> module::Module for GhAction<S> {
+    fn prepare(&self, _: bool) -> Result<(), Box<dyn Error>> {
         let config = self.config.borrow();
         let repository_root = config.vcs_service()?.repository_root()?;
         let deplo_yml_path = format!("{}/.github/workflows/deplo.yml", repository_root);
@@ -45,6 +39,16 @@ impl<S: shell::Shell> ci::CI for GhAction<S> {
             config.runtime.workdir.as_ref().unwrap_or(&"".to_string())
         ))?;
         Ok(())
+    }
+}
+
+impl<S: shell::Shell> ci::CI for GhAction<S> {
+    fn new(config: &config::Container, account_name: &str) -> Result<GhAction<S>, Box<dyn Error>> {
+        return Ok(GhAction::<S> {
+            config: config.clone(),
+            account_name: account_name.to_string(),
+            shell: S::new(config)
+        });
     }
     fn pull_request_url(&self) -> Result<Option<String>, Box<dyn Error>> {
         match std::env::var("DEPLO_GHACTION_PULL_REQUEST_URL") {

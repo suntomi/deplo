@@ -7,6 +7,7 @@ use maplit::hashmap;
 use crate::config;
 use crate::ci;
 use crate::shell;
+use crate::module;
 use crate::util::escalate;
 
 pub struct Circle<S: shell::Shell = shell::Default> {
@@ -15,15 +16,8 @@ pub struct Circle<S: shell::Shell = shell::Default> {
     pub shell: S,
 }
 
-impl<'a, S: shell::Shell> ci::CI for Circle<S> {
-    fn new(config: &config::Container, account_name: &str) -> Result<Circle<S>, Box<dyn Error>> {
-        return Ok(Circle::<S> {
-            config: config.clone(),
-            account_name: account_name.to_string(),
-            shell: S::new(config),
-        });
-    }
-    fn init(&self, _: bool) -> Result<(), Box<dyn Error>> {
+impl<'a, S: shell::Shell> module::Module for Circle<S> {
+    fn prepare(&self, _: bool) -> Result<(), Box<dyn Error>> {
         let config = self.config.borrow();
         let repository_root = config.vcs_service()?.repository_root()?;
         let circle_yml_path = format!("{}/.circleci/config.yml", repository_root);
@@ -34,6 +28,16 @@ impl<'a, S: shell::Shell> ci::CI for Circle<S> {
             config::DEPLO_GIT_HASH, config.runtime.workdir.as_ref().unwrap_or(&"".to_string())
         ))?;
         Ok(())
+    }
+}
+
+impl<'a, S: shell::Shell> ci::CI for Circle<S> {
+    fn new(config: &config::Container, account_name: &str) -> Result<Circle<S>, Box<dyn Error>> {
+        return Ok(Circle::<S> {
+            config: config.clone(),
+            account_name: account_name.to_string(),
+            shell: S::new(config),
+        });
     }
     fn pull_request_url(&self) -> Result<Option<String>, Box<dyn Error>> {
         match std::env::var("CIRCLE_PULL_REQUEST") {

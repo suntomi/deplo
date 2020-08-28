@@ -12,7 +12,7 @@ pub trait Args : Sized {
     fn command_path(&self) -> &Vec<&str>;
     fn value_of(&self, name: &str) -> Option<&str> {
         match self.values_of(name) {
-            Some(v) => Some(v[0]),
+            Some(v) => if v.len() > 0 { Some(v[0]) } else { None },
             None => None
         }
     }

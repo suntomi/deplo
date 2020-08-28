@@ -7,6 +7,7 @@ use serde::{Deserialize, Serialize};
 use crate::config;
 use crate::endpoints;
 use crate::plan;
+use crate::module;
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct DeployStorageOption {
@@ -25,11 +26,10 @@ pub enum StorageKind<'a> {
         version: u32
     }
 }
-pub trait Cloud {
+pub trait Cloud : module::Module {
     fn new(
         config: &config::Container, account_name: &str
     ) -> Result<Self, Box<dyn Error>> where Self : Sized;
-    fn init(&self, reinit: bool) -> Result<(), Box<dyn Error>>;
     fn cleanup_dependency(&self) -> Result<(), Box<dyn Error>>;
     fn generate_terraformer_config(&self, name: &str) -> Result<String, Box<dyn Error>>;
     // dns

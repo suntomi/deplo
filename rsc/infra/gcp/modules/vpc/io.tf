@@ -16,5 +16,4 @@ output "networks" {
   value = {for k in keys(google_compute_network.vpc-network) : 
     k => google_compute_network.vpc-network[k].self_link
   }
-
 }

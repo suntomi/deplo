@@ -16,6 +16,9 @@ variable "default_backend_url" {
 variable "envs" {
   type = list(string)
 }
+variable "lbs" {
+  type = list(string)
+}
 variable "ip_version" {
   type = string
   default = "IPV4"

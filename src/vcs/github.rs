@@ -6,6 +6,7 @@ use regex;
 
 use crate::config;
 use crate::vcs;
+use crate::module;
 use super::git;
 
 pub struct Github<GIT: (git::GitFeatures) + (git::GitHubFeatures) = git::Git> {
@@ -25,6 +26,12 @@ impl<GIT: (git::GitFeatures) + (git::GitHubFeatures)> Github<GIT> {
                 cause: format!("should have github config, got: {}", config.vcs)
             }))
         }
+    }
+}
+
+impl<GIT: (git::GitFeatures) + (git::GitHubFeatures)> module::Module for Github<GIT> {
+    fn prepare(&self, _:bool) -> Result<(), Box<dyn Error>> {
+        Ok(())
     }
 }
 

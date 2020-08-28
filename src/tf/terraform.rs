@@ -7,7 +7,7 @@ use std::path::PathBuf;
 use maplit::hashmap;
 
 use crate::config;
-use crate::cloud;
+use crate::module;
 use crate::shell;
 use crate::tf;
 
@@ -63,24 +63,26 @@ impl<S: shell::Shell> Terraform<S> {
                 )?;
             }
         }
-        Ok(())   
-    }    
+        Ok(())
+    }
+    fn write_file(dest: &PathBuf, contents: &str) -> Result<(), Box<dyn Error>> {
+        match fs::metadata(dest) {
+            Ok(_) => log::debug!("infra config file {} already exists", dest.to_string_lossy()),
+            Err(_) => {
+                log::debug!("create infra config file {}", dest.to_string_lossy());
+                fs::write(&dest, contents)?;
+            }
+        }
+        Ok(())
+    }
 }
 
-impl<S: shell::Shell> tf::Terraformer for Terraform<S> {
-    fn new(config: &config::Container) -> Result<Terraform<S>, Box<dyn Error>> {
-        let config_ref = config.borrow();
-        let mut shell = S::new(config);
-        shell.set_cwd(Some(&config_ref.infra_code_dest_root_path()))?;
-        return Ok(Terraform::<S> {
-            config: config.clone(),
-            shell
-        });
-    }
-    fn init(&self, main_cloud: &Box<dyn cloud::Cloud>, reinit: bool) -> Result<(), Box<dyn Error>> {
+impl<S: shell::Shell> module::Module for Terraform<S> {
+    fn prepare(&self, reinit: bool) -> Result<(), Box<dyn Error>> {
         let config = self.config.borrow();
+        let main_cloud = config.cloud_service("default")?;
+        let cloud_provider_and_configs = config.cloud_provider_and_configs();
         if reinit {
-            let cloud_provider_and_configs = config.cloud_provider_and_configs();
             for (provider_code, _) in &cloud_provider_and_configs {
                 let dir_name = provider_code.to_lowercase();
                 Terraform::<S>::rmdir(&config.infra_code_dest_path(provider_code));
@@ -94,41 +96,68 @@ impl<S: shell::Shell> tf::Terraformer for Terraform<S> {
             Terraform::<S>::rm(&config.infra_code_dest_root_path().join("tfvars"));
             Terraform::<S>::rm(&config.infra_code_dest_root_path().join("backend"));
             Terraform::<S>::rm(&config.infra_code_dest_root_path().join("main.tf"));
+        }
 
-            let mut tfvars_list = vec!();
-            for (provider_code, cloud_config) in &cloud_provider_and_configs {
-                let provider_name = provider_code.to_lowercase();
-                Terraform::<S>::rm(
-                    &config.infra_code_dest_root_path().join(&format!("{}.tf", &provider_name))
-                );
-                Terraform::<S>::dircp(
-                    &config.infra_code_source_path(&provider_name),
-                    &config.infra_code_dest_path(&provider_name)
-                )?;
-                let account_name = config.account_name_from_provider_config(cloud_config).unwrap();
-                let cloud = config.cloud_service(account_name)?;
-                tfvars_list.push(cloud.generate_terraformer_config("terraform.tfvars")?);
-                // activate cloud provider initialization,
-                // by renaming $provider_name/init.tf to $provider_name.tf of infra direactory root
-                fs::rename(
+        let mut tfvars_list = vec!(format!(
+            "\
+                resource_prefix = \"{}\"\n\
+                envs = [\"{}\"]\n\
+            ",
+            config.cloud.resource_prefix().as_ref().unwrap_or(&config.project_namespace().to_string()), 
+            config.common.release_targets
+                .keys().map(|s| &**s)
+                .collect::<Vec<&str>>().join(r#"",""#)
+        ));
+        for (provider_code, cloud_config) in &cloud_provider_and_configs {
+            let provider_name = provider_code.to_lowercase();
+            Terraform::<S>::dircp(
+                &config.infra_code_source_path(&provider_name),
+                &config.infra_code_dest_path(&provider_name)
+            )?;
+            let account_name = config.account_name_from_provider_config(cloud_config).unwrap();
+            let cloud = config.cloud_service(account_name)?;
+            tfvars_list.push(cloud.generate_terraformer_config("terraform.tfvars")?);
+            // activate cloud provider initialization,
+            // by renaming $provider_name/init.tf to $provider_name.tf of infra direactory root
+            let tf_entry_file = &config.infra_code_dest_root_path().join(&format!("{}.tf", &provider_name));
+            match fs::metadata(tf_entry_file) {
+                Ok(_) => log::debug!("tf entry point already moved {}", tf_entry_file.to_string_lossy()),
+                Err(_) => fs::rename(
                     &config.infra_code_dest_path(&provider_name).join("init.tf"),
                     &config.infra_code_dest_root_path().join(&format!("{}.tf", &provider_name))
-                )?;
+                )?
             }
-            let tfvars = config.infra_code_dest_root_path().join("tfvars");
-            fs::write(&tfvars, tfvars_list.join("\n"))?;
-            let backend_config = config.infra_code_dest_root_path().join("backend");
-            fs::write(&backend_config, main_cloud.generate_terraformer_config("terraform.backend")?)?;
-            let main_tf = config.infra_code_dest_root_path().join("main.tf");
-            fs::write(&main_tf, main_cloud.generate_terraformer_config("terraform.main.tf")?)?;
         }
+        let tfvars = config.infra_code_dest_root_path().join("tfvars");
+        Terraform::<S>::write_file(&tfvars, &tfvars_list.join("\n"))?;
+        let backend_config = config.infra_code_dest_root_path().join("backend");
+        Terraform::<S>::write_file(&backend_config, 
+            &main_cloud.generate_terraformer_config("terraform.backend")?)?;
+        let main_tf = config.infra_code_dest_root_path().join("main.tf");
+        Terraform::<S>::write_file(&main_tf, 
+            &main_cloud.generate_terraformer_config("terraform.main.tf")?)?;
+        Ok(())
+    }    
+}
+
+impl<S: shell::Shell> tf::Terraformer for Terraform<S> {
+    fn new(config: &config::Container) -> Result<Terraform<S>, Box<dyn Error>> {
+        let config_ref = config.borrow();
+        let mut shell = S::new(config);
+        shell.set_cwd(Some(&config_ref.infra_code_dest_root_path()))?;
+        return Ok(Terraform::<S> {
+            config: config.clone(),
+            shell
+        });
+    }
+    fn init(&self) -> Result<(), Box<dyn Error>> {
         self.shell.exec(&vec!(
             "terraform", "init", "-input=false", "-backend-config=backend",
             "-var-file=tfvars"
         ), &self.run_env(), false)?;
         Ok(())
     }
-    fn destroy(&self, _: &Box<dyn cloud::Cloud>) {
+    fn destroy(&self) {
         match self.shell.exec(&vec!(
             "terraform", "destroy", "-var-file=tfvars"
         ), &self.run_env(), false) {
@@ -144,8 +173,14 @@ impl<S: shell::Shell> tf::Terraformer for Terraform<S> {
     fn rclist(&self) -> Result<Vec<String>, Box<dyn Error>> {
         let r = self.shell.output_of(&vec!(
             "terraform", "state", "list", "-no-color"
-        ), &hashmap!{})?;
+        ), &self.run_env())?;
         Ok(r.split('\n').map(|s| s.to_string()).collect())
+    }
+    fn rm(&self, path: &str) -> Result<(), Box<dyn Error>> {
+        let r = self.shell.exec(&vec!(
+            "terraform", "state", "rm", path
+        ), &self.run_env(), false)?;
+        Ok(())
     }
     fn eval(&self, path: &str) -> Result<String, Box<dyn Error>> {
         let parsed: Vec<&str> = path.split("@").collect();

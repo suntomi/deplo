@@ -6,7 +6,7 @@ use crate::args;
 use crate::config;
 use crate::command;
 use crate::shell;
-use crate::tf;
+use crate::lb;
 
 pub struct Destroy<S: shell::Shell = shell::Default> {
     pub config: config::Container,
@@ -21,13 +21,12 @@ impl<S: shell::Shell, A: args::Args> command::Command<A> for Destroy<S> {
         });
     }
     fn run(&self, _: &A) -> Result<(), Box<dyn Error>> {
-        log::info!("destroy command invoked");
-        log::debug!("destroy environment by terraformer");
+        log::debug!("destroy command invoked");
+        log::info!("destroy environment by terraformer");
+        lb::cleanup(&self.config)?;
         let config = self.config.borrow();
-        let tf = tf::factory(&self.config)?;
-        let c = config.cloud_service("default")?;
-        tf.destroy(&c);
-        c.cleanup_dependency()?;
+        let tf = config.terraformer()?;
+        tf.destroy();
         return Ok(())
     }
 }

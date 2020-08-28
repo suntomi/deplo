@@ -5,8 +5,9 @@ use std::fmt;
 use regex::Regex;
 
 use super::config;
+use crate::module;
 
-pub trait VCS {
+pub trait VCS : module::Module {
     fn new(config: &config::Container) -> Result<Self, Box<dyn Error>> where Self : Sized;
     fn release_target(&self) -> Option<String>;
     fn current_branch(&self) -> Result<String, Box<dyn Error>>;

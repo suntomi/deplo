@@ -25,27 +25,12 @@ impl<S: shell::Shell, A: args::Args> command::Command<A> for Init<S> {
     fn run(&self, args: &A) -> Result<(), Box<dyn Error>> {
         log::info!("init command invoked");
         let config = self.config.borrow();
-        let reinit = args.occurence_of("reinit") > 0;
         fs::create_dir_all(&config.root_path())?;
         fs::create_dir_all(&config.services_path())?;
 
-        log::info!("init cloud modules");
-        let cloud_provider_and_configs = config.cloud_provider_and_configs();
-        for (_, cloud_config) in &cloud_provider_and_configs {
-            let account_name = config.account_name_from_provider_config(cloud_config).unwrap();
-            let cloud = config.cloud_service(account_name)?;
-            cloud.init(reinit)?;
-        }
-
-        log::info!("init CI modules");
-        for (_, ci) in &config.ci_caches {
-            ci.init(reinit)?;
-        }
-
         log::info!("create new environment by terraformer");
         let tf = config.terraformer()?;
-        let c = config.cloud_service("default")?;
-        tf.init(&c, reinit)?;
+        tf.init()?;
         tf.exec()?;
 
         log::info!("create endpoints files for each release target");

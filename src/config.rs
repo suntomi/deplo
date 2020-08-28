@@ -176,6 +176,15 @@ pub struct CloudConfig {
     pub terraformer: TerraformerConfig,
 }
 impl CloudConfig {
+    pub fn resource_prefix<'b>(&'b self) -> &'b Option<String> {
+        match &self.terraformer {
+            TerraformerConfig::Terraform { 
+                backend: _,
+                backend_bucket: _,
+                resource_prefix
+            } => resource_prefix
+        }
+    }
     pub fn account<'b>(&'b self, name: &str) -> &'b CloudProviderConfig {
         match &self.accounts.get(name) {
             Some(a) => a,
@@ -356,6 +365,12 @@ impl Config {
             let mut mutc = c.ptr.borrow_mut();
             mutc.runtime.release_target = release_target;
         }
+        // do preparation
+        let reinit = args.value_of("reinit").unwrap_or("none");
+        Self::prepare_ci(&c, reinit == "all" || reinit == "ci")?;
+        Self::prepare_cloud(&c, reinit == "all" || reinit == "cloud")?;
+        Self::prepare_vcs(&c, reinit == "all" || reinit == "vcs")?;
+        Self::prepare_tf(&c, reinit == "all" || reinit == "tf")?;
         return Ok(c);
     }
     pub fn root_path(&self) -> &path::Path {
@@ -450,6 +465,21 @@ impl Config {
             None => panic!("no lb config for {}", lb_name)
         }
     }
+    pub fn lb_names_for_provider<'b>(&'b self, provider_name: &str) -> Vec<&'b str> {
+        let mut list = vec!();
+        for (name, lb_config) in &self.lb {
+            let default = &"default".to_string();
+            let lb_account = lb_config.account.as_ref().unwrap_or(default);
+            let account = match self.cloud.accounts.get(lb_account) {
+                Some(a) => a,
+                None => panic!("account {} does not exist", lb_account)
+            };
+            if account.code().to_lowercase() == provider_name.to_lowercase() {
+                list.push(&**name)
+            }
+        }
+        list
+    }
     pub fn cloud_service<'a>(&'a self, account_name: &str) -> Result<&'a Box<dyn cloud::Cloud>, Box<dyn Error>> {
         return match self.cloud_caches.get(account_name) {
             Some(cloud) => Ok(cloud),
@@ -515,7 +545,15 @@ impl Config {
             }))
         } 
     }
-    pub fn ensure_ci_init(c: &Container) -> Result<(), Box<dyn Error>> {
+    fn prepare_ci(c: &Container, reinit: bool) -> Result<(), Box<dyn Error>> {
+        let c = c.ptr.borrow();
+        let cache = &c.ci_caches;
+        for (_, ci) in cache {
+            ci.prepare(reinit)?;
+        }
+        Ok(())
+    }
+    fn ensure_ci_init(c: &Container) -> Result<(), Box<dyn Error>> {
         let mut caches = hashmap!{};
         {
             let immc = c.borrow();
@@ -531,7 +569,16 @@ impl Config {
         }
         Ok(())
     }
-    pub fn ensure_cloud_init(c: &Container) -> Result<(), Box<dyn Error>> {
+    fn prepare_cloud(c: &Container, reinit: bool) -> Result<(), Box<dyn Error>> {
+        let c = c.ptr.borrow();
+        let cache = &c.cloud_caches;
+        for (_, ci) in cache {
+            ci.prepare(reinit)?;
+        }
+        Ok(())
+
+    }
+    fn ensure_cloud_init(c: &Container) -> Result<(), Box<dyn Error>> {
         let mut caches = hashmap!{};
         {
             let immc = c.borrow();
@@ -547,13 +594,33 @@ impl Config {
         }
         Ok(())
     }
-    pub fn ensure_vcs_init(c: &Container) -> Result<(), Box<dyn Error>> {
+    fn prepare_vcs(c: &Container, reinit: bool) -> Result<(), Box<dyn Error>> {
+        let c = c.ptr.borrow();
+        let cache = &c.vcs_cache;
+        if cache.len() <= 0 {
+            return escalate!(Box::new(ConfigError{ 
+                cause: format!("no vcs service") 
+            }))
+        }
+        cache[0].prepare(reinit)
+    }
+    fn ensure_vcs_init(c: &Container) -> Result<(), Box<dyn Error>> {
         let vcs = vcs::factory(c)?;
         let mut mutc = c.ptr.borrow_mut();
         mutc.vcs_cache.push(vcs);
         Ok(())
     }
-    pub fn ensure_tf_init(c: &Container) -> Result<(), Box<dyn Error>> {
+    fn prepare_tf(c: &Container, reinit: bool) -> Result<(), Box<dyn Error>> {
+        let c = c.ptr.borrow();
+        let cache = &c.tf_cache;
+        if cache.len() <= 0 {
+            return escalate!(Box::new(ConfigError{ 
+                cause: format!("no vcs service") 
+            }))
+        }
+        cache[0].prepare(reinit)
+    }    
+    fn ensure_tf_init(c: &Container) -> Result<(), Box<dyn Error>> {
         let tf = tf::factory(c)?;
         let mut mutc = c.ptr.borrow_mut();
         mutc.tf_cache.push(tf);

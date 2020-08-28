@@ -3,13 +3,15 @@ use std::fmt;
 
 use crate::config;
 use crate::cloud;
+use crate::module;
 
-pub trait Terraformer {
+pub trait Terraformer : module::Module {
     fn new(config: &config::Container) -> Result<Self, Box<dyn Error>> where Self : Sized;
-    fn init(&self, main_cloud: &Box<dyn cloud::Cloud>, reinit: bool) -> Result<(), Box<dyn Error>>;
-    fn destroy(&self, cloud: &Box<dyn cloud::Cloud>);
+    fn destroy(&self);
+    fn init(&self) -> Result<(), Box<dyn Error>>;
     fn plan(&self) -> Result<(), Box<dyn Error>>;
     fn apply(&self) -> Result<(), Box<dyn Error>>;
+    fn rm(&self, path: &str) -> Result<(), Box<dyn Error>>;
     fn rclist(&self) -> Result<Vec<String>, Box<dyn Error>>;
     fn eval(&self, path: &str) -> Result<String, Box<dyn Error>>;
     fn exec(&self) -> Result<(), Box<dyn Error>> {

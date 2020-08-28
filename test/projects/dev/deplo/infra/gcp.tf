@@ -1,17 +1,23 @@
 //
 // tfvars
 //
+variable "envs" {}
+variable "resource_prefix" {}
 variable "gcp" {}
 
 locals {
+  envs = var.envs
+  resource_prefix = var.resource_prefix
+
   root_domain = var.gcp.root_domain
   dns_zone = var.gcp.dns_zone
   dns_zone_project = var.gcp.dns_zone_project
   project_id = var.gcp.project_id
   region = var.gcp.region
-  envs = var.gcp.envs
-  lbs = var.gcp.lbs
-  resource_prefix = var.gcp.resource_prefix
+
+  lbs = concat(var.envs, [for p in 
+    setproduct([for n in var.gcp.lb_names: n if n != "default"], var.envs): "${p[0]}.${p[1]}"
+  ])
 }
 
 
@@ -70,6 +76,7 @@ module "lb" {
   source = "./gcp/modules/lb"
 
   envs = local.envs
+  lbs = local.lbs
   prefix = local.resource_prefix
   root_domain = "${local.resource_prefix}.${local.root_domain}"
   dns_zone = local.dns_zone

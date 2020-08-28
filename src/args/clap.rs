@@ -53,13 +53,14 @@ lazy_static! {
             .long("workdir")
             .help("Sets working directory of entire process")
             .takes_value(true))
+        .arg(Arg::new("reinit")
+            .long("reinit")
+            .help("initialize all component again")
+            .required(false)
+            .takes_value(true))
         .subcommand(
             App::new("init")
                 .about("initialize deplo project. need to configure deplo.json beforehand")
-                .arg(Arg::new("reinit")
-                    .long("reinit")
-                    .help("initialize again")
-                    .required(false))
         )
         .subcommand(
             App::new("destroy")
@@ -75,6 +76,13 @@ lazy_static! {
                 .subcommand(
                     App::new("apply")
                     .about("apply infra change")
+                )
+                .subcommand(
+                    App::new("rm")
+                    .about("remove resource from state")
+                    .arg(Arg::new("address")
+                        .help("resource address")
+                        .index(1))
                 )
                 .subcommand(
                     App::new("rsc")

@@ -22,6 +22,16 @@ impl<S: shell::Shell> Infra<S> {
         let tf = config.terraformer()?;
         tf.apply()
     }
+    fn rm<A: args::Args>(&self, args: &A) -> Result<(), Box<dyn Error>> {
+        let config = self.config.borrow();
+        let tf = config.terraformer()?;
+        match args.value_of("address") {
+            Some(path) => return tf.rm(&path),
+            None => return escalate!(args.error(
+                &format!("resource address is not specified") 
+            ))
+        }
+    }
     fn resource<A: args::Args>(&self, args: &A) -> Result<(), Box<dyn Error>> {
         let config = self.config.borrow();
         let tf = config.terraformer()?;
@@ -44,6 +54,7 @@ impl<'a, S: shell::Shell, A: args::Args> command::Command<A> for Infra<S> {
         match args.subcommand() {
             Some(("plan", subargs)) => return self.plan(&subargs),
             Some(("apply", subargs)) => return self.apply(&subargs),
+            Some(("rm", subargs)) => return self.rm(&subargs),
             Some(("rsc", subargs)) => return self.resource(&subargs),
             Some((name, _)) => return escalate!(args.error(
                 &format!("no such subcommand: [{}]", name) 

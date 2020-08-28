@@ -2,12 +2,12 @@ use std::error::Error;
 use std::fmt;
 
 use super::config;
+use crate::module;
 
-pub trait CI {
+pub trait CI : module::Module {
     fn new(
         config: &config::Container, account_name: &str
     ) -> Result<Self, Box<dyn Error>> where Self : Sized;
-    fn init(&self, reinit: bool) -> Result<(), Box<dyn Error>>;
     fn pull_request_url(&self) -> Result<Option<String>, Box<dyn Error>>;
     fn run_job(&self, job_name: &str) -> Result<String, Box<dyn Error>>;
     fn wait_job(&self, job_id: &str) -> Result<(), Box<dyn Error>>;

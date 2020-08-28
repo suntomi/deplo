@@ -12,6 +12,7 @@ use crate::endpoints;
 use crate::shell;
 use crate::cloud;
 use crate::plan;
+use crate::module;
 use crate::util::escalate;
 
 pub struct Gcp<S: shell::Shell = shell::Default> {
@@ -680,36 +681,15 @@ impl<S: shell::Shell> Gcp<S> {
     }
 }
 
-impl<'a, S: shell::Shell> cloud::Cloud for Gcp<S> {
-    fn new(config: &config::Container, account_name: &str) -> Result<Gcp<S>, Box<dyn Error>> {
-        let shell = S::new(config);
-        let config_ref = config.borrow();
-        let cloud_provider_config = config_ref.cloud.accounts.get(account_name).unwrap();
-        if let config::CloudProviderConfig::GCP{
-            key:_, project_id, dns_zone, region
-        } = cloud_provider_config {
-            return Ok(Gcp::<S> {
-                config: config.clone(),
-                account_name: account_name.to_string(),
-                default_region: region.to_string(),
-                dns_zone: dns_zone.to_string(),
-                service_account: Gcp::<S>::service_account(cloud_provider_config, &shell)?,
-                gcp_project_id: project_id.to_string(),
-                shell
-            });
-        }
-        return escalate!(Box::new(config::ConfigError{
-            cause: format!("should have GCP config for config.cloud.provider, but {}", cloud_provider_config)
-        }))
-    }
-    fn init(&self, _: bool) -> Result<(), Box<dyn Error>> {
+impl<'a, S: shell::Shell> module::Module for Gcp<S> {
+    fn prepare(&self, reinit: bool) -> Result<(), Box<dyn Error>> {
         let config = self.config.borrow();
         // install gcloud command, if not installed
         let install_path = format!("{}/cloud/google-cloud-sdk", std::env::var("DEPLO_TOOLS_PATH")?);
-        // if reinit {
-        //     log::info!("remove gcloud installation for reinitialize");
-        //     fs::remove_dir_all(&install_path).unwrap_or(());
-        // }
+        if reinit {
+             log::info!("remove gcloud installation for reinitialize");
+             fs::remove_dir_all(&install_path).unwrap_or(());
+        }
         match fs::metadata(&install_path) {
             Ok(_) => {
                 log::debug!("gcloud already installed at {}", &install_path);
@@ -808,7 +788,32 @@ impl<'a, S: shell::Shell> cloud::Cloud for Gcp<S> {
             }
         }
 
+        log::info!("tf prepare done");
         Ok(())        
+    }
+}
+
+impl<'a, S: shell::Shell> cloud::Cloud for Gcp<S> {
+    fn new(config: &config::Container, account_name: &str) -> Result<Gcp<S>, Box<dyn Error>> {
+        let shell = S::new(config);
+        let config_ref = config.borrow();
+        let cloud_provider_config = config_ref.cloud.accounts.get(account_name).unwrap();
+        if let config::CloudProviderConfig::GCP{
+            key:_, project_id, dns_zone, region
+        } = cloud_provider_config {
+            return Ok(Gcp::<S> {
+                config: config.clone(),
+                account_name: account_name.to_string(),
+                default_region: region.to_string(),
+                dns_zone: dns_zone.to_string(),
+                service_account: Gcp::<S>::service_account(cloud_provider_config, &shell)?,
+                gcp_project_id: project_id.to_string(),
+                shell
+            });
+        }
+        return escalate!(Box::new(config::ConfigError{
+            cause: format!("should have GCP config for config.cloud.provider, but {}", cloud_provider_config)
+        }))
     }
     fn cleanup_dependency(&self) -> Result<(), Box<dyn Error>> {
         let config = self.config.borrow();
@@ -857,7 +862,7 @@ impl<'a, S: shell::Shell> cloud::Cloud for Gcp<S> {
                 let config::TerraformerConfig::Terraform {
                     backend: _,
                     backend_bucket:_,
-                    resource_prefix
+                    resource_prefix:_,
                 } = &config.cloud.terraformer;
                 let root_domain_dns_name = self.root_domain_dns_name()?;
                 let zone_and_project = self.get_zone_and_project();
@@ -870,21 +875,13 @@ impl<'a, S: shell::Shell> cloud::Cloud for Gcp<S> {
                                 dns_zone_project = \"{}\"\n\
                                 project_id = \"{}\"\n\
                                 region = \"{}\"\n\
-                                resource_prefix = \"{}\"\n\
-                                envs = [\"{}\"]\n\
-                                lbs = [\"{}\"]\n\
+                                lb_names = [\"{}\"]\n\
                             }}
                         ",
                         &root_domain_dns_name[..root_domain_dns_name.len()-1], 
                         zone_and_project.0, zone_and_project.1, 
                         self.gcp_project_id, self.default_region, 
-                        resource_prefix.as_ref().unwrap_or(&config.project_namespace().to_string()), 
-                        config.common.release_targets
-                            .keys().map(|s| &**s)
-                            .collect::<Vec<&str>>().join(r#"",""#),
-                        config.lb
-                            .keys().map(|s| &**s)
-                            .collect::<Vec<&str>>().join(r#"",""#)
+                        config.lb_names_for_provider("gcp").join(r#"",""#)
                     )
                 );
             },
