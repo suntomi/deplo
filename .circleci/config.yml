@@ -2,7 +2,7 @@ executors:
   deplo:
     working_directory: /workdir
     docker:
-      - image: suntomi/deplo:157f61edae54ef69c9bb5a80c663d3e28caa32fe
+      - image: suntomi/deplo:ff8deef89f26453cc456d4a2cfaaa18a75025dd6
 
 commands:
   fetch_repo:

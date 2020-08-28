@@ -2,12 +2,11 @@ use std::error::Error;
 use std::fmt;
 
 use crate::config;
-use crate::cloud;
 use crate::module;
 
 pub trait Terraformer : module::Module {
     fn new(config: &config::Container) -> Result<Self, Box<dyn Error>> where Self : Sized;
-    fn destroy(&self);
+    fn destroy(&self) -> Result<(), Box<dyn Error>>;
     fn init(&self) -> Result<(), Box<dyn Error>>;
     fn plan(&self) -> Result<(), Box<dyn Error>>;
     fn apply(&self) -> Result<(), Box<dyn Error>>;

@@ -7,9 +7,11 @@ use std::path::PathBuf;
 use maplit::hashmap;
 
 use crate::config;
+use crate::cloud;
 use crate::module;
 use crate::shell;
 use crate::tf;
+use crate::util::escalate;
 
 pub struct Terraform<S: shell::Shell = shell::Default> {
     pub config: config::Container,
@@ -98,6 +100,7 @@ impl<S: shell::Shell> module::Module for Terraform<S> {
             Terraform::<S>::rm(&config.infra_code_dest_root_path().join("main.tf"));
         }
 
+        // generate cloud provider specific settings
         let mut tfvars_list = vec!(format!(
             "\
                 resource_prefix = \"{}\"\n\
@@ -128,6 +131,16 @@ impl<S: shell::Shell> module::Module for Terraform<S> {
                 )?
             }
         }
+
+        // create bucket which contains terraform state
+        let config::TerraformerConfig::Terraform {
+            backend:_,
+            backend_bucket,
+            resource_prefix:_
+        } = &config.cloud.terraformer;        
+        main_cloud.create_bucket(backend_bucket, &cloud::CreateBucketOption{ region: None })?;
+
+        // generate setting files
         let tfvars = config.infra_code_dest_root_path().join("tfvars");
         Terraform::<S>::write_file(&tfvars, &tfvars_list.join("\n"))?;
         let backend_config = config.infra_code_dest_root_path().join("backend");
@@ -157,7 +170,7 @@ impl<S: shell::Shell> tf::Terraformer for Terraform<S> {
         ), &self.run_env(), false)?;
         Ok(())
     }
-    fn destroy(&self) {
+    fn destroy(&self) -> Result<(), Box<dyn Error>> {
         match self.shell.exec(&vec!(
             "terraform", "destroy", "-var-file=tfvars"
         ), &self.run_env(), false) {
@@ -167,8 +180,17 @@ impl<S: shell::Shell> tf::Terraformer for Terraform<S> {
                     destroy infra fail with {:?}, \
                     check undeleted resources and manually cleanup\
                 ", err);
+                return escalate!(Box::new(err));
             }
         }
+        let config = self.config.borrow();
+        let main_cloud = config.cloud_service("default")?;
+        let config::TerraformerConfig::Terraform {
+            backend:_,
+            backend_bucket,
+            resource_prefix:_
+        } = &config.cloud.terraformer;        
+        main_cloud.delete_bucket(backend_bucket)
     }
     fn rclist(&self) -> Result<Vec<String>, Box<dyn Error>> {
         let r = self.shell.output_of(&vec!(

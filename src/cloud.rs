@@ -10,6 +10,10 @@ use crate::plan;
 use crate::module;
 
 #[derive(Serialize, Deserialize, Debug)]
+pub struct CreateBucketOption {
+    pub region: Option<String>
+}
+#[derive(Serialize, Deserialize, Debug)]
 pub struct DeployStorageOption {
     pub permission: Option<String>,
     pub max_age: Option<u32>,
@@ -30,7 +34,7 @@ pub trait Cloud : module::Module {
     fn new(
         config: &config::Container, account_name: &str
     ) -> Result<Self, Box<dyn Error>> where Self : Sized;
-    fn cleanup_dependency(&self) -> Result<(), Box<dyn Error>>;
+    // terraformer
     fn generate_terraformer_config(&self, name: &str) -> Result<String, Box<dyn Error>>;
     // dns
     fn root_domain_dns_name(&self) -> Result<String, Box<dyn Error>>;
@@ -48,7 +52,10 @@ pub trait Cloud : module::Module {
     ) -> Result<(), Box<dyn Error>>;
     // storage
     fn create_bucket(
-        &self, bucket_name: &str, options: &DeployStorageOption
+        &self, bucket_name: &str, options: &CreateBucketOption
+    ) -> Result<(), Box<dyn Error>>;
+    fn delete_bucket(
+        &self, bucket_name: &str
     ) -> Result<(), Box<dyn Error>>;
     fn deploy_storage<'b>(
         &self, kind: StorageKind<'b>, 

@@ -815,23 +815,6 @@ impl<'a, S: shell::Shell> cloud::Cloud for Gcp<S> {
             cause: format!("should have GCP config for config.cloud.provider, but {}", cloud_provider_config)
         }))
     }
-    fn cleanup_dependency(&self) -> Result<(), Box<dyn Error>> {
-        let config = self.config.borrow();
-        let config::TerraformerConfig::Terraform {
-            backend: _,
-            backend_bucket,
-            resource_prefix: _
-        } = &config.cloud.terraformer;
-        return match self.shell.exec(
-            &vec!("gsutil", "rb", &format!("gs://{}", backend_bucket)), 
-            &hashmap!{}, false) {
-            Ok(_) => Ok(()),
-            Err(err) => match err {
-                shell::ShellError::ExitStatus{ status:_ } => Ok(()),
-                _ => escalate!(Box::new(err))
-            }
-        }
-    }
     fn generate_terraformer_config(&self, name: &str) -> Result<String, Box<dyn Error>> {
         let config = self.config.borrow();
         match name {
@@ -841,15 +824,6 @@ impl<'a, S: shell::Shell> cloud::Cloud for Gcp<S> {
                     backend_bucket,
                     resource_prefix
                 } = &config.cloud.terraformer;
-                match self.shell.exec(
-                    &vec!("gsutil", "mb", &format!("gs://{}", backend_bucket)), 
-                    &hashmap!{}, false) {
-                    Ok(_) => {},
-                    Err(err) => match err {
-                        shell::ShellError::ExitStatus{ status:_ } => {},
-                        _ => return escalate!(Box::new(err))
-                    }            
-                }
                 return Ok(format!("\
                     bucket = \"{}\"\n\
                     prefix = \"{}\"\n\
@@ -980,7 +954,7 @@ impl<'a, S: shell::Shell> cloud::Cloud for Gcp<S> {
 
     // storage
     fn create_bucket(
-        &self, bucket_name: &str, options: &cloud::DeployStorageOption
+        &self, bucket_name: &str, options: &cloud::CreateBucketOption
     ) -> Result<(), Box<dyn Error>> {
         match self.shell.exec(
             &vec!("gsutil", "mb", 
@@ -995,6 +969,19 @@ impl<'a, S: shell::Shell> cloud::Cloud for Gcp<S> {
             }            
         }
     }
+    fn delete_bucket(
+        &self, bucket_name: &str
+    ) -> Result<(), Box<dyn Error>> {
+        match self.shell.exec(
+            &vec!("gsutil", "rb", &format!("gs://{}", bucket_name)), 
+            &hashmap!{}, false) {
+            Ok(_) => Ok(()),
+            Err(err) => match err {
+                shell::ShellError::ExitStatus{ status:_ } => Ok(()),
+                _ => return escalate!(Box::new(err))
+            }            
+        }
+    }    
     fn deploy_storage<'b>(
         &self, kind: cloud::StorageKind<'b>, copymap: &HashMap<String, cloud::DeployStorageOption>
     ) -> Result<(), Box<dyn Error>> {
@@ -1006,7 +993,7 @@ impl<'a, S: shell::Shell> cloud::Cloud for Gcp<S> {
                 Some(c) => match c.get(1) {
                     Some(m) => { 
                         let bn = m.as_str();
-                        self.create_bucket(bn, config)?; 
+                        self.create_bucket(bn, &cloud::CreateBucketOption{ region: config.region.clone() })?; 
                         bn.to_string()
                     },
                     None => return escalate!(Box::new(cloud::CloudError{

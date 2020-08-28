@@ -26,7 +26,7 @@ impl<S: shell::Shell, A: args::Args> command::Command<A> for Destroy<S> {
         lb::cleanup(&self.config)?;
         let config = self.config.borrow();
         let tf = config.terraformer()?;
-        tf.destroy();
+        tf.destroy()?;
         return Ok(())
     }
 }
