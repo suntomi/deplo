@@ -15,12 +15,10 @@
     "endpoint_service_map": {
       "android": "android",
       "ios": "ios",
-      "api": "api",
-      "admin": "api"
+      "api": "api"
     },
     "versions": {
       "api": 4,
-      "admin": 4,
       "android": 2,
       "ios": 2
     }
@@ -31,12 +29,10 @@
       "endpoint_service_map": {
         "android": "android",
         "ios": "ios",
-        "api": "api",
-        "admin": "api"
+        "api": "api"
       },
       "versions": {
         "api": 4,
-        "admin": 4,
         "android": 2,
         "ios": 2
       }
@@ -45,14 +41,12 @@
       "paths": null,
       "endpoint_service_map": {
         "android": "android",
-        "admin": "api",
         "api": "api",
         "ios": "ios"
       },
       "versions": {
         "api": 4,
-        "admin": 4,
-        "android": 1,
+        "android": 2,
         "ios": 2
       }
     }

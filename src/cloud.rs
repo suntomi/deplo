@@ -46,7 +46,7 @@ pub trait Cloud : module::Module {
         &self, plan: &plan::Plan,
         target: &plan::ContainerDeployTarget,
         // note: ports always contain single entry corresponding to the empty string key
-        image: &str, ports: &HashMap<String, u32>, 
+        image: &str, services: &HashMap<String, plan::Port>, 
         env: &HashMap<String, String>,
         options: &HashMap<String, String>
     ) -> Result<(), Box<dyn Error>>;

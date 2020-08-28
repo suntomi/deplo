@@ -337,7 +337,7 @@ impl<S: shell::Shell> Gcp<S> {
     // create instance group
     fn deploy_instance_group(
         &self, plan: &plan::Plan,
-        image: &str, ports: &HashMap<String, u32>,
+        image: &str, ports: &HashMap<String, plan::Port>,
         env: &HashMap<String, String>,
         options: &HashMap<String, String>
     ) -> Result<(), Box<dyn Error>> {
@@ -431,7 +431,7 @@ impl<S: shell::Shell> Gcp<S> {
             --named-ports={}", 
             instance_group_name, resource_location_flag, 
             ports.iter().map(
-                |p| format!("{}:{}", self.backend_service_name(plan, p.0, service_version), p.1)
+                |p| format!("{}:{}", self.backend_service_name(plan, p.0, service_version), p.1.port)
             ).collect::<Vec<String>>().join(",")
         ), 
         &hashmap!{}, false)?;
@@ -932,7 +932,7 @@ impl<'a, S: shell::Shell> cloud::Cloud for Gcp<S> {
         &self, plan: &plan::Plan,
         target: &plan::ContainerDeployTarget, 
         // note: ports always contain single entry corresponding to the empty string key
-        image: &str, ports: &HashMap<String, u32>,
+        image: &str, ports: &HashMap<String, plan::Port>,
         env: &HashMap<String, String>,
         options: &HashMap<String, String>
     ) -> Result<(), Box<dyn Error>> {

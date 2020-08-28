@@ -57,12 +57,14 @@ impl<S: shell::Shell> Service<S> {
         }) == ActionType::PullRequest)?;
         match p.ports()? {
             Some(ports) => {
-                for (n, _) in &ports {
+                for (n, port) in &ports {
                     let name = if n.is_empty() { &p.service } else { n };
-                    config::Config::update_endpoint_version(&self.config, p.lb_name(), name, &p)?;
+                    let default_lb_name = &p.lb_name().to_string();
+                    let lb_name = port.lb_name.as_ref().unwrap_or(default_lb_name);
+                    config::Config::update_endpoint_version(&self.config, lb_name, name, &p)?;
                 }
             },
-            None => {
+            None => { // non-container deployment (storage / destribution / etc...)
                 config::Config::update_endpoint_version(&self.config, p.lb_name(), &p.service, &p)?;
             }
         }

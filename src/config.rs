@@ -657,7 +657,7 @@ impl Config {
         // global configuration verificaiton
         // 1. all endpoints/plans can be loaded without error 
         //    (loading endpoints/plans verify consistency of its content)
-        // 2. keys in each plan's extra_ports is project-unique
+        // 2. keys in each plan's extra_services is project-unique
         let mut endpoint_service_map = hashmap!{};
         let mut store_deployments = vec!();
         for entry in glob(&c.borrow().services_path().join("*.toml").to_string_lossy())? {

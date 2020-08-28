@@ -81,6 +81,11 @@ pub enum Builder {
     CreateReactApp {
     }
 }
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct Port {
+    pub port: u32,
+    pub lb_name: Option<String>,
+}
 #[derive(Serialize, Deserialize, Debug)]
 #[serde(tag = "type")]
 enum Step {
@@ -93,7 +98,7 @@ enum Step {
         image: String,
         target: ContainerDeployTarget,
         port: u32,
-        extra_ports: Option<HashMap<String, u32>>,
+        extra_ports: Option<HashMap<String, Port>>,
         env: Option<HashMap<String, String>>,
         options: Option<HashMap<String, String>>,
     },
@@ -381,12 +386,15 @@ impl Plan {
             cause: format!("no container/storage are deployed in {}.toml", self.service)
         }))
     }
-    pub fn ports(&self) -> Result<Option<HashMap<String, u32>>, Box<dyn Error>> {
+    pub fn ports(&self) -> Result<Option<HashMap<String, Port>>, Box<dyn Error>> {
         for step in &self.data.deploy.steps {
             match step {
                 Step::Container { target:_, image:_, port, extra_ports, env:_, options:_ } => {
-                    let mut ports = extra_ports.clone().unwrap_or(hashmap!{});
-                    ports.entry("".to_string()).or_insert(*port);
+                    let mut ports = match extra_ports {
+                        Some(ps) => ps.clone(),
+                        None => hashmap!{}
+                    };
+                    ports.entry("".to_string()).or_insert(Port{ port:*port, lb_name: None });
                     return Ok(Some(ports))
                 },
                 Step::Storage { copymap:_ } => return Ok(None),

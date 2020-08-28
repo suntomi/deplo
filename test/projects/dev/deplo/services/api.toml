@@ -13,8 +13,11 @@ type = "Container"
 image = "deplo-sandbox/apisv"
 target = "Instance"
 port = 80
-[deploy.steps.extra_ports]
-admin = 10000
+[deploy.steps.extra_services.admin]
+port = 10000
+lb = "admin"
+[deploy.steps.extra_services.metrics]
+port = 10001
 
 
 # add steps if you need to do something on pull request
