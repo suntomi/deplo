@@ -189,13 +189,13 @@ impl Plan {
     }
     pub fn create(
         config: &config::Container, 
-        service: &str, kind: &str
+        lb: Option<&str>, service: &str, kind: &str
     ) -> Result<Plan, Box<dyn Error>> {
         Ok(Plan {
             service: service.to_string(),
             config: config.clone(),
             data: PlanData {
-                lb: None,
+                lb: lb.and_then(|v| Some(v.to_string())).or_else(|| None),
                 pr: Sequence {
                     steps: match kind {
                         "storage" => vec!(Step::Script {
@@ -409,7 +409,7 @@ impl Plan {
         }
         return None
     }
-    
+
     fn verify(&self) -> Result<(), Box<dyn Error>> {
         let err = Box::new(DeployError {
             cause: format!(

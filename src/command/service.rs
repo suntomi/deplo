@@ -26,6 +26,8 @@ impl<S: shell::Shell> Service<S> {
         log::debug!("service create invoked");
         let p = plan::Plan::create(
             &self.config, 
+            // optoinal
+            args.value_of("lb"),
             // both required argument
             args.value_of("name").unwrap(), 
             args.value_of("type").unwrap()

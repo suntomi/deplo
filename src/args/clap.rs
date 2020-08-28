@@ -118,6 +118,10 @@ lazy_static! {
                 .subcommand(
                     App::new("create")
                     .about("create service")
+                    .arg(Arg::new("lb")
+                        .short('l')
+                        .long("lb")
+                        .help("load balancer name that the service belongs to"))
                     .arg(Arg::new("name")
                         .help("service name")
                         .index(1)

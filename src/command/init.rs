@@ -34,17 +34,23 @@ impl<S: shell::Shell, A: args::Args> command::Command<A> for Init<S> {
         tf.exec()?;
 
         log::info!("create endpoints files for each release target");
-        fs::create_dir_all(&config.endpoints_path())?;
         let root_domain = config.root_domain()?;
         for (lb_name, _) in &config.lb {
             for (k, _) in &config.common.release_targets {
                 match fs::metadata(config.endpoints_file_path(lb_name, Some(k))) {
-                    Ok(_) => log::info!("versions file for [{}] already created", k),
+                    Ok(_) => if lb_name == "default" {
+                        log::info!("versions file for [{}] already created", k)
+                    } else {
+                        log::info!("versions file for [{}.{}] already created", lb_name, k)
+                    },
                     Err(_) => {
-                        log::info!("create versions file for [{}]", k);
                         let domain = if lb_name == "default" {
+                            log::info!("create versions file for [{}]", k);
+                            fs::create_dir_all(&config.endpoints_path())?;
                             format!("{}.{}", k, root_domain)
                         } else {
+                            log::info!("create versions file for [{}.{}]", lb_name, k);
+                            fs::create_dir_all(&config.endpoints_path().join(lb_name))?;
                             format!("{}.{}.{}", k, lb_name, root_domain)
                         };
                         let ep = endpoints::Endpoints::new(lb_name, &domain);
