@@ -16,6 +16,7 @@ use glob::glob;
 use crate::args;
 use crate::vcs;
 use crate::cloud;
+use crate::lb;
 use crate::tf;
 use crate::ci;
 use crate::endpoints;
@@ -371,6 +372,9 @@ impl Config {
         Self::prepare_cloud(&c, reinit == "all" || reinit == "cloud")?;
         Self::prepare_vcs(&c, reinit == "all" || reinit == "vcs")?;
         Self::prepare_tf(&c, reinit == "all" || reinit == "tf")?;
+
+        // do lb preparation
+        lb::prepare(&c)?;
         return Ok(c);
     }
     pub fn root_path(&self) -> &path::Path {

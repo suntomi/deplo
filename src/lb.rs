@@ -1,4 +1,5 @@
 use std::error::Error;
+use std::fs;
 
 use maplit::hashmap;
 use chrono::Utc;
@@ -158,6 +159,38 @@ pub fn deploy(
         deploy_single_load_balancer(target, &config_ref, &mut endpoints, ct, enable_backport)?
     }
 
+    Ok(())
+}
+
+pub fn prepare(
+    config: &config::Container
+) -> Result<(), Box<dyn Error>> {
+    let config_ref = config.borrow();
+    let root_domain = config_ref.root_domain()?;
+    for (lb_name, _) in &config_ref.lb {
+        for (k, _) in &config_ref.common.release_targets {
+            match fs::metadata(config_ref.endpoints_file_path(lb_name, Some(k))) {
+                Ok(_) => if lb_name == "default" {
+                    log::debug!("versions file for [{}] already created", k)
+                } else {
+                    log::debug!("versions file for [{}.{}] already created", lb_name, k)
+                },
+                Err(_) => {
+                    let domain = if lb_name == "default" {
+                        log::info!("create versions file for [{}]", k);
+                        fs::create_dir_all(&config_ref.endpoints_path())?;
+                        format!("{}.{}", k, root_domain)
+                    } else {
+                        log::info!("create versions file for [{}.{}]", lb_name, k);
+                        fs::create_dir_all(&config_ref.endpoints_path().join(lb_name))?;
+                        format!("{}.{}.{}", k, lb_name, root_domain)
+                    };
+                    let ep = endpoints::Endpoints::new(lb_name, &domain);
+                    ep.save(config_ref.endpoints_file_path(lb_name, Some(k)))?;
+                }
+            }
+        }
+    }    
     Ok(())
 }
 
