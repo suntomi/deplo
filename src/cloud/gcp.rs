@@ -161,7 +161,12 @@ impl<S: shell::Shell> Gcp<S> {
         // service path rule should include unreleased paths 
         // (BeforeCascade case when Endpoints::confirm_deploy is true)
         let mut releases = endpoints.releases.iter().collect::<Vec<&endpoints::Release>>();
-        releases.push(&endpoints.next);
+        releases.push(match &endpoints.next {
+            Some(n) => n,
+            None => return escalate!(Box::new(cloud::CloudError{
+                cause: format!("endpoint {} should have next release", endpoints.lb_name)
+            }))
+        });
         for r in &releases {
             for (ep, v) in &r.versions {
                 let s = r.endpoint_service_map.get(ep).unwrap(); //should exist
@@ -575,7 +580,7 @@ impl<S: shell::Shell> Gcp<S> {
             &hashmap!{}
         )?;
         let existing_instance_templates: Vec<&str> = service_output.split('\n').collect();
-        let resource_location_flag = format!("--region={}", self.default_region);
+        // let resource_location_flag = format!("--region={}", self.default_region);
         let re_services = Regex::new(
             &config.canonical_name(&r#"instance-template\-([^\-]+)\-([^\-]+)"#)
         ).unwrap();
@@ -598,7 +603,7 @@ impl<S: shell::Shell> Gcp<S> {
                         }
                         None => return escalate!(template_name_err(t))
                     };
-                    if !endpoints.service_is_active(service, version) {
+                    if !endpoints.service_is_active(service, version)? {
                         // remove GC'ed cloud resource
                         let plan = plan::Plan::load(&self.config, service)?;
                         for (ep, _) in &plan.ports()?.unwrap() {
@@ -1050,6 +1055,13 @@ impl<'a, S: shell::Shell> cloud::Cloud for Gcp<S> {
     fn update_path_matcher(
         &self, endpoints: &endpoints::Endpoints
     ) -> Result<(), Box<dyn Error>> {
+        let next = match &endpoints.next {
+            Some(n) => n,
+            None => {
+                log::warn!("no new release exists");
+                return Ok(())
+            }
+        };
         let config = self.config.borrow();
         let target = config.release_target().expect("should be on release branch");
         let default_backend_option = match &endpoints.default {
@@ -1058,7 +1070,7 @@ impl<'a, S: shell::Shell> cloud::Cloud for Gcp<S> {
                 let name = if ep == &plan.service { "" } else { ep };
                 log::warn!("TODO: support manually set default backend bucket case");
                 format!("--default-service={}", 
-                    self.backend_service_name(&plan, name, endpoints.next.get_version(ep))
+                    self.backend_service_name(&plan, name, next.get_version(ep))
                 )
             },
             None => {
@@ -1091,7 +1103,7 @@ impl<'a, S: shell::Shell> cloud::Cloud for Gcp<S> {
         ), &hashmap!{}, false)?;
     
         log::info!("--- waiting for new urlmap having applied");
-        let endpoint_names = endpoints.next.versions.keys();
+        let endpoint_names = next.versions.keys();
         for ep in endpoint_names {
             let service = match config.find_service_by_endpoint(ep) {
                 Some(s) => s,
@@ -1102,7 +1114,7 @@ impl<'a, S: shell::Shell> cloud::Cloud for Gcp<S> {
                 log::debug!("[{}] does not change path. skipped", service);
                 continue
             }
-            let next_version = endpoints.next.get_version(ep);
+            let next_version = next.get_version(ep);
             if next_version <= 0 {
                 continue
             }

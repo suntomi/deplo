@@ -104,7 +104,7 @@ enum Step {
         image: String,
         target: ContainerDeployTarget,
         port: u32,
-        extra_ports: Option<HashMap<String, Port>>,
+        extra_endpoints: Option<HashMap<String, Port>>,
         env: Option<HashMap<String, String>>,
         options: Option<HashMap<String, String>>,
     },
@@ -133,7 +133,7 @@ impl Step {
                 shell.set_cwd(workdir.as_ref())?;
                 shell.run_code_or_file(code, &to_kv_ref(env.as_ref().unwrap_or(&hashmap!{})))
             },
-            Self::Container { target, image, port:_, extra_ports:_, env, options } => {
+            Self::Container { target, image, port:_, extra_endpoints:_, env, options } => {
                 let cloud = config.cloud_service(&plan.cloud_account_name())?;
                 // deploy image to cloud container registry
                 let pushed_image_tag = cloud.push_container_image(
@@ -233,7 +233,7 @@ impl Plan {
                             image: "your/image".to_string(),
                             target: ContainerDeployTarget::Instance,
                             port: 80,
-                            extra_ports: None,
+                            extra_endpoints: None,
                             env: Some(hashmap!{}),
                             options: Some(hashmap!{}),
                         }), 
@@ -333,14 +333,16 @@ impl Plan {
                             Some(_) => return Ok(plan),
                             None => if endpoint == plan.service { return Ok(plan) }
                         },
-                        None => {}
+                        None => {
+                            if endpoint == plan.service { return Ok(plan) }
+                        }
                     }
                 },
                 Err(e) => return escalate!(Box::new(e))
             }
         }
         escalate!(Box::new(DeployError {
-            cause: format!("plan contains endpoint:{} does not found", endpoint)
+            cause: format!("plan contains endpoint:{} is not found", endpoint)
         }))
     }
     pub fn save(&self) -> Result<(), Box<dyn Error>> {
@@ -376,7 +378,7 @@ impl Plan {
         }
         for step in &self.data.deploy.steps {
             match step {
-                Step::Container { target:_, image:_, port:_, extra_ports:_, env:_, options:_ } => {
+                Step::Container { target:_, image:_, port:_, extra_endpoints:_, env:_, options:_ } => {
                     return Ok(kind == "service" || kind == "any")
                 },
                 Step::Storage { copymap:_ } => {
@@ -395,8 +397,8 @@ impl Plan {
     pub fn ports(&self) -> Result<Option<HashMap<String, Port>>, Box<dyn Error>> {
         for step in &self.data.deploy.steps {
             match step {
-                Step::Container { target:_, image:_, port, extra_ports, env:_, options:_ } => {
-                    let mut ports = match extra_ports {
+                Step::Container { target:_, image:_, port, extra_endpoints, env:_, options:_ } => {
+                    let mut ports = match extra_endpoints {
                         Some(ps) => ps.clone(),
                         None => hashmap!{}
                     };
@@ -415,7 +417,7 @@ impl Plan {
     pub fn try_get_container_options<'a>(&'a self) -> Option<&'a HashMap<String, String>> {
         for step in &self.data.deploy.steps {
             match step {
-                Step::Container { target:_, image:_, port:_, extra_ports:_, env:_, options } => {
+                Step::Container { target:_, image:_, port:_, extra_endpoints:_, env:_, options } => {
                     return options.as_ref()
                 }
                 _ => {}
@@ -436,7 +438,7 @@ impl Plan {
             let pr = steps as *const _ == &self.data.pr.steps as *const _;
             for step in steps {
                 match step {
-                    Step::Container { target:_, image:_, port:_, extra_ports:_, env:_, options:_ } => {
+                    Step::Container { target:_, image:_, port:_, extra_endpoints:_, env:_, options:_ } => {
                         if pr { return Err(err) }
                         if deployment_found { return Err(err) }
                         deployment_found = true;

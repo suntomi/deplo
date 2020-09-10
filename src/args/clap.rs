@@ -37,11 +37,13 @@ lazy_static! {
             .long("debug")
             .multiple(true)
             .value_name("CATEGORY")
-            .help("Activate debug feature (vcs:deploy:tf:ci)")
-            .takes_value(true)
-            .possible_values(
-                &["skip_rebase", "infra_debug"]
-            ))    
+            .help("Activate debug feature (vcs:deploy:tf:ci)\n\
+            possible values: \n\
+            skip_rebase (flag)\n\
+            infra_debug (flag)\n\
+            ci_env=(Circle|GhAction)\n\
+            ")
+            .takes_value(true))
         .arg(Arg::with_name("verbosity")
             .short('v')
             .long("verbose")

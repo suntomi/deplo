@@ -13,10 +13,10 @@ type = "Container"
 image = "deplo-sandbox/apisv"
 target = "Instance"
 port = 80
-[deploy.steps.extra_services.admin]
+[deploy.steps.extra_endpoints.admin]
 port = 10000
 lb_name = "admin"
-[deploy.steps.extra_services.metrics]
+[deploy.steps.extra_endpoints.metrics]
 port = 10001
 
 

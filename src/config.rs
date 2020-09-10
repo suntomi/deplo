@@ -226,9 +226,9 @@ pub struct CommonConfig {
 pub struct RuntimeConfig {
     pub verbosity: u64,
     pub dryrun: bool,
-    pub debug: Vec<String>,
-    pub store_deployments: Vec<String>,
-    pub endpoint_service_map: HashMap<String, String>,
+    pub debug: HashMap<String, String>,
+    pub distributions: Vec<String>,
+    pub endpoint_service_map: HashMap<String, HashMap<String, String>>,
     pub release_target: Option<String>,
     pub workdir: Option<String>,
 }
@@ -330,23 +330,42 @@ impl Config {
             let mut mutc = c.ptr.borrow_mut();
             mutc.runtime = RuntimeConfig {
                 verbosity,
-                store_deployments: vec!(),
+                distributions: vec!(),
                 endpoint_service_map: hashmap!{},
                 dryrun: args.occurence_of("dryrun") > 0,
                 debug: match args.values_of("debug") {
-                    Some(s) => s.iter().map(|e| e.to_string()).collect(),
-                    None => vec!{}
+                    Some(s) => {
+                        let mut opts = hashmap!{};
+                        for v in s {
+                            let sp: Vec<&str> = v.split("=").collect();
+                            opts.insert(
+                                sp[0].to_string(),
+                                (if sp.len() > 1 { sp[1] } else { "true" }).to_string()
+                            );
+                        }
+                        opts
+                    }
+                    None => hashmap!{}
                 },
                 release_target: None, // set after
                 workdir: may_workdir.map(String::from),
             };
         }
         // verify all configuration files, including endoints/plans
-        let (endpoint_service_map, store_deployments) = Self::verify(&c)?;
+        let (endpoint_service_map, distributions) = Self::verify(&c)?;
         {
             let mut mutc = c.ptr.borrow_mut();
             mutc.runtime.endpoint_service_map = endpoint_service_map;
-            mutc.runtime.store_deployments = store_deployments;
+            mutc.runtime.distributions = distributions;
+        }
+        {
+            log::debug!("====== endpoint service map ====== ");
+            let c = c.ptr.borrow();
+            for (lb, hm) in &c.runtime.endpoint_service_map {
+                for (k, v) in hm {
+                    log::debug!("lb:{}|{} => {}", lb, k, v);
+                }
+            }
         }
         // setup module cache
         Self::ensure_ci_init(&c)?;
@@ -364,7 +383,12 @@ impl Config {
                 vcs.release_target()
             };
             let mut mutc = c.ptr.borrow_mut();
-            mutc.runtime.release_target = release_target;
+            mutc.runtime.release_target = match release_target {
+                Some(v) => Some(v),
+                None => mutc.get_debug_option("force_set_release_target_to").map_or(
+                    None, |v| Some(v.clone())
+                )
+            }
         }
         // do preparation
         let reinit = args.value_of("reinit").unwrap_or("none");
@@ -444,9 +468,15 @@ impl Config {
         c: &Container, lb_name: &str, endpoint: &str, plan: &plan::Plan
     ) -> Result<u32, Box<dyn Error>> {
         endpoints::Endpoints::modify(c, c.borrow().endpoints_file_path(lb_name, None), |eps| {
-            let latest_version = eps.get_latest_version(endpoint);
-            let v = eps.next.versions.entry(endpoint.to_string()).or_insert(0);
-            *v = latest_version + 1;
+            // latest version of endpoint is service version which the endpoint belongs to
+            let latest_version = eps.get_latest_version(&plan.service);
+            let next_version = {
+                let next = eps.prepare_next_if_not_exist(c);
+                let v = next.versions.entry(endpoint.to_string()).or_insert(0);
+                let nv = latest_version + 1;
+                *v = nv;
+                nv
+            };
             // if confirm_deploy is not set and this is deployment of distribution, 
             // automatically update min_front_version with new version
             if eps.certify_latest_dist_only.unwrap_or(false) && 
@@ -455,9 +485,9 @@ impl Config {
                 let fv = eps.min_certified_dist_versions
                     .entry(endpoint.to_string()).or_insert(0);
                 // set next version
-                *fv = *v;
+                *fv = next_version;
             }
-            return Ok(*v);
+            return Ok(next_version);
         })
     }
     pub fn default_backend(&self) -> String {
@@ -538,7 +568,17 @@ impl Config {
                 panic!("DEPLO_CI_TYPE = {}, but does not have corresponding CI Config", v)
             },
             // TODO: returns merged action
-            Err(e) => panic!("DEPLO_CI_TYPE is not defined, should be development mode {}", e)
+            Err(e) =>  {
+                match self.get_debug_option("ci_env") {
+                    Some(v) => {
+                        for (account_name, config) in &self.ci {
+                            if config.type_matched(&v) { return (account_name, config) }
+                        };
+                    },
+                    None => {}
+                }
+                panic!("DEPLO_CI_TYPE is not defined, should be development mode {}", e)
+            }
         }
     }
     pub fn ci_service<'a>(&'a self, account_name: &str) -> Result<&'a Box<dyn ci::CI>, Box<dyn Error>> {
@@ -643,30 +683,40 @@ impl Config {
         }
     }
     pub fn has_debug_option(&self, name: &str) -> bool {
-        match self.runtime.debug.iter().position(|e| e == name) {
-            Some(_) => true,
-            None => false
-        }
+        self.runtime.debug.get(name) != None
+    }
+    pub fn get_debug_option<'a>(&'a self, name: &str) -> Option<&'a String> {
+        self.runtime.debug.get(name)
     }
     pub fn find_service_by_endpoint(&self, endpoint: &str) -> Option<&String> {
-        self.runtime.endpoint_service_map.get(endpoint)
+        for (_, endpoints) in &self.runtime.endpoint_service_map {
+            match endpoints.get(endpoint) {
+                Some(service) => return Some(service),
+                None => {}
+            }
+        }
+        None
     }    
 
-    fn verify(c: &Container) -> Result<(HashMap<String,String>,Vec<String>), Box<dyn Error>> {
+    fn verify(
+        c: &Container
+    ) -> Result<
+        (HashMap<String, HashMap<String,String>>,Vec<String>), 
+        Box<dyn Error>
+    > {
         log::debug!("verify config");
-        // global configuration verificaiton
+        // global configuration verificaitons
         // 1. all endpoints/plans can be loaded without error 
         //    (loading endpoints/plans verify consistency of its content)
-        // 2. keys in each plan's extra_services is project-unique
+        // 2. keys in each plan's extra_endpoints is project-unique
         // 3. ports belongs to same service must belong to load balancers of same cloud provider
-        let config = c.borrow();
-        let mut endpoint_service_map = hashmap!{};
-        let mut store_deployments = vec!();
+        let mut endpoint_service_map: HashMap<String, HashMap<String, String>> = hashmap!{};
+        let mut distributions = vec!();
         for entry in glob(&c.borrow().services_path().join("*.toml").to_string_lossy())? {
             match entry {
                 Ok(path) => {
                     log::debug!("verify config: load at path {}", path.to_string_lossy());
-                    let store_deployment_name = {
+                    let distribution_name = {
                         let plan = match plan::Plan::load_by_path(&c, &path) {
                             Ok(p) => p,
                             Err(err) => return escalate!(Box::new(ConfigError {
@@ -678,23 +728,41 @@ impl Config {
                         };
                         match plan.ports()? {
                             Some(ports) => {
-                                for (n, _) in &ports {
+                                for (n, port) in &ports {
                                     let name = if n.is_empty() { &plan.service } else { n };
-                                    match endpoint_service_map.get(name) {
-                                        Some(service_name) => return Err(Box::new(ConfigError {
-                                            cause: format!(
-                                                "endpoint name:{} both exists in plan {}.toml and {}.toml",
-                                                name, service_name, plan.service
-                                            )
-                                        })),
+                                    match endpoint_service_map.get_mut(&port.get_lb_name(&plan)) {
+                                        Some(map) => match map.get(name) {
+                                            Some(service_name) => return Err(Box::new(ConfigError {
+                                                cause: format!(
+                                                    "endpoint name:{} both exists in plan {}.toml and {}.toml",
+                                                    name, service_name, plan.service
+                                                )
+                                            })),
+                                            None => {
+                                                map.insert(name.to_string(), plan.service.clone());
+                                            }
+                                        },
                                         None => {
-                                            endpoint_service_map.entry(name.to_string()).or_insert(plan.service.clone());
+                                            let map = hashmap!{
+                                                name.to_string() => plan.service.clone()
+                                            };
+                                            endpoint_service_map.entry(port.get_lb_name(&plan)).or_insert(map);
                                         }
                                     }
                                 }
                             },
                             None => {
-                                endpoint_service_map.entry(plan.service.clone()).or_insert(plan.service.clone());
+                                match endpoint_service_map.get_mut(plan.lb_name()) {
+                                    Some(map) => {
+                                        map.insert(plan.service.clone(), plan.service.clone());
+                                    },
+                                    None => {
+                                        let map = hashmap!{
+                                            plan.service.clone().to_string() => plan.service.clone()
+                                        };
+                                        endpoint_service_map.entry(plan.lb_name().to_string()).or_insert(map);
+                                    }
+                                }
                             }
                         }
                         if plan.has_deployment_of("distribution")? {
@@ -703,13 +771,13 @@ impl Config {
                             "".to_string()
                         }
                     };
-                    if !store_deployment_name.is_empty() {
-                        store_deployments.push(store_deployment_name);
+                    if !distribution_name.is_empty() {
+                        distributions.push(distribution_name);
                     }
                 },
                 Err(e) => return Err(Box::new(e))
             }
         }
-        Ok((endpoint_service_map, store_deployments))
+        Ok((endpoint_service_map, distributions))
     }
 }
