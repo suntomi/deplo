@@ -161,7 +161,7 @@ impl Endpoints {
                     None => continue
                 };
                 let plan = plan::Plan::load(&config, service)?;
-                if plan.has_deployment_of("service")? {
+                if plan.has_deployment_of(plan::DeployKind::Service)? {
                     change = ChangeType::Path;
                 }
             }
@@ -186,7 +186,6 @@ impl Endpoints {
         let lb_name = self.lb_name.clone();
         let next = self.next.as_mut().unwrap();
         next.versions.retain(|ep,_| {
-            log::debug!("next.versions.retain check {}", ep);
             let plan = match plan::Plan::find_by_endpoint(config, &ep) {
                 Ok(p) => p,
                 Err(e) => {

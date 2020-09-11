@@ -28,6 +28,19 @@ impl Error for DeployError {
     }
 }
 
+#[derive(Serialize, Deserialize, Debug, PartialEq)]
+pub enum DeployKind {
+    #[serde(rename = "service")]
+    Service,        // server program serving to distribution
+    #[serde(rename = "storage")]
+    Storage,        // storage files serving to distribution
+    #[serde(rename = "dist")]
+    Distribution,   // 'client program' that user operate on
+
+    #[serde(rename = "any")]
+    Any = -1,       // special enum to express any deployment
+}
+
 #[derive(Serialize, Deserialize, Debug)]
 pub enum ContainerDeployTarget {
     Instance,
@@ -367,25 +380,26 @@ impl Plan {
             None => "default"
         }
     }
-    pub fn has_deployment_of(&self, kind: &str) -> Result<bool, Box<dyn Error>> {
+    pub fn has_deployment_of(&self, kind: DeployKind) -> Result<bool, Box<dyn Error>> {
         match kind {
-            "service" => {},
-            "storage" => {},
-            "distribution" => {},
+            DeployKind::Service => {},
+            DeployKind::Storage => {},
+            DeployKind::Distribution => {},
+            DeployKind::Any => {},
             _ => return Err(Box::new(DeployError {
-                cause: format!("invalid deployment kind {}", kind)
+                cause: format!("invalid deployment kind {:?}", kind)
             }))
         }
         for step in &self.data.deploy.steps {
             match step {
                 Step::Container { target:_, image:_, port:_, extra_endpoints:_, env:_, options:_ } => {
-                    return Ok(kind == "service" || kind == "any")
+                    return Ok(kind == DeployKind::Service || kind == DeployKind::Any)
                 },
                 Step::Storage { copymap:_ } => {
-                    return Ok(kind == "storage" || kind == "any")
+                    return Ok(kind == DeployKind::Storage || kind == DeployKind::Any)
                 },
                 Step::Distribution { config:_ } => {
-                    return Ok(kind == "distribution" || kind == "any")
+                    return Ok(kind == DeployKind::Distribution || kind == DeployKind::Any)
                 },
                 _ => {}
             }

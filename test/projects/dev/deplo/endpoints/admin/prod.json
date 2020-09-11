@@ -8,11 +8,7 @@
   "default": null,
   "paths": null,
   "min_certified_dist_versions": {},
-  "next": {
-    "paths": null,
-    "endpoint_service_map": {},
-    "versions": {}
-  },
+  "next": null,
   "releases": [],
   "deploy_state": null
 }

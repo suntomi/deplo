@@ -480,7 +480,7 @@ impl Config {
             // if confirm_deploy is not set and this is deployment of distribution, 
             // automatically update min_front_version with new version
             if eps.certify_latest_dist_only.unwrap_or(false) && 
-                plan.has_deployment_of("distribution")? &&
+                plan.has_deployment_of(plan::DeployKind::Distribution)? &&
                 endpoint == &plan.service {
                 let fv = eps.min_certified_dist_versions
                     .entry(endpoint.to_string()).or_insert(0);
@@ -765,7 +765,7 @@ impl Config {
                                 }
                             }
                         }
-                        if plan.has_deployment_of("distribution")? {
+                        if plan.has_deployment_of(plan::DeployKind::Distribution)? {
                             plan.service.clone()
                         } else {
                             "".to_string()

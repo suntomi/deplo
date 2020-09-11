@@ -169,19 +169,15 @@ impl<S: shell::Shell> Gcp<S> {
         });
         for r in &releases {
             for (ep, v) in &r.versions {
-                let s = r.endpoint_service_map.get(ep).unwrap(); //should exist
-                let plan = plan::Plan::load(&self.config, s)?;
-                if !plan.has_deployment_of("service")? {
-                    continue
-                }
                 let key = format!("{}-{}", ep, v);
                 match processed.get(&key) {
                     Some(_) => continue,
                     None => {}
                 }
+                let plan = plan::Plan::find_by_endpoint(&self.config, &ep)?;
                 processed.entry(key).or_insert(true);
                 let backend_sevice_name = self.backend_service_name(&plan, 
-                    if ep == s { "" } else { ep }, 
+                    if ep.to_string() == plan.service { "" } else { ep }, 
                     *v
                 );
                 rules.push(format!("/{}/{}/*={}", ep, v, backend_sevice_name));
@@ -199,14 +195,13 @@ impl<S: shell::Shell> Gcp<S> {
         ));
         for r in &endpoints.releases {
             for (ep, _) in &r.versions {
-                let s = r.endpoint_service_map.get(ep).unwrap(); //should exist
                 match processed.get(ep) {
                     Some(_) => continue,
                     None => {}
                 }
                 processed.entry(ep).or_insert(true);
-                let plan = plan::Plan::load(&self.config, s)?;
-                if plan.has_deployment_of("storage")? {
+                let plan = plan::Plan::find_by_endpoint(&self.config, &ep)?;
+                if plan.has_deployment_of(plan::DeployKind::Storage)? {
                     rules.push(format!("/{}/*={}", ep, self.backend_bucket_name(&plan)));
                 }
             }
@@ -572,7 +567,7 @@ impl<S: shell::Shell> Gcp<S> {
     fn cleanup_resources(
         &self, endpoints: &endpoints::Endpoints
     ) -> Result<(), Box<dyn Error>> {
-        log::info!("---- cleanup_load_balancer");
+        log::info!("---- cleanup_resources");
         let config = self.config.borrow();
         let service_output = self.shell.eval_output_of(
             // to keep linefeed, we don't use -j option for jq. (usually -jr used)
@@ -673,6 +668,8 @@ impl<S: shell::Shell> Gcp<S> {
                 },
                 None => {}
             }
+            // backend-bucket may take loooong time to delete (eg. assets for video game), 
+            // we don't remove them here.
         }
         Ok(())
     }
@@ -1110,7 +1107,7 @@ impl<'a, S: shell::Shell> cloud::Cloud for Gcp<S> {
                 None => continue
             };
             let plan = plan::Plan::load(&self.config, service)?;
-            if !plan.has_deployment_of("service")? {
+            if !plan.has_deployment_of(plan::DeployKind::Service)? {
                 log::debug!("[{}] does not change path. skipped", service);
                 continue
             }
