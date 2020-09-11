@@ -13,49 +13,66 @@
   },
   "next": {
     "paths": null,
-    "endpoint_service_map": {
-      "api": "api",
-      "android": "android",
-      "metrics": "api",
-      "data": "data",
-      "ios": "ios"
-    },
     "versions": {
-      "metrics": 5,
-      "api": 5,
-      "ios": 2,
-      "android": 2
+      "android": [
+        2,
+        "distribution"
+      ],
+      "api": [
+        5,
+        "service"
+      ],
+      "metrics": [
+        1,
+        "service"
+      ],
+      "ios": [
+        2,
+        "distribution"
+      ]
     }
   },
   "releases": [
     {
       "paths": null,
-      "endpoint_service_map": {
-        "admin": "api",
-        "ios": "ios",
-        "api": "api",
-        "android": "android"
-      },
       "versions": {
-        "admin": 4,
-        "api": 4,
-        "ios": 2,
-        "android": 2
+        "android": [
+          2,
+          "distribution"
+        ],
+        "admin": [
+          4,
+          "service"
+        ],
+        "api": [
+          4,
+          "service"
+        ],
+        "ios": [
+          2,
+          "distribution"
+        ]
       }
     },
     {
       "paths": null,
-      "endpoint_service_map": {
-        "admin": "api",
-        "api": "api",
-        "ios": "ios",
-        "android": "android"
-      },
       "versions": {
-        "admin": 4,
-        "ios": 2,
-        "api": 4,
-        "android": 1
+        "admin": [
+          4,
+          "service"
+        ],
+        "android": [
+          1,
+          "distribution"
+        ],
+        "api": [
+          4,
+          "service"
+        ],
+        "ios": [
+          2,
+          "distribution"
+        ]
       }
     }
   ],

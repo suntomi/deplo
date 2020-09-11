@@ -62,13 +62,12 @@ impl fmt::Display for ChangeType {
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct Release {
     pub paths: Option<HashMap<String, String>>,
-    pub endpoint_service_map: HashMap<String, String>,
-    pub versions: HashMap<String, u32>,
+    pub versions: HashMap<String, (u32, plan::DeployKind)>,
 }
 impl Release {
     pub fn get_version(&self, service: &str) -> u32 {
         match self.versions.get(service) {
-            Some(v) => *v,
+            Some(v) => v.0,
             None => 0
         }
     }
@@ -151,17 +150,12 @@ impl Endpoints {
         let mut change = ChangeType::None;
         let next = self.get_next()?; 
         let vs = &next.versions;
-        for (ep, _) in vs {
-            if self.version_changed(ep, next) {
+        for (ep, v) in vs {
+            if config_ref.version_changed(ep, next) {
                 if change != ChangeType::Path {
                     change = ChangeType::Version;
                 }
-                let service = match config_ref.find_service_by_endpoint(ep) {
-                    Some(s) => s,
-                    None => continue
-                };
-                let plan = plan::Plan::load(&config, service)?;
-                if plan.has_deployment_of(plan::DeployKind::Service)? {
+                if v.1 == plan::DeployKind::Service {
                     change = ChangeType::Path;
                 }
             }
@@ -177,7 +171,6 @@ impl Endpoints {
             } else {
                 self.next = Some(Release {
                     paths: None,
-                    endpoint_service_map: hashmap!{},
                     versions: hashmap!{}
                 });
             }
@@ -217,11 +210,6 @@ impl Endpoints {
                 }
             }
         });
-        next.endpoint_service_map = config_ref.runtime
-            .endpoint_service_map
-            .get(&lb_name)
-            .unwrap()
-            .clone();
         return next;
     }
     pub fn cascade_releases(
@@ -236,13 +224,6 @@ impl Endpoints {
         self.version += 1;
         self.persist(config)?;
         Ok(())
-    }
-    pub fn get_latest_version(&self, endpoint: &str) -> u32 {
-        if self.releases.len() > 0 {
-            self.releases[0].get_version(endpoint)
-        } else {
-            0
-        }
     }
     pub fn service_is_active(&self, service: &str, version: u32) -> Result<bool, Box<dyn Error>> {
         if self.get_next()?.has_endpoint(service, version) {
@@ -307,9 +288,6 @@ impl Endpoints {
     }
     fn target<'a>(&'a self) -> &'a str {
         self.host.split(".").collect::<Vec<&str>>()[0]
-    }
-    fn version_changed(&self, service: &str, release: &Release) -> bool {
-        self.get_latest_version(service) != release.get_version(service)
     }
     fn get_next<'a>(&'a self) -> Result<&'a Release, Box<dyn Error>> {
         match &self.next {

@@ -10,11 +10,11 @@
   "min_certified_dist_versions": {},
   "next": {
     "paths": null,
-    "endpoint_service_map": {
-      "admin": "api"
-    },
     "versions": {
-      "admin": 1
+      "admin": [
+        5,
+        "service"
+      ]
     }
   },
   "releases": [],

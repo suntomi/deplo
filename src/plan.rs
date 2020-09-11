@@ -28,13 +28,13 @@ impl Error for DeployError {
     }
 }
 
-#[derive(Serialize, Deserialize, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub enum DeployKind {
     #[serde(rename = "service")]
     Service,        // server program serving to distribution
     #[serde(rename = "storage")]
     Storage,        // storage files serving to distribution
-    #[serde(rename = "dist")]
+    #[serde(rename = "distribution")]
     Distribution,   // 'client program' that user operate on
 
     #[serde(rename = "any")]
@@ -104,6 +104,11 @@ impl Port {
         let default_lb_name = &plan.lb_name().to_string();
         self.lb_name.as_ref().unwrap_or(default_lb_name).to_string()
     }
+    pub fn get_lb_cloud_account_name(&self, c: &config::Container, plan: &Plan) -> String {
+        let config = c.borrow();
+        let lb_name = self.get_lb_name(plan);
+        config.lb_config(&lb_name).account_name().to_string()
+    }
 }
 #[derive(Serialize, Deserialize, Debug)]
 #[serde(tag = "type")]
@@ -153,7 +158,7 @@ impl Step {
                     &image, 
                     &format!("{}:{}", 
                         &config.canonical_name(&plan.service), 
-                        config::Config::next_endpoint_version(&plan.config, plan.lb_name(), &plan.service)?),
+                        config.next_endpoint_version(&plan.service)),
                     options.as_ref().unwrap_or(&hashmap!{})
                 )?;
                 // deploy to autoscaling group or serverless platform
@@ -380,26 +385,17 @@ impl Plan {
             None => "default"
         }
     }
-    pub fn has_deployment_of(&self, kind: DeployKind) -> Result<bool, Box<dyn Error>> {
-        match kind {
-            DeployKind::Service => {},
-            DeployKind::Storage => {},
-            DeployKind::Distribution => {},
-            DeployKind::Any => {},
-            _ => return Err(Box::new(DeployError {
-                cause: format!("invalid deployment kind {:?}", kind)
-            }))
-        }
+    pub fn deployment_kind(&self) -> Result<DeployKind, Box<dyn Error>> {
         for step in &self.data.deploy.steps {
             match step {
                 Step::Container { target:_, image:_, port:_, extra_endpoints:_, env:_, options:_ } => {
-                    return Ok(kind == DeployKind::Service || kind == DeployKind::Any)
+                    return Ok(DeployKind::Service);
                 },
                 Step::Storage { copymap:_ } => {
-                    return Ok(kind == DeployKind::Storage || kind == DeployKind::Any)
+                    return Ok(DeployKind::Storage);
                 },
                 Step::Distribution { config:_ } => {
-                    return Ok(kind == DeployKind::Distribution || kind == DeployKind::Any)
+                    return Ok(DeployKind::Distribution);
                 },
                 _ => {}
             }
@@ -407,6 +403,9 @@ impl Plan {
         return escalate!(Box::new(DeployError {
             cause: format!("no container/storage are deployed in {}.toml", self.service)
         }))
+    }
+    pub fn has_deployment_of(&self, kind: DeployKind) -> Result<bool, Box<dyn Error>> {
+        Ok(kind == self.deployment_kind()? || kind == DeployKind::Any)
     }
     pub fn ports(&self) -> Result<Option<HashMap<String, Port>>, Box<dyn Error>> {
         for step in &self.data.deploy.steps {

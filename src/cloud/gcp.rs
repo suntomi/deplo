@@ -169,7 +169,8 @@ impl<S: shell::Shell> Gcp<S> {
         });
         for r in &releases {
             for (ep, v) in &r.versions {
-                let key = format!("{}-{}", ep, v);
+                let vernum = v.0;
+                let key = format!("{}-{}", ep, vernum);
                 match processed.get(&key) {
                     Some(_) => continue,
                     None => {}
@@ -178,9 +179,9 @@ impl<S: shell::Shell> Gcp<S> {
                 processed.entry(key).or_insert(true);
                 let backend_sevice_name = self.backend_service_name(&plan, 
                     if ep.to_string() == plan.service { "" } else { ep }, 
-                    *v
+                    vernum
                 );
-                rules.push(format!("/{}/{}/*={}", ep, v, backend_sevice_name));
+                rules.push(format!("/{}/{}/*={}", ep, vernum, backend_sevice_name));
             }
         }
         Ok(rules.join(","))
@@ -358,7 +359,7 @@ impl<S: shell::Shell> Gcp<S> {
         let container_options = options.get("container_options").unwrap_or(&DEFAULT_CONTINER_OPTIONS);
         // endpoint version for the service name is used for service version, 
         // TODO: better separation between endpoint and service version
-        let service_version = config::Config::next_endpoint_version(&self.config, plan.lb_name(), &plan.service)?;
+        let service_version = config.next_endpoint_version(&plan.service);
         let deploy_path = format!("/{}/{}", plan.service, service_version);
         let release_target = config.release_target().expect("should be on release target branch");
         let mut env_vec: Vec<String> = Vec::<String>::new();
@@ -446,9 +447,10 @@ impl<S: shell::Shell> Gcp<S> {
         &self, plan: &plan::Plan,
         name: &str, options: &HashMap<String, String>
     ) -> Result<(), Box<dyn Error>> {
+        let config = self.config.borrow();
         // endpoint version for the service name is used for service version, 
         // TODO: better separation between endpoint and service version
-        let service_version = config::Config::next_endpoint_version(&self.config, plan.lb_name(), &plan.service)?;
+        let service_version = config.next_endpoint_version(&plan.service);
         let backend_service_name = self.backend_service_name(plan, name, service_version);
         let backend_service_port_name = &backend_service_name;
         let health_check_name = self.health_check_name(plan, name, service_version);
@@ -518,7 +520,7 @@ impl<S: shell::Shell> Gcp<S> {
         let region = self.deploy_region(options);
         // endpoint version for the service name is used for service version, 
         // TODO: better separation between endpoint and service version
-        let service_version = config::Config::next_endpoint_version(&self.config, plan.lb_name(), &plan.service)?;
+        let service_version = config.next_endpoint_version(&plan.service);
         let mem = options.get("memory").unwrap_or(&DEFAULT_MEMORY);
         let timeout = options.get("execution_timeout").unwrap_or(&DEFAULT_EXECUTION_TIMEOUT);
         let container_options = options.get("container_options").unwrap_or(&DEFAULT_CONTAINER_OPTIONS);
@@ -1100,27 +1102,21 @@ impl<'a, S: shell::Shell> cloud::Cloud for Gcp<S> {
         ), &hashmap!{}, false)?;
     
         log::info!("--- waiting for new urlmap having applied");
-        let endpoint_names = next.versions.keys();
-        for ep in endpoint_names {
-            let service = match config.find_service_by_endpoint(ep) {
-                Some(s) => s,
-                None => continue
-            };
-            let plan = plan::Plan::load(&self.config, service)?;
-            if !plan.has_deployment_of(plan::DeployKind::Service)? {
-                log::debug!("[{}] does not change path. skipped", service);
+        for (ep, v) in &next.versions {
+            if v.1 == plan::DeployKind::Service {
+                log::debug!("[{}] does not change path. skipped", ep);
                 continue
             }
-            let next_version = next.get_version(ep);
+            let next_version = next.get_version(&ep);
             if next_version <= 0 {
                 continue
             }
-            log::info!("wait for [{}]'s next version url being active.", service);
+            log::info!("wait for [{}]'s next version url being active.", ep);
             let mut count = 0;
             loop {
                 let status: u32 = self.shell.eval_output_of(&format!(r#"
                     curl https://{}/{}/{}/ping --output /dev/null -w %{{http_code}} 2>/dev/null
-                "#, target_host, service, next_version), &hashmap!{})?.parse().unwrap();
+                "#, target_host, ep, next_version), &hashmap!{})?.parse().unwrap();
                 if status == 200 {
                     log::info!("done");
                     break
@@ -1128,7 +1124,7 @@ impl<'a, S: shell::Shell> cloud::Cloud for Gcp<S> {
                     count += 1;
                     if count > 360 {
                         return escalate!(Box::new(cloud::CloudError{
-                            cause: format!("[{}]:too long to active. abort", service)
+                            cause: format!("[{}]:too long to active. abort", ep)
                         }))
                     }
                 }

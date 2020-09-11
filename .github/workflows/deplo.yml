@@ -11,7 +11,7 @@ jobs:
     name: running CI jobs
     # This job runs on Linux
     runs-on: ubuntu-latest
-    container: suntomi/deplo:6be550f77b13c0650d54d38b4345e1037b29f35a
+    container: suntomi/deplo:5ace76cfb6fc2aac78c56681778bfacec09e3cc7
     steps:
       - uses: actions/checkout@v2
         lfs: true
