@@ -175,6 +175,9 @@ impl<S: shell::Shell> Gcp<S> {
                     Some(_) => continue,
                     None => {}
                 }
+                if v.1 != plan::DeployKind::Service {
+                    continue
+                }
                 let plan = plan::Plan::find_by_endpoint(&self.config, &ep)?;
                 processed.entry(key).or_insert(true);
                 let backend_sevice_name = self.backend_service_name(&plan, 
