@@ -64,7 +64,7 @@ pub trait Cloud : module::Module {
     ) -> Result<(), Box<dyn Error>>;
     // load balancer
     fn update_path_matcher(
-        &self, endpoints: &endpoints::Endpoints
+        &self, lb_name: &str, endpoints: &endpoints::Endpoints
     ) -> Result<(), Box<dyn Error>>;
 }
 

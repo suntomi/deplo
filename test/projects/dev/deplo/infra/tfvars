@@ -9,4 +9,3 @@ project_id = "deplo-sandbox"
 region = "asia-northeast1"
 lb_names = ["default","admin"]
 }
-                        

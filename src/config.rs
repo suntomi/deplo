@@ -411,11 +411,8 @@ impl Config {
     pub fn endpoints_path(&self) -> path::PathBuf {
         return path::Path::new(&self.common.data_dir).join("endpoints");
     }
-    pub fn endpoints_file_path(&self, lb_name: &str, release_target: Option<&str>) -> path::PathBuf {
+    pub fn endpoints_file_path(&self, release_target: Option<&str>) -> path::PathBuf {
         let mut p = self.endpoints_path();
-        if lb_name != "default" {
-            p = p.join(lb_name)
-        }
         if let Some(e) = release_target {
             return p.join(format!("{}.json", e));
         } else if let Some(e) = self.release_target() {
@@ -465,12 +462,13 @@ impl Config {
     pub fn update_endpoint_version(
         c: &Container, lb_name: &str, endpoint: &str, plan: &plan::Plan
     ) -> Result<u32, Box<dyn Error>> {
-        endpoints::Endpoints::modify(c, c.borrow().endpoints_file_path(lb_name, None), |eps| {
+        endpoints::Endpoints::modify(c, c.borrow().endpoints_file_path(None), |eps| {
             // latest version of endpoint is service version which the endpoint belongs to
             let next_version = c.borrow().next_endpoint_version(endpoint);
             let next = eps.prepare_next_if_not_exist(c);
-            let v = next.versions.entry(endpoint.to_string()).or_insert((0, plan::DeployKind::Any));
-            *v = (next_version, plan.deployment_kind()?);
+            let deployments = next.versions.entry(lb_name.to_string()).or_insert(hashmap!{});
+            let vs = deployments.entry(plan.deployment_kind()?).or_insert(hashmap!{});
+            vs.insert(endpoint.to_string(), next_version);
             // if confirm_deploy is not set and this is deployment of distribution, 
             // automatically update min_front_version with new version
             if eps.certify_latest_dist_only.unwrap_or(false) && 
@@ -697,7 +695,7 @@ impl Config {
         //    => this means no endpoint belongs to multiple load balancer too
         // 3. ports belongs to same service must belong to load balancers of same cloud provider account
         //    => this restriction plans to be removed by deploying same service to multiple cloud provider account
-        let mut latest_endpoint_versions_and_path: HashMap<String, (String, u32)> = hashmap!{};
+        let mut latest_endpoint_versions_and_path: HashMap<String, (String, u32, usize)> = hashmap!{};
         let mut endpoint_service_map: HashMap<String, String> = hashmap!{};
         let mut distributions = vec!();
         for entry in glob(&c.borrow().endpoints_path().join("*.json").to_string_lossy())? {
@@ -705,19 +703,27 @@ impl Config {
                 Ok(path) => {
                     let endpoints = endpoints::Endpoints::load(&c, &path)?;
                     if endpoints.releases.len() > 0 {
-                        for (ep, v) in &endpoints.releases[0].versions {
-                            match latest_endpoint_versions_and_path.get(ep) {
-                                Some(ent) => return Err(Box::new(ConfigError {
-                                    cause: format!(
-                                        "endpoint name:{} both exists in endpoint {} and {}",
-                                        ep, path.to_string_lossy(), ent.0
-                                    )
-                                })),
-                                None => {
-                                    latest_endpoint_versions_and_path.insert(
-                                        ep.to_string(),
-                                        (path.to_string_lossy().to_string(), v.0)
-                                    );
+                        for (idx, r) in endpoints.releases.iter().enumerate() {
+                            for (_, deployments) in &r.versions {
+                                for (_, vs) in deployments {
+                                    for (ep, v) in vs {
+                                        match latest_endpoint_versions_and_path.get(ep) {
+                                            Some(ent) => if ent.2 == idx {
+                                                return Err(Box::new(ConfigError {
+                                                    cause: format!(
+                                                        "endpoint name:{} duplicates in endpoint {} and {} @ rhis:{}",
+                                                        ep, path.to_string_lossy(), ent.0, idx
+                                                    )
+                                                }))
+                                            },
+                                            None => {
+                                                latest_endpoint_versions_and_path.insert(
+                                                    ep.to_string(),
+                                                    (path.to_string_lossy().to_string(), *v, idx)
+                                                );
+                                            }
+                                        }
+                                    }
                                 }
                             }
                         }
