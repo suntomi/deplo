@@ -7,6 +7,7 @@ use std::collections::{HashMap};
 use serde::{Deserialize, Serialize};
 use maplit::hashmap;
 use glob::glob;
+use indexmap::IndexMap;
 
 use crate::config;
 use crate::shell;
@@ -40,7 +41,7 @@ pub enum DeployKind {
     #[serde(rename = "any")]
     Any = -1,       // special enum to express any deployment
 }
-pub type Deployments = HashMap<DeployKind, HashMap<String, u32>>;
+pub type Deployments = IndexMap<DeployKind, IndexMap<String, u32>>;
 
 #[derive(Serialize, Deserialize, Debug)]
 pub enum ContainerDeployTarget {

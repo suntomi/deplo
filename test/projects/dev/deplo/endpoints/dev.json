@@ -8,14 +8,14 @@
   "default": "api",
   "paths": null,
   "min_certified_dist_versions": {
-    "ios": 2,
-    "android": 2
+    "android": 2,
+    "ios": 2
   },
   "next": {
     "paths": null,
     "distributions": {
-      "android": 2,
-      "ios": 2
+      "ios": 2,
+      "android": 2
     },
     "versions": {
       "admin": {
@@ -35,14 +35,14 @@
     {
       "paths": null,
       "distributions": {
-        "ios": 2,
-        "android": 2
+        "android": 2,
+        "ios": 2
       },
       "versions": {
         "default": {
           "service": {
-            "api": 4,
-            "admin": 4
+            "admin": 4,
+            "api": 4
           }
         }
       }

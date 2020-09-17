@@ -2,16 +2,16 @@ name: Deplo Launcher
 
 on: 
   push:
-    branches: [master,release]
+    branches: [release,master]
   pull_request:
-    branches: [master,release]
+    branches: [release,master]
 
 jobs:
   deplo:
     name: running CI jobs
     # This job runs on Linux
     runs-on: ubuntu-latest
-    container: suntomi/deplo:ec86e79e0e3659695cfd30d0cdfbf5e07a9cbcb7
+    container: suntomi/deplo:f2cf78fa07f74e7799bffe986e61d00a7467c545
     steps:
       - uses: actions/checkout@v2
         lfs: true

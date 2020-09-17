@@ -11,6 +11,7 @@ use simple_logger;
 use serde::{Deserialize, Serialize};
 use dotenv::dotenv;
 use maplit::hashmap;
+use indexmap::IndexMap;
 use glob::glob;
 
 use crate::args;
@@ -466,8 +467,8 @@ impl Config {
             // latest version of endpoint is service version which the endpoint belongs to
             let next_version = c.borrow().next_endpoint_version(endpoint);
             let next = eps.prepare_next_if_not_exist(c);
-            let deployments = next.versions.entry(lb_name.to_string()).or_insert(hashmap!{});
-            let vs = deployments.entry(plan.deployment_kind()?).or_insert(hashmap!{});
+            let deployments = next.versions.entry(lb_name.to_string()).or_insert(IndexMap::new());
+            let vs = deployments.entry(plan.deployment_kind()?).or_insert(IndexMap::new());
             vs.insert(endpoint.to_string(), next_version);
             // if confirm_deploy is not set and this is deployment of distribution, 
             // automatically update min_front_version with new version

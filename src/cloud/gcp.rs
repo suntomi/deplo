@@ -6,6 +6,7 @@ use std::fs;
 
 use regex::Regex;
 use maplit::hashmap;
+use indexmap::IndexMap;
 
 use crate::config;
 use crate::endpoints;
@@ -1076,8 +1077,8 @@ impl<'a, S: shell::Shell> cloud::Cloud for Gcp<S> {
                 return Ok(())
             }
         };
-        let empty_hashmap = hashmap!{};
-        let deployments = next.versions.get(lb_name).unwrap_or(&empty_hashmap);
+        let empty_map = IndexMap::new();
+        let deployments = next.versions.get(lb_name).unwrap_or(&empty_map);
         let config = self.config.borrow();
         let target = config.release_target().expect("should be on release branch");
         let default_backend_option = match &endpoints.default {
@@ -1119,7 +1120,7 @@ impl<'a, S: shell::Shell> cloud::Cloud for Gcp<S> {
         ), &hashmap!{}, false)?;
     
         log::info!("--- waiting for new urlmap having applied");
-        for (ep, v) in deployments.get(&plan::DeployKind::Service).unwrap_or(&hashmap!{}) {
+        for (ep, v) in deployments.get(&plan::DeployKind::Service).unwrap_or(&IndexMap::new()) {
             let next_version = next.get_version(&ep);
             if next_version <= 0 {
                 continue

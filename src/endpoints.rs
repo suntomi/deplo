@@ -1,11 +1,10 @@
-use std::collections::HashMap;
 use std::error::Error;
 use std::path;
 use std::fs;
 use std::fmt;
 
-use maplit::hashmap;
 use serde::{Deserialize, Serialize};
+use indexmap::IndexMap;
 
 use crate::config;
 use crate::plan;
@@ -60,11 +59,11 @@ impl fmt::Display for ChangeType {
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct Release {
-    pub paths: Option<HashMap<String, String>>,
+    pub paths: Option<IndexMap<String, String>>,
     // { distribution name => its version }
-    pub distributions: HashMap<String, u32>,
+    pub distributions: IndexMap<String, u32>,
     // lb_name => { deploy_kind => { endpoint_name => its version } }
-    pub versions: HashMap<String, plan::Deployments>,
+    pub versions: IndexMap<String, plan::Deployments>,
 }
 impl Release {
     pub fn get_version(&self, service: &str) -> u32 {
@@ -98,8 +97,8 @@ pub struct Endpoints {
     pub certify_latest_dist_only: Option<bool>,
     pub backport_target_branch: Option<String>,
     pub default: Option<String>,
-    pub paths: Option<HashMap<String, String>>,
-    pub min_certified_dist_versions: HashMap<String, u32>,
+    pub paths: Option<IndexMap<String, String>>,
+    pub min_certified_dist_versions: IndexMap<String, u32>,
     pub next: Option<Release>, // None if no plan to release
     pub releases: Vec<Release>,
     pub deploy_state: Option<DeployState>,
@@ -116,7 +115,7 @@ impl Endpoints {
             backport_target_branch: None,
             default: None,
             paths: None,
-            min_certified_dist_versions: hashmap!{},
+            min_certified_dist_versions: IndexMap::new(),
             next: None,
             releases: vec!(),
             deploy_state: None,
@@ -195,8 +194,8 @@ impl Endpoints {
             } else {
                 self.next = Some(Release {
                     paths: None,
-                    distributions: hashmap!{},
-                    versions: hashmap!{}
+                    distributions: IndexMap::new(),
+                    versions: IndexMap::new()
                 });
             }
         }
