@@ -43,9 +43,6 @@ deploy:
 	docker tag suntomi/deplo:latest suntomi/deplo:$(GIT_HASH)
 	docker push suntomi/deplo:$(GIT_HASH)
 
-run:
-	docker run --rm -ti -v $(CURDIR):/workdir -w /workdir suntomi/deplo $(CMD)
-
 dev:
 	cargo run -- -vv -w /workdir/test/projects/dev $(CMD)
 
@@ -56,3 +53,8 @@ sh:
 		-v $(HOME)/.cargo/registry:/.cargo/registry \
 		-v /var/run/docker.sock:/var/run/docker.sock \
 		suntomi/deplo_shell sh
+
+run:
+	cargo run -- \
+		-w test/projects/dev -d skip_rebase -d force_set_release_target_to=dev -d ci_env=Circle -vvv \
+		$(CMD)
