@@ -94,7 +94,7 @@ impl<S: shell::Shell> Gcp<S> {
         if lb_name == "default" {
             return config.canonical_name("url-map")
         }
-        return config.canonical_name(&format!("url-map-{}", lb_name))
+        return config.canonical_name(&format!("{}-url-map", lb_name))
     }
     fn path_matcher_name(&self, lb_name: &str, endpoints_version: u32) -> String {
         let config = self.config.borrow();

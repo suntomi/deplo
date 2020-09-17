@@ -136,6 +136,9 @@ impl Endpoints {
         fs::write(&path, &as_text)?;
         Ok(())
     }
+    pub fn dump(&self) -> Result<String, Box<dyn Error>> {
+        Ok(serde_json::to_string_pretty(&self)?)
+    }
     fn persist(&self, config: &config::Ref) -> Result<(), Box<dyn Error>> {
         self.save(config.endpoints_file_path(Some(self.target())))
     }

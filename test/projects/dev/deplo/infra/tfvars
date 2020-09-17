@@ -1,5 +1,5 @@
 resource_prefix = "deplo"
-envs = ["prod","dev"]
+envs = ["dev","prod"]
 
 gcp = {
 root_domain = "suntomi.dev"
@@ -9,3 +9,4 @@ project_id = "deplo-sandbox"
 region = "asia-northeast1"
 lb_names = ["default","admin"]
 }
+                        

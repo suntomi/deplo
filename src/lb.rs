@@ -92,6 +92,10 @@ pub fn deploy(
         config,
         &config_ref.endpoints_file_path(Some(target))
     )?;
+    if endpoints.next.is_none() {
+        log::warn!("no new release. next should be non-null in {}", endpoints.dump()?);
+        return Ok(())
+    }
     let mut lb_change_types: HashMap<&str, endpoints::ChangeType> = hashmap!{};
     let mut change_type = endpoints::ChangeType::None;
     for (lb_name, _) in &config_ref.lb {
