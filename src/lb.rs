@@ -63,7 +63,7 @@ fn deploy_meta(
 ) -> Result<(), Box<dyn Error>> {
     let cloud = config.cloud_service(&cloud_account_name)?;
     let mv = endpoints.version;
-    let bucket_name = config.canonical_name(&format!("metadata-{}",  mv));
+    let bucket_name = config.metadata_backend_bucket_name(lb_name, mv);
     cloud.deploy_storage(
         cloud::StorageKind::Metadata {
             version: mv,
@@ -130,7 +130,7 @@ pub fn deploy(
             }
             endpoints.set_deploy_state(&config_ref, None)?;
         } else {
-            log::info!("--- set pending cleanup for prod deployment");
+            log::info!("--- set pending cleanup for {} deployment", target);
             endpoints.set_deploy_state(&config_ref, Some(endpoints::DeployState::ConfirmCleanup))?;
             // before PR, next release as also seen in load balancer, because some of workflow
             // requires QA in real environment (eg. game)

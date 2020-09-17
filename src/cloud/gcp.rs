@@ -104,11 +104,7 @@ impl<S: shell::Shell> Gcp<S> {
         return config.canonical_name(&format!("path-matcher-{}-{}", lb_name, endpoints_version))
     }
     fn metadata_backend_bucket_name(&self, lb_name: &str, endpoint_version: u32) -> String {
-        let config = self.config.borrow();
-        if lb_name == "default" {
-            return config.canonical_name(&format!("backend-bucket-metadata-{}", endpoint_version));
-        }
-        return config.canonical_name(&format!("backend-bucket-metadata-{}-{}", lb_name, endpoint_version));
+        self.config.borrow().metadata_backend_bucket_name(lb_name, endpoint_version)
     }
     fn backend_bucket_name(&self, plan: &plan::Plan) -> String {
         let config = self.config.borrow();
