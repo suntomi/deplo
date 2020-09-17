@@ -125,7 +125,7 @@ impl<S: shell::Shell> Gcp<S> {
             return Ok("new-hosts")
         }
         let host_group = self.shell.eval_output_of(&format!(
-            r#"echo '{}' | jq ".[].hosts[]" | grep "{}""#, host_rules, target_host
+            r#"echo '{}' | jq ".[].hosts[]|select(.==\"{}\")""#, host_rules, target_host
         ), &hashmap!{})?;
         if host_group.is_empty() {
             return Ok("new-hosts")

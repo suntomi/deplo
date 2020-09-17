@@ -154,7 +154,11 @@ impl Endpoints {
     pub fn target_host(
         &self, lb_name: &str
     ) -> String {
-        format!("{}.{}.{}", self.target, lb_name, self.host_postfix)
+        if lb_name == "default" {
+            format!("{}.{}", self.target, self.host_postfix)
+        } else {
+            format!("{}.{}.{}", self.target, lb_name, self.host_postfix)
+        }
     }
     pub fn change_type(
         &self, lb_name: &str, config: &config::Container
