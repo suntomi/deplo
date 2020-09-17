@@ -17,16 +17,24 @@ pub struct Circle<S: shell::Shell = shell::Default> {
 }
 
 impl<'a, S: shell::Shell> module::Module for Circle<S> {
-    fn prepare(&self, _: bool) -> Result<(), Box<dyn Error>> {
+    fn prepare(&self, reinit: bool) -> Result<(), Box<dyn Error>> {
         let config = self.config.borrow();
         let repository_root = config.vcs_service()?.repository_root()?;
         let circle_yml_path = format!("{}/.circleci/config.yml", repository_root);
-        fs::create_dir_all(&format!("{}/.circleci", repository_root))?;
-        fs::write(&circle_yml_path, format!(
-            include_str!("../../rsc/ci/circle/config.yml.tmpl"),
-            config.common.deplo_image,
-            config::DEPLO_GIT_HASH, config.runtime.workdir.as_ref().unwrap_or(&"".to_string())
-        ))?;
+        if reinit {
+            fs::remove_file(&circle_yml_path)?;
+        }
+        match fs::metadata(&circle_yml_path) {
+            Ok(_) => log::debug!("config file for circle ci already created"),
+            Err(_) => {
+                fs::create_dir_all(&format!("{}/.circleci", repository_root))?;
+                fs::write(&circle_yml_path, format!(
+                    include_str!("../../rsc/ci/circle/config.yml.tmpl"),
+                    config.common.deplo_image,
+                    config::DEPLO_GIT_HASH, config.runtime.workdir.as_ref().unwrap_or(&"".to_string())
+                ))?;
+            }
+        }
         Ok(())
     }
 }

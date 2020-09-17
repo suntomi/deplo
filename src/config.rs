@@ -230,6 +230,7 @@ pub struct RuntimeConfig {
     pub debug: HashMap<String, String>,
     pub distributions: Vec<String>,
     pub latest_endpoint_versions: HashMap<String, u32>,
+    pub endpoint_service_map: HashMap<String, String>,
     pub release_target: Option<String>,
     pub workdir: Option<String>,
 }
@@ -333,6 +334,7 @@ impl Config {
                 verbosity,
                 distributions: vec!(),
                 latest_endpoint_versions: hashmap!{},
+                endpoint_service_map: hashmap!{},
                 dryrun: args.occurence_of("dryrun") > 0,
                 debug: match args.values_of("debug") {
                     Some(s) => {
@@ -353,11 +355,12 @@ impl Config {
             };
         }
         // verify all configuration files, including endoints/plans
-        let (latest_endpoint_versions, distributions) = Self::verify(&c)?;
+        let (latest_endpoint_versions, distributions, endpoint_service_map) = Self::verify(&c)?;
         {
             let mut mutc = c.ptr.borrow_mut();
             mutc.runtime.latest_endpoint_versions = latest_endpoint_versions;
             mutc.runtime.distributions = distributions;
+            mutc.runtime.endpoint_service_map = endpoint_service_map;
         }
         {
             log::debug!("====== latest endpoint versions ====== ");
@@ -452,7 +455,17 @@ impl Config {
         )
     }
     pub fn latest_endpoint_version(&self, endpoint: &str) -> u32 {
-        *self.runtime.latest_endpoint_versions.get(endpoint).unwrap_or(&0)
+        match self.runtime.latest_endpoint_versions.get(endpoint) {
+            Some(v) => *v,
+            None => {
+                let service = self.runtime.endpoint_service_map.get(endpoint).expect(
+                    &format!("endpoint:{} should exist in plan file", endpoint)
+                );
+                if service == endpoint { 0 } else { 
+                    self.latest_endpoint_version(service)
+                }
+            }
+        }
     }
     pub fn version_changed(&self, endpoint: &str, release: &endpoints::Release) -> bool {
         self.latest_endpoint_version(endpoint) != release.get_version(endpoint)
@@ -685,7 +698,7 @@ impl Config {
     fn verify(
         c: &Container
     ) -> Result<
-        (HashMap<String, u32>,Vec<String>),
+        (HashMap<String, u32>,Vec<String>,HashMap<String, String>),
         Box<dyn Error>
     > {
         log::debug!("verify config");
@@ -817,6 +830,6 @@ impl Config {
                 latest_endpoint_versions.insert(k, v.1);
             };
             latest_endpoint_versions
-        }, distributions))
+        }, distributions, endpoint_service_map))
     }
 }

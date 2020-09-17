@@ -24,20 +24,28 @@ pub struct GhAction<S: shell::Shell = shell::Default> {
 }
 
 impl<'a, S: shell::Shell> module::Module for GhAction<S> {
-    fn prepare(&self, _: bool) -> Result<(), Box<dyn Error>> {
+    fn prepare(&self, reinit: bool) -> Result<(), Box<dyn Error>> {
         let config = self.config.borrow();
         let repository_root = config.vcs_service()?.repository_root()?;
         let deplo_yml_path = format!("{}/.github/workflows/deplo.yml", repository_root);
-        let target_branches = config.common.release_targets
-            .values().map(|s| &**s)
-            .collect::<Vec<&str>>().join(",");
-        fs::create_dir_all(&format!("{}/.github/workflows", repository_root))?;
-        fs::write(&deplo_yml_path, format!(
-            include_str!("../../rsc/ci/ghaction/deplo.yml.tmpl"), 
-            target_branches, target_branches, 
-            config.common.deplo_image, config::DEPLO_GIT_HASH,
-            config.runtime.workdir.as_ref().unwrap_or(&"".to_string())
-        ))?;
+        if reinit {
+            fs::remove_file(&deplo_yml_path)?;
+        }
+        match fs::metadata(&deplo_yml_path) {
+            Ok(_) => log::debug!("config file for github action already created"),
+            Err(_) => {
+                let target_branches = config.common.release_targets
+                    .values().map(|s| &**s)
+                    .collect::<Vec<&str>>().join(",");
+                fs::create_dir_all(&format!("{}/.github/workflows", repository_root))?;
+                fs::write(&deplo_yml_path, format!(
+                    include_str!("../../rsc/ci/ghaction/deplo.yml.tmpl"), 
+                    target_branches, target_branches, 
+                    config.common.deplo_image, config::DEPLO_GIT_HASH,
+                    config.runtime.workdir.as_ref().unwrap_or(&"".to_string())
+                ))?;
+            }
+        }
         Ok(())
     }
 }
