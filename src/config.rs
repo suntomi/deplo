@@ -499,11 +499,11 @@ impl Config {
     pub fn default_backend(&self) -> String {
         format!("{}-backend-bucket-404", self.project_namespace())
     }
-    pub fn metadata_backend_bucket_name(&self, lb_name: &str, endpoint_version: u32) -> String {
+    pub fn metadata_bucket_name(&self, lb_name: &str, endpoint_version: u32) -> String {
         if lb_name == "default" {
-            return self.canonical_name(&format!("backend-bucket-metadata-{}", endpoint_version));
+            return self.canonical_name(&format!("metadata-{}", endpoint_version));
         }
-        return self.canonical_name(&format!("backend-bucket-metadata-{}-{}", lb_name, endpoint_version));
+        return self.canonical_name(&format!("metadata-{}-{}", lb_name, endpoint_version));
     }
     pub fn lb_config<'a>(&'a self, lb_name: &str) -> &'a LoadBalancerConfig {
         match self.lb.get(lb_name) {

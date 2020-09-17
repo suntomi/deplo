@@ -96,7 +96,7 @@ pub struct Endpoints {
     pub confirm_deploy: Option<bool>,
     pub certify_latest_dist_only: Option<bool>,
     pub backport_target_branch: Option<String>,
-    pub default: Option<String>,
+    pub default: Option<IndexMap<String, Option<String>>>,
     pub paths: Option<IndexMap<String, String>>,
     pub min_certified_dist_versions: IndexMap<String, u32>,
     pub next: Option<Release>, // None if no plan to release

@@ -5,7 +5,10 @@
   "confirm_deploy": true,
   "certify_latest_dist_only": true,
   "backport_target_branch": null,
-  "default": "api",
+  "default": {
+    "default": "api",
+    "admin": null
+  },
   "paths": null,
   "min_certified_dist_versions": {
     "android": 2,

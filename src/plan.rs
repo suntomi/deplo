@@ -426,7 +426,9 @@ impl Plan {
             }
         }
         return escalate!(Box::new(DeployError {
-            cause: format!("either storage/container deployment should exist in {}.toml", self.service)
+            cause: format!(
+                "either storage/container/distribution deployment should exist in {}.toml", self.service
+            )
         }))
     }
     pub fn try_get_container_options<'a>(&'a self) -> Option<&'a HashMap<String, String>> {

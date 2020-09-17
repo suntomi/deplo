@@ -104,7 +104,11 @@ impl<S: shell::Shell> Gcp<S> {
         return config.canonical_name(&format!("path-matcher-{}-{}", lb_name, endpoints_version))
     }
     fn metadata_backend_bucket_name(&self, lb_name: &str, endpoint_version: u32) -> String {
-        self.config.borrow().metadata_backend_bucket_name(lb_name, endpoint_version)
+        let config = self.config.borrow();
+        if lb_name == "default" {
+            return config.canonical_name(&format!("backend-bucket-metadata-{}", endpoint_version));
+        }
+        return config.canonical_name(&format!("backend-bucket-metadata-{}-{}", lb_name, endpoint_version));
     }
     fn backend_bucket_name(&self, plan: &plan::Plan) -> String {
         let config = self.config.borrow();
@@ -695,6 +699,31 @@ impl<S: shell::Shell> Gcp<S> {
             (parsed[0], &*self.gcp_project_id)
         };
     }
+    fn get_default_backend_option(
+        &self, lb_name: &str, endpoints: &endpoints::Endpoints
+    ) -> Result<String, Box<dyn Error>> {
+        let next = endpoints.next.as_ref().unwrap();
+        match &endpoints.default {
+            Some(ds) => {
+                match ds.get(lb_name) {
+                    Some(may_ep) => match may_ep {
+                        Some(ep) => {
+                            let plan = plan::Plan::find_by_endpoint(&self.config, ep)?;
+                            let name = if ep == &plan.service { "" } else { ep };
+                            log::warn!("TODO: support setting backend bucket as default backend");
+                            return Ok(format!("--default-service={}", 
+                                self.backend_service_name(&plan, name, next.get_version(ep))
+                            ))
+                        },
+                        None => {}
+                    },
+                    None => {}
+                }
+            },
+            None => {}
+        }
+        Ok(format!("--default-backend-bucket={}", self.config.borrow().default_backend()))
+    }
 }
 
 impl<'a, S: shell::Shell> module::Module for Gcp<S> {
@@ -1077,19 +1106,7 @@ impl<'a, S: shell::Shell> cloud::Cloud for Gcp<S> {
         let deployments = next.versions.get(lb_name).unwrap_or(&empty_map);
         let config = self.config.borrow();
         let target = config.release_target().expect("should be on release branch");
-        let default_backend_option = match &endpoints.default {
-            Some(ep) => {
-                let plan = plan::Plan::find_by_endpoint(&self.config, ep)?;
-                let name = if ep == &plan.service { "" } else { ep };
-                log::warn!("TODO: support manually set default backend bucket case");
-                format!("--default-service={}", 
-                    self.backend_service_name(&plan, name, next.get_version(ep))
-                )
-            },
-            None => {
-                format!("--default-backend-bucket={}", config.default_backend())
-            }
-        };
+        let default_backend_option = self.get_default_backend_option(lb_name, endpoints)?;
         let endpoints_version = endpoints.version;
         log::info!("--- update path matcher ({}/{}/{})", target.to_string(), default_backend_option, endpoints_version);
         let target_host = &endpoints.target_host(lb_name);

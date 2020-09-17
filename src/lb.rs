@@ -63,7 +63,7 @@ fn deploy_meta(
 ) -> Result<(), Box<dyn Error>> {
     let cloud = config.cloud_service(&cloud_account_name)?;
     let mv = endpoints.version;
-    let bucket_name = config.metadata_backend_bucket_name(lb_name, mv);
+    let bucket_name = config.metadata_bucket_name(lb_name, mv);
     cloud.deploy_storage(
         cloud::StorageKind::Metadata {
             version: mv,
