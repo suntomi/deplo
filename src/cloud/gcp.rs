@@ -1120,7 +1120,7 @@ impl<'a, S: shell::Shell> cloud::Cloud for Gcp<S> {
         ), &hashmap!{}, false)?;
     
         log::info!("--- waiting for new urlmap having applied");
-        for (ep, v) in deployments.get(&plan::DeployKind::Service).unwrap_or(&IndexMap::new()) {
+        for (ep, _) in deployments.get(&plan::DeployKind::Service).unwrap_or(&IndexMap::new()) {
             let next_version = next.get_version(&ep);
             if next_version <= 0 {
                 continue

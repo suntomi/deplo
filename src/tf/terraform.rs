@@ -197,7 +197,7 @@ impl<S: shell::Shell> tf::Terraformer for Terraform<S> {
         Ok(r.split('\n').map(|s| s.to_string()).collect())
     }
     fn rm(&self, path: &str) -> Result<(), Box<dyn Error>> {
-        let r = self.shell.exec(&vec!(
+        self.shell.exec(&vec!(
             "terraform", "state", "rm", path
         ), &self.run_env(), false)?;
         Ok(())

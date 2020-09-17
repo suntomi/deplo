@@ -413,7 +413,7 @@ impl Config {
         return path::Path::new(&self.common.data_dir).join("endpoints");
     }
     pub fn endpoints_file_path(&self, release_target: Option<&str>) -> path::PathBuf {
-        let mut p = self.endpoints_path();
+        let p = self.endpoints_path();
         if let Some(e) = release_target {
             return p.join(format!("{}.json", e));
         } else if let Some(e) = self.release_target() {
@@ -520,7 +520,7 @@ impl Config {
         for (_, provider_config) in &self.cloud.accounts {
             let code = provider_config.code();
             match h.get_mut(&code) {
-                Some(v) => { 
+                Some(_) => { 
                     panic!("currently multiple account for same provider {} is not supported", code)
                 },
                 None => { h.insert(code, provider_config); }

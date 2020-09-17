@@ -172,7 +172,7 @@ impl Endpoints {
             }
         };
         for (kind, eps) in vs {
-            for (ep, v) in eps {
+            for (ep, _) in eps {
                 if config_ref.version_changed(ep, next) {
                     if change != ChangeType::Path {
                         change = ChangeType::Version;
