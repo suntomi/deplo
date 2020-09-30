@@ -1,11 +1,10 @@
-use std::collections::HashMap;
 use std::error::Error;
 use std::path;
 use std::fs;
 use std::fmt;
 
-use maplit::hashmap;
 use serde::{Deserialize, Serialize};
+use indexmap::IndexMap;
 
 use crate::config;
 use crate::plan;
@@ -58,18 +57,25 @@ impl fmt::Display for ChangeType {
     }
 }
 
-
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct Release {
-    pub paths: Option<HashMap<String, String>>,
-    pub versions: HashMap<String, (u32, plan::DeployKind)>,
+    pub paths: Option<IndexMap<String, String>>,
+    // { distribution name => its version }
+    pub distributions: IndexMap<String, u32>,
+    // lb_name => { deploy_kind => { endpoint_name => its version } }
+    pub versions: IndexMap<String, plan::Deployments>,
 }
 impl Release {
     pub fn get_version(&self, service: &str) -> u32 {
-        match self.versions.get(service) {
-            Some(v) => v.0,
-            None => 0
+        for (_, lbm) in &self.versions {
+            for (_, eps) in lbm {
+                match eps.get(service) {
+                    Some(v) => return *v,
+                    None => continue
+                }        
+            }
         }
+        return 0
     }
     pub fn has_endpoint(&self, endpoint: &str, version: u32) -> bool {
         return self.get_version(endpoint) == version
@@ -85,31 +91,31 @@ impl PartialEq for Release {
 #[derive(Serialize, Deserialize)]
 pub struct Endpoints {
     pub version: u32,
-    pub lb_name: String,
-    pub host: String,
+    pub target: String,
+    pub host_postfix: String,
     pub confirm_deploy: Option<bool>,
     pub certify_latest_dist_only: Option<bool>,
     pub backport_target_branch: Option<String>,
-    pub default: Option<String>,
-    pub paths: Option<HashMap<String, String>>,
-    pub min_certified_dist_versions: HashMap<String, u32>,
+    pub default: Option<IndexMap<String, Option<String>>>,
+    pub paths: Option<IndexMap<String, String>>,
+    pub min_certified_dist_versions: IndexMap<String, u32>,
     pub next: Option<Release>, // None if no plan to release
     pub releases: Vec<Release>,
     pub deploy_state: Option<DeployState>,
 }
 
 impl Endpoints {
-    pub fn new(lb_name: &str, host: &str) -> Endpoints {
+    pub fn new(target: &str, host_postfix: &str) -> Endpoints {
         Endpoints {
             version: 0,
-            lb_name: lb_name.to_string(),
-            host: host.to_string(),
+            target: target.to_string(),
+            host_postfix: host_postfix.to_string(),
             confirm_deploy: None,
             certify_latest_dist_only: None,
             backport_target_branch: None,
             default: None,
             paths: None,
-            min_certified_dist_versions: hashmap!{},
+            min_certified_dist_versions: IndexMap::new(),
             next: None,
             releases: vec!(),
             deploy_state: None,
@@ -130,8 +136,11 @@ impl Endpoints {
         fs::write(&path, &as_text)?;
         Ok(())
     }
+    pub fn dump(&self) -> Result<String, Box<dyn Error>> {
+        Ok(serde_json::to_string_pretty(&self)?)
+    }
     fn persist(&self, config: &config::Ref) -> Result<(), Box<dyn Error>> {
-        self.save(config.endpoints_file_path(&self.lb_name, Some(self.target())))
+        self.save(config.endpoints_file_path(Some(self.target())))
     }
     pub fn modify<P: AsRef<path::Path>, F, R: Sized>(
         config: &config::Container, path: P, f: F
@@ -142,21 +151,42 @@ impl Endpoints {
         ep.save(&path)?;
         Ok(r)
     }
-    pub fn cloud_account_name(&self, config: &config::Container) -> String {
-        config.borrow().lb_config(&self.lb_name).account_name().to_string()
+    pub fn target_host(
+        &self, lb_name: &str
+    ) -> String {
+        if lb_name == "default" {
+            format!("{}.{}", self.target, self.host_postfix)
+        } else {
+            format!("{}.{}.{}", self.target, lb_name, self.host_postfix)
+        }
     }
-    pub fn change_type<'a>(&self, config: &config::Container) -> Result<ChangeType, Box<dyn Error>> {
+    pub fn change_type(
+        &self, lb_name: &str, config: &config::Container
+    ) -> Result<ChangeType, Box<dyn Error>> {
         let config_ref = config.borrow();
         let mut change = ChangeType::None;
         let next = self.get_next()?; 
-        let vs = &next.versions;
-        for (ep, v) in vs {
-            if config_ref.version_changed(ep, next) {
-                if change != ChangeType::Path {
-                    change = ChangeType::Version;
+        let vs = match next.versions.get(lb_name) {
+            Some(entry) => entry,
+            None => if self.releases.len() > 0 {
+                match self.releases[0].versions.get(lb_name) {
+                    // if previous version has load balancer entry, path should change.
+                    Some(_) => return Ok(ChangeType::Path),
+                    None => return Ok(change)
                 }
-                if v.1 == plan::DeployKind::Service {
-                    change = ChangeType::Path;
+            } else {
+                return Ok(change)
+            }
+        };
+        for (kind, eps) in vs {
+            for (ep, _) in eps {
+                if config_ref.version_changed(ep, next) {
+                    if change != ChangeType::Path {
+                        change = ChangeType::Version;
+                    }
+                    if *kind == plan::DeployKind::Service {
+                        change = ChangeType::Path;
+                    }
                 }
             }
         }
@@ -171,45 +201,48 @@ impl Endpoints {
             } else {
                 self.next = Some(Release {
                     paths: None,
-                    versions: hashmap!{}
+                    distributions: IndexMap::new(),
+                    versions: IndexMap::new()
                 });
             }
         }
-        let config_ref = config.borrow();
-        let lb_name = self.lb_name.clone();
         let next = self.next.as_mut().unwrap();
-        next.versions.retain(|ep,_| {
-            let plan = match plan::Plan::find_by_endpoint(config, &ep) {
-                Ok(p) => p,
-                Err(e) => {
-                    log::debug!("lb:{}, ep {}, cannot find plan {:?}", lb_name, ep, e);
-                    return false
-                }
-            };
-            match plan.ports() {
-                Ok(ports) => match ports {
-                    Some(ps) => match ps.get(ep) {
-                        Some(port) => {
-                            log::debug!("lb:{}, ep:{}, port {}/{}", lb_name, ep,
-                                port.port, port.lb_name.as_ref().unwrap_or(&"default".to_string()));
-                            port.get_lb_name(&plan) == lb_name
-                        },
-                        None => {
-                            log::debug!("lb:{}, ep:{}, no port entry service:{}", lb_name, ep, plan.service);
-                            ep.to_string() == plan.service
+        for (lb_name, deployments) in &mut next.versions {
+            for (_, versions) in deployments {
+                versions.retain(|ep,_| {
+                    let plan = match plan::Plan::find_by_endpoint(config, &ep) {
+                        Ok(p) => p,
+                        Err(e) => {
+                            log::debug!("lb:{}, ep {}, cannot find plan {:?}", lb_name, ep, e);
+                            return false
                         }
-                    },
-                    None => {
-                        log::debug!("lb:{}, ep:{}, no container", lb_name, ep);
-                        true // ep is storage or distribution
+                    };
+                    match plan.ports() {
+                        Ok(ports) => match ports {
+                            Some(ps) => match ps.get(ep) {
+                                Some(port) => {
+                                    log::debug!("lb:{}, ep:{}, port {}/{}", lb_name, ep,
+                                        port.port, port.lb_name.as_ref().unwrap_or(&"default".to_string()));
+                                    port.get_lb_name(&plan) == *lb_name
+                                },
+                                None => {
+                                    log::debug!("lb:{}, ep:{}, no port entry service:{}", lb_name, ep, plan.service);
+                                    ep.to_string() == plan.service
+                                }
+                            },
+                            None => {
+                                log::debug!("lb:{}, ep:{}, no container", lb_name, ep);
+                                true // ep is storage or distribution
+                            }
+                        }
+                        Err(e) => {
+                            log::debug!("lb:{}, ep:{}, get ports error {:?}", lb_name, ep, e);
+                            false
+                        }
                     }
-                }
-                Err(e) => {
-                    log::debug!("lb:{}, ep:{}, get ports error {:?}", lb_name, ep, e);
-                    false
-                }
+                });
             }
-        });
+        }
         return next;
     }
     pub fn cascade_releases(
@@ -287,7 +320,7 @@ impl Endpoints {
         Ok(())
     }
     fn target<'a>(&'a self) -> &'a str {
-        self.host.split(".").collect::<Vec<&str>>()[0]
+        &self.target
     }
     fn get_next<'a>(&'a self) -> Result<&'a Release, Box<dyn Error>> {
         match &self.next {

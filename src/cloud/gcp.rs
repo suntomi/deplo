@@ -6,6 +6,7 @@ use std::fs;
 
 use regex::Regex;
 use maplit::hashmap;
+use indexmap::IndexMap;
 
 use crate::config;
 use crate::endpoints;
@@ -93,7 +94,7 @@ impl<S: shell::Shell> Gcp<S> {
         if lb_name == "default" {
             return config.canonical_name("url-map")
         }
-        return config.canonical_name(&format!("url-map-{}", lb_name))
+        return config.canonical_name(&format!("{}-url-map", lb_name))
     }
     fn path_matcher_name(&self, lb_name: &str, endpoints_version: u32) -> String {
         let config = self.config.borrow();
@@ -124,7 +125,7 @@ impl<S: shell::Shell> Gcp<S> {
             return Ok("new-hosts")
         }
         let host_group = self.shell.eval_output_of(&format!(
-            r#"echo '{}' | jq ".[].hosts[]" | grep "{}""#, host_rules, target_host
+            r#"echo '{}' | jq ".[].hosts[]|select(.==\"{}\")""#, host_rules, target_host
         ), &hashmap!{})?;
         if host_group.is_empty() {
             return Ok("new-hosts")
@@ -155,7 +156,7 @@ impl<S: shell::Shell> Gcp<S> {
         }
         return Ok(true)
     }
-    fn service_path_rule(&self, endpoints: &endpoints::Endpoints) -> Result<String, Box<dyn Error>> {
+    fn service_path_rule(&self, lb_name: &str, endpoints: &endpoints::Endpoints) -> Result<String, Box<dyn Error>> {
         let mut rules = vec!();
         let mut processed = hashmap!{};
         // service path rule should include unreleased paths 
@@ -164,47 +165,62 @@ impl<S: shell::Shell> Gcp<S> {
         releases.push(match &endpoints.next {
             Some(n) => n,
             None => return escalate!(Box::new(cloud::CloudError{
-                cause: format!("endpoint {} should have next release", endpoints.lb_name)
+                cause: format!("load balancer {} should have next release", lb_name)
             }))
         });
         for r in &releases {
-            for (ep, v) in &r.versions {
-                let vernum = v.0;
-                let key = format!("{}-{}", ep, vernum);
+            let eps = match r.versions.get(lb_name) {
+                Some(dp) => match dp.get(&plan::DeployKind::Service) {
+                    Some(svc) => svc,
+                    None => continue
+                },
+                None => continue
+            };
+            for (ep, v) in eps {
+                let key = format!("{}-{}", ep, v);
                 match processed.get(&key) {
                     Some(_) => continue,
                     None => {}
                 }
-                let plan = plan::Plan::find_by_endpoint(&self.config, &ep)?;
                 processed.entry(key).or_insert(true);
+                let plan = plan::Plan::find_by_endpoint(&self.config, &ep)?;
                 let backend_sevice_name = self.backend_service_name(&plan, 
-                    if ep.to_string() == plan.service { "" } else { ep }, 
-                    vernum
+                    if ep.to_string() == plan.service { "" } else { ep }, *v
                 );
-                rules.push(format!("/{}/{}/*={}", ep, vernum, backend_sevice_name));
+                rules.push(format!("/{}/{}/*={}", ep, v, backend_sevice_name));
             }
         }
         Ok(rules.join(","))
     }
     fn bucket_path_rule(
-        &self, endpoints: &endpoints::Endpoints, endpoints_version: u32
+        &self, lb_name: &str, endpoints: &endpoints::Endpoints, endpoints_version: u32
     ) -> Result<String, Box<dyn Error>> {
         let mut rules = vec!();
         let mut processed = hashmap!{};
-        rules.push(format!("/meta/*={}", self.metadata_backend_bucket_name(
-            &endpoints.lb_name, endpoints_version)
-        ));
-        for r in &endpoints.releases {
-            for (ep, _) in &r.versions {
+        let mut releases = endpoints.releases.iter().collect::<Vec<&endpoints::Release>>();
+        releases.push(match &endpoints.next {
+            Some(n) => n,
+            None => return escalate!(Box::new(cloud::CloudError{
+                cause: format!("load balancer {} should have next release", lb_name)
+            }))
+        });
+        rules.push(format!("/meta/*={}", self.metadata_backend_bucket_name(lb_name, endpoints_version)));
+        for r in &releases {
+            let eps = match r.versions.get(lb_name) {
+                Some(dp) => match dp.get(&plan::DeployKind::Storage) {
+                    Some(svc) => svc,
+                    None => continue
+                },
+                None => continue
+            };
+            for (ep, _) in eps {
                 match processed.get(ep) {
                     Some(_) => continue,
                     None => {}
                 }
                 processed.entry(ep).or_insert(true);
                 let plan = plan::Plan::find_by_endpoint(&self.config, &ep)?;
-                if plan.has_deployment_of(plan::DeployKind::Storage)? {
-                    rules.push(format!("/{}/*={}", ep, self.backend_bucket_name(&plan)));
-                }
+                rules.push(format!("/{}/*={}", ep, self.backend_bucket_name(&plan)));
             }
         }
         Ok(rules.join(","))
@@ -567,7 +583,7 @@ impl<S: shell::Shell> Gcp<S> {
         return Ok(())
     }
     fn cleanup_resources(
-        &self, endpoints: &endpoints::Endpoints
+        &self, lb_name: &str, endpoints: &endpoints::Endpoints
     ) -> Result<(), Box<dyn Error>> {
         log::info!("---- cleanup_resources");
         let config = self.config.borrow();
@@ -660,7 +676,7 @@ impl<S: shell::Shell> Gcp<S> {
                         // delete backend buckets first
                         shell::ignore_exit_code!(self.shell.exec(&vec!(
                             "gcloud", "compute", "backend-buckets", "delete",
-                            &self.metadata_backend_bucket_name(&endpoints.lb_name, version), "--quiet"
+                            &self.metadata_backend_bucket_name(lb_name, version), "--quiet"
                         ), &hashmap!{}, false));
                         // then, delete actual bucket
                         shell::ignore_exit_code!(self.shell.exec(&vec!(
@@ -670,8 +686,8 @@ impl<S: shell::Shell> Gcp<S> {
                 },
                 None => {}
             }
-            // backend-bucket may take loooong time to delete (eg. assets for video game), 
-            // we don't remove them here.
+            // project specific backend-bucket may take loooong time to delete (eg. assets for video game), 
+            // we don't remove them here. do it by your own risk and tool :)
         }
         Ok(())
     }
@@ -682,6 +698,31 @@ impl<S: shell::Shell> Gcp<S> {
         } else {
             (parsed[0], &*self.gcp_project_id)
         };
+    }
+    fn get_default_backend_option(
+        &self, lb_name: &str, endpoints: &endpoints::Endpoints
+    ) -> Result<String, Box<dyn Error>> {
+        let next = endpoints.next.as_ref().unwrap();
+        match &endpoints.default {
+            Some(ds) => {
+                match ds.get(lb_name) {
+                    Some(may_ep) => match may_ep {
+                        Some(ep) => {
+                            let plan = plan::Plan::find_by_endpoint(&self.config, ep)?;
+                            let name = if ep == &plan.service { "" } else { ep };
+                            log::warn!("TODO: support setting backend bucket as default backend");
+                            return Ok(format!("--default-service={}", 
+                                self.backend_service_name(&plan, name, next.get_version(ep))
+                            ))
+                        },
+                        None => {}
+                    },
+                    None => {}
+                }
+            },
+            None => {}
+        }
+        Ok(format!("--default-backend-bucket={}", self.config.borrow().default_backend()))
     }
 }
 
@@ -1052,7 +1093,7 @@ impl<'a, S: shell::Shell> cloud::Cloud for Gcp<S> {
     }
 
     fn update_path_matcher(
-        &self, endpoints: &endpoints::Endpoints
+        &self, lb_name: &str, endpoints: &endpoints::Endpoints
     ) -> Result<(), Box<dyn Error>> {
         let next = match &endpoints.next {
             Some(n) => n,
@@ -1061,29 +1102,19 @@ impl<'a, S: shell::Shell> cloud::Cloud for Gcp<S> {
                 return Ok(())
             }
         };
+        let empty_map = IndexMap::new();
+        let deployments = next.versions.get(lb_name).unwrap_or(&empty_map);
         let config = self.config.borrow();
         let target = config.release_target().expect("should be on release branch");
-        let default_backend_option = match &endpoints.default {
-            Some(ep) => {
-                let plan = plan::Plan::find_by_endpoint(&self.config, ep)?;
-                let name = if ep == &plan.service { "" } else { ep };
-                log::warn!("TODO: support manually set default backend bucket case");
-                format!("--default-service={}", 
-                    self.backend_service_name(&plan, name, next.get_version(ep))
-                )
-            },
-            None => {
-                format!("--default-backend-bucket={}", config.default_backend())
-            }
-        };
+        let default_backend_option = self.get_default_backend_option(lb_name, endpoints)?;
         let endpoints_version = endpoints.version;
         log::info!("--- update path matcher ({}/{}/{})", target.to_string(), default_backend_option, endpoints_version);
-        let target_host = &endpoints.host;
-        let url_map_name = self.url_map_name(&endpoints.lb_name);
-        let path_matcher_name = self.path_matcher_name(&endpoints.lb_name, endpoints_version);
-        let service_path_rule = self.service_path_rule(&endpoints)?;
+        let target_host = &endpoints.target_host(lb_name);
+        let url_map_name = self.url_map_name(lb_name);
+        let path_matcher_name = self.path_matcher_name(lb_name, endpoints_version);
+        let service_path_rule = self.service_path_rule(lb_name, &endpoints)?;
         log::info!("--- service_path_rule {}", service_path_rule);
-        let bucket_path_rule = self.bucket_path_rule(&endpoints, endpoints_version)?;
+        let bucket_path_rule = self.bucket_path_rule(lb_name, &endpoints, endpoints_version)?;
         let host_rule_add_option_name = self.host_rule_add_option_name(&url_map_name, target_host)?;
         self.shell.exec(&vec!(
             "gcloud", "compute", "url-maps", "add-path-matcher", &url_map_name,
@@ -1102,11 +1133,7 @@ impl<'a, S: shell::Shell> cloud::Cloud for Gcp<S> {
         ), &hashmap!{}, false)?;
     
         log::info!("--- waiting for new urlmap having applied");
-        for (ep, v) in &next.versions {
-            if v.1 == plan::DeployKind::Service {
-                log::debug!("[{}] does not change path. skipped", ep);
-                continue
-            }
+        for (ep, _) in deployments.get(&plan::DeployKind::Service).unwrap_or(&IndexMap::new()) {
             let next_version = next.get_version(&ep);
             if next_version <= 0 {
                 continue
@@ -1133,6 +1160,6 @@ impl<'a, S: shell::Shell> cloud::Cloud for Gcp<S> {
             }
         }
         // cleanup unused cloud resources
-        self.cleanup_resources(endpoints)
+        self.cleanup_resources(lb_name, endpoints)
     }
 }

@@ -7,6 +7,7 @@ use std::collections::{HashMap};
 use serde::{Deserialize, Serialize};
 use maplit::hashmap;
 use glob::glob;
+use indexmap::IndexMap;
 
 use crate::config;
 use crate::shell;
@@ -28,7 +29,7 @@ impl Error for DeployError {
     }
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, Hash)]
 pub enum DeployKind {
     #[serde(rename = "service")]
     Service,        // server program serving to distribution
@@ -40,6 +41,7 @@ pub enum DeployKind {
     #[serde(rename = "any")]
     Any = -1,       // special enum to express any deployment
 }
+pub type Deployments = IndexMap<DeployKind, IndexMap<String, u32>>;
 
 #[derive(Serialize, Deserialize, Debug)]
 pub enum ContainerDeployTarget {
@@ -161,7 +163,7 @@ impl Step {
                         config.next_endpoint_version(&plan.service)),
                     options.as_ref().unwrap_or(&hashmap!{})
                 )?;
-                // deploy to autoscaling group or serverless platform
+                // deploy to autoscaling group or serverless platform or k8s
                 let ports = plan.ports()?.expect("container deployment should have at least an exposed port");
                 return cloud.deploy_container(
                     plan, &target, &pushed_image_tag, &ports, 
@@ -424,7 +426,9 @@ impl Plan {
             }
         }
         return escalate!(Box::new(DeployError {
-            cause: format!("either storage/container deployment should exist in {}.toml", self.service)
+            cause: format!(
+                "either storage/container/distribution deployment should exist in {}.toml", self.service
+            )
         }))
     }
     pub fn try_get_container_options<'a>(&'a self) -> Option<&'a HashMap<String, String>> {

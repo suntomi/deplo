@@ -16,7 +16,7 @@ locals {
   region = var.gcp.region
 
   lbs = concat(var.envs, [for p in 
-    setproduct([for n in var.gcp.lb_names: n if n != "default"], var.envs): "${p[0]}.${p[1]}"
+    setproduct([for n in var.gcp.lb_names: n if n != "default"], var.envs): "${p[1]}.${p[0]}"
   ])
 }
 

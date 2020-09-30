@@ -90,10 +90,8 @@ impl<S: shell::Shell> module::Module for Terraform<S> {
                 Terraform::<S>::rmdir(&config.infra_code_dest_path(provider_code));
                 Terraform::<S>::rm(&config.infra_code_dest_root_path().join(format!("{}.tf", dir_name)));
             }
-            for (name, _) in &config.lb {
-                for (k, _) in &config.common.release_targets {
-                    Terraform::<S>::rm(&config.endpoints_file_path(name, Some(k)));
-                }
+            for (k, _) in &config.common.release_targets {
+                Terraform::<S>::rm(&config.endpoints_file_path(Some(k)));
             }
             Terraform::<S>::rm(&config.infra_code_dest_root_path().join("tfvars"));
             Terraform::<S>::rm(&config.infra_code_dest_root_path().join("backend"));
@@ -199,7 +197,7 @@ impl<S: shell::Shell> tf::Terraformer for Terraform<S> {
         Ok(r.split('\n').map(|s| s.to_string()).collect())
     }
     fn rm(&self, path: &str) -> Result<(), Box<dyn Error>> {
-        let r = self.shell.exec(&vec!(
+        self.shell.exec(&vec!(
             "terraform", "state", "rm", path
         ), &self.run_env(), false)?;
         Ok(())

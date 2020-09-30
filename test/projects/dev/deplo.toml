@@ -9,7 +9,7 @@ dev = "master"
 prod = "release"
 
 # you can use multiple cloud provider with [cloud.accounts.$account_name]
-# cloud.accounts.default should always exists
+# cloud.accounts.default should always exist
 [cloud.accounts.default]
 type = "GCP"
 key = "${DEPLO_CLOUD_ACCESS_KEY}"

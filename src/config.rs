@@ -11,6 +11,7 @@ use simple_logger;
 use serde::{Deserialize, Serialize};
 use dotenv::dotenv;
 use maplit::hashmap;
+use indexmap::IndexMap;
 use glob::glob;
 
 use crate::args;
@@ -229,6 +230,7 @@ pub struct RuntimeConfig {
     pub debug: HashMap<String, String>,
     pub distributions: Vec<String>,
     pub latest_endpoint_versions: HashMap<String, u32>,
+    pub endpoint_service_map: HashMap<String, String>,
     pub release_target: Option<String>,
     pub workdir: Option<String>,
 }
@@ -332,6 +334,7 @@ impl Config {
                 verbosity,
                 distributions: vec!(),
                 latest_endpoint_versions: hashmap!{},
+                endpoint_service_map: hashmap!{},
                 dryrun: args.occurence_of("dryrun") > 0,
                 debug: match args.values_of("debug") {
                     Some(s) => {
@@ -352,11 +355,12 @@ impl Config {
             };
         }
         // verify all configuration files, including endoints/plans
-        let (latest_endpoint_versions, distributions) = Self::verify(&c)?;
+        let (latest_endpoint_versions, distributions, endpoint_service_map) = Self::verify(&c)?;
         {
             let mut mutc = c.ptr.borrow_mut();
             mutc.runtime.latest_endpoint_versions = latest_endpoint_versions;
             mutc.runtime.distributions = distributions;
+            mutc.runtime.endpoint_service_map = endpoint_service_map;
         }
         {
             log::debug!("====== latest endpoint versions ====== ");
@@ -411,11 +415,8 @@ impl Config {
     pub fn endpoints_path(&self) -> path::PathBuf {
         return path::Path::new(&self.common.data_dir).join("endpoints");
     }
-    pub fn endpoints_file_path(&self, lb_name: &str, release_target: Option<&str>) -> path::PathBuf {
-        let mut p = self.endpoints_path();
-        if lb_name != "default" {
-            p = p.join(lb_name)
-        }
+    pub fn endpoints_file_path(&self, release_target: Option<&str>) -> path::PathBuf {
+        let p = self.endpoints_path();
         if let Some(e) = release_target {
             return p.join(format!("{}.json", e));
         } else if let Some(e) = self.release_target() {
@@ -454,7 +455,17 @@ impl Config {
         )
     }
     pub fn latest_endpoint_version(&self, endpoint: &str) -> u32 {
-        *self.runtime.latest_endpoint_versions.get(endpoint).unwrap_or(&0)
+        match self.runtime.latest_endpoint_versions.get(endpoint) {
+            Some(v) => *v,
+            None => {
+                let service = self.runtime.endpoint_service_map.get(endpoint).expect(
+                    &format!("endpoint:{} should exist in plan file", endpoint)
+                );
+                if service == endpoint { 0 } else { 
+                    self.latest_endpoint_version(service)
+                }
+            }
+        }
     }
     pub fn version_changed(&self, endpoint: &str, release: &endpoints::Release) -> bool {
         self.latest_endpoint_version(endpoint) != release.get_version(endpoint)
@@ -465,12 +476,13 @@ impl Config {
     pub fn update_endpoint_version(
         c: &Container, lb_name: &str, endpoint: &str, plan: &plan::Plan
     ) -> Result<u32, Box<dyn Error>> {
-        endpoints::Endpoints::modify(c, c.borrow().endpoints_file_path(lb_name, None), |eps| {
+        endpoints::Endpoints::modify(c, c.borrow().endpoints_file_path(None), |eps| {
             // latest version of endpoint is service version which the endpoint belongs to
             let next_version = c.borrow().next_endpoint_version(endpoint);
             let next = eps.prepare_next_if_not_exist(c);
-            let v = next.versions.entry(endpoint.to_string()).or_insert((0, plan::DeployKind::Any));
-            *v = (next_version, plan.deployment_kind()?);
+            let deployments = next.versions.entry(lb_name.to_string()).or_insert(IndexMap::new());
+            let vs = deployments.entry(plan.deployment_kind()?).or_insert(IndexMap::new());
+            vs.insert(endpoint.to_string(), next_version);
             // if confirm_deploy is not set and this is deployment of distribution, 
             // automatically update min_front_version with new version
             if eps.certify_latest_dist_only.unwrap_or(false) && 
@@ -486,6 +498,12 @@ impl Config {
     }
     pub fn default_backend(&self) -> String {
         format!("{}-backend-bucket-404", self.project_namespace())
+    }
+    pub fn metadata_bucket_name(&self, lb_name: &str, endpoint_version: u32) -> String {
+        if lb_name == "default" {
+            return self.canonical_name(&format!("metadata-{}", endpoint_version));
+        }
+        return self.canonical_name(&format!("metadata-{}-{}", lb_name, endpoint_version));
     }
     pub fn lb_config<'a>(&'a self, lb_name: &str) -> &'a LoadBalancerConfig {
         match self.lb.get(lb_name) {
@@ -521,7 +539,7 @@ impl Config {
         for (_, provider_config) in &self.cloud.accounts {
             let code = provider_config.code();
             match h.get_mut(&code) {
-                Some(v) => { 
+                Some(_) => { 
                     panic!("currently multiple account for same provider {} is not supported", code)
                 },
                 None => { h.insert(code, provider_config); }
@@ -686,7 +704,7 @@ impl Config {
     fn verify(
         c: &Container
     ) -> Result<
-        (HashMap<String, u32>,Vec<String>),
+        (HashMap<String, u32>,Vec<String>,HashMap<String, String>),
         Box<dyn Error>
     > {
         log::debug!("verify config");
@@ -697,7 +715,7 @@ impl Config {
         //    => this means no endpoint belongs to multiple load balancer too
         // 3. ports belongs to same service must belong to load balancers of same cloud provider account
         //    => this restriction plans to be removed by deploying same service to multiple cloud provider account
-        let mut latest_endpoint_versions_and_path: HashMap<String, (String, u32)> = hashmap!{};
+        let mut latest_endpoint_versions_and_path: HashMap<String, (String, u32, usize)> = hashmap!{};
         let mut endpoint_service_map: HashMap<String, String> = hashmap!{};
         let mut distributions = vec!();
         for entry in glob(&c.borrow().endpoints_path().join("*.json").to_string_lossy())? {
@@ -705,19 +723,27 @@ impl Config {
                 Ok(path) => {
                     let endpoints = endpoints::Endpoints::load(&c, &path)?;
                     if endpoints.releases.len() > 0 {
-                        for (ep, v) in &endpoints.releases[0].versions {
-                            match latest_endpoint_versions_and_path.get(ep) {
-                                Some(ent) => return Err(Box::new(ConfigError {
-                                    cause: format!(
-                                        "endpoint name:{} both exists in endpoint {} and {}",
-                                        ep, path.to_string_lossy(), ent.0
-                                    )
-                                })),
-                                None => {
-                                    latest_endpoint_versions_and_path.insert(
-                                        ep.to_string(),
-                                        (path.to_string_lossy().to_string(), v.0)
-                                    );
+                        for (idx, r) in endpoints.releases.iter().enumerate() {
+                            for (_, deployments) in &r.versions {
+                                for (_, vs) in deployments {
+                                    for (ep, v) in vs {
+                                        match latest_endpoint_versions_and_path.get(ep) {
+                                            Some(ent) => if ent.2 == idx {
+                                                return Err(Box::new(ConfigError {
+                                                    cause: format!(
+                                                        "endpoint name:{} duplicates in endpoint {} and {} @ rhis:{}",
+                                                        ep, path.to_string_lossy(), ent.0, idx
+                                                    )
+                                                }))
+                                            },
+                                            None => {
+                                                latest_endpoint_versions_and_path.insert(
+                                                    ep.to_string(),
+                                                    (path.to_string_lossy().to_string(), *v, idx)
+                                                );
+                                            }
+                                        }
+                                    }
                                 }
                             }
                         }
@@ -810,6 +836,6 @@ impl Config {
                 latest_endpoint_versions.insert(k, v.1);
             };
             latest_endpoint_versions
-        }, distributions))
+        }, distributions, endpoint_service_map))
     }
 }

@@ -57,9 +57,12 @@ lazy_static! {
             .takes_value(true))
         .arg(Arg::new("reinit")
             .long("reinit")
-            .help("initialize all component again")
+            .help("initialize component")
             .required(false)
-            .takes_value(true))
+            .takes_value(true)
+            .possible_values(
+                &["tf", "cloud", "ci", "vcs", "all"]
+            ))
         .subcommand(
             App::new("init")
                 .about("initialize deplo project. need to configure deplo.json beforehand")

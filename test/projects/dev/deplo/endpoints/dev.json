@@ -1,11 +1,14 @@
 {
-  "version": 7,
-  "lb_name": "default",
-  "host": "dev.deplo.suntomi.dev",
+  "version": 8,
+  "target": "dev",
+  "host_postfix": "deplo.suntomi.dev",
   "confirm_deploy": true,
   "certify_latest_dist_only": true,
   "backport_target_branch": null,
-  "default": "api",
+  "default": {
+    "default": "api",
+    "admin": null
+  },
   "paths": null,
   "min_certified_dist_versions": {
     "android": 2,
@@ -13,68 +16,55 @@
   },
   "next": {
     "paths": null,
+    "distributions": {
+      "ios": 2,
+      "android": 2
+    },
     "versions": {
-      "android": [
-        2,
-        "distribution"
-      ],
-      "api": [
-        5,
-        "service"
-      ],
-      "metrics": [
-        1,
-        "service"
-      ],
-      "ios": [
-        2,
-        "distribution"
-      ]
+      "admin": {
+        "service": {
+          "admin": 5
+        }
+      },
+      "default": {
+        "service": {
+          "metrics": 5,
+          "api": 5
+        }
+      }
     }
   },
   "releases": [
     {
       "paths": null,
+      "distributions": {
+        "android": 2,
+        "ios": 2
+      },
       "versions": {
-        "android": [
-          2,
-          "distribution"
-        ],
-        "admin": [
-          4,
-          "service"
-        ],
-        "api": [
-          4,
-          "service"
-        ],
-        "ios": [
-          2,
-          "distribution"
-        ]
+        "default": {
+          "service": {
+            "admin": 4,
+            "api": 4
+          }
+        }
       }
     },
     {
       "paths": null,
+      "distributions": {
+        "ios": 2,
+        "android": 1
+      },
       "versions": {
-        "admin": [
-          4,
-          "service"
-        ],
-        "android": [
-          1,
-          "distribution"
-        ],
-        "api": [
-          4,
-          "service"
-        ],
-        "ios": [
-          2,
-          "distribution"
-        ]
+        "default": {
+          "service": {
+            "admin": 4,
+            "api": 4
+          }
+        }
       }
     }
   ],
-  "deploy_state": null
+  "deploy_state": "ConfirmCleanup"
 }
