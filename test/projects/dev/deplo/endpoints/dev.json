@@ -1,5 +1,5 @@
 {
-  "version": 7,
+  "version": 8,
   "target": "dev",
   "host_postfix": "deplo.suntomi.dev",
   "confirm_deploy": true,
@@ -66,5 +66,5 @@
       }
     }
   ],
-  "deploy_state": null
+  "deploy_state": "ConfirmCleanup"
 }
