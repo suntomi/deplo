@@ -126,6 +126,7 @@ pub fn deploy(
             // and collect releases which is not referenced by distributions
             if endpoints.gc_releases(&config_ref)? {
                 // if true, means some releases are collected and path will be changed
+                log::info!("--- set change_type to Path");
                 change_type = endpoints::ChangeType::Path;
             }
             endpoints.set_deploy_state(&config_ref, None)?;
@@ -143,7 +144,7 @@ pub fn deploy(
         }
         for (lb_name, ct) in &lb_change_types {
             let lb_config = config_ref.lb_config(lb_name);
-            log::info!("--- deploy metadata bucket for {}", lb_name);
+            log::info!("--- deploy metadata bucket for {}, change_type={}", lb_name, change_type);
             deploy_meta(&config_ref, target, lb_name, &lb_config.account_name(), &endpoints)?;
             if *ct == endpoints::ChangeType::Path || change_type == endpoints::ChangeType::Path {
                 &config_ref.cloud_service(&lb_config.account_name())?.update_path_matcher(lb_name, &endpoints)?;

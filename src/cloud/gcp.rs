@@ -162,12 +162,10 @@ impl<S: shell::Shell> Gcp<S> {
         // service path rule should include unreleased paths 
         // (BeforeCascade case when Endpoints::confirm_deploy is true)
         let mut releases = endpoints.releases.iter().collect::<Vec<&endpoints::Release>>();
-        releases.push(match &endpoints.next {
-            Some(n) => n,
-            None => return escalate!(Box::new(cloud::CloudError{
-                cause: format!("load balancer {} should have next release", lb_name)
-            }))
-        });
+        match &endpoints.next {
+            Some(n) => releases.push(n),
+            None => {}
+        }
         for r in &releases {
             let eps = match r.versions.get(lb_name) {
                 Some(dp) => match dp.get(&plan::DeployKind::Service) {
@@ -198,12 +196,10 @@ impl<S: shell::Shell> Gcp<S> {
         let mut rules = vec!();
         let mut processed = hashmap!{};
         let mut releases = endpoints.releases.iter().collect::<Vec<&endpoints::Release>>();
-        releases.push(match &endpoints.next {
-            Some(n) => n,
-            None => return escalate!(Box::new(cloud::CloudError{
-                cause: format!("load balancer {} should have next release", lb_name)
-            }))
-        });
+        match &endpoints.next {
+            Some(n) => releases.push(n),
+            None => {}
+        }
         rules.push(format!("/meta/*={}", self.metadata_backend_bucket_name(lb_name, endpoints_version)));
         for r in &releases {
             let eps = match r.versions.get(lb_name) {
@@ -660,15 +656,18 @@ impl<S: shell::Shell> Gcp<S> {
         )?;
         let existing_buckets: Vec<&str> = bucket_output.split('\n').collect();
         let re_meta_buckets = Regex::new(
-            &config.canonical_name(&r#"metadata\-([^\-]+)"#)
+            &config.canonical_name(&r#"metadata\-(.+)"#)
         ).unwrap();
         for b in existing_buckets {
             match re_meta_buckets.captures(&b) {
                 Some(c) => {
                     let version: u32 = match c.get(1) {
-                        Some(v) => match v.as_str().parse() {
-                            Ok(n) => n,
-                            Err(err) => return escalate!(Box::new(err))
+                        Some(v) => {
+                            let vs: Vec<&str> = v.as_str().split('-').collect();
+                            match vs[vs.len() - 1].parse() {
+                                Ok(n) => n,
+                                Err(err) => return escalate!(Box::new(err))
+                            }
                         },
                         None => return escalate!(template_name_err(b))
                     };
@@ -702,7 +701,7 @@ impl<S: shell::Shell> Gcp<S> {
     fn get_default_backend_option(
         &self, lb_name: &str, endpoints: &endpoints::Endpoints
     ) -> Result<String, Box<dyn Error>> {
-        let next = endpoints.next.as_ref().unwrap();
+        let next = endpoints.next.as_ref().unwrap_or(&endpoints.releases[0]);
         match &endpoints.default {
             Some(ds) => {
                 match ds.get(lb_name) {
@@ -1098,8 +1097,12 @@ impl<'a, S: shell::Shell> cloud::Cloud for Gcp<S> {
         let next = match &endpoints.next {
             Some(n) => n,
             None => {
-                log::warn!("no new release exists");
-                return Ok(())
+                if endpoints.releases.len() <= 0 {
+                    log::warn!("no new release exists");
+                    return Ok(())
+                } else {
+                    &endpoints.releases[0]
+                }
             }
         };
         let empty_map = IndexMap::new();

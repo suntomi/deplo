@@ -77,6 +77,9 @@ impl Release {
         }
         return 0
     }
+    pub fn get_dist_version(&self, service: &str) -> u32 {
+        *self.distributions.get(service).unwrap_or(&0)
+    }
     pub fn has_endpoint(&self, endpoint: &str, version: u32) -> bool {
         return self.get_version(endpoint) == version
     }
@@ -165,16 +168,18 @@ impl Endpoints {
     ) -> Result<ChangeType, Box<dyn Error>> {
         let config_ref = config.borrow();
         let mut change = ChangeType::None;
-        let next = self.get_next()?; 
+        let next = self.get_next().unwrap_or(&self.releases[0]);
         let vs = match next.versions.get(lb_name) {
             Some(entry) => entry,
             None => if self.releases.len() > 0 {
                 match self.releases[0].versions.get(lb_name) {
-                    // if previous version has load balancer entry, path should change.
+                    // if previous version has load balancer entry, path should change
                     Some(_) => return Ok(ChangeType::Path),
+                    // both prev/next have no entry for the load balancer, thus no change
                     None => return Ok(change)
                 }
             } else {
+                // first release, but does not contains the load balancer, means no change
                 return Ok(change)
             }
         };
@@ -259,8 +264,11 @@ impl Endpoints {
         Ok(())
     }
     pub fn service_is_active(&self, service: &str, version: u32) -> Result<bool, Box<dyn Error>> {
-        if self.get_next()?.has_endpoint(service, version) {
-            return Ok(true);
+        match self.get_next() {
+            Ok(r) => if r.has_endpoint(service, version) {
+                return Ok(true);
+            },
+            Err(_) => {}
         }
         for r in &self.releases {
             if r.has_endpoint(service, version) {
@@ -283,7 +291,9 @@ impl Endpoints {
         for r in &self.releases {
             let mut referred = true;
             for (service, min_version) in &self.min_certified_dist_versions {
-                if r.get_version(service) < *min_version {
+                if r.get_dist_version(service) < *min_version {
+                    log::debug!("release {:?} will be collected: service {} version {} <  min certified {}", 
+                        r, service, r.get_dist_version(service), *min_version);
                     referred = false;
                     break;
                 }
@@ -291,17 +301,19 @@ impl Endpoints {
             if referred {
                 // if version is same as last pushed release
                 // for all services in min_certified_dist_versions,
-                // that release will not marked, because higher version tuple
-                // can handle these versions of front services
+                // that release will not marked, because newer version tuple
+                // can handle these version of distributions
                 if marked_releases.len() > 0 {
                     let last_pushed = &marked_releases[marked_releases.len() - 1];
                     let mut front_versions_same = true;
                     for (service, _) in &self.min_certified_dist_versions {
-                        if last_pushed.get_version(service) != r.get_version(service) {
+                        if last_pushed.get_dist_version(service) != r.get_dist_version(service) {
                             front_versions_same = false;
                         }
                     }
                     if front_versions_same {
+                        log::debug!("release {:?} will be collected: distributions are same {:?} as newer release {:?}",
+                            r, r.distributions, last_pushed.distributions);
                         continue;
                     }
                 }
@@ -311,6 +323,13 @@ impl Endpoints {
             }
         }
         let collected = marked_releases.len() != self.releases.len();
+        if collected {
+            log::debug!("some releases are collected {} => {}",
+                self.releases.len(), marked_releases.len()
+            );
+        } else {
+            log::debug!("no releases are collected {}", self.releases.len());
+        }
         self.releases = marked_releases;
         self.persist(config)?;
         return Ok(collected);
