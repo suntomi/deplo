@@ -11,11 +11,11 @@ jobs:
     name: running CI jobs
     # This job runs on Linux
     runs-on: ubuntu-latest
-    container: suntomi/deplo:105ff1ae6ff27ef7053bceaff3c4685f2812f632
+    container: suntomi/deplo:08c743fce1f3c455c96b8b984068b9a12c7b3306
     steps:
       - uses: actions/checkout@v2
         lfs: true
       - name: Run Deplo
         env:
           DEPLO_GHACTION_PULL_REQUEST_URL: ${ github.event.pull_request.comments_url }
-        run: deplo -w test/projects/dev ci
+        run: deplo -w test/projects/dev ci kick

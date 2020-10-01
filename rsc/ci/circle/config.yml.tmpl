@@ -1,3 +1,5 @@
+version: 2.1
+
 executors:
   deplo:
     working_directory: /workdir
@@ -28,17 +30,23 @@ commands:
   load_deplo_tools:
     steps:
       - restore_cache:
-        keys:
-          - deplo-tools-v1-{{ arch }}-{{ .Branch }}-{{ .Revision }}
-          - deplo-tools-v1-{{ arch }}-{{ .Branch }}-
-          - deplo-tools-v1-{{ arch }}-
+          keys:
+            - deplo-tools-v1-{{ arch }}-{{ .Branch }}-{{ .Revision }}
+            - deplo-tools-v1-{{ arch }}-{{ .Branch }}-
+            - deplo-tools-v1-{{ arch }}-
   save_deplo_tools:
     steps:
-    - save_cache:
-        key: deplo-tools-v1-{{ arch }}-{{ .Branch }}-{{ .Revision }}
-        paths:
-          - "/deplo-tools"
+      - save_cache:
+          key: deplo-tools-v1-{{ arch }}-{{ .Branch }}-{{ .Revision }}
+          paths:
+            - "/deplo-tools"
 
+workflows:
+  version: 2
+  main:
+    jobs:
+      - main
+          
 jobs:
   main:
     executor: deplo
@@ -46,6 +54,6 @@ jobs:
       - fetch_repo
       - load_deplo_tools
       - run:
-        name: 'running CI jobs'
-        command: deplo -w {} ci
+          name: 'running CI jobs'
+          command: deplo -w {} ci kick
       - save_deplo_tools
