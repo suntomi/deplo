@@ -37,11 +37,13 @@ lazy_static! {
             .long("debug")
             .multiple(true)
             .value_name("CATEGORY")
-            .help("Activate debug feature (vcs:deploy:tf:ci)")
-            .takes_value(true)
-            .possible_values(
-                &["skip_rebase", "infra_debug"]
-            ))    
+            .help("Activate debug feature (vcs:deploy:tf:ci)\n\
+            possible values: \n\
+            skip_rebase (flag)\n\
+            infra_debug (flag)\n\
+            ci_env=(Circle|GhAction)\n\
+            ")
+            .takes_value(true))
         .arg(Arg::with_name("verbosity")
             .short('v')
             .long("verbose")
@@ -53,13 +55,17 @@ lazy_static! {
             .long("workdir")
             .help("Sets working directory of entire process")
             .takes_value(true))
+        .arg(Arg::new("reinit")
+            .long("reinit")
+            .help("initialize component")
+            .required(false)
+            .takes_value(true)
+            .possible_values(
+                &["tf", "cloud", "ci", "vcs", "all"]
+            ))
         .subcommand(
             App::new("init")
                 .about("initialize deplo project. need to configure deplo.json beforehand")
-                .arg(Arg::new("reinit")
-                    .long("reinit")
-                    .help("initialize again")
-                    .required(false))
         )
         .subcommand(
             App::new("destroy")
@@ -75,6 +81,13 @@ lazy_static! {
                 .subcommand(
                     App::new("apply")
                     .about("apply infra change")
+                )
+                .subcommand(
+                    App::new("rm")
+                    .about("remove resource from state")
+                    .arg(Arg::new("address")
+                        .help("resource address")
+                        .index(1))
                 )
                 .subcommand(
                     App::new("rsc")
@@ -110,6 +123,10 @@ lazy_static! {
                 .subcommand(
                     App::new("create")
                     .about("create service")
+                    .arg(Arg::new("lb")
+                        .short('l')
+                        .long("lb")
+                        .help("load balancer name that the service belongs to"))
                     .arg(Arg::new("name")
                         .help("service name")
                         .index(1)

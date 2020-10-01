@@ -1,25 +1,17 @@
-version: 2.1
-
-workflows:
-  version: 2
-  deplo:
-    jobs:
-      - deplo
-
 executors:
   deplo:
     working_directory: /workdir
     docker:
-      - image: suntomi/deplo:c27be81c06c93e5efe753c6ce60f3008a6d35e1b
+      - image: suntomi/deplo:105ff1ae6ff27ef7053bceaff3c4685f2812f632
 
 commands:
   fetch_repo:
     steps:
       - restore_cache:
           keys:
-            - deplo-git-v1-{{ arch }}-{{ .Branch }}-{{ .Revision }}
-            - deplo-git-v1-{{ arch }}-{{ .Branch }}-
-            - deplo-git-v1-{{ arch }}-
+            - deplo-git-v1-{ arch }-{ .Branch }-{ .Revision }
+            - deplo-git-v1-{ arch }-{ .Branch }-
+            - deplo-git-v1-{ arch }-
       - checkout
       - run:
           name: 'pull files in git LFS'
@@ -30,32 +22,30 @@ commands:
           name: 'maintain git'
           command: git gc
       - save_cache:
-          key: deplo-git-v1-{{ arch }}-{{ .Branch }}-{{ .Revision }}
+          key: deplo-git-v1-{ arch }-{ .Branch }-{ .Revision }
           paths:
             - ".git"
   load_deplo_tools:
     steps:
       - restore_cache:
-          keys:
-            - deplo-tools-v1-{{ arch }}-{{ .Branch }}-{{ .Revision }}
-            - deplo-tools-v1-{{ arch }}-{{ .Branch }}-
-            - deplo-tools-v1-{{ arch }}-
+        keys:
+          - deplo-tools-v1-{ arch }-{ .Branch }-{ .Revision }
+          - deplo-tools-v1-{ arch }-{ .Branch }-
+          - deplo-tools-v1-{ arch }-
   save_deplo_tools:
     steps:
     - save_cache:
-        key: deplo-tools-v1-{{ arch }}-{{ .Branch }}-{{ .Revision }}
+        key: deplo-tools-v1-{ arch }-{ .Branch }-{ .Revision }
         paths:
           - "/deplo-tools"
 
 jobs:
-  deplo:
+  main:
     executor: deplo
-    environment:
-      DEPLO_CI_TYPE: Circle
     steps:
       - fetch_repo
       - load_deplo_tools
       - run:
-          name: 'running CI jobs'
-          command: /deplo -vvv -w test/projects/dev ci kick
+        name: 'running CI jobs'
+        command: deplo -w test/projects/dev ci
       - save_deplo_tools

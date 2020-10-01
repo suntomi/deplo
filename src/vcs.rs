@@ -2,10 +2,13 @@ use std::error::Error;
 use std::collections::HashMap;
 use std::fmt;
 
-use super::config;
+use regex::Regex;
 
-pub trait VCS<'a> {
-    fn new(config: &'a config::Config) -> Result<Self, Box<dyn Error>> where Self : Sized;
+use super::config;
+use crate::module;
+
+pub trait VCS : module::Module {
+    fn new(config: &config::Container) -> Result<Self, Box<dyn Error>> where Self : Sized;
     fn release_target(&self) -> Option<String>;
     fn current_branch(&self) -> Result<String, Box<dyn Error>>;
     fn commit_hash(&self) -> Result<String, Box<dyn Error>>;
@@ -18,6 +21,23 @@ pub trait VCS<'a> {
         &self, title: &str, head_branch: &str, base_branch: &str, option: &HashMap<&str, &str>
     ) -> Result<(), Box<dyn Error>>;
     fn user_and_repo(&self) -> Result<(String, String), Box<dyn Error>>;
+    fn diff<'b>(&'b self) -> &'b Vec<String>;
+    fn changed<'b>(&'b self, patterns: &Vec<&str>) -> bool {
+        let difflines = self.diff();
+        for pattern in patterns {
+            match Regex::new(pattern) {
+                Ok(re) => for diff in difflines {
+                    if re.is_match(diff) {
+                        return true
+                    }
+                },
+                Err(err) => {
+                    panic!("pattern[{}] is invalid regular expression err:{:?}", pattern, err);
+                }
+            }
+        }
+        false
+    }
 }
 
 #[derive(Debug)]
@@ -40,22 +60,22 @@ pub mod git;
 pub mod github;
 
 // factorys
-fn factory_by<'a, T: VCS<'a> + 'a>(
-    config: &'a config::Config
-) -> Result<Box<dyn VCS<'a> + 'a>, Box<dyn Error>> {
+fn factory_by<'a, T: VCS + 'a>(
+    config: &config::Container
+) -> Result<Box<dyn VCS + 'a>, Box<dyn Error>> {
     let cmd = T::new(config).unwrap();
-    return Ok(Box::new(cmd) as Box<dyn VCS<'a> + 'a>);
+    return Ok(Box::new(cmd) as Box<dyn VCS + 'a>);
 }
 
 pub fn factory<'a>(
-    config: &'a config::Config
-) -> Result<Box<dyn VCS<'a> + 'a>, Box<dyn Error>> {
-    match &config.vcs {
+    config: &config::Container
+) -> Result<Box<dyn VCS + 'a>, Box<dyn Error>> {
+    match &config.borrow().vcs {
         config::VCSConfig::Github { email:_,  account:_, key:_ } => {
             return factory_by::<github::Github>(config);
         },
         _ => return Err(Box::new(VCSError {
-            cause: format!("add factory matching pattern for [{}]", config.vcs)
+            cause: format!("add factory matching pattern for [{}]", config.borrow().vcs)
         }))
     };
 }

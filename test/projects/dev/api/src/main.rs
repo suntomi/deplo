@@ -77,12 +77,11 @@ async fn main() -> io::Result<()> {
     std::env::set_var("RUST_LOG", "actix_web=info");
     env_logger::init();
     let target = std::env::var("DEPLO_RELEASE_TARGET").unwrap_or("dev".to_string());
-
-    println!("Starting {} server at port 80,10000", target);
+    
+    println!("Starting {} server at port 80(api),10000(admin),10001(metrics)", target);
     let s1 = HttpServer::new(move || {
-        let version = std::env::var("DEPLO_SERVICE_VERSION").unwrap_or("1".to_string());
-        let name = std::env::var("DEPLO_SERVICE_NAME").unwrap_or("api".to_string());
-        let path = std::env::var("DEPLO_SERVICE_PATH").unwrap_or(format!("/{}/{}", name, version));
+        let version = std::env::var("DEPLO_SERVICE_VERSION").unwrap();
+        let path = format!("/api/{}", version);
         App::new()
             .data(Client::default())
             .service(web::resource(format!("{}/something", &path)).route(web::post().to(create_something)))
@@ -93,9 +92,8 @@ async fn main() -> io::Result<()> {
     .run();
 
     let s2 = HttpServer::new(move || {
-        let version = std::env::var("DEPLO_SERVICE_VERSION").unwrap_or("1".to_string());
-        let name = std::env::var("DEPLO_SERVICE_NAME").unwrap_or("api".to_string());
-        let path = std::env::var("DEPLO_SERVICE_PATH").unwrap_or(format!("/{}/{}", name, version));
+        let version = std::env::var("DEPLO_SERVICE_VERSION").unwrap();
+        let path = format!("/admin/{}", version);
         App::new()
             .data(Client::default())
             .service(web::resource(format!("{}/ping", &path)).route(web::get().to(ok)))
@@ -104,6 +102,17 @@ async fn main() -> io::Result<()> {
     .bind("0.0.0.0:10000")?
     .run();
 
-    future::try_join(s1, s2).await?;
+    let s3 = HttpServer::new(move || {
+        let version = std::env::var("DEPLO_SERVICE_VERSION").unwrap();
+        let path = format!("/metrics/{}", version);
+        App::new()
+            .data(Client::default())
+            .service(web::resource(format!("{}/ping", &path)).route(web::get().to(ok)))
+            .service(web::resource("/ping".to_string()).route(web::get().to(ok)))
+    })
+    .bind("0.0.0.0:10001")?
+    .run();
+
+    future::try_join(future::try_join(s1, s2), s3).await?;
     Ok(())
 }

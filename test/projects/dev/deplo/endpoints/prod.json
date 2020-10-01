@@ -1,7 +1,14 @@
 {
-    "version": 0,
-    "host": "prod.deplo.suntomi.dev",
-    "min_certified_dist_versions": {},
-    "next": {},
-    "releases": []
+  "version": 0,
+  "target": "prod",
+  "host_postfix": "deplo.suntomi.dev",
+  "confirm_deploy": null,
+  "certify_latest_dist_only": null,
+  "backport_target_branch": null,
+  "default": null,
+  "paths": null,
+  "min_certified_dist_versions": {},
+  "next": null,
+  "releases": [],
+  "deploy_state": null
 }

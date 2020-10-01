@@ -9,15 +9,15 @@ use crate::command;
 use crate::shell;
 use crate::util::escalate;
 
-pub struct Exec<'a, S: shell::Shell<'a> = shell::Default<'a>> {
-    pub config: &'a config::Config<'a>,
+pub struct Exec<S: shell::Shell = shell::Default> {
+    pub config: config::Container,
     pub shell: S
 }
 
-impl<'a, S: shell::Shell<'a>, A: args::Args> command::Command<'a, A> for Exec<'a, S> {
-    fn new(config: &'a config::Config) -> Result<Exec<'a, S>, Box<dyn Error>> {
+impl<S: shell::Shell, A: args::Args> command::Command<A> for Exec<S> {
+    fn new(config: &config::Container) -> Result<Exec<S>, Box<dyn Error>> {
         return Ok(Exec {
-            config: config,
+            config: config.clone(),
             shell: S::new(config)
         });
     }
@@ -25,7 +25,7 @@ impl<'a, S: shell::Shell<'a>, A: args::Args> command::Command<'a, A> for Exec<'a
         log::info!("exec command invoked");
         match args.values_of("args") {
             Some(subargs) => {
-                return match self.shell.exec(&subargs, &hashmap!{}, false) {
+                return match self.shell.exec(&subargs, shell::no_env(), false) {
                     Ok(_) => Ok(()),
                     Err(err) => escalate!(Box::new(err))
                 }

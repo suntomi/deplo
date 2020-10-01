@@ -6,41 +6,55 @@ use regex;
 
 use crate::config;
 use crate::vcs;
+use crate::module;
 use super::git;
 
-pub struct Github<'a, GIT: (git::GitFeatures<'a>) + (git::GitHubFeatures<'a>) = git::Git<'a>> {
-    pub config: &'a config::Config<'a>,
+pub struct Github<GIT: (git::GitFeatures) + (git::GitHubFeatures) = git::Git> {
+    pub config: config::Container,
     pub git: GIT,
+    pub diff: Vec<String>
 }
 
-impl<'a, GIT: (git::GitFeatures<'a>) + (git::GitHubFeatures<'a>)> Github<'a, GIT> {
+impl<GIT: (git::GitFeatures) + (git::GitHubFeatures)> Github<GIT> {
     fn push_url(&self) -> Result<String, Box<dyn Error>> {
-        if let config::VCSConfig::Github{ email:_, account, key } = &self.config.vcs {
-            let user_and_repo = (self as &dyn vcs::VCS<'a>).user_and_repo()?;
+        let config = self.config.borrow();
+        if let config::VCSConfig::Github{ email:_, account, key } = &config.vcs {
+            let user_and_repo = (self as &dyn vcs::VCS).user_and_repo()?;
             Ok(format!("https://{}:{}@github.com/{}/{}", account, key, user_and_repo.0, user_and_repo.1))
         } else {
             Err(Box::new(vcs::VCSError {
-                cause: format!("should have github config, got: {}", self.config.vcs)
+                cause: format!("should have github config, got: {}", config.vcs)
             }))
         }
     }
 }
 
-impl<'a, GIT: (git::GitFeatures<'a>) + (git::GitHubFeatures<'a>)> vcs::VCS<'a> for Github<'a, GIT> {
-    fn new(config: &'a config::Config) -> Result<Github<'a, GIT>, Box<dyn Error>> {
-        if let config::VCSConfig::Github{ account, key:_, email } = &config.vcs {
-            return Ok(Github::<'a> {
-                config: config,
-                git: GIT::new(account, email, config)
-            });
+impl<GIT: (git::GitFeatures) + (git::GitHubFeatures)> module::Module for Github<GIT> {
+    fn prepare(&self, _:bool) -> Result<(), Box<dyn Error>> {
+        Ok(())
+    }
+}
+
+impl<GIT: (git::GitFeatures) + (git::GitHubFeatures)> vcs::VCS for Github<GIT> {
+    fn new(config: &config::Container) -> Result<Github<GIT>, Box<dyn Error>> {
+        if let config::VCSConfig::Github{ account, key:_, email } = &config.borrow().vcs {
+            let mut gh = Github {
+                config: config.clone(),
+                diff: vec!(),
+                git: GIT::new(&account, &email, config)
+            };
+            let diff = gh.git.rebase_with_remote_counterpart(&gh.push_url()?, &gh.git.current_branch()?)?;
+            gh.diff = diff.split('\n').map(|e| e.to_string()).collect();
+            return Ok(gh)
         } 
         return Err(Box::new(vcs::VCSError {
-            cause: format!("should have github config but {}", config.vcs)
+            cause: format!("should have github config but {}", config.borrow().vcs)
         }))
     }
     fn release_target(&self) -> Option<String> {
+        let config = self.config.borrow();
         let b = self.git.current_branch().unwrap();
-        for (k,v) in &self.config.common.release_targets {
+        for (k,v) in &config.common.release_targets {
             let re = regex::Regex::new(v).unwrap();
             match re.captures(&b) {
                 Some(_) => return Some(k.to_string()),
@@ -84,5 +98,8 @@ impl<'a, GIT: (git::GitFeatures<'a>) + (git::GitHubFeatures<'a>)> vcs::VCS<'a> f
             }))
         };
         Ok(user_and_repo)
+    }
+    fn diff<'b>(&'b self) -> &'b Vec<String> {
+        &self.diff
     }
 }

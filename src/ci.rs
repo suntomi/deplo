@@ -1,35 +1,18 @@
 use std::error::Error;
 use std::fmt;
 
-use regex::Regex;
-
 use super::config;
+use crate::module;
 
-pub trait CI<'a> {
-    fn new(config: &'a config::Config) -> Result<Self, Box<dyn Error>> where Self : Sized;
-    fn init(&self) -> Result<(), Box<dyn Error>>;
+pub trait CI : module::Module {
+    fn new(
+        config: &config::Container, account_name: &str
+    ) -> Result<Self, Box<dyn Error>> where Self : Sized;
     fn pull_request_url(&self) -> Result<Option<String>, Box<dyn Error>>;
     fn run_job(&self, job_name: &str) -> Result<String, Box<dyn Error>>;
     fn wait_job(&self, job_id: &str) -> Result<(), Box<dyn Error>>;
     fn wait_job_by_name(&self, job_id: &str) -> Result<(), Box<dyn Error>>;
-    fn diff<'b>(&'b self) -> &'b Vec<String>;
     fn set_secret(&self, key: &str, val: &str) -> Result<(), Box<dyn Error>>;
-    fn changed<'b>(&'b self, patterns: &Vec<&str>) -> bool {
-        let difflines = self.diff();
-        for pattern in patterns {
-            match Regex::new(pattern) {
-                Ok(re) => for diff in difflines {
-                    if re.is_match(diff) {
-                        return true
-                    }
-                },
-                Err(err) => {
-                    panic!("pattern[{}] is invalid regular expression err:{:?}", pattern, err);
-                }
-            }
-        }
-        false
-    }
 }
 
 #[derive(Debug)]
@@ -52,22 +35,24 @@ pub mod ghaction;
 pub mod circle;
 
 // factorys
-fn factory_by<'a, T: CI<'a> + 'a>(
-    config: &'a config::Config
-) -> Result<Box<dyn CI<'a> + 'a>, Box<dyn Error>> {
-    let cmd = T::new(config).unwrap();
-    return Ok(Box::new(cmd) as Box<dyn CI<'a> + 'a>);
+fn factory_by<'a, T: CI + 'a>(
+    config: &config::Container,
+    account_name: &str
+) -> Result<Box<dyn CI + 'a>, Box<dyn Error>> {
+    let cmd = T::new(config, account_name).unwrap();
+    return Ok(Box::new(cmd) as Box<dyn CI + 'a>);
 }
 
 pub fn factory<'a>(
-    config: &'a config::Config
-) -> Result<Box<dyn CI<'a> + 'a>, Box<dyn Error>> {
-    match &config.ci {
-        config::CIConfig::GhAction { account:_, key:_ } => {
-            return factory_by::<ghaction::GhAction>(config);
+    config: &config::Container,
+    account_name: &str
+) -> Result<Box<dyn CI + 'a>, Box<dyn Error>> {
+    match &config.borrow().ci_config(account_name) {
+        config::CIConfig::GhAction { account:_, key:_, action:_ } => {
+            return factory_by::<ghaction::GhAction>(config, account_name);
         },
-        config::CIConfig::Circle { key:_ } => {
-            return factory_by::<circle::Circle>(config);
+        config::CIConfig::Circle { key:_, action:_ } => {
+            return factory_by::<circle::Circle>(config, account_name);
         }
     };
 }

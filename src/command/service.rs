@@ -16,16 +16,18 @@ pub enum ActionType {
     PullRequest,
 }
 
-pub struct Service<'a, S: shell::Shell<'a> = shell::Default<'a>> {
-    pub config: &'a config::Config<'a>,
+pub struct Service<S: shell::Shell = shell::Default> {
+    pub config: config::Container,
     pub shell: S
 }
 
-impl<'a, S: shell::Shell<'a>> Service<'a, S> {
+impl<S: shell::Shell> Service<S> {
     fn create<A: args::Args>(&self, args: &A) -> Result<(), Box<dyn Error>> {
         log::debug!("service create invoked");
-        let p = plan::Plan::<'a>::create(
-            self.config, 
+        let p = plan::Plan::create(
+            &self.config, 
+            // optoinal
+            args.value_of("lb"),
             // both required argument
             args.value_of("name").unwrap(), 
             args.value_of("type").unwrap()
@@ -40,40 +42,43 @@ impl<'a, S: shell::Shell<'a>> Service<'a, S> {
         }
     }
     fn action<A: args::Args>(&self, args: &A, kind: Option<ActionType>) -> Result<(), Box<dyn Error>> {
-        log::debug!("service deploy invoked");      
-        let ci = self.config.ci_service()?;
-        let p = plan::Plan::<'a>::load(
-            self.config, 
+        log::debug!("service deploy invoked");
+        let config = self.config.borrow();        
+        let (account_name, _) = config.ci_config_by_env();
+        let ci = config.ci_service(account_name)?;
+        let plan = plan::Plan::load(
+            &self.config, 
             // both required argument
             args.value_of("name").unwrap()
         )?;
-        p.exec::<S>(kind.unwrap_or(match ci.pull_request_url()? {
+        plan.exec::<S>(kind.unwrap_or(match ci.pull_request_url()? {
             Some(_) => ActionType::PullRequest,
             _ => ActionType::Deploy
         }) == ActionType::PullRequest)?;
-        match p.ports()? {
+        match plan.ports()? {
             Some(ports) => {
-                for (n, _) in &ports {
-                    let name = if n.is_empty() { &p.service } else { n };
-                    self.config.update_service_endpoint_version(name, &p)?;
+                for (n, port) in &ports {
+                    let name = if n.is_empty() { &plan.service } else { n };
+                    let lb_name = port.get_lb_name(&plan);
+                    config::Config::update_endpoint_version(&self.config, &lb_name, name, &plan)?;
                 }
             },
-            None => {
-                self.config.update_service_endpoint_version(&p.service, &p)?;
+            None => { // non-container deployment (storage / destribution / etc...)
+                config::Config::update_endpoint_version(&self.config, plan.lb_name(), &plan.service, &plan)?;
             }
         }
         Ok(())
     }
     fn cutover<A: args::Args>(&self, _: &A) -> Result<(), Box<dyn Error>> {
         log::debug!("service cutover invoked");      
-        lb::deploy(self.config, false)
+        lb::deploy(&self.config, false)
     }
 }
 
-impl<'a, S: shell::Shell<'a>, A: args::Args> command::Command<'a, A> for Service<'a, S> {
-    fn new(config: &'a config::Config) -> Result<Service<'a, S>, Box<dyn Error>> {
-        return Ok(Service::<'a, S> {
-            config: config,
+impl<S: shell::Shell, A: args::Args> command::Command<A> for Service<S> {
+    fn new(config: &config::Container) -> Result<Service<S>, Box<dyn Error>> {
+        return Ok(Service::<S> {
+            config: config.clone(),
             shell: S::new(config)
         });
     }

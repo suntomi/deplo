@@ -14,6 +14,7 @@ mod lb;
 mod ci;
 mod util;
 mod plan;
+mod module;
 
 use log;
 
