@@ -1,5 +1,5 @@
 {
-  "version": 8,
+  "version": 9,
   "target": "dev",
   "host_postfix": "deplo.suntomi.dev",
   "confirm_deploy": true,
@@ -14,57 +14,28 @@
     "android": 2,
     "ios": 2
   },
-  "next": {
-    "paths": null,
-    "distributions": {
-      "ios": 2,
-      "android": 2
-    },
-    "versions": {
-      "admin": {
-        "service": {
-          "admin": 5
-        }
-      },
-      "default": {
-        "service": {
-          "metrics": 5,
-          "api": 5
-        }
-      }
-    }
-  },
+  "next": null,
   "releases": [
     {
       "paths": null,
       "distributions": {
-        "android": 2,
-        "ios": 2
-      },
-      "versions": {
-        "default": {
-          "service": {
-            "admin": 4,
-            "api": 4
-          }
-        }
-      }
-    },
-    {
-      "paths": null,
-      "distributions": {
         "ios": 2,
-        "android": 1
+        "android": 2
       },
       "versions": {
+        "admin": {
+          "service": {
+            "admin": 5
+          }
+        },
         "default": {
           "service": {
-            "admin": 4,
-            "api": 4
+            "metrics": 5,
+            "api": 5
           }
         }
       }
     }
   ],
-  "deploy_state": "ConfirmCleanup"
+  "deploy_state": null
 }
