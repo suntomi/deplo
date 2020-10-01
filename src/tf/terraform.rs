@@ -211,7 +211,7 @@ impl<S: shell::Shell> tf::Terraformer for Terraform<S> {
         };
         let r = self.shell.eval_output_of(&format!("\
             terraform state show -no-color '{}'
-        ", addr_and_key.0), &hashmap!{})?;
+        ", addr_and_key.0), shell::no_env())?;
         if addr_and_key.1.is_empty() {
             Ok(r)
         } else {

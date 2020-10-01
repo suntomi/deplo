@@ -3,6 +3,8 @@ use std::fs;
 use std::path::Path;
 use std::collections::HashMap;
 use std::error::Error;
+use std::ffi::OsStr;
+use std::convert::AsRef;
 
 use crate::config;
 use crate::util::escalate;
@@ -13,17 +15,30 @@ pub trait Shell {
     fn new(config: &config::Container) -> Self;
     fn set_cwd<P: AsRef<Path>>(&mut self, dir: Option<&P>) -> Result<(), Box<dyn Error>>;
     fn set_env(&mut self, key: &str, val: String) -> Result<(), Box<dyn Error>>;
-    fn output_of(&self, args: &Vec<&str>, envs: &HashMap<&str, &str>) -> Result<String, ShellError>;
-    fn exec(&self, args: &Vec<&str>, envs: &HashMap<&str, &str>, capture: bool) -> Result<String, ShellError>;
-    fn eval(&self, code: &str, envs: &HashMap<&str, &str>, capture: bool) -> Result<String, ShellError> {
+    fn output_of<I, K, V>(
+        &self, args: &Vec<&str>, envs: I
+    ) -> Result<String, ShellError>
+    where I: IntoIterator<Item = (K, V)>, K: AsRef<OsStr>, V: AsRef<OsStr>;
+    fn exec<I, K, V>(
+        &self, args: &Vec<&str>, envs: I, capture: bool
+    ) -> Result<String, ShellError>
+    where I: IntoIterator<Item = (K, V)>, K: AsRef<OsStr>, V: AsRef<OsStr>;
+    fn eval<I, K, V>(
+        &self, code: &str, envs: I, capture: bool
+    ) -> Result<String, ShellError> 
+    where I: IntoIterator<Item = (K, V)>, K: AsRef<OsStr>, V: AsRef<OsStr> {
         return self.exec(&vec!("sh", "-c", code), envs, capture);
     }
-    fn eval_output_of(&self, code: &str, envs: &HashMap<&str, &str>) -> Result<String, ShellError> {
+    fn eval_output_of<I, K, V>(
+        &self, code: &str, envs: I
+    ) -> Result<String, ShellError>
+    where I: IntoIterator<Item = (K, V)>, K: AsRef<OsStr>, V: AsRef<OsStr> {
         return self.output_of(&vec!("sh", "-c", code), envs);
     }
-    fn run_code_or_file(
-        &self, code_or_file: &str, envs: &HashMap<&str, &str>
-    ) -> Result<(), Box<dyn Error>> {
+    fn run_code_or_file<I, K, V>(
+        &self, code_or_file: &str, envs: I
+    ) -> Result<(), Box<dyn Error>>
+    where I: IntoIterator<Item = (K, V)>, K: AsRef<OsStr>, V: AsRef<OsStr> {
         let r = match fs::metadata(code_or_file) {
             Ok(_) => self.exec(
                 &vec!(code_or_file), envs, false
@@ -77,3 +92,6 @@ macro_rules! macro_ignore_exit_code {
 }
 
 pub use macro_ignore_exit_code as ignore_exit_code;
+pub fn no_env() -> HashMap<String, String> {
+    return HashMap::new()
+}

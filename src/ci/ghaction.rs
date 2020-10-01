@@ -92,7 +92,7 @@ impl<S: shell::Shell> ci::CI for GhAction<S> {
         let public_key_info = serde_json::from_str::<RepositoryPublicKeyResponse>(
             &self.shell.eval_output_of(&format!(r#"
                 curl https://api.github.com/repos/{}/{}/actions/secrets/public-key?access_token={}
-            "#, user_and_repo.0, user_and_repo.1, token), &hashmap!{})?
+            "#, user_and_repo.0, user_and_repo.1, token), shell::no_env())?
         )?;
         let json = format!("{{\"encrypted_value\":\"{}\",\"key_id\":\"{}\"}}", 
             seal(val, &public_key_info.key)?, 
@@ -107,7 +107,7 @@ impl<S: shell::Shell> ci::CI for GhAction<S> {
             "-H", "Content-Type: application/json",
             "-H", "Accept: application/json",
             "-d", &json, "-w", "%{http_code}", "-o", "/dev/null"
-        ), &hashmap!{}, true)?.parse::<u32>()?;
+        ), shell::no_env(), true)?.parse::<u32>()?;
         if status >= 200 && status < 300 {
             Ok(())
         } else {

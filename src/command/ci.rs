@@ -37,7 +37,7 @@ impl<S: shell::Shell> CI<S> {
                         .to_string_lossy().to_string()
                 }).collect::<Vec<String>>();
                 if vcs.changed(&ps.iter().map(std::ops::Deref::deref).collect()) {
-                    self.shell.run_code_or_file(&code, &hashmap!{})?;
+                    self.shell.run_code_or_file(&code, shell::no_env())?;
                 }
             }
         } else {
@@ -52,7 +52,7 @@ impl<S: shell::Shell> CI<S> {
                         log::debug!("plan file path:{},stem:{}", path.to_string_lossy(), stem);
                         match std::env::current_dir()?.join(&stem).join(".*").to_str() {
                             Some(p) => if vcs.changed(&vec!(p)) {
-                                self.shell.eval(&format!("deplo service action {}", stem), &hashmap!{}, false)?;
+                                self.shell.eval(&format!("deplo service action {}", stem), shell::no_env(), false)?;
                             },
                             None => {}
                         }

@@ -25,7 +25,7 @@ impl<S: shell::Shell, A: args::Args> command::Command<A> for Exec<S> {
         log::info!("exec command invoked");
         match args.values_of("args") {
             Some(subargs) => {
-                return match self.shell.exec(&subargs, &hashmap!{}, false) {
+                return match self.shell.exec(&subargs, shell::no_env(), false) {
                     Ok(_) => Ok(()),
                     Err(err) => escalate!(Box::new(err))
                 }

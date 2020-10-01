@@ -51,7 +51,7 @@ impl<S: shell::Shell> Gcp<S> {
         } = cloud_provider_config {
             return Ok(shell.eval_output_of(&format!(r#"
                 echo '{}' | jq -jr ".client_email"
-            "#, key), &hashmap!{})?)
+            "#, key), shell::no_env())?)
         }
         return escalate!(Box::new(config::ConfigError{
             cause: format!("should have GCP config for config.cloud.provider, but {}", cloud_provider_config)
@@ -117,7 +117,7 @@ impl<S: shell::Shell> Gcp<S> {
     fn host_rule_add_option_name(&self, url_map_name: &str, target_host: &str) -> Result<&str, Box<dyn Error>> {
         let host_rules = self.shell.eval_output_of(&format!(
             r#"gcloud compute url-maps describe {} --format=json | jq ".hostRules""#, url_map_name
-        ), &hashmap!{})?;
+        ), shell::no_env())?;
         if host_rules.is_empty() {
             return Ok("new-hosts")
         }
@@ -126,7 +126,7 @@ impl<S: shell::Shell> Gcp<S> {
         }
         let host_group = self.shell.eval_output_of(&format!(
             r#"echo '{}' | jq ".[].hosts[]|select(.==\"{}\")""#, host_rules, target_host
-        ), &hashmap!{})?;
+        ), shell::no_env())?;
         if host_group.is_empty() {
             return Ok("new-hosts")
         }
@@ -140,7 +140,7 @@ impl<S: shell::Shell> Gcp<S> {
         let fw_rules = self.shell.eval_output_of(&format!(r#"
             gcloud compute firewall-rules list --format=json | 
             jq -jr ".[]|select(.name==\"{}\").allowed
-        "#, self.fw_rule_name_for_health_check()), &hashmap!{})?;
+        "#, self.fw_rule_name_for_health_check()), shell::no_env())?;
         if fw_rules.is_empty() {
             return Ok(false)
         }
@@ -150,7 +150,7 @@ impl<S: shell::Shell> Gcp<S> {
         let entry = self.shell.eval_output_of(&format!(
             r#"echo '{}' | jq ".allowed[]|select(.IPProtocol==\"tcp\").ports" | grep {}"#, 
             fw_rules, port
-        ), &hashmap!{})?;
+        ), shell::no_env())?;
         if entry.is_empty() {
             return Ok(false)
         }
@@ -231,7 +231,7 @@ impl<S: shell::Shell> Gcp<S> {
         let bs_list=self.shell.eval_output_of(&format!(r#"
             gcloud compute security-policies list --format=json | 
             jq -jr ".[]|select(.name==\"{}\")"
-        "#, fw_name), &hashmap!{}).unwrap_or("".to_string());
+        "#, fw_name), shell::no_env()).unwrap_or("".to_string());
         if bs_list.is_empty() {
             return "".to_string();
         }
@@ -244,7 +244,7 @@ impl<S: shell::Shell> Gcp<S> {
         let bs_list = self.shell.eval_output_of(&format!(r#"
             gcloud compute backend-services list --format=json | 
             jq -jr ".[]|select(.name==\"{}\").backends"
-        "#, backend_service_name), &hashmap!{}).unwrap_or("".to_string());
+        "#, backend_service_name), shell::no_env()).unwrap_or("".to_string());
         if bs_list.is_empty() {
             return false;
         }
@@ -253,7 +253,7 @@ impl<S: shell::Shell> Gcp<S> {
         }
         let bs_group = self.shell.eval_output_of(&format!(r#"
             echo '{}' | jq -jr ".[]|select(.group|endswith(\"{}\"))|.group"
-        "#, bs_list, instance_group_name), &hashmap!{}).unwrap_or("".to_string());
+        "#, bs_list, instance_group_name), shell::no_env()).unwrap_or("".to_string());
         if bs_group.is_empty() {
             return false;
         }
@@ -267,7 +267,7 @@ impl<S: shell::Shell> Gcp<S> {
             list = self.shell.eval(&format!(r#"
                 gcloud compute instance-groups list-instances {} {} --format=json |
                 jq -jr '[.[].instance]|join(",")'
-            "#, instance_group_name, resource_location_flag), &hashmap!{}, true)?;
+            "#, instance_group_name, resource_location_flag), shell::no_env(), true)?;
             if !list.is_empty() {
                 return Ok(list)
             }
@@ -280,14 +280,14 @@ impl<S: shell::Shell> Gcp<S> {
             let out = self.shell.eval_output_of(&format!(r#"
                 gcloud beta run services list --platform=managed --format=json | 
                 jq -jr ".[]|select(.metadata.name == \"{}\")"
-            "#, service_name), &hashmap!{})?;
+            "#, service_name), shell::no_env())?;
             if out.is_empty() {
                 continue
             }
             let status_type=self.shell.eval_output_of(&format!(r#"
                 echo '{}' | 
                 jq -jr ".status.conditions[0].type"
-            "#, out), &hashmap!{})?;
+            "#, out), shell::no_env())?;
             if status_type == "Ready" && status_type == "True" {
                 println!("done.");
                 return Ok(())
@@ -295,7 +295,7 @@ impl<S: shell::Shell> Gcp<S> {
                 log::error!("------ cloud run deploy status ------");
                 let status=self.shell.eval_output_of(&format!(r#"
                     echo '{}' | jq -jr ".status"
-                "#, out), &hashmap!{})?;
+                "#, out), shell::no_env())?;
                 log::error!("=> {}:{}", status, status_type);
                 thread::sleep(time::Duration::from_secs(5));
             }
@@ -306,7 +306,7 @@ impl<S: shell::Shell> Gcp<S> {
         let out = self.shell.eval_output_of(&format!(r#"
             gcloud beta run services list --platform=managed --format=json | 
             jq -jr ".[]|select(.metadata.name == \"{}\")
-        "#, service_name), &hashmap!{})?;
+        "#, service_name), shell::no_env())?;
         if out.is_empty() {
             return escalate!(Box::new(cloud::CloudError{
                 cause: format!(
@@ -316,7 +316,7 @@ impl<S: shell::Shell> Gcp<S> {
         }
         Ok(self.shell.eval_output_of(&format!(r#"
             echo '{}' | jq -jr ".status.address.url"
-        "#, out), &hashmap!{})?)
+        "#, out), shell::no_env())?)
     }
     fn subscribe_topic(
         &self,
@@ -328,11 +328,11 @@ impl<S: shell::Shell> Gcp<S> {
         let out = self.shell.eval_output_of(&format!(r#"
             gcloud beta pubsub subscriptions list --format=json | 
             jq -jr ".[]|select(.name|endswith(\"{}\"))
-        "#, subscribe_name), &hashmap!{})?;
+        "#, subscribe_name), shell::no_env())?;
         if !out.is_empty() {
             let curr_url = self.shell.eval_output_of(&format!(r#"
                 echo '{}' | jq -jr ".pushConfig.pushEndpoint"
-            "#, out), &hashmap!{})?;
+            "#, out), shell::no_env())?;
             let re = Regex::new(&format!("^{}/?$", endpoint_url)).unwrap();
             match re.captures(&curr_url) {
                 Some(_) => {
@@ -347,7 +347,7 @@ impl<S: shell::Shell> Gcp<S> {
             --push-endpoint={}/ \
             --push-auth-service-account={}
         ", subscribe_name, topic_name, endpoint_url, self.service_account), 
-        &hashmap!{}, false)?;
+        shell::no_env(), false)?;
 
         Ok(())
     }
@@ -405,7 +405,7 @@ impl<S: shell::Shell> Gcp<S> {
             jq -jr ".[] |
             select(.name == \"{}\") |
             .id"
-        "#, instance_template_name), &hashmap!{})?;
+        "#, instance_template_name), shell::no_env())?;
         if tmpl_id.is_empty() {
             log::info!("---- instance template:{} does not exist. create new", instance_template_name);
             self.shell.eval(&format!("gcloud compute instance-templates create-with-container {} \
@@ -417,30 +417,30 @@ impl<S: shell::Shell> Gcp<S> {
                 --container-env {} \
                 {}
             ", instance_template_name, image, service_account, network, env_vec.join(","), container_options), 
-            &hashmap!{}, false)?;
+            shell::no_env(), false)?;
         }
         let ig_id = self.shell.eval_output_of(&format!(r#"
             gcloud compute instance-groups list --format=json | 
             jq -jr ".[] | 
             select(.name == \"{}\") | .id"
-        "#, instance_group_name), &hashmap!{})?;
+        "#, instance_group_name), shell::no_env())?;
         if ig_id.is_empty() {
             log::info!("---- instance group:{} does not exist. create new", instance_group_name);
             self.shell.eval(&format!("gcloud compute instance-groups managed create {} \
                 {} --base-instance-name {} --size {} --template {}
             ", instance_group_name, node_distribution, instance_prefix, 1, instance_template_name), 
-            &hashmap!{}, false)?;
+            shell::no_env(), false)?;
         } else {
             log::info!("---- instance group:{} exists. update with new image", instance_group_name);
             self.shell.eval(&format!("gcloud compute instance-groups managed set-instance-template {} \
                 --template {} {}
             ", instance_group_name, instance_template_name, resource_location_flag), 
-            &hashmap!{}, false)?;
+            shell::no_env(), false)?;
             let instance_list = self.instance_list(&instance_group_name, &resource_location_flag)?;
             self.shell.eval(&format!("gcloud compute instance-groups managed recreate-instances {} \
                 --instances {} {}
             ", instance_group_name, instance_list, resource_location_flag), 
-            &hashmap!{}, false)?;
+            shell::no_env(), false)?;
         }
         log::info!("---- set named port for {}", instance_group_name);
         self.shell.eval(&format!("gcloud compute instance-groups set-named-ports {} \
@@ -451,11 +451,11 @@ impl<S: shell::Shell> Gcp<S> {
                 |p| format!("{}:{}", self.backend_service_name(plan, p.0, service_version), p.1.port)
             ).collect::<Vec<String>>().join(",")
         ), 
-        &hashmap!{}, false)?;
+        shell::no_env(), false)?;
         log::info!("---- set autoscaling settings for {}", instance_group_name);
         self.shell.eval(&format!("gcloud compute instance-groups managed set-autoscaling {} \
             {} {}
-        ", instance_group_name, resource_location_flag, scaling_config), &hashmap!{}, false)?;
+        ", instance_group_name, resource_location_flag, scaling_config), shell::no_env(), false)?;
         Ok(())
     }
     // deploy container to backend service
@@ -477,43 +477,43 @@ impl<S: shell::Shell> Gcp<S> {
         let hc_id = self.shell.eval_output_of(&format!(r#"gcloud compute health-checks list --format=json | 
             jq -jr ".[] | 
             select(.name == \"{}\") | .id"
-        "#, health_check_name), &hashmap!{})?;
+        "#, health_check_name), shell::no_env())?;
         if hc_id.is_empty() {
             log::info!("---- health check:{} does not exist. create new", health_check_name);
             self.shell.eval(&format!("gcloud compute health-checks create http {} \
                 --port-name={} --request-path=/ping
-            ", health_check_name, backend_service_port_name), &hashmap!{}, false)?;
+            ", health_check_name, backend_service_port_name), shell::no_env(), false)?;
         }
         let bs_id=self.shell.eval_output_of(&format!(r#"gcloud compute backend-services list --format=json | 
             jq -jr ".[] | 
             select(.name == \"{}\") | .id"
-        "#, backend_service_name), &hashmap!{})?;
+        "#, backend_service_name), shell::no_env())?;
         if bs_id.is_empty() {
             log::info!("---- backend service:{} does not exist. create new", backend_service_name);
             self.shell.eval(&format!("gcloud compute backend-services create {} \
                 --connection-draining-timeout=10 --health-checks={} \
                 --protocol=HTTP --port-name={} --global {}
             ", backend_service_name, health_check_name, backend_service_port_name, ""), 
-            &hashmap!{}, false)?;
+            shell::no_env(), false)?;
         }
         let backend_added=self.backend_added(&backend_service_name, &instance_group_name);
         if !backend_added {
             log::info!("---- add backend instance group {} to {}", instance_group_name, backend_service_name);
             self.shell.eval(&format!("gcloud compute backend-services add-backend {} --instance-group={} \
                 --global {}
-            ", backend_service_name, instance_group_name, instance_group_type), &hashmap!{}, false)?;
+            ", backend_service_name, instance_group_name, instance_group_type), shell::no_env(), false)?;
         }
         log::info!("---- update backend service balancing setting {}", backend_service_name);
         // TODO: found proper settings for balancing
         self.shell.eval(&format!("gcloud compute backend-services update-backend {} --instance-group={} \
             --balancing-mode=UTILIZATION --global {}
-        ", backend_service_name, instance_group_name, instance_group_type), &hashmap!{}, false)?;
+        ", backend_service_name, instance_group_name, instance_group_type), shell::no_env(), false)?;
         let fw_option=self.firewall_option_for_backend(plan);
         if !fw_option.is_empty() {
             log::info!("---- update backend to use firewall {}", fw_option);
             self.shell.eval(&format!("
                 gcloud compute backend-services update {} {} --global
-            ", backend_service_name, fw_option), &hashmap!{}, false)?;
+            ", backend_service_name, fw_option), shell::no_env(), false)?;
         }
         Ok(())
     }
@@ -564,7 +564,7 @@ impl<S: shell::Shell> Gcp<S> {
                 {}", 
                 service_name, image, region,
                 mem, timeout, access_control_options, container_options
-            ), &hashmap!{}, false) {
+            ), shell::no_env(), false) {
             Ok(_) => log::info!("succeed to deploy container {}", image),
             Err(_) => {
                 // seems interrupted
@@ -574,7 +574,7 @@ impl<S: shell::Shell> Gcp<S> {
         // set traffic to latest
         self.shell.eval(&format!("gcloud alpha run services update-traffic {} \
             --platform managed --region={} \
-            --to-latest", service_name, region), &hashmap!{}, false)?;
+            --to-latest", service_name, region), shell::no_env(), false)?;
         
         if !subscribed_topic.is_empty() {
             let subscription_name = self.subscription_name(subscribed_topic);
@@ -590,7 +590,7 @@ impl<S: shell::Shell> Gcp<S> {
         let service_output = self.shell.eval_output_of(
             // to keep linefeed, we don't use -j option for jq. (usually -jr used)
             r#"gcloud compute instance-templates list --format=json | jq -r ".[].name""#,
-            &hashmap!{}
+            shell::no_env()
         )?;
         let existing_instance_templates: Vec<&str> = service_output.split('\n').collect();
         // let resource_location_flag = format!("--region={}", self.default_region);
@@ -624,12 +624,12 @@ impl<S: shell::Shell> Gcp<S> {
                             shell::ignore_exit_code!(self.shell.exec(&vec!(
                                 "gcloud", "compute", "backend-services" ,"delete",
                                 &self.backend_service_name(&plan, ep, version), "--global", "--quiet"
-                            ), &hashmap!{}, false));
+                            ), shell::no_env(), false));
                             // 2. remove outdated health check
                             shell::ignore_exit_code!(self.shell.exec(&vec!(
                                 "gcloud", "compute", "health-checks", "delete",
                                 &self.health_check_name(&plan, ep, version), "--quiet"
-                            ), &hashmap!{}, false));
+                            ), shell::no_env(), false));
                         }
                         // then, remove outdated instance group
                         let default_deploy_options = hashmap!{};
@@ -638,12 +638,12 @@ impl<S: shell::Shell> Gcp<S> {
                             "gcloud", "compute", "instance-groups", "managed", "delete",
                              &self.instance_group_name(&plan, version),
                              &format!("--region={}", self.deploy_region(deploy_options)), "--quiet"
-                        ), &hashmap!{}, false));
+                        ), shell::no_env(), false));
                         // then, delete instance template
                         shell::ignore_exit_code!(self.shell.exec(&vec!(
                             "gcloud", "compute", "instance-templates", "delete",
                             &self.instance_template_name(&plan, version), "--quiet"
-                        ), &hashmap!{}, false));
+                        ), shell::no_env(), false));
                     }
                 },
                 None => continue
@@ -656,7 +656,7 @@ impl<S: shell::Shell> Gcp<S> {
         let bucket_output = self.shell.eval_output_of(
             // to keep linefeed, we don't use -j option for jq. (usually -jr used)
             r#"gcloud compute backend-buckets list --format=json | jq -r ".[].bucketName""#,
-            &hashmap!{}
+            shell::no_env()
         )?;
         let existing_buckets: Vec<&str> = bucket_output.split('\n').collect();
         let re_meta_buckets = Regex::new(
@@ -677,11 +677,11 @@ impl<S: shell::Shell> Gcp<S> {
                         shell::ignore_exit_code!(self.shell.exec(&vec!(
                             "gcloud", "compute", "backend-buckets", "delete",
                             &self.metadata_backend_bucket_name(lb_name, version), "--quiet"
-                        ), &hashmap!{}, false));
+                        ), shell::no_env(), false));
                         // then, delete actual bucket
                         shell::ignore_exit_code!(self.shell.exec(&vec!(
                             "gsutil", "rm", "-r", &format!("gs://{}", b)
-                        ), &hashmap!{}, false));
+                        ), shell::no_env(), false));
                     }
                 },
                 None => {}
@@ -807,16 +807,16 @@ impl<'a, S: shell::Shell> module::Module for Gcp<S> {
                     // setup for gcloud cli 
                     self.shell.eval(&format!(
                         "echo '{}' | gcloud auth activate-service-account --key-file=-", key
-                    ), &hashmap!{}, false)?;
+                    ), shell::no_env(), false)?;
                     self.shell.eval(&format!(
                         "gcloud config set project {} && \
                         gcloud config set compute/region {} && \
                         gcloud config set run/region {}",
                         &self.gcp_project_id, region, region
-                    ), &hashmap!{}, false)?;
+                    ), shell::no_env(), false)?;
                     self.shell.exec(&vec!(
                         "gcloud", "services", "enable", "cloudresourcemanager.googleapis.com"
-                    ), &hashmap!{}, false)?;
+                    ), shell::no_env(), false)?;
                 } else {
                     return escalate!(Box::new(cloud::CloudError{
                         cause: format!(
@@ -937,7 +937,7 @@ impl<'a, S: shell::Shell> cloud::Cloud for Gcp<S> {
         let r = self.shell.eval_output_of(&format!(r#"
             gcloud dns managed-zones list --project={} --format=json |
             jq -jr ".[]|select(.name==\"{}\").dnsName"
-        "#, zone_and_project.1, zone_and_project.0), &hashmap!{})?;
+        "#, zone_and_project.1, zone_and_project.0), shell::no_env())?;
         if r.is_empty() {
             return escalate!(Box::new(cloud::CloudError{
                 cause: format!("no such zone: {:?} [{}]", zone_and_project, r)
@@ -951,7 +951,7 @@ impl<'a, S: shell::Shell> cloud::Cloud for Gcp<S> {
         &self, src: &str, target: &str, options: &HashMap<String, String>
     ) -> Result<String, Box<dyn Error>> {
         let config = self.config.borrow();
-        self.shell.exec(&vec!("docker", "tag", src, target), &hashmap!{}, false)?;
+        self.shell.exec(&vec!("docker", "tag", src, target), shell::no_env(), false)?;
         let repository_url = self.container_repository_url(options.get("region")).expect(
             &format!("invalid region:{}", self.deploy_region(options))
         );
@@ -962,15 +962,15 @@ impl<'a, S: shell::Shell> cloud::Cloud for Gcp<S> {
                 self.shell.eval(&format!(
                     "echo '{}' | docker login -u _json_key --password-stdin https://{}",
                     key, repository_url
-                ), &hashmap!{}, false)?;
+                ), shell::no_env(), false)?;
             },
             _ => return escalate!(Box::new(cloud::CloudError{
                 cause: format!("invalid provider config: {}. gcp config requred", cloud_provider_config)
             }))
         }
         let container_image_tag = format!("{}/{}/{}", repository_url, self.gcp_project_id, target);
-        self.shell.exec(&vec!("docker", "tag", src,  &container_image_tag), &hashmap!{}, false)?;
-        self.shell.exec(&vec!("docker", "push", &container_image_tag), &hashmap!{}, false)?;
+        self.shell.exec(&vec!("docker", "tag", src,  &container_image_tag), shell::no_env(), false)?;
+        self.shell.exec(&vec!("docker", "push", &container_image_tag), shell::no_env(), false)?;
         Ok(container_image_tag)
     }
     fn deploy_container(
@@ -1006,7 +1006,7 @@ impl<'a, S: shell::Shell> cloud::Cloud for Gcp<S> {
                 "-l", &self.storage_region(options.region.as_ref()), 
                 &format!("gs://{}", bucket_name)
             ), 
-            &hashmap!{}, false) {
+            shell::no_env(), false) {
             Ok(_) => Ok(()),
             Err(err) => match err {
                 shell::ShellError::ExitStatus{ status:_ } => Ok(()),
@@ -1019,7 +1019,7 @@ impl<'a, S: shell::Shell> cloud::Cloud for Gcp<S> {
     ) -> Result<(), Box<dyn Error>> {
         match self.shell.exec(
             &vec!("gsutil", "rb", &format!("gs://{}", bucket_name)), 
-            &hashmap!{}, false) {
+            shell::no_env(), false) {
             Ok(_) => Ok(()),
             Err(err) => match err {
                 shell::ShellError::ExitStatus{ status:_ } => Ok(()),
@@ -1057,7 +1057,7 @@ impl<'a, S: shell::Shell> cloud::Cloud for Gcp<S> {
                     "-a", &config.permission.as_ref().unwrap_or(&"public-read".to_string()), 
                     "-r", src, 
                     &format!("gs://{}", dst)
-                ), &hashmap!{}, false)?;
+                ), shell::no_env(), false)?;
             } else {
                 self.shell.exec(&vec!(
                     "gsutil", 
@@ -1065,13 +1065,13 @@ impl<'a, S: shell::Shell> cloud::Cloud for Gcp<S> {
                     "cp", 
                     "-a", config.permission.as_ref().unwrap_or(&"public-read".to_string()), 
                     src, &format!("gs://{}", dst)
-                ), &hashmap!{}, false)?;
+                ), shell::no_env(), false)?;
             }
 
             let backend_bucket_info = self.shell.eval_output_of(&format!(r#"
                 gcloud compute backend-buckets list --format=json | 
                 jq ".[]|select(.bucketName==\"{}\")"
-            "#, bucket_name), &hashmap!{})?;
+            "#, bucket_name), shell::no_env())?;
             if backend_bucket_info.is_empty() {
                 let backend_bucket_name = match kind {
                     cloud::StorageKind::Service { plan } => {
@@ -1086,7 +1086,7 @@ impl<'a, S: shell::Shell> cloud::Cloud for Gcp<S> {
                     &backend_bucket_name,
                     &format!("--gcs-bucket-name={}", bucket_name),
                     "--enable-cdn"
-                ), &hashmap!{}, false)?;
+                ), shell::no_env(), false)?;
             }
         }
         Ok(())
@@ -1124,13 +1124,13 @@ impl<'a, S: shell::Shell> cloud::Cloud for Gcp<S> {
             &format!("--backend-service-path-rules={}", service_path_rule),
             &format!("--{}={}", host_rule_add_option_name, target_host),
             "--delete-orphaned-path-matcher"
-        ), &hashmap!{}, false)?;
+        ), shell::no_env(), false)?;
     
         log::info!("--- update default service");
         self.shell.exec(&vec!(
             "gcloud", "compute", "url-maps", "set-default-service", &url_map_name,
             &default_backend_option, "--global"
-        ), &hashmap!{}, false)?;
+        ), shell::no_env(), false)?;
     
         log::info!("--- waiting for new urlmap having applied");
         for (ep, _) in deployments.get(&plan::DeployKind::Service).unwrap_or(&IndexMap::new()) {
@@ -1143,7 +1143,7 @@ impl<'a, S: shell::Shell> cloud::Cloud for Gcp<S> {
             loop {
                 let status: u32 = self.shell.eval_output_of(&format!(r#"
                     curl https://{}/{}/{}/ping --output /dev/null -w %{{http_code}} 2>/dev/null
-                "#, target_host, ep, next_version), &hashmap!{})?.parse().unwrap();
+                "#, target_host, ep, next_version), shell::no_env())?.parse().unwrap();
                 if status == 200 {
                     log::info!("done");
                     break

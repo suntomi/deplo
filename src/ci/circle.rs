@@ -88,7 +88,7 @@ impl<'a, S: shell::Shell> ci::CI for Circle<S> {
             "-H", "Content-Type: application/json",
             "-H", "Accept: application/json",
             "-d", &json, "-w", "%{http_code}", "-o", "/dev/null"
-        ), &hashmap!{}, true)?.parse::<u32>()?;
+        ), shell::no_env(), true)?.parse::<u32>()?;
         if status >= 200 && status < 300 {
             Ok(())
         } else {

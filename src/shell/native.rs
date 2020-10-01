@@ -3,6 +3,8 @@ use std::collections::HashMap;
 use std::error::Error;
 use std::io::Read;
 use std::path::Path;
+use std::ffi::OsStr;
+use std::convert::AsRef;
 
 use maplit::hashmap;
 
@@ -31,17 +33,20 @@ impl<'a> shell::Shell for Native {
     }
     fn set_env(&mut self, key: &str, val: String) -> Result<(), Box<dyn Error>> {
         let ent = self.envs.entry(key.to_string());
-        // why we have to write such redundant and inefficient codes just for setting value to hashmap?
         ent.and_modify(|e| *e = val.clone()).or_insert(val);
         Ok(())
     }
-    fn output_of(&self, args: &Vec<&str>, envs: &HashMap<&str, &str>) -> Result<String, shell::ShellError> {
+    fn output_of<I, K, V>(
+        &self, args: &Vec<&str>, envs: I
+    ) -> Result<String, shell::ShellError> 
+    where I: IntoIterator<Item = (K, V)>, K: AsRef<OsStr>, V: AsRef<OsStr> {
         let mut cmd = self.create_command(args, envs, true);
         return Native::get_output(&mut cmd);
     }
-    fn exec(
-        &self, args: &Vec<&str>, envs: &HashMap<&str, &str>, capture: bool
-    ) -> Result<String, shell::ShellError> {
+    fn exec<I, K, V>(
+        &self, args: &Vec<&str>, envs: I, capture: bool
+    ) -> Result<String, shell::ShellError> 
+    where I: IntoIterator<Item = (K, V)>, K: AsRef<OsStr>, V: AsRef<OsStr>{
         if self.config.borrow().runtime.dryrun {
             let cmd = args.join(" ");
             println!("dryrun: {}", cmd);
@@ -53,7 +58,10 @@ impl<'a> shell::Shell for Native {
     }
 }
 impl Native {
-    fn create_command(&self, args: &Vec<&str>, envs: &HashMap<&str, &str>, capture: bool) -> Command {
+    fn create_command<I, K, V>(
+        &self, args: &Vec<&str>, envs: I, capture: bool
+    ) -> Command 
+    where I: IntoIterator<Item = (K, V)>, K: AsRef<OsStr>, V: AsRef<OsStr> {
         let mut c = Command::new(args[0]);
         c.args(&args[1..]);
         c.envs(envs);
