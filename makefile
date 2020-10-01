@@ -55,6 +55,6 @@ sh:
 		suntomi/deplo_shell sh
 
 run:
-	cargo run -- \
-		-w test/projects/dev -d skip_rebase -d force_set_release_target_to=dev -d ci_env=Circle -vvv \
+	DEPLO_CI_TYPE=Circle cargo run -- \
+		-w test/projects/dev -d skip_rebase -d force_set_release_target_to=dev -vvv \
 		$(CMD)

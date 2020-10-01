@@ -300,14 +300,14 @@ impl Config {
             },
             None => match dotenv() {
                 Ok(path) => log::debug!("using .env file at {}", path.to_string_lossy()),
-                Err(err) => match std::env::var("DEPLO_CI_TYPE") {
-                    Ok(_) => {},
-                    Err(_) => log::warn!(".env not present or cannot load by error [{:?}], this usually means:\n\
+                Err(err) => match Self::ci_type() {
+                    Ok(v) => log::info!("ci type = {}, environment variable is provided by CI system", v),
+                    Err(_) => log::warn!("non-ci environment but .env not present or cannot load by error [{:?}], this usually means:\n\
                         1. command will be run with incorrect parameter or\n\
                         2. secrets are directly written in deplo.toml\n\
-                        please use .env to store secrets, or use -e flag to specify its path", 
+                        please use $repo/.env to provide secrets, or use -e flag to specify its path", 
                         err)
-                } 
+                }
             },
         };
         // println!("DEPLO_CLOUD_ACCESS_KEY:{}", std::env::var("DEPLO_CLOUD_ACCESS_KEY").unwrap());    
@@ -565,6 +565,25 @@ impl Config {
             }))            
         }
     }
+    pub fn ci_type() -> Result<String, ConfigError> {
+        match std::env::var("DEPLO_CI_TYPE") {
+            Ok(v) => return Ok(v),
+            Err(_) => {
+                for (key, value) in hashmap!{
+                    "CIRCLE_SHA1" => "Circle",
+                    "GITHUB_ACTION" => "GhAction"
+                } {
+                    match std::env::var(key) {
+                        Ok(_) => return Ok(value.to_string()),
+                        Err(_) => continue
+                    }
+                }
+            }
+        }
+        return Err(ConfigError{ 
+            cause: "you don't set CI type and deplo cannot detect it. abort".to_string()
+        })
+    }
     pub fn ci_config<'a>(&'a self, account_name: &str) -> &'a CIConfig {
         match &self.ci.get(account_name) {
             Some(c) => c,
@@ -572,26 +591,11 @@ impl Config {
         }
     }
     pub fn ci_config_by_env<'b>(&'b self) -> (&'b str, &'b CIConfig) {
-        match std::env::var("DEPLO_CI_TYPE") {
-            Ok(v) => { 
-                for (account_name, config) in &self.ci {
-                    if config.type_matched(&v) { return (account_name, config) }
-                }
-                panic!("DEPLO_CI_TYPE = {}, but does not have corresponding CI Config", v)
-            },
-            // TODO: returns merged action
-            Err(e) =>  {
-                match self.get_debug_option("ci_env") {
-                    Some(v) => {
-                        for (account_name, config) in &self.ci {
-                            if config.type_matched(&v) { return (account_name, config) }
-                        };
-                    },
-                    None => {}
-                }
-                panic!("DEPLO_CI_TYPE is not defined, should be development mode {}", e)
-            }
+        let t = Self::ci_type().unwrap();
+        for (account_name, config) in &self.ci {
+            if config.type_matched(&t) { return (account_name, config) }
         }
+        panic!("ci_type = {}, but does not have corresponding CI Config", t)
     }
     pub fn ci_service<'a>(&'a self, account_name: &str) -> Result<&'a Box<dyn ci::CI>, Box<dyn Error>> {
         return match self.ci_caches.get(account_name) {

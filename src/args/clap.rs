@@ -41,7 +41,6 @@ lazy_static! {
             possible values: \n\
             skip_rebase (flag)\n\
             infra_debug (flag)\n\
-            ci_env=(Circle|GhAction)\n\
             ")
             .takes_value(true))
         .arg(Arg::with_name("verbosity")
