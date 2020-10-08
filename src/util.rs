@@ -74,6 +74,9 @@ use regex::{Regex,Captures};
 use std::collections::HashMap;
 
 pub fn envsubst(src: &str) -> String {
+    for (k, v) in std::env::vars() {
+        println!("envsubst:{} => {}", k, v);
+    }
     let envs: HashMap<String, String> = std::env::vars().collect();
     let re = Regex::new(r"\$\{([^\}]+)\}").unwrap();
     let content = re.replace_all(src, |caps: &Captures| {
