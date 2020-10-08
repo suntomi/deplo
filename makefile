@@ -2,6 +2,7 @@
 CMD=
 REL=
 OPT=
+CI=GhAction
 
 # settings
 LINUX_TARGET=x86_64-unknown-linux-musl
@@ -56,6 +57,6 @@ sh:
 		suntomi/deplo_shell sh
 
 run:
-	DEPLO_CI_TYPE=GhAction cargo run -- \
+	DEPLO_CI_TYPE=$(CI) cargo run -- \
 		-w test/projects/dev -d skip_rebase -d force_set_release_target_to=dev $(OPT) -vvv \
 		$(CMD)

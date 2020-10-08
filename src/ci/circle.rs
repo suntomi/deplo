@@ -27,6 +27,8 @@ impl<'a, S: shell::Shell> module::Module for Circle<S> {
         match fs::metadata(&circle_yml_path) {
             Ok(_) => log::debug!("config file for circle ci already created"),
             Err(_) => {
+                // sync dotenv secrets with ci system
+                config.parse_dotenv(|k,v| (self as &dyn ci::CI).set_secret(k, v))?;
                 fs::create_dir_all(&format!("{}/.circleci", repository_root))?;
                 fs::write(&circle_yml_path, format!(
                     include_str!("../../rsc/ci/circle/config.yml.tmpl"),
