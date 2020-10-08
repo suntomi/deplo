@@ -1,12 +1,7 @@
 use std::error::Error;
-use std::fs;
-use std::io::{BufReader, BufRead};
 
 use log;
-use maplit::hashmap;
 use glob::glob;
-use dotenv::dotenv;
-use regex::Regex;
 
 use crate::args;
 use crate::config;
@@ -67,41 +62,7 @@ impl<S: shell::Shell> CI<S> {
         let config = self.config.borrow();
         let (account_name, _) = config.ci_config_by_env();
         let ci = config.ci_service(account_name)?;
-        let dotenv_file_content = match args.value_of("dotenv") {
-            Some(dotenv_path) => match fs::metadata(dotenv_path) {
-                Ok(_) => match fs::read_to_string(dotenv_path) {
-                    Ok(content) => content,
-                    Err(err) => return escalate!(Box::new(err))
-                },
-                Err(_) => dotenv_path.to_string(),
-            },
-            None => match dotenv() {
-                Ok(dotenv_path) => match fs::read_to_string(dotenv_path) {
-                    Ok(content) => content,
-                    Err(err) => return escalate!(Box::new(err))
-                },
-                Err(err) => return escalate!(
-                    args.error(&format!("no .env file found err:{:?}", err))
-                ),
-            }
-        };
-        let r = BufReader::new(dotenv_file_content.as_bytes());
-        let re = Regex::new(r#"^([^=]+)=(.+)$"#).unwrap();
-        for read_result in r.lines() {
-            match read_result {
-                Ok(line) => match re.captures(&line) {
-                    Some(c) => {
-                        ci.set_secret(
-                            c.get(1).map(|m| m.as_str()).unwrap(), 
-                            c.get(2).map(|m| m.as_str()).unwrap().trim_matches('"')
-                        )?;
-                    },
-                    None => {},
-                },
-                Err(_) => {}
-            }
-        }
-        return Ok(())
+        config.parse_dotenv(|k,v| ci.set_secret(k, v))
     }
 }
 

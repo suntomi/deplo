@@ -1,6 +1,7 @@
 # command line argument
 CMD=
 REL=
+OPT=
 
 # settings
 LINUX_TARGET=x86_64-unknown-linux-musl
@@ -56,5 +57,5 @@ sh:
 
 run:
 	DEPLO_CI_TYPE=GhAction cargo run -- \
-		-w test/projects/dev -d skip_rebase -d force_set_release_target_to=dev -vvv \
+		-w test/projects/dev -d skip_rebase -d force_set_release_target_to=dev $(OPT) -vvv \
 		$(CMD)

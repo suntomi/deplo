@@ -5,6 +5,7 @@ use std::error::Error;
 use std::rc::Rc;
 use std::cell::{RefCell};
 use std::collections::{HashMap};
+use std::io::{BufReader, BufRead};
 
 use log;
 use simple_logger;
@@ -13,6 +14,7 @@ use dotenv::dotenv;
 use maplit::hashmap;
 use indexmap::IndexMap;
 use glob::glob;
+use regex::Regex;
 
 use crate::args;
 use crate::vcs;
@@ -25,6 +27,7 @@ use crate::plan;
 use crate::util::{escalate,envsubst};
 
 pub const DEPLO_GIT_HASH: &'static str = env!("GIT_HASH");
+pub const DEPLO_VERSION: &'static str = "0.1.0";
 
 #[derive(Debug)]
 pub struct ConfigError {
@@ -233,6 +236,7 @@ pub struct RuntimeConfig {
     pub endpoint_service_map: HashMap<String, String>,
     pub release_target: Option<String>,
     pub workdir: Option<String>,
+    pub dotenv_path: Option<String>
 }
 #[derive(Serialize, Deserialize)]
 pub struct Config {
@@ -335,6 +339,10 @@ impl Config {
                 distributions: vec!(),
                 latest_endpoint_versions: hashmap!{},
                 endpoint_service_map: hashmap!{},
+                dotenv_path: match args.value_of("dotenv") {
+                    Some(v) => Some(v.to_string()),
+                    None => None
+                },
                 dryrun: args.occurence_of("dryrun") > 0,
                 debug: match args.values_of("debug") {
                     Some(s) => {
@@ -438,6 +446,42 @@ impl Config {
             Some(s) => Some(&s),
             None => None
         }
+    }
+    pub fn parse_dotenv<F>(&self, mut cb: F) -> Result<(), Box<dyn Error>>
+    where F: FnMut (&str, &str) -> Result<(), Box<dyn Error>> {
+        let dotenv_file_content = match &self.runtime.dotenv_path {
+            Some(dotenv_path) => match fs::metadata(dotenv_path) {
+                Ok(_) => match fs::read_to_string(dotenv_path) {
+                    Ok(content) => content,
+                    Err(err) => return escalate!(Box::new(err))
+                },
+                Err(_) => dotenv_path.to_string(),
+            },
+            None => match dotenv() {
+                Ok(dotenv_path) => match fs::read_to_string(dotenv_path) {
+                    Ok(content) => content,
+                    Err(err) => return escalate!(Box::new(err))
+                },
+                Err(err) => return escalate!(Box::new(err))
+            }
+        };
+        let r = BufReader::new(dotenv_file_content.as_bytes());
+        let re = Regex::new(r#"^([^=]+)=(.+)$"#).unwrap();
+        for read_result in r.lines() {
+            match read_result {
+                Ok(line) => match re.captures(&line) {
+                    Some(c) => {
+                        cb(
+                            c.get(1).map(|m| m.as_str()).unwrap(),
+                            c.get(2).map(|m| m.as_str()).unwrap().trim_matches('"')
+                        )?;
+                    },
+                    None => {},
+                },
+                Err(_) => {}
+            }
+        }
+        return Ok(())
     }
     pub fn infra_code_source_path(&self, provider_code: &str) -> path::PathBuf {
         self.cloud.infra_code_path(&self, provider_code)

@@ -2,14 +2,13 @@ use std::fs;
 use std::error::Error;
 use std::result::Result;
 
-use maplit::hashmap;
 use serde::{Deserialize, Serialize};
 
 use crate::config;
 use crate::ci;
 use crate::shell;
 use crate::module;
-use crate::util::{escalate,seal};
+use crate::util::{escalate,seal,MultilineFormatString};
 
 #[derive(Serialize, Deserialize)]
 struct RepositoryPublicKeyResponse {
@@ -37,11 +36,16 @@ impl<'a, S: shell::Shell> module::Module for GhAction<S> {
                 let target_branches = config.common.release_targets
                     .values().map(|s| &**s)
                     .collect::<Vec<&str>>().join(",");
+                let mut env_inject_settings = vec!();
+                config.parse_dotenv(|k,_| {
+                    Ok(env_inject_settings.push(format!("{}: ${{{{ secrets.{} }}}}", k, k)))
+                });
                 fs::create_dir_all(&format!("{}/.github/workflows", repository_root))?;
                 fs::write(&deplo_yml_path, format!(
                     include_str!("../../rsc/ci/ghaction/deplo.yml.tmpl"), 
                     target_branches, target_branches, 
                     config.common.deplo_image, config::DEPLO_GIT_HASH,
+                    MultilineFormatString{ strings: &env_inject_settings, postfix: None },
                     config.runtime.workdir.as_ref().unwrap_or(&"".to_string())
                 ))?;
             }

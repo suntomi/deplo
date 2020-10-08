@@ -75,9 +75,6 @@ use std::collections::HashMap;
 
 pub fn envsubst(src: &str) -> String {
     let envs: HashMap<String, String> = std::env::vars().collect();
-    for (k, v) in &envs {
-        println!("envsubst:{}=>{}", k, v);
-    };
     let re = Regex::new(r"\$\{([^\}]+)\}").unwrap();
     let content = re.replace_all(src, |caps: &Captures| {
         match envs.get(&caps[1]) {
@@ -140,4 +137,27 @@ pub fn to_kv_ref<'a>(h: &'a HashMap<String, String>) -> HashMap<&'a str, &'a str
         ret.entry(k).or_insert(v);
     }
     return ret;
+}
+
+// multiline string which can specify indentation of each line
+// from width format specifier. useful for print multiline element in yaml
+pub struct MultilineFormatString<'a> {
+    pub strings: &'a Vec<String>,
+    pub postfix: Option<&'a str>
+}
+impl<'a> fmt::Display for MultilineFormatString<'a> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let indent = f.width().unwrap_or(0);
+        for s in self.strings {
+            for _ in 0..indent {
+                write!(f, " ")?;
+            }
+            f.write_str(s)?;
+            match self.postfix {
+                Some(v) => f.write_str(&format!("{}\n", v))?,
+                None => f.write_str("\n")?
+            }
+        }
+        Ok(())
+    }
 }

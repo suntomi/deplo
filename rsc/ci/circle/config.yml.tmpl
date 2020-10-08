@@ -11,9 +11,9 @@ commands:
     steps:
       - restore_cache:
           keys:
-            - deplo-git-v1-{{ arch }}-{{ .Branch }}-{{ .Revision }}
-            - deplo-git-v1-{{ arch }}-{{ .Branch }}-
-            - deplo-git-v1-{{ arch }}-
+            - deplo-git-v1-{{{{ arch }}}}-{{{{ .Branch }}}}-{{{{ .Revision }}}}
+            - deplo-git-v1-{{{{ arch }}}}-{{{{ .Branch }}}}-
+            - deplo-git-v1-{{{{ arch }}}}-
       - checkout
       - run:
           name: 'pull files in git LFS'
@@ -24,20 +24,20 @@ commands:
           name: 'maintain git'
           command: git gc
       - save_cache:
-          key: deplo-git-v1-{{ arch }}-{{ .Branch }}-{{ .Revision }}
+          key: deplo-git-v1-{{{{ arch }}}}-{{{{ .Branch }}}}-{{{{ .Revision }}}}
           paths:
             - ".git"
   load_deplo_tools:
     steps:
       - restore_cache:
           keys:
-            - deplo-tools-v1-{{ arch }}-{{ .Branch }}-{{ .Revision }}
-            - deplo-tools-v1-{{ arch }}-{{ .Branch }}-
-            - deplo-tools-v1-{{ arch }}-
+            - deplo-tools-v1-{{{{ arch }}}}-{{{{ .Branch }}}}-{{{{ .Revision }}}}
+            - deplo-tools-v1-{{{{ arch }}}}-{{{{ .Branch }}}}-
+            - deplo-tools-v1-{{{{ arch }}}}-
   save_deplo_tools:
     steps:
       - save_cache:
-          key: deplo-tools-v1-{{ arch }}-{{ .Branch }}-{{ .Revision }}
+          key: deplo-tools-v1-{{{{ arch }}}}-{{{{ .Branch }}}}-{{{{ .Revision }}}}
           paths:
             - "/deplo-tools"
 

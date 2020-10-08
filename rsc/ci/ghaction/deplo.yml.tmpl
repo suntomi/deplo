@@ -1,4 +1,4 @@
-name: Deplo Launcher
+name: Deplo CI/CD
 
 on: 
   push:
@@ -9,7 +9,6 @@ on:
 jobs:
   deplo:
     name: running CI jobs
-    # This job runs on Linux
     runs-on: ubuntu-latest
     container: {}:{}
     steps:
@@ -18,5 +17,6 @@ jobs:
           lfs: true
       - name: Run Deplo
         env:
-          DEPLO_GHACTION_PULL_REQUEST_URL: ${{ github.event.pull_request.url }}
+          DEPLO_GHACTION_PULL_REQUEST_URL: ${{{{ github.event.pull_request.url }}}}
+{:>10}
         run: deplo -w {} ci kick

@@ -63,6 +63,18 @@ lazy_static! {
                 &["tf", "cloud", "ci", "vcs", "all"]
             ))
         .subcommand(
+            App::new("version")
+                .about("dump version")
+                .arg(Arg::new("output")
+                    .help("output format")
+                    .short('o')
+                    .long("output")
+                    .possible_values(
+                        &["plain", "json"]
+                    )
+                    .required(false))
+        )
+        .subcommand(
             App::new("init")
                 .about("initialize deplo project. need to configure deplo.json beforehand")
         )

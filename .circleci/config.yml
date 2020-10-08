@@ -4,16 +4,16 @@ executors:
   deplo:
     working_directory: /workdir
     docker:
-      - image: suntomi/deplo:004f635457a9f903ea74f12e2a66fe867389890a
+      - image: suntomi/deplo:8f3635c8065036ba485c4018f9e3be1c806ef370
 
 commands:
   fetch_repo:
     steps:
       - restore_cache:
           keys:
-            - deplo-git-v1-{ arch }-{ .Branch }-{ .Revision }
-            - deplo-git-v1-{ arch }-{ .Branch }-
-            - deplo-git-v1-{ arch }-
+            - deplo-git-v1-{{ arch }}-{{ .Branch }}-{{ .Revision }}
+            - deplo-git-v1-{{ arch }}-{{ .Branch }}-
+            - deplo-git-v1-{{ arch }}-
       - checkout
       - run:
           name: 'pull files in git LFS'
@@ -24,20 +24,20 @@ commands:
           name: 'maintain git'
           command: git gc
       - save_cache:
-          key: deplo-git-v1-{ arch }-{ .Branch }-{ .Revision }
+          key: deplo-git-v1-{{ arch }}-{{ .Branch }}-{{ .Revision }}
           paths:
             - ".git"
   load_deplo_tools:
     steps:
       - restore_cache:
           keys:
-            - deplo-tools-v1-{ arch }-{ .Branch }-{ .Revision }
-            - deplo-tools-v1-{ arch }-{ .Branch }-
-            - deplo-tools-v1-{ arch }-
+            - deplo-tools-v1-{{ arch }}-{{ .Branch }}-{{ .Revision }}
+            - deplo-tools-v1-{{ arch }}-{{ .Branch }}-
+            - deplo-tools-v1-{{ arch }}-
   save_deplo_tools:
     steps:
       - save_cache:
-          key: deplo-tools-v1-{ arch }-{ .Branch }-{ .Revision }
+          key: deplo-tools-v1-{{ arch }}-{{ .Branch }}-{{ .Revision }}
           paths:
             - "/deplo-tools"
 
@@ -46,7 +46,7 @@ workflows:
   main:
     jobs:
       - main
-
+          
 jobs:
   main:
     executor: deplo

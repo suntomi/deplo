@@ -57,7 +57,7 @@ impl<S: shell::Shell> Git<S> {
     }
     fn hub_env(&self) -> Result<HashMap<String, String>, Box<dyn Error>> {
         let config = self.config.borrow();
-        if let config::VCSConfig::Github{ email:_, account, key } = &config.vcs {
+        if let config::VCSConfig::Github{ email:_, account:_, key } = &config.vcs {
             Ok(hashmap!{
                 "GITHUB_TOKEN".to_string() => key.to_string()
             })
