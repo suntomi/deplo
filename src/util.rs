@@ -91,7 +91,12 @@ pub fn envsubst(src: &str) -> String {
 // seal
 use rand;
 use base64;
-use crypto_box::{SalsaBox, PublicKey, SecretKey, aead::Aead};
+use blake2::{Blake2b, Digest};
+use sodalite::{
+    box_ as box_up, box_keypair_seed, 
+    BoxPublicKey, BoxSecretKey, BoxNonce,
+    BOX_SECRET_KEY_LEN, BOX_PUBLIC_KEY_LEN, BOX_NONCE_LEN
+};
 
 #[derive(Debug)]
 pub struct CryptoError {
@@ -107,7 +112,51 @@ impl Error for CryptoError {
         None
     }
 }
+fn seal_nonce(epk: &impl AsRef<[u8]>, pk: &impl AsRef<[u8]>, nonce: &mut BoxNonce) {
+    let mut hasher = Blake2b::new();
+    hasher.update(epk);
+    hasher.update(pk);
+    let bs = hasher.finalize();
+    for i in 0..BOX_NONCE_LEN { nonce[i] = bs[i]; }
+}
+pub fn randombytes(x: &mut [u8]) {
+    let mut rng = rand::rngs::OsRng;
+    use rand::RngCore;
+    rng.fill_bytes(x);
+}
 pub fn seal(plaintext: &str, pkey_encoded: &str) -> Result<String, Box<dyn Error>> {
+    let pk_vec = base64::decode(pkey_encoded)?;
+    if pk_vec.len() != 32 {
+        return escalate!(Box::new(CryptoError {
+            cause: format!("given encoded public key length wrong {}", pk_vec.len())
+        }));
+    }
+    let mut pk: [u8; 32] = [0u8; 32];
+    for i in 0..31 { pk[i] = pk_vec[i]; };
+
+    let mut epk: BoxPublicKey = [0u8; BOX_PUBLIC_KEY_LEN];
+    let mut esk: BoxSecretKey = [0u8; BOX_SECRET_KEY_LEN];
+    let mut seed = [0u8; 32];
+    randombytes(&mut seed);
+    box_keypair_seed(&mut epk, &mut esk, &seed);
+
+    let mut nonce: BoxNonce = [0u8; BOX_NONCE_LEN];
+    seal_nonce(&epk, &pk, &mut nonce);
+    let plaintext_as_bytes = plaintext.as_bytes();
+    let mut padded_plaintext = vec![0u8; plaintext_as_bytes.len() + 32];
+    for _ in 0..31 { padded_plaintext.push(0); }
+    for i in 0..plaintext_as_bytes.len() { padded_plaintext.push(plaintext_as_bytes[i]); }
+    let mut ciphertext = vec![0; padded_plaintext.len()];
+
+    box_up(&mut ciphertext, &padded_plaintext, &nonce, &pk, &esk).unwrap();
+
+    let mut result_vec = vec!();
+    result_vec.extend_from_slice(&epk);
+    for i in 15..ciphertext.len() { result_vec.push(ciphertext[i]) }
+
+    Ok(base64::encode(result_vec))
+}
+/* pub fn seal(plaintext: &str, pkey_encoded: &str) -> Result<String, Box<dyn Error>> {
     let mut rng = rand::thread_rng();
     let secret_key = SecretKey::generate(&mut rng);
     let vec_pkey_decoded = base64::decode(pkey_encoded)?;
@@ -131,7 +180,7 @@ pub fn seal(plaintext: &str, pkey_encoded: &str) -> Result<String, Box<dyn Error
     result_vec.extend_from_slice(&secret_key.to_bytes());
     result_vec.extend(encrypted_bin);
     Ok(base64::encode(result_vec))
-}
+} */
 
 // ref
 pub fn to_kv_ref<'a>(h: &'a HashMap<String, String>) -> HashMap<&'a str, &'a str> {
