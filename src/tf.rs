@@ -42,7 +42,7 @@ pub mod terraform;
 fn factory_by<'a, T: Terraformer + 'a>(
     config: &config::Container
 ) -> Result<Box<dyn Terraformer + 'a>, Box<dyn Error>> {
-    let cmd = T::new(config).unwrap();
+    let cmd = T::new(config)?;
     return Ok(Box::new(cmd) as Box<dyn Terraformer + 'a>);
 }
 

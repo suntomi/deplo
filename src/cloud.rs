@@ -92,7 +92,7 @@ fn factory_by<'a, T: Cloud + 'a>(
     config: &config::Container,
     account_name: &str
 ) -> Result<Box<dyn Cloud + 'a>, Box<dyn Error>> {
-    let cmd = T::new(config, account_name).unwrap();
+    let cmd = T::new(config, account_name)?;
     return Ok(Box::new(cmd) as Box<dyn Cloud + 'a>);
 }
 

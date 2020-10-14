@@ -38,7 +38,7 @@ pub mod version;
 fn factory_by<'a, S: args::Args, T: Command<S> + 'a>(
     config: &config::Container
 ) -> Result<Box<dyn Command<S> + 'a>, Box<dyn Error>> {
-    let cmd = T::new(config).unwrap();
+    let cmd = T::new(config)?;
     return Ok(Box::new(cmd) as Box<dyn Command<S> + 'a>);
 }
 

@@ -63,7 +63,7 @@ pub mod github;
 fn factory_by<'a, T: VCS + 'a>(
     config: &config::Container
 ) -> Result<Box<dyn VCS + 'a>, Box<dyn Error>> {
-    let cmd = T::new(config).unwrap();
+    let cmd = T::new(config)?;
     return Ok(Box::new(cmd) as Box<dyn VCS + 'a>);
 }
 
