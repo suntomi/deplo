@@ -74,9 +74,9 @@ use regex::{Regex,Captures};
 use std::collections::HashMap;
 
 pub fn envsubst(src: &str) -> String {
-    for (k, v) in std::env::vars() {
-        println!("envsubst:{} => {}", k, v);
-    }
+    // for (k, v) in std::env::vars() {
+    //     println!("envsubst:{} => {}({})", k, v, v.len());
+    // }
     let envs: HashMap<String, String> = std::env::vars().collect();
     let re = Regex::new(r"\$\{([^\}]+)\}").unwrap();
     let content = re.replace_all(src, |caps: &Captures| {
@@ -91,7 +91,8 @@ pub fn envsubst(src: &str) -> String {
 // seal
 use rand;
 use base64;
-use blake2::{Blake2b, Digest};
+use blake2::{VarBlake2b};
+use blake2::digest::{Update, VariableOutput};
 use sodalite::{
     box_ as box_up, box_keypair_seed, 
     BoxPublicKey, BoxSecretKey, BoxNonce,
@@ -113,11 +114,12 @@ impl Error for CryptoError {
     }
 }
 fn seal_nonce(epk: &impl AsRef<[u8]>, pk: &impl AsRef<[u8]>, nonce: &mut BoxNonce) {
-    let mut hasher = Blake2b::new();
+    let mut hasher = VarBlake2b::new(BOX_NONCE_LEN).unwrap();
     hasher.update(epk);
     hasher.update(pk);
-    let bs = hasher.finalize();
-    for i in 0..BOX_NONCE_LEN { nonce[i] = bs[i]; }
+    hasher.finalize_variable(|bs| {
+        for i in 0..BOX_NONCE_LEN { nonce[i] = bs[i]; }
+    });
 }
 pub fn randombytes(x: &mut [u8]) {
     let mut rng = rand::rngs::OsRng;
@@ -132,7 +134,8 @@ pub fn seal(plaintext: &str, pkey_encoded: &str) -> Result<String, Box<dyn Error
         }));
     }
     let mut pk: [u8; 32] = [0u8; 32];
-    for i in 0..31 { pk[i] = pk_vec[i]; };
+    for i in 0..32 { pk[i] = pk_vec[i]; };
+    // println!("plaintext:{}({})", plaintext, plaintext.len());
 
     let mut epk: BoxPublicKey = [0u8; BOX_PUBLIC_KEY_LEN];
     let mut esk: BoxSecretKey = [0u8; BOX_SECRET_KEY_LEN];
@@ -144,43 +147,21 @@ pub fn seal(plaintext: &str, pkey_encoded: &str) -> Result<String, Box<dyn Error
     seal_nonce(&epk, &pk, &mut nonce);
     let plaintext_as_bytes = plaintext.as_bytes();
     let mut padded_plaintext = vec![0u8; plaintext_as_bytes.len() + 32];
-    for _ in 0..31 { padded_plaintext.push(0); }
-    for i in 0..plaintext_as_bytes.len() { padded_plaintext.push(plaintext_as_bytes[i]); }
+    for i in 0..32 { padded_plaintext[i] = 0; }
+    for i in 0..plaintext_as_bytes.len() { padded_plaintext[i + 32] = plaintext_as_bytes[i]; }
     let mut ciphertext = vec![0; padded_plaintext.len()];
 
     box_up(&mut ciphertext, &padded_plaintext, &nonce, &pk, &esk).unwrap();
 
+    // println!("padded_plaintext:{:?}", padded_plaintext);
+    // println!("ciphertext:{:?}", ciphertext);
+
     let mut result_vec = vec!();
     result_vec.extend_from_slice(&epk);
-    for i in 15..ciphertext.len() { result_vec.push(ciphertext[i]) }
+    for i in 16..ciphertext.len() { result_vec.push(ciphertext[i]) }
 
     Ok(base64::encode(result_vec))
 }
-/* pub fn seal(plaintext: &str, pkey_encoded: &str) -> Result<String, Box<dyn Error>> {
-    let mut rng = rand::thread_rng();
-    let secret_key = SecretKey::generate(&mut rng);
-    let vec_pkey_decoded = base64::decode(pkey_encoded)?;
-    if vec_pkey_decoded.len() != 32 {
-        return escalate!(Box::new(CryptoError {
-            cause: format!("given encoded public key length wrong {}", vec_pkey_decoded.len())
-        }));
-    }
-    let mut pkey_decoded: [u8; 32] = [0; 32];
-    for i in 0..31 { pkey_decoded[i] = vec_pkey_decoded[i]; };
-    let public_key = PublicKey::from(pkey_decoded);
-    let bx = SalsaBox::new(&public_key, &secret_key);
-    let nonce = crypto_box::generate_nonce(&mut rng);
-    let encrypted_bin = match bx.encrypt(&nonce, plaintext.as_bytes()) {
-        Ok(vec) => vec,
-        Err(e) => return escalate!(Box::new(CryptoError {
-            cause: format!("encrypt failure {:?}", e)
-        }))
-    };
-    let mut result_vec = vec!();
-    result_vec.extend_from_slice(&secret_key.to_bytes());
-    result_vec.extend(encrypted_bin);
-    Ok(base64::encode(result_vec))
-} */
 
 // ref
 pub fn to_kv_ref<'a>(h: &'a HashMap<String, String>) -> HashMap<&'a str, &'a str> {
@@ -211,5 +192,52 @@ impl<'a> fmt::Display for MultilineFormatString<'a> {
             }
         }
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn seal() {
+        let pk: [u8; 32] = [
+            251, 131, 196, 215, 71, 235, 222, 20, 23, 114, 62, 99, 207, 12, 107, 139,
+            240, 115, 104, 188, 0, 166, 113, 163, 146, 192, 226, 36, 237, 60, 205, 33
+        ];
+        let plaintext_as_bytes: [u8; 13] = [
+            115, 117, 110, 116, 111, 109, 105, 44, 32, 105, 110, 99, 46
+        ];
+        let epk: BoxPublicKey = [
+            116, 145, 95, 55, 158, 53, 28, 119, 63, 24, 168, 231, 86, 102,
+            170, 53, 76, 165, 29, 123, 124, 245, 100, 251, 25, 164, 144, 220,
+            13, 57, 238, 37
+        ];
+        let esk: BoxSecretKey = [
+            151, 93, 67, 130, 106, 170, 176, 198, 242, 76, 136, 220, 39, 233,
+            129, 103, 243, 197, 224, 222, 225, 56, 80, 22, 219, 173, 121, 12,
+            213, 155, 44, 165
+        ];
+        let mut nonce: BoxNonce = [0u8; BOX_NONCE_LEN];
+        seal_nonce(&epk, &pk, &mut nonce);
+        println!("epk:{:?},pk:{:?},nonce:{:?}", epk, pk, nonce);
+        let mut padded_plaintext = vec![0u8; plaintext_as_bytes.len() + 32];
+        for i in 0..32 { padded_plaintext[i] = 0; }
+        for i in 0..plaintext_as_bytes.len() { padded_plaintext[i + 32] = plaintext_as_bytes[i]; }
+        let mut ciphertext = vec![0; padded_plaintext.len()];
+
+        box_up(&mut ciphertext, &padded_plaintext, &nonce, &pk, &esk).unwrap();
+
+        println!("padded_plaintext:{:?}", padded_plaintext);
+        println!("ciphertext:{:?}", ciphertext);
+
+        let mut result_vec = vec!();
+        result_vec.extend_from_slice(&epk);
+        for i in 16..ciphertext.len() { result_vec.push(ciphertext[i]) }
+
+        let result = base64::encode(result_vec);
+        let expect = "dJFfN541HHc/GKjnVmaqNUylHXt89WT7GaSQ3A057iW40mR0MOenhwM21mgQ3aL/kzlCvXvKLDBFzoiXAA==";
+        println!("result:{},expect:{}", result, expect);
+        assert!(result == expect);
     }
 }

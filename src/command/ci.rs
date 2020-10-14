@@ -58,7 +58,7 @@ impl<S: shell::Shell> CI<S> {
         }
         Ok(())
     }
-    fn setenv<A: args::Args>(&self, args: &A) -> Result<(), Box<dyn Error>> {
+    fn setenv<A: args::Args>(&self, _: &A) -> Result<(), Box<dyn Error>> {
         let config = self.config.borrow();
         let (account_name, _) = config.ci_config_by_env();
         let ci = config.ci_service(account_name)?;

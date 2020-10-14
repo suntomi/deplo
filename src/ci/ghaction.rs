@@ -38,7 +38,7 @@ impl<'a, S: shell::Shell> module::Module for GhAction<S> {
                     .collect::<Vec<&str>>().join(",");
                 let mut env_inject_settings = vec!();
                 config.parse_dotenv(|k,v| {
-                    config.parse_dotenv(|k,v| (self as &dyn ci::CI).set_secret(k, v))?;
+                    (self as &dyn ci::CI).set_secret(k, v)?;
                     Ok(env_inject_settings.push(format!("{}: ${{{{ secrets.{} }}}}", k, k)))
                 });
                 fs::create_dir_all(&format!("{}/.github/workflows", repository_root))?;
@@ -83,7 +83,7 @@ impl<S: shell::Shell> ci::CI for GhAction<S> {
     fn wait_job_by_name(&self, job_name: &str) -> Result<(), Box<dyn Error>> {
         Ok(())
     }
-    fn set_secret(&self, key: &str, val: &str) -> Result<(), Box<dyn Error>> {
+    fn set_secret(&self, key: &str, _: &str) -> Result<(), Box<dyn Error>> {
         let config = self.config.borrow();
         let token = match &config.ci_config(&self.account_name) {
             config::CIConfig::GhAction { account:_, key, action:_ } => { key },
@@ -100,7 +100,8 @@ impl<S: shell::Shell> ci::CI for GhAction<S> {
             "#, user_and_repo.0, user_and_repo.1, token), shell::no_env())?
         )?;
         let json = format!("{{\"encrypted_value\":\"{}\",\"key_id\":\"{}\"}}", 
-            seal(val, &public_key_info.key)?, 
+            //get value from env to unescapse
+            seal(&std::env::var(key).unwrap(), &public_key_info.key)?,
             public_key_info.key_id
         );
         let status = self.shell.exec(&vec!(
