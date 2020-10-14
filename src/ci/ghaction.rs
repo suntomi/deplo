@@ -40,7 +40,7 @@ impl<'a, S: shell::Shell> module::Module for GhAction<S> {
                 config.parse_dotenv(|k,v| {
                     (self as &dyn ci::CI).set_secret(k, v)?;
                     Ok(env_inject_settings.push(format!("{}: ${{{{ secrets.{} }}}}", k, k)))
-                });
+                })?;
                 fs::create_dir_all(&format!("{}/.github/workflows", repository_root))?;
                 fs::write(&deplo_yml_path, format!(
                     include_str!("../../rsc/ci/ghaction/deplo.yml.tmpl"), 
