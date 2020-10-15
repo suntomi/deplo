@@ -168,39 +168,38 @@ impl<S: shell::Shell> GitFeatures for Git<S> {
         self.setup_author()?;
         if config.has_debug_option("skip_rebase") {
             return Ok(self.shell.output_of(
-                &vec!("git", "diff", "--name-only", "HEAD^1...HEAD"),
+                &vec!("git", "diff", "--name-only", "HEAD~1...HEAD"),
                 shell::no_env()
             )?)
         }
         setup_remote!(self, url);
+        // get current base commit hash (that is, HEAD^1). 
+        // because below we do rebase, which may change HEAD.
+        // but we want to know the diff between "current" HEAD^1 and "rebased" HEAD with ... 
+        // to invoke all possible deployment that need to run
+        let commit = self.shell.output_of(&vec!(
+            "git", "rev-parse" ,"HEAD"
+        ), shell::no_env())?;
+        let base = self.shell.exec(&vec!(
+            "git", "rev-parse", &format!("{}^", commit)
+        ), shell::no_env(), true)?;
+
         // we cannot `git pull latest $remote_branch` here. eg. $remote_branch = master case on circleCI. 
         // sometimes latest/master and master diverged, and pull causes merge FETCH_HEAD into master.
-        // then it raises error if no mail/user name specified, because these are diverges branches. 
+        // then it raises error if no mail/user name specified, because these are diverged branches. 
         // (but we don't know how master and latest/master are diverged with cached .git of circleCI)
-        let base = self.shell.exec(&vec!(
-            "git", "rev-parse", 
-            &format!("{}^", &self.commit_hash()?
-        )), shell::no_env(), true)?;
 
-        // here, $CI_BASE_BRANCH_NAME before colon means branch which name i $CI_BASE_BRANCH_NAME at remote `latest`
+        // here, remote_branch before colon means branch which name is $remote_branch at remote `latest`
+        // fetch remote counter part of the branch, which may change HEAD by commiting something 
         self.shell.exec(&vec!(
             "git", "fetch", "--force", "latest", 
             &format!("{}:remotes/latest/{}", remote_branch, remote_branch)
         ), shell::no_env(), false)?;
-        /* if run_on_pr_branch {
-            // pull request: forcefully match base branch and its remote `latest` counterpart
-            // here, $CI_BASE_BRANCH_NAME menas local branch which name is $$CI_BASE_BRANCH_NAME
-            self.shell.exec(&vec!(
-                "git", "branch", "-f", remote_branch,
-                &format!("remotes/latest/{}", remote_branch)
-            ), shell::no_env(), false)?;
-        } else */ {
-            // deploy branch: rebase CI branch with remotes `latest`. 
-            // because sometimes build on deploy branch made commit to $CI_BRANCH (eg. commit meta data)
-            self.shell.exec(&vec!(
-                "git", "rebase", &format!("remotes/latest/{}", remote_branch)
-            ), shell::no_env(), false)?;
-        }
+        // because sometimes build on deploy branch made commit to $CI_BRANCH (eg. commit meta data)
+        self.shell.exec(&vec!(
+            "git", "rebase", &format!("remotes/latest/{}", remote_branch)
+        ), shell::no_env(), false)?;
+        // actually get diff
         Ok(self.shell.output_of(
             &vec!("git", "diff", "--name-only", &format!("{}...HEAD", base)),
             shell::no_env()
