@@ -10,7 +10,7 @@ jobs:
   deplo:
     name: running CI jobs
     runs-on: ubuntu-latest
-    container: suntomi/deplo:a84991728de4f91e278231478eef5eb5c53c65bc
+    container: suntomi/deplo:d69dcf7bbe06b0743fb310f5892d0a9ebcceb9e4
     steps:
       - uses: actions/checkout@v2
         with:
