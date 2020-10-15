@@ -10,7 +10,7 @@ jobs:
   deplo:
     name: running CI jobs
     runs-on: ubuntu-latest
-    container: suntomi/deplo:d69dcf7bbe06b0743fb310f5892d0a9ebcceb9e4
+    container: suntomi/deplo:b71a1248a1b53f23d905f7d75be944de36366989
     steps:
       - uses: actions/checkout@v2
         with:
@@ -40,4 +40,4 @@ jobs:
           DEPLO_DISTRIBUTION_APPLE_PASSWORD: ${{ secrets.DEPLO_DISTRIBUTION_APPLE_PASSWORD }}
           DEPLO_DISTRIBUTION_GOOGLE_ACCESS_KEY: ${{ secrets.DEPLO_DISTRIBUTION_GOOGLE_ACCESS_KEY }}
 
-        run: deplo -vvv -w test/projects/dev ci kick
+        run: git --no-pager log -5 && deplo -vvv -w test/projects/dev ci kick
