@@ -126,7 +126,18 @@ impl Native {
                             }
                         } else {
                             return match status.code() {
-                                Some(_) => Err(shell::ShellError::ExitStatus{ status }),
+                                Some(_) => match process.stderr {
+                                    Some(mut stream) => {
+                                        let mut s = String::new();
+                                        match stream.read_to_string(&mut s) {
+                                            Ok(_) => Err(shell::ShellError::ExitStatus{ status, stderr: s }),
+                                            Err(err) => Err(shell::ShellError::ExitStatus{
+                                                status, stderr: format!("cannot get stderr by {:?}", err)
+                                            })
+                                        }
+                                    },
+                                    None => Err(shell::ShellError::ExitStatus{ status, stderr: "no stderr".to_string() })
+                                },
                                 None => Err(shell::ShellError::OtherFailure{
                                     cause: format!("cmd terminated by signal")
                                 }),
