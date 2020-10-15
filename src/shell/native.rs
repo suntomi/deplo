@@ -89,22 +89,26 @@ impl Native {
                     match String::from_utf8(output.stdout) {
                         Ok(s) => return Ok(s.trim().to_string()),
                         Err(err) => return Err(shell::ShellError::OtherFailure{
-                            cause: format!("stdout character code error {:?}", err)
+                            cause: format!("stdout character code error {:?}", err),
+                            cmd: format!("{:?}", cmd)
                         })
                     }
                 } else {
                     match String::from_utf8(output.stderr) {
                         Ok(s) => return Err(shell::ShellError::OtherFailure{ 
-                            cause: format!("command returns error {}", s)
+                            cause: format!("command returns error {}", s),
+                            cmd: format!("{:?}", cmd)
                         }),
                         Err(err) => return Err(shell::ShellError::OtherFailure{
-                            cause: format!("stderr character code error {:?}", err)
+                            cause: format!("stderr character code error {:?}", err),
+                            cmd: format!("{:?}", cmd)
                         })
                     }
                 }
             },
             Err(err) => return Err(shell::ShellError::OtherFailure{
-                cause: format!("get output error {:?}", err)
+                cause: format!("get output error {:?}", err),
+                cmd: format!("{:?}", cmd)
             })
         }
     }
@@ -119,7 +123,8 @@ impl Native {
                                 Some(mut stream) => match stream.read_to_string(&mut s) {
                                     Ok(_) => return Ok(s.trim().to_string()),
                                     Err(err) => return Err(shell::ShellError::OtherFailure{
-                                        cause: format!("read stream error {:?}", err)
+                                        cause: format!("read stream error {:?}", err),
+                                        cmd: format!("{:?}", cmd)
                                     })
                                 },
                                 None => Ok("".to_string())
@@ -130,27 +135,37 @@ impl Native {
                                     Some(mut stream) => {
                                         let mut s = String::new();
                                         match stream.read_to_string(&mut s) {
-                                            Ok(_) => Err(shell::ShellError::ExitStatus{ status, stderr: s }),
+                                            Ok(_) => Err(shell::ShellError::ExitStatus{ 
+                                                status, stderr: s,
+                                                cmd: format!("{:?}", cmd)
+                                            }),
                                             Err(err) => Err(shell::ShellError::ExitStatus{
-                                                status, stderr: format!("cannot get stderr by {:?}", err)
+                                                status, stderr: format!("cannot get stderr by {:?}", err),
+                                                cmd: format!("{:?}", cmd)
                                             })
                                         }
                                     },
-                                    None => Err(shell::ShellError::ExitStatus{ status, stderr: "no stderr".to_string() })
+                                    None => Err(shell::ShellError::ExitStatus{ 
+                                        status, stderr: "no stderr".to_string(),
+                                        cmd: format!("{:?}", cmd)
+                                    })
                                 },
                                 None => Err(shell::ShellError::OtherFailure{
-                                    cause: format!("cmd terminated by signal")
+                                    cause: format!("cmd terminated by signal"),
+                                    cmd: format!("{:?}", cmd)
                                 }),
                             }
                         }
                     },
                     Err(err) => Err(shell::ShellError::OtherFailure{
-                        cause: format!("wait process error {:?}", err)
+                        cause: format!("wait process error {:?}", err),
+                        cmd: format!("{:?}", cmd)
                     })
                 }
             },
             Err(err) => Err(shell::ShellError::OtherFailure{
-                cause: format!("process spawn error {:?}", err)
+                cause: format!("process spawn error {:?}", err),
+                cmd: format!("{:?}", cmd)
             })
         }
     }

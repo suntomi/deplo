@@ -1008,7 +1008,7 @@ impl<'a, S: shell::Shell> cloud::Cloud for Gcp<S> {
             shell::no_env(), false) {
             Ok(_) => Ok(()),
             Err(err) => match err {
-                shell::ShellError::ExitStatus{ status:_, stderr:_ } => Ok(()),
+                shell::ShellError::ExitStatus{ status:_, stderr:_, cmd:_ } => Ok(()),
                 _ => return escalate!(Box::new(err))
             }            
         }
@@ -1021,7 +1021,7 @@ impl<'a, S: shell::Shell> cloud::Cloud for Gcp<S> {
             shell::no_env(), false) {
             Ok(_) => Ok(()),
             Err(err) => match err {
-                shell::ShellError::ExitStatus{ status:_, stderr:_  } => Ok(()),
+                shell::ShellError::ExitStatus{ status:_, stderr:_, cmd:_  } => Ok(()),
                 _ => return escalate!(Box::new(err))
             }            
         }

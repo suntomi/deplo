@@ -59,19 +59,21 @@ pub type Default = native::Native;
 pub enum ShellError {
     ExitStatus {
         status: std::process::ExitStatus,
+        cmd: String,
         stderr: String
     },
     OtherFailure {
+        cmd: String,
         cause: String
     },
 }
 impl fmt::Display for ShellError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::ExitStatus { status, stderr } => {
-                write!(f, "exit status: {}, stedrr:{}", status, stderr)
+            Self::ExitStatus { status, stderr, cmd } => {
+                write!(f, "cmd:{}, exit status:{}, stedrr:{}", cmd, status, stderr)
             },
-            Self::OtherFailure { cause } => write!(f, "{}", cause)
+            Self::OtherFailure { cmd, cause } => write!(f, "cmd:{}, err:{}", cmd, cause)
         }
     }
 }
@@ -87,7 +89,7 @@ macro_rules! macro_ignore_exit_code {
         match $exec {
             Ok(_) => {},
             Err(err) => match err {
-                shell::ShellError::ExitStatus{ status:_, stderr:_ } => {},
+                shell::ShellError::ExitStatus{ status:_, stderr:_, cmd:_ } => {},
                 _ => return escalate!(Box::new(err))
             }
         }
