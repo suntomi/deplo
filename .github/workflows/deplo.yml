@@ -18,6 +18,8 @@ jobs:
           lfs: true
       - name: Setup tmate session
         uses: mxschmitt/action-tmate@v3
+        with:
+          sudo: false
       - name: Run Deplo
         env:
           DEPLO_GHACTION_PULL_REQUEST_URL: ${{ github.event.pull_request.url }}
