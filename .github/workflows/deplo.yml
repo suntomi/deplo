@@ -8,7 +8,7 @@ on:
 
 jobs:
   deplo:
-    name: running CI jobs
+    name: Running CI jobs
     runs-on: ubuntu-latest
     container: suntomi/deplo:latest
     steps:
@@ -17,8 +17,18 @@ jobs:
         with:
           lfs: true
           # deplo refers previous commit of current HEAD to determine diff
-          fetch-depth: 2 
-      - name: Run deplo
+          fetch-depth: 2
+      - name: Cache runtime dependencies
+        uses: actions/cache@v2
+        env:
+          cache-name: deplo-tools
+        with:
+          # npm cache files are stored in `~/.npm` on Linux/macOS
+          path: /deplo-tools
+          key: ${{ env.cache-name }}-v1-${{ github.sha }}
+          restore-keys: |
+            ${{ env.cache-name }}-v1-
+      - name: Run main cli
         env:
           DEPLO_GHACTION_PULL_REQUEST_URL: ${{ github.event.pull_request.url }}
           DEPLO_ORG_NAME: ${{ secrets.DEPLO_ORG_NAME }}
