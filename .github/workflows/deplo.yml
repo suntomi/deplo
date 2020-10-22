@@ -16,11 +16,9 @@ jobs:
         uses: actions/checkout@v2
         with:
           lfs: true
-      - name: Setup tmate session
-        uses: mxschmitt/action-tmate@v3
-        with:
-          sudo: false
-      - name: Run Deplo
+          # deplo refers previous commit of current HEAD to determine diff
+          fetch-depth: 2 
+      - name: Run deplo
         env:
           DEPLO_GHACTION_PULL_REQUEST_URL: ${{ github.event.pull_request.url }}
           DEPLO_ORG_NAME: ${{ secrets.DEPLO_ORG_NAME }}
@@ -46,3 +44,8 @@ jobs:
           DEPLO_DISTRIBUTION_GOOGLE_ACCESS_KEY: ${{ secrets.DEPLO_DISTRIBUTION_GOOGLE_ACCESS_KEY }}
 
         run: git --no-pager log -5 && deplo -vvv -w test/projects/dev ci kick
+      - name: Setup ssh session to debug
+        if: ${{ failure() }}
+        uses: mxschmitt/action-tmate@v3
+        with:
+          sudo: false
