@@ -1,7 +1,15 @@
 FROM ubuntu:groovy-20200921
 
 # install common dependencies
-RUN apt-get update && apt-get install -y git unzip curl hub && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && \
+	apt-get install -y \
+		git=1:2.27.0-1ubuntu1 \
+		unzip=6.0-25ubuntu1 \
+		python3=3.8.6-0ubuntu1 \
+		python-is-python3 \
+		curl=7.68.0-1ubuntu4 \
+		hub=2.7.0~ds1-1build1 && \
+	rm -rf /var/lib/apt/lists/*
 
 # install dependencies from github
 ENV TERRAFORM_VERSION=0.12.25
