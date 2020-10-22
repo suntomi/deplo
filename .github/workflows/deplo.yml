@@ -12,9 +12,12 @@ jobs:
     runs-on: ubuntu-latest
     container: suntomi/deplo:b71a1248a1b53f23d905f7d75be944de36366989
     steps:
-      - uses: actions/checkout@v2
+      - name: Checkout
+        uses: actions/checkout@v2
         with:
           lfs: true
+      - name: Setup tmate session
+        uses: mxschmitt/action-tmate@v3
       - name: Run Deplo
         env:
           DEPLO_GHACTION_PULL_REQUEST_URL: ${{ github.event.pull_request.url }}

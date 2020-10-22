@@ -1,7 +1,7 @@
 FROM alpine:3.11
 
 # install common dependencies
-RUN apk --update add git make python unzip expect curl bash openssh
+RUN apk --update add git make python unzip expect curl bash openssh sudo
 
 # common utils
 # to avoid dynamic link issue, install hub from edge
