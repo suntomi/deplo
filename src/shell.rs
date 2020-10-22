@@ -27,13 +27,13 @@ pub trait Shell {
         &self, code: &str, envs: I, capture: bool
     ) -> Result<String, ShellError> 
     where I: IntoIterator<Item = (K, V)>, K: AsRef<OsStr>, V: AsRef<OsStr> {
-        return self.exec(&vec!("sh", "-c", code), envs, capture);
+        return self.exec(&vec!("bash", "-c", code), envs, capture);
     }
     fn eval_output_of<I, K, V>(
         &self, code: &str, envs: I
     ) -> Result<String, ShellError>
     where I: IntoIterator<Item = (K, V)>, K: AsRef<OsStr>, V: AsRef<OsStr> {
-        return self.output_of(&vec!("sh", "-c", code), envs);
+        return self.output_of(&vec!("bash", "-c", code), envs);
     }
     fn run_code_or_file<I, K, V>(
         &self, code_or_file: &str, envs: I

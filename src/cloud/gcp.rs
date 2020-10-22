@@ -734,6 +734,14 @@ impl<'a, S: shell::Shell> module::Module for Gcp<S> {
              log::info!("remove gcloud installation for reinitialize");
              fs::remove_dir_all(&install_path).unwrap_or(());
         }
+        match self.shell.exec(&vec!("python", "--version"), shell::no_env(), true) {
+            Ok(out) => log::debug!("{} already intalled", out),
+            Err(_) => {
+                self.shell.eval(r#"
+                    apt-get update && apt-get install -y python && rm -rf /var/lib/apt/lists/*
+                "#, shell::no_env(), false)?;
+            }
+        }
         match fs::metadata(&install_path) {
             Ok(_) => {
                 log::debug!("gcloud already installed at {}", &install_path);
@@ -759,6 +767,8 @@ impl<'a, S: shell::Shell> module::Module for Gcp<S> {
                     echo "install gcloud sdk"
                     echo "CAUTION: it takes sooooooo long time on container in docker mac"
                     echo "-----------------------------------------------"
+                    echo "install dependency"
+                    apt-get install -y python
                     echo "download gcloud CLI..."
                     cd /tmp
                     if [ ! -e google-cloud-sdk.zip ]; then

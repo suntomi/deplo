@@ -1,22 +1,12 @@
-FROM alpine:3.11
+FROM ubuntu:groovy-20200921
 
 # install common dependencies
-RUN apk --update add git make python unzip expect curl bash openssh sudo
+RUN apt-get update && apt-get install -y git unzip curl hub && rm -rf /var/lib/apt/lists/*
 
-# common utils
-# to avoid dynamic link issue, install hub from edge
-RUN apk add --no-cache -X http://dl-cdn.alpinelinux.org/alpine/edge/testing hub
-#ENV HUB_VERSION=2.14.2
-#RUN curl -L -o /hub.tgz https://github.com/github/hub/releases/download/v$HUB_VERSION/hub-linux-amd64-$HUB_VERSION.tgz && \
-#	tar -zxvf /hub.tgz && /hub-linux-amd64-$HUB_VERSION/install && rm -rf /hub.tgz /hub-linux-amd64-$HUB_VERSION
-
+# install dependencies from github
 ENV TERRAFORM_VERSION=0.12.25
 RUN curl -L -o /tf.zip https://releases.hashicorp.com/terraform/${TERRAFORM_VERSION}/terraform_${TERRAFORM_VERSION}_linux_amd64.zip && \
 	unzip /tf.zip && mv /terraform /usr/local/bin && rm -rf /tf.zip
-
-ENV DOCKER_COMPOSE_VERSION=1.25.5
-RUN curl -L https://github.com/docker/compose/releases/download/${DOCKER_COMPOSE_VERSION}/docker-compose-`uname -s`-`uname -m` -o /usr/local/bin/docker-compose && \
-	chmod +x /usr/local/bin/docker-compose
 
 ENV GIT_LFS_VERSION=2.11.0
 RUN mkdir /git-lfs && curl -o /git-lfs/package.tgz -L https://github.com/git-lfs/git-lfs/releases/download/v${GIT_LFS_VERSION}/git-lfs-linux-amd64-v${GIT_LFS_VERSION}.tar.gz && \

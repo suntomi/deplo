@@ -54,7 +54,7 @@ sh:
 		-v $(CURDIR)/.deplo-tools:/deplo-tools:delegated \
 		-v $(HOME)/.cargo/registry:/.cargo/registry \
 		-v /var/run/docker.sock:/var/run/docker.sock \
-		suntomi/deplo:shell sh
+		suntomi/deplo:shell bash
 
 run:
 	DEPLO_CI_TYPE=$(CI) cargo run -- \
