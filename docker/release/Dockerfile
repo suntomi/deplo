@@ -1,4 +1,4 @@
-FROM suntomi/deplo_base
+FROM suntomi/deplo:base
 
 ADD deplo /deplo
 ADD rsc /rsc

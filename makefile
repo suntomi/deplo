@@ -9,7 +9,7 @@ LINUX_TARGET=x86_64-unknown-linux-musl
 DARWIN_TARGET=x86_64-apple-darwin
 RESOURCE_FILE_PATH=$(CURDIR)/rsc
 IMAGE_BUILD_ROOT_PATH=$(CURDIR)/docker/release
-GIT_HASH=$(shell git rev-parse HEAD)
+TAG?=$(shell git rev-parse HEAD)
 ifeq ($(REL), 1)
 BUILD_PROFILE=release
 RELEASE=--release
@@ -27,11 +27,11 @@ build:
 	cross build $(RELEASE) --target $(DARWIN_TARGET)
 
 base: 
-	docker build -t suntomi/deplo_base docker/base
+	docker build -t suntomi/deplo:base docker/base
 
 shell:
 	cp $(CURDIR)/Cargo.* docker/shell
-	docker build -t suntomi/deplo_shell docker/shell
+	docker build -t suntomi/deplo:shell docker/shell
 
 image: base build
 	cp $(DEPLO_LINUX) $(IMAGE_BUILD_ROOT_PATH)
@@ -42,8 +42,8 @@ image: base build
 	docker build -t suntomi/deplo $(IMAGE_BUILD_ROOT_PATH)
 
 deploy:
-	docker tag suntomi/deplo:latest suntomi/deplo:$(GIT_HASH)
-	docker push suntomi/deplo:$(GIT_HASH)
+	docker tag suntomi/deplo:latest suntomi/deplo:$(TAG)
+	docker push suntomi/deplo:$(TAG)
 
 dev:
 	cargo run -- -vv -w /workdir/test/projects/dev $(CMD)
@@ -54,7 +54,7 @@ sh:
 		-v $(CURDIR)/.deplo-tools:/deplo-tools:delegated \
 		-v $(HOME)/.cargo/registry:/.cargo/registry \
 		-v /var/run/docker.sock:/var/run/docker.sock \
-		suntomi/deplo_shell sh
+		suntomi/deplo:shell sh
 
 run:
 	DEPLO_CI_TYPE=$(CI) cargo run -- \

@@ -1,4 +1,4 @@
-FROM suntomi/deplo_base
+FROM suntomi/deplo:base
 
 # all rust toolchain requires gcc/clang installed (https://github.com/rust-lang/rustup/issues/2213)
 RUN apk --update add gcc g++
