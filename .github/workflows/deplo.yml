@@ -18,8 +18,10 @@ jobs:
           lfs: true
           # deplo refers previous commit of current HEAD to determine diff
           fetch-depth: 2
+      - name: pre-execution deplo info version
+        run: deplo -w test/projects/dev info version -o json
       - name: Generate cache key
-        run: echo "DEPLO_TOOL_CACHE_KEY=$(deplo info version -json | jq .toolset)" >> $GITHUB_ENV
+        run: echo "DEPLO_TOOL_CACHE_KEY=$(deplo -w test/projects/dev info version -o json | jq .-jr toolset)" >> $GITHUB_ENV
       - name: Cache runtime dependencies
         uses: actions/cache@v2
         env:
