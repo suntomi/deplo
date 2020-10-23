@@ -18,6 +18,8 @@ jobs:
           lfs: true
           # deplo refers previous commit of current HEAD to determine diff
           fetch-depth: 2
+      - name: Generate cache key
+        run: echo "DEPLO_TOOL_CACHE_KEY=$(deplo info version -json | jq .toolset)" >> $GITHUB_ENV
       - name: Cache runtime dependencies
         uses: actions/cache@v2
         env:
@@ -25,9 +27,7 @@ jobs:
         with:
           # npm cache files are stored in `~/.npm` on Linux/macOS
           path: /deplo-tools
-          key: ${{ env.cache-name }}-v1-${{ github.sha }}
-          restore-keys: |
-            ${{ env.cache-name }}-v1-
+          key: deplo-tools-v1-${{ runner.os }}-${{ env.DEPLO_TOOL_CACHE_KEY }}
       - name: Run main cli
         env:
           DEPLO_GHACTION_PULL_REQUEST_URL: ${{ github.event.pull_request.url }}

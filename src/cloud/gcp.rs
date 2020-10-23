@@ -737,61 +737,31 @@ impl<'a, S: shell::Shell> module::Module for Gcp<S> {
         match fs::metadata(&install_path) {
             Ok(_) => {
                 log::debug!("gcloud already installed at {}", &install_path);
-                let linked_path = "/usr/lib/google-cloud-sdk";
-                match fs::metadata(linked_path) {
-                    Ok(_) => {
-                        log::debug!("and linked to {}", linked_path);
-                    },
-                    Err(_) => {
-                        self.shell.eval(r#"
-                            ln -s $INSTALL_PATH /usr/lib
-                        "#, &hashmap!{
-                            "HOME" => "/",
-                            "INSTALL_PATH" => &install_path
-                        }, false)?;
-                    }
-                }
             },
             Err(_) => {
                 // it takes sooooooo long time on container in docker mac
-                self.shell.eval(r#"
-                    echo "-----------------------------------------------"
-                    echo "install gcloud sdk"
-                    echo "CAUTION: it takes sooooooo long time on container in docker mac"
-                    echo "-----------------------------------------------"
-                    echo "install dependency"
-                    apt-get install -y python
-                    echo "download gcloud CLI..."
-                    cd /tmp
-                    if [ ! -e google-cloud-sdk.zip ]; then
-                        curl https://dl.google.com/dl/cloudsdk/channels/rapid/downloads/google-cloud-sdk-$CLOUDSDK_VERSION-linux-x86_64.tar.gz \
-                            --output google-cloud-sdk.zip.tmp
-                        mv google-cloud-sdk.zip.tmp google-cloud-sdk.zip
-                    fi
-                    if [ ! -e google-cloud-sdk ]; then
-                        tar -zxf google-cloud-sdk.zip
-                    fi
-                    google-cloud-sdk/install.sh --usage-reporting=true --path-update=true --bash-completion=true --rc-path=/.bashrc \
-                        --additional-components kubectl alpha beta
-
-                    echo "disable auto upgrade..."
-                    google-cloud-sdk/bin/gcloud config set --installation component_manager/disable_update_check true
-                    sed -i -- 's/\"disable_updater\": false/\"disable_updater\": true/g' google-cloud-sdk/lib/googlecloudsdk/core/config.json
-
-                    echo "make link..."
-                    rm google-cloud-sdk.zip
-                    mv google-cloud-sdk $DEPLO_TOOLS_PATH/cloud
-                    if [ ! -e "/usr/lib/google-cloud-sdk" ]; then
-                        ln -s $INSTALL_PATH /usr/lib
-                    fi
-                "#, &hashmap!{
+                self.shell.eval(include_str!("../../rsc/install/gcloud.sh"), &hashmap!{
                     "CLOUDSDK_PYTHON_SITEPACKAGES" => "1",
                     "CLOUDSDK_VERSION" => "292.0.0",
                     "INSTALL_PATH" => &install_path
                 }, false)?;
             }
         };
-        // modify path
+        // link and modify path
+        let linked_path = "/usr/lib/google-cloud-sdk";
+        match fs::metadata(linked_path) {
+            Ok(_) => {
+                log::debug!("and linked to {}", linked_path);
+            },
+            Err(_) => {
+                self.shell.eval(r#"
+                    ln -s $INSTALL_PATH /usr/lib
+                "#, &hashmap!{
+                    "HOME" => "/",
+                    "INSTALL_PATH" => &install_path
+                }, false)?;
+            }
+        }
         std::env::set_var("PATH", &format!("{}/bin:{}", &install_path, std::env::var("PATH")?));
         // ensure project setting is valid
         let cloud_provider_config = config.cloud.accounts.get(&self.account_name).unwrap();

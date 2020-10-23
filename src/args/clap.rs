@@ -63,16 +63,20 @@ lazy_static! {
                 &["tf", "cloud", "ci", "vcs", "all"]
             ))
         .subcommand(
-            App::new("version")
-                .about("dump version")
-                .arg(Arg::new("output")
-                    .help("output format")
-                    .short('o')
-                    .long("output")
-                    .possible_values(
-                        &["plain", "json"]
-                    )
-                    .required(false))
+            App::new("info")
+                .about("get information about deplo")
+                .subcommand(
+                    App::new("version")
+                        .about("get deplo version")
+                        .arg(Arg::new("output")
+                        .help("output format")
+                        .short('o')
+                        .long("output")
+                        .possible_values(
+                            &["plain", "json"]
+                        )
+                        .required(false))
+                )
         )
         .subcommand(
             App::new("init")

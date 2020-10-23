@@ -32,7 +32,7 @@ pub mod infra;
 pub mod exec;
 pub mod service;
 pub mod ci;
-pub mod version;
+pub mod info;
 
 // factorys
 fn factory_by<'a, S: args::Args, T: Command<S> + 'a>(
@@ -47,7 +47,7 @@ pub fn factory<'a, S: args::Args>(
 ) -> Result<Option<Box<dyn Command<S> + 'a>>, Box<dyn Error>> {
     let cmd = match name {
         "init" => factory_by::<S, init::Init>(config),
-        "version" => factory_by::<S, version::Version>(config),
+        "info" => factory_by::<S, info::Info>(config),
         "destroy" => factory_by::<S, destroy::Destroy>(config),
         "infra" => factory_by::<S, infra::Infra>(config),
         "exec" => factory_by::<S, exec::Exec>(config),

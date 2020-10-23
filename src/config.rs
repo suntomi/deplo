@@ -28,6 +28,7 @@ use crate::util::{escalate,envsubst};
 
 pub const DEPLO_GIT_HASH: &'static str = env!("GIT_HASH");
 pub const DEPLO_VERSION: &'static str = "0.1.0";
+pub const DEPLO_TOOLSET_HASH: &'static str = env!("TOOLSET_HASH");
 
 #[derive(Debug)]
 pub struct ConfigError {

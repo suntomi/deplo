@@ -29,15 +29,16 @@ commands:
             - ".git"
   load_deplo_tools:
     steps:
+      - run:
+          name: store toolset hash to files
+          command: deplo info version -json | jq .toolset > /tmp/deplo-toolset.hash
       - restore_cache:
           keys:
-            - deplo-tools-v1-{{ arch }}-{{ .Branch }}-{{ .Revision }}
-            - deplo-tools-v1-{{ arch }}-{{ .Branch }}-
-            - deplo-tools-v1-{{ arch }}-
+            - deplo-tools-v1-{{ arch }}-{{ checksum "/tmp/deplo-toolset.hash" }}
   save_deplo_tools:
     steps:
       - save_cache:
-          key: deplo-tools-v1-{{ arch }}-{{ .Branch }}-{{ .Revision }}
+          key: deplo-tools-v1-{{ arch }}-{{ checksum "/tmp/deplo-toolset.hash" }}
           paths:
             - "/deplo-tools"
 
