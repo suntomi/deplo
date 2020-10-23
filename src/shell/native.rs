@@ -47,10 +47,15 @@ impl<'a> shell::Shell for Native {
         &self, args: &Vec<&str>, envs: I, capture: bool
     ) -> Result<String, shell::ShellError> 
     where I: IntoIterator<Item = (K, V)>, K: AsRef<OsStr>, V: AsRef<OsStr>{
-        if self.config.borrow().runtime.dryrun {
+        let config = self.config.borrow();
+        if config.runtime.dryrun {
             let cmd = args.join(" ");
             println!("dryrun: {}", cmd);
             return Ok(cmd);
+        } else if config.should_silent_shell_exec() {
+            // regardless for the value of `capture`, always capture value
+            let mut cmd = self.create_command(args, envs, true);
+            return Native::run_as_child(&mut cmd);
         } else {
             let mut cmd = self.create_command(args, envs, capture);
             return Native::run_as_child(&mut cmd);

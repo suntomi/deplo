@@ -749,6 +749,9 @@ impl Config {
     pub fn get_debug_option<'a>(&'a self, name: &str) -> Option<&'a String> {
         self.runtime.debug.get(name)
     }
+    pub fn should_silent_shell_exec(&self) -> bool {
+        return self.runtime.verbosity <= 0;
+    }
 
     fn verify(
         c: &Container
