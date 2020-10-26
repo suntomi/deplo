@@ -2,13 +2,11 @@ use std::fs;
 use std::error::Error;
 use std::result::Result;
 
-use maplit::hashmap;
-
 use crate::config;
 use crate::ci;
 use crate::shell;
 use crate::module;
-use crate::util::escalate;
+use crate::util::{escalate};
 
 pub struct Circle<S: shell::Shell = shell::Default> {
     pub config: config::Container,
@@ -21,6 +19,7 @@ impl<'a, S: shell::Shell> module::Module for Circle<S> {
         let config = self.config.borrow();
         let repository_root = config.vcs_service()?.repository_root()?;
         let circle_yml_path = format!("{}/.circleci/config.yml", repository_root);
+        let cli_opts = config.ci_cli_options();
         if reinit {
             fs::remove_file(&circle_yml_path)?;
         }
@@ -33,7 +32,8 @@ impl<'a, S: shell::Shell> module::Module for Circle<S> {
                 fs::write(&circle_yml_path, format!(
                     include_str!("../../rsc/ci/circle/config.yml.tmpl"),
                     config.common.deplo_image,
-                    config::DEPLO_GIT_HASH, config.runtime.workdir.as_ref().unwrap_or(&"".to_string())
+                    config::DEPLO_GIT_HASH, 
+                    cli_opts, cli_opts
                 ))?;
             }
         }

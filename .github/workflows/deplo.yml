@@ -2,10 +2,10 @@ name: Deplo CI/CD
 
 on: 
   push:
-    branches: [master,release]
+    branches: [release,master]
   pull_request:
-    branches: [master,release]
-
+    branches: [release,master]
+  
 env:
   DEPLO_GHACTION_PULL_REQUEST_URL: ${{ github.event.pull_request.url }}
   DEPLO_ORG_NAME: ${{ secrets.DEPLO_ORG_NAME }}
@@ -28,7 +28,7 @@ env:
   DEPLO_BUILD_UNITY_IOS_SIGNING_FILES_PATH: ${{ secrets.DEPLO_BUILD_UNITY_IOS_SIGNING_FILES_PATH }}
   DEPLO_DISTRIBUTION_APPLE_ACCOUNT: ${{ secrets.DEPLO_DISTRIBUTION_APPLE_ACCOUNT }}
   DEPLO_DISTRIBUTION_APPLE_PASSWORD: ${{ secrets.DEPLO_DISTRIBUTION_APPLE_PASSWORD }}
-  DEPLO_DISTRIBUTION_GOOGLE_ACCESS_KEY: ${{ secrets.DEPLO_DISTRIBUTION_GOOGLE_ACCESS_KEY }}    
+  DEPLO_DISTRIBUTION_GOOGLE_ACCESS_KEY: ${{ secrets.DEPLO_DISTRIBUTION_GOOGLE_ACCESS_KEY }}
 
 jobs:
   deplo:
@@ -46,14 +46,12 @@ jobs:
         run: echo "DEPLO_TOOL_CACHE_KEY=$(deplo -w test/projects/dev info version -o json | jq -jr .toolset)" >> $GITHUB_ENV
       - name: Cache runtime dependencies
         uses: actions/cache@v2
-        env:
-          cache-name: deplo-tools
         with:
           # npm cache files are stored in `~/.npm` on Linux/macOS
           path: /deplo-tools
           key: deplo-tools-v1-${{ runner.os }}-${{ env.DEPLO_TOOL_CACHE_KEY }}
       - name: Run main cli
-        run: git --no-pager log -5 && deplo -vvv -w test/projects/dev ci kick
+        run: deplo -w test/projects/dev ci kick
       - name: Setup ssh session to debug
         if: ${{ failure() }}
         uses: mxschmitt/action-tmate@v3

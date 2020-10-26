@@ -56,5 +56,5 @@ jobs:
       - load_deplo_tools
       - run:
           name: 'running CI jobs'
-          command: deplo -vv -w test/projects/dev ci kick
+          command: deplo -w test/projects/dev ci kick
       - save_deplo_tools

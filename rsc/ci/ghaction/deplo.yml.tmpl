@@ -5,18 +5,34 @@ on:
     branches: [{}]
   pull_request:
     branches: [{}]
-
+  
+env:
+  DEPLO_GHACTION_PULL_REQUEST_URL: ${{{{ github.event.pull_request.url }}}}
+{:>2}
 jobs:
   deplo:
-    name: running CI jobs
+    name: Running CI jobs
     runs-on: ubuntu-latest
     container: {}:{}
     steps:
-      - uses: actions/checkout@v2
+      - name: Checkout
+        uses: actions/checkout@v2
         with:
           lfs: true
-      - name: Run Deplo
-        env:
-          DEPLO_GHACTION_PULL_REQUEST_URL: ${{{{ github.event.pull_request.url }}}}
-{:>10}
-        run: deplo -w {} ci kick
+          # deplo refers previous commit of current HEAD to determine diff
+          fetch-depth: 2
+      - name: Generate cache key
+        run: echo "DEPLO_TOOL_CACHE_KEY=$(deplo {} info version -o json | jq -jr .toolset)" >> $GITHUB_ENV
+      - name: Cache runtime dependencies
+        uses: actions/cache@v2
+        with:
+          # npm cache files are stored in `~/.npm` on Linux/macOS
+          path: /deplo-tools
+          key: deplo-tools-v1-${{{{ runner.os }}}}-${{{{ env.DEPLO_TOOL_CACHE_KEY }}}}
+      - name: Run main cli
+        run: deplo {} ci kick
+      - name: Setup ssh session to debug
+        if: ${{{{ failure() }}}}
+        uses: mxschmitt/action-tmate@v3
+        with:
+          sudo: false

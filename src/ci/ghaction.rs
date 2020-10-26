@@ -36,6 +36,7 @@ impl<'a, S: shell::Shell> module::Module for GhAction<S> {
                 let target_branches = config.common.release_targets
                     .values().map(|s| &**s)
                     .collect::<Vec<&str>>().join(",");
+                let cli_opts = config.ci_cli_options();
                 let mut env_inject_settings = vec!();
                 config.parse_dotenv(|k,v| {
                     (self as &dyn ci::CI).set_secret(k, v)?;
@@ -45,9 +46,9 @@ impl<'a, S: shell::Shell> module::Module for GhAction<S> {
                 fs::write(&deplo_yml_path, format!(
                     include_str!("../../rsc/ci/ghaction/deplo.yml.tmpl"), 
                     target_branches, target_branches, 
-                    config.common.deplo_image, config::DEPLO_GIT_HASH,
                     MultilineFormatString{ strings: &env_inject_settings, postfix: None },
-                    config.runtime.workdir.as_ref().unwrap_or(&"".to_string())
+                    config.common.deplo_image, config::DEPLO_GIT_HASH,
+                    cli_opts, cli_opts
                 ))?;
             }
         }

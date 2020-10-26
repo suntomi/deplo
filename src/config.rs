@@ -448,6 +448,12 @@ impl Config {
             None => None
         }
     }
+    pub fn ci_cli_options(&self) -> String {
+        let wdref = self.runtime.workdir.as_ref();
+        return format!("{}", 
+            if wdref.is_none() { "".to_string() } else { format!("-w {}", wdref.unwrap()) }
+        );
+    }
     pub fn parse_dotenv<F>(&self, mut cb: F) -> Result<(), Box<dyn Error>>
     where F: FnMut (&str, &str) -> Result<(), Box<dyn Error>> {
         let dotenv_file_content = match &self.runtime.dotenv_path {
