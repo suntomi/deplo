@@ -31,7 +31,7 @@ commands:
     steps:
       - run:
           name: store toolset hash to files
-          command: deplo info version -json | jq .toolset > /tmp/deplo-toolset.hash
+          command: deplo -w test/projects/dev info version -o json | jq -jr .toolset > /tmp/deplo-toolset.hash
       - restore_cache:
           keys:
             - deplo-tools-v1-{{ arch }}-{{ checksum "/tmp/deplo-toolset.hash" }}
