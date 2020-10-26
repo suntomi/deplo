@@ -36,7 +36,7 @@ lazy_static! {
             .short('d')
             .long("debug")
             .multiple(true)
-            .value_name("CATEGORY")
+            .value_name("KEY(=VALUE)")
             .help("Activate debug feature (vcs:deploy:tf:ci)\n\
             possible values: \n\
             skip_rebase (flag)\n\
