@@ -55,13 +55,19 @@ impl<S: shell::Shell, A: args::Args> command::Command<A> for Info<S> {
             shell: S::new(config)
         });
     }
-    fn run(&self, args: &A) -> Result<(), Box<dyn Error>> {
+    fn run(&self, _: &A) -> Result<(), Box<dyn Error>> {
+        Ok(())
+    }
+    fn prerun(&self, args: &A) -> Result<bool, Box<dyn Error>> {
         match args.subcommand() {
-            Some(("version", subargs)) => return self.version(&subargs),
+            Some(("version", subargs)) => {
+                self.version(&subargs)?;
+            },
             Some((name, _)) => return escalate!(args.error(
                 &format!("no such subcommand: [{}]", name) 
             )),
             None => return escalate!(args.error("no subcommand specified"))
         }
+        Ok(true)
     }
 }

@@ -33,4 +33,7 @@ impl<S: shell::Shell, A: args::Args> command::Command<A> for Init<S> {
 
         return Ok(())
     }
+    fn prerun(&self, args: &A) -> Result<bool, Box<dyn Error>> {
+        Ok(false)
+    }
 }

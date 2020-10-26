@@ -378,6 +378,9 @@ impl Config {
                 log::debug!("{} => {}", ep, v);
             }
         }
+        return Ok(c);
+    }
+    pub fn setup<'a, A: args::Args>(c: &'a mut Container, args: &A) -> Result<&'a Container, Box<dyn Error>> {
         // setup module cache
         Self::ensure_ci_init(&c)?;
         Self::ensure_cloud_init(&c)?;

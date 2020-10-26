@@ -8,6 +8,7 @@ use crate::util::escalate;
 pub trait Command<A: args::Args> {
     fn new(config: &config::Container) -> Result<Self, Box<dyn Error>> where Self : Sized;
     fn run(&self, args: &A) -> Result<(), Box<dyn Error>>;
+    fn prerun(&self, args: &A) -> Result<bool, Box<dyn Error>>;
 }
 
 #[derive(Debug)]

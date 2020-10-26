@@ -33,4 +33,7 @@ impl<S: shell::Shell, A: args::Args> command::Command<A> for Exec<S> {
             None => escalate!(args.error("no argument for exec"))
         }
     }
+    fn prerun(&self, _: &A) -> Result<bool, Box<dyn Error>> {
+        Ok(false)
+    }
 }

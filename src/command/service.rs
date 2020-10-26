@@ -95,4 +95,7 @@ impl<S: shell::Shell, A: args::Args> command::Command<A> for Service<S> {
             None => return escalate!(args.error("no subcommand specified"))
         }
     }
+    fn prerun(&self, _: &A) -> Result<bool, Box<dyn Error>> {
+        Ok(false)
+    }
 }

@@ -62,4 +62,7 @@ impl<'a, S: shell::Shell, A: args::Args> command::Command<A> for Infra<S> {
             None => return escalate!(args.error("no subcommand specified"))
         }
     }
+    fn prerun(&self, _: &A) -> Result<bool, Box<dyn Error>> {
+        Ok(false)
+    }
 }
