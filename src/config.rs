@@ -345,10 +345,10 @@ impl Config {
                     None => None
                 },
                 dryrun: args.occurence_of("dryrun") > 0,
-                debug: match args.values_of("debug") {
+                debug: match args.value_of("debug") {
                     Some(s) => {
                         let mut opts = hashmap!{};
-                        for v in s {
+                        for v in s.split(",") {
                             let sp: Vec<&str> = v.split("=").collect();
                             opts.insert(
                                 sp[0].to_string(),

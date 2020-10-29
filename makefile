@@ -58,5 +58,5 @@ sh:
 
 run:
 	DEPLO_CI_TYPE=$(CI) cargo run -- \
-		-w test/projects/dev -d skip_rebase -d force_set_release_target_to=dev $(OPT) -vvv \
+		-w test/projects/dev -d skip_rebase,force_set_release_target_to=dev $(OPT) -vvv \
 		$(CMD)

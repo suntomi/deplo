@@ -35,12 +35,12 @@ lazy_static! {
         .arg(Arg::with_name("debug")
             .short('d')
             .long("debug")
-            .multiple(true)
-            .value_name("KEY(=VALUE)")
-            .help("Activate debug feature (vcs:deploy:tf:ci)\n\
-            possible values: \n\
-            skip_rebase (flag)\n\
-            infra_debug (flag)\n\
+            .value_name("KEY(=VALUE),...")
+            .help("Activate debug feature\n\
+                possible settings(concat with comma when specify multiple values): \n\
+                skip_rebase=flag)\n\
+                infra_debug=(flag)\n\
+                force_set_release_target_to=(one of your release target)\n\
             ")
             .takes_value(true))
         .arg(Arg::with_name("verbosity")
