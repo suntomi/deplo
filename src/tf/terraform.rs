@@ -50,7 +50,10 @@ impl<S: shell::Shell> Terraform<S> {
     }
     fn dircp(src: &PathBuf, dest: &PathBuf) -> Result<(), Box<dyn Error>> {
         match fs::metadata(dest) {
-            Ok(_) => log::info!("infra setup scripts for {} already copied", dest.to_string_lossy()),
+            Ok(d) => log::info!(
+                "infra setup scripts for {}({:?}) already copied",
+                dest.to_string_lossy(), fs::canonicalize(&dest)
+            ),
             Err(_) => {
                 log::debug!("copy infra setup scripts: {}=>{}", src.to_string_lossy(), dest.to_string_lossy());
                 fs_extra::dir::copy(
@@ -67,15 +70,22 @@ impl<S: shell::Shell> Terraform<S> {
         }
         Ok(())
     }
-    fn write_file(dest: &PathBuf, contents: &str) -> Result<(), Box<dyn Error>> {
+    fn write_file<F>(dest: &PathBuf, make_contents: F) -> Result<bool, Box<dyn Error>> 
+    where F: Fn () -> Result<String, Box<dyn Error>> {
         match fs::metadata(dest) {
-            Ok(_) => log::debug!("infra config file {} already exists", dest.to_string_lossy()),
+            Ok(_) => {
+                log::debug!(
+                    "infra config file {}({:?}) already exists",
+                    dest.to_string_lossy(), fs::canonicalize(&dest)
+                );
+                Ok(false)
+            },
             Err(_) => {
                 log::debug!("create infra config file {}", dest.to_string_lossy());
-                fs::write(&dest, contents)?;
+                fs::write(&dest, &make_contents()?)?;
+                Ok(true)
             }
         }
-        Ok(())
     }
 }
 
@@ -90,34 +100,18 @@ impl<S: shell::Shell> module::Module for Terraform<S> {
                 Terraform::<S>::rmdir(&config.infra_code_dest_path(provider_code));
                 Terraform::<S>::rm(&config.infra_code_dest_root_path().join(format!("{}.tf", dir_name)));
             }
-            for (k, _) in &config.common.release_targets {
-                Terraform::<S>::rm(&config.endpoints_file_path(Some(k)));
-            }
             Terraform::<S>::rm(&config.infra_code_dest_root_path().join("tfvars"));
             Terraform::<S>::rm(&config.infra_code_dest_root_path().join("backend"));
             Terraform::<S>::rm(&config.infra_code_dest_root_path().join("main.tf"));
         }
 
-        // generate cloud provider specific settings
-        let mut tfvars_list = vec!(format!(
-            "\
-                resource_prefix = \"{}\"\n\
-                envs = [\"{}\"]\n\
-            ",
-            config.cloud.resource_prefix().as_ref().unwrap_or(&config.project_namespace().to_string()), 
-            config.common.release_targets
-                .keys().map(|s| &**s)
-                .collect::<Vec<&str>>().join(r#"",""#)
-        ));
+        // copy terraform scripts for each cloud provider 
         for (provider_code, cloud_config) in &cloud_provider_and_configs {
             let provider_name = provider_code.to_lowercase();
             Terraform::<S>::dircp(
                 &config.infra_code_source_path(&provider_name),
                 &config.infra_code_dest_path(&provider_name)
             )?;
-            let account_name = config.account_name_from_provider_config(cloud_config).unwrap();
-            let cloud = config.cloud_service(account_name)?;
-            tfvars_list.push(cloud.generate_terraformer_config("terraform.tfvars")?);
             // activate cloud provider initialization,
             // by renaming $provider_name/init.tf to $provider_name.tf of infra direactory root
             let tf_entry_file = &config.infra_code_dest_root_path().join(&format!("{}.tf", &provider_name));
@@ -129,24 +123,53 @@ impl<S: shell::Shell> module::Module for Terraform<S> {
                 )?
             }
         }
-
-        // create bucket which contains terraform state
-        let config::TerraformerConfig::Terraform {
-            backend:_,
-            backend_bucket,
-            resource_prefix:_
-        } = &config.cloud.terraformer;        
-        main_cloud.create_bucket(backend_bucket, &cloud::CreateBucketOption{ region: None })?;
-
+        log::debug!("generate settings files");
         // generate setting files
         let tfvars = config.infra_code_dest_root_path().join("tfvars");
-        Terraform::<S>::write_file(&tfvars, &tfvars_list.join("\n"))?;
         let backend_config = config.infra_code_dest_root_path().join("backend");
-        Terraform::<S>::write_file(&backend_config, 
-            &main_cloud.generate_terraformer_config("terraform.backend")?)?;
         let main_tf = config.infra_code_dest_root_path().join("main.tf");
-        Terraform::<S>::write_file(&main_tf, 
-            &main_cloud.generate_terraformer_config("terraform.main.tf")?)?;
+
+        if  // check any of these files are not exists
+            !fs::metadata(&tfvars).is_ok() ||
+            !fs::metadata(&backend_config).is_ok() ||
+            !fs::metadata(&main_tf).is_ok() 
+        {
+            // create bucket which contains terraform state
+            let config::TerraformerConfig::Terraform {
+                backend:_,
+                backend_bucket,
+                resource_prefix:_
+            } = &config.cloud.terraformer;        
+            main_cloud.create_bucket(backend_bucket, &cloud::CreateBucketOption{ region: None })?;
+
+            // generate setting files
+            // tfvars for each cloud provider setup scripts
+            Terraform::<S>::write_file(&tfvars, || {
+                // generate tfvars for each cloud provider, from config
+                let mut tfvars_list = vec!(format!(
+                    "\
+                        resource_prefix = \"{}\"\n\
+                        envs = [\"{}\"]\n\
+                    ",
+                    config.cloud.resource_prefix().as_ref().unwrap_or(&config.project_namespace().to_string()), 
+                    config.common.release_targets
+                        .keys().map(|s| &**s)
+                        .collect::<Vec<&str>>().join(r#"",""#)
+                ));
+                for (provider_code, cloud_config) in &cloud_provider_and_configs {
+                    let account_name = config.account_name_from_provider_config(cloud_config).unwrap();
+                    let cloud = config.cloud_service(account_name)?;
+                    tfvars_list.push(cloud.generate_terraformer_config("terraform.tfvars")?);
+                }
+                Ok(tfvars_list.join("\n"))
+            })?;
+            // backend bucket config for terraform state
+            Terraform::<S>::write_file(&backend_config, 
+                || { main_cloud.generate_terraformer_config("terraform.backend") })?;
+            // entry point of all terraform scripts
+            Terraform::<S>::write_file(&main_tf, 
+                || { main_cloud.generate_terraformer_config("terraform.main.tf") })?;
+        }
         Ok(())
     }    
 }

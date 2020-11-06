@@ -768,33 +768,39 @@ impl<'a, S: shell::Shell> module::Module for Gcp<S> {
         match std::env::var("GOOGLE_APPLICATION_CREDENTIALS") {
             Ok(_) => {},
             Err(std::env::VarError::NotPresent) => { 
-                if let config::CloudProviderConfig::GCP{
-                    key, project_id:_,dns_zone:_, region
-                } = &cloud_provider_config {
-                    fs::write("/tmp/gcp-secret.json", key)?;
-                    // setup env for apps which uses gcloud library
-                    std::env::set_var("GOOGLE_APPLICATION_CREDENTIALS", "/tmp/gcp-secret.json");
-                    std::env::set_var("GOOGLE_PROJECT", &self.gcp_project_id);
-                    // setup for gcloud cli 
-                    self.shell.eval(&format!(
-                        "echo '{}' | gcloud auth activate-service-account --key-file=-", key
-                    ), shell::no_env(), false)?;
-                    self.shell.eval(&format!(
-                        "gcloud config set project {} && \
-                        gcloud config set compute/region {} && \
-                        gcloud config set run/region {}",
-                        &self.gcp_project_id, region, region
-                    ), shell::no_env(), false)?;
-                    self.shell.exec(&vec!(
-                        "gcloud", "services", "enable", "cloudresourcemanager.googleapis.com"
-                    ), shell::no_env(), false)?;
-                } else {
-                    return escalate!(Box::new(cloud::CloudError{
-                        cause: format!(
-                            "should have GCP config but have: {}", 
-                            cloud_provider_config
-                        )
-                    }))                    
+                let credential_path = "/tmp/gcp-secret.json";
+                match fs::metadata(credential_path) {
+                    Ok(_) => log::debug!("gcp project already setting up"),
+                    Err(_) => {
+                        if let config::CloudProviderConfig::GCP{
+                            key, project_id:_,dns_zone:_, region
+                        } = &cloud_provider_config {
+                            // setup for gcloud cli 
+                            self.shell.eval(&format!(
+                                "echo '{}' | gcloud auth activate-service-account --key-file=-", key
+                            ), shell::no_env(), false)?;
+                            self.shell.eval(&format!(
+                                "gcloud config set project {} && \
+                                gcloud config set compute/region {} && \
+                                gcloud config set run/region {}",
+                                &self.gcp_project_id, region, region
+                            ), shell::no_env(), false)?;
+                            self.shell.exec(&vec!(
+                                "gcloud", "services", "enable", "cloudresourcemanager.googleapis.com"
+                            ), shell::no_env(), false)?;
+                            // setup env for apps which uses gcloud library
+                            fs::write("/tmp/gcp-secret.json", key)?;
+                            std::env::set_var("GOOGLE_APPLICATION_CREDENTIALS", "/tmp/gcp-secret.json");
+                            std::env::set_var("GOOGLE_PROJECT", &self.gcp_project_id);
+                        } else {
+                            return escalate!(Box::new(cloud::CloudError{
+                                cause: format!(
+                                    "should have GCP config but have: {}", 
+                                    cloud_provider_config
+                                )
+                            }))                    
+                        }
+                    }
                 }
             }
             Err(std::env::VarError::NotUnicode(f)) => {

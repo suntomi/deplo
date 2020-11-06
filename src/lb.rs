@@ -170,12 +170,12 @@ pub fn prepare(
     config: &config::Container
 ) -> Result<(), Box<dyn Error>> {
     let config_ref = config.borrow();
-    let root_domain = config_ref.root_domain()?;
     for (k, _) in &config_ref.common.release_targets {
         match fs::metadata(config_ref.endpoints_file_path(Some(k))) {
             Ok(_) => log::debug!("versions file for [{}] already created", k),
             Err(_) => {
                 log::info!("create versions file for [{}]", k);
+                let root_domain = config_ref.root_domain()?;
                 fs::create_dir_all(&config_ref.endpoints_path())?;
                 let ep = endpoints::Endpoints::new(k, &root_domain);
                 ep.save(config_ref.endpoints_file_path(Some(k)))?;
