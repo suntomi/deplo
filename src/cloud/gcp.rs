@@ -740,7 +740,7 @@ impl<'a, S: shell::Shell> module::Module for Gcp<S> {
             },
             Err(_) => {
                 // it takes sooooooo long time on container in docker mac
-                self.shell.eval(include_str!("../../rsc/install/gcloud.sh"), &hashmap!{
+                self.shell.eval(include_str!("../../rsc/scripts/install/gcloud.sh"), &hashmap!{
                     "CLOUDSDK_PYTHON_SITEPACKAGES" => "1",
                     "CLOUDSDK_VERSION" => "292.0.0",
                     "INSTALL_PATH" => &install_path
