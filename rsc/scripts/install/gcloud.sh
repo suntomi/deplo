@@ -9,8 +9,6 @@ echo "-----------------------------------------------"
 echo "install gcloud sdk"
 echo "CAUTION: it takes sooooooo long time on container in docker mac"
 echo "-----------------------------------------------"
-echo "install dependency"
-apt-get install -y python
 echo "download gcloud CLI..."
 cd /tmp
 if [ ! -e google-cloud-sdk.zip ]; then

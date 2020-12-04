@@ -1,10 +1,22 @@
 version: 2.1
 
+parameters:
+  osx:
+    type: boolean
+    default: false
+  command:
+    type: string
+    default: ''
+
 executors:
-  deplo:
+  deplo-main:
     working_directory: /workdir
     docker:
       - image: suntomi/deplo:latest
+  deplo-osx:
+    working_directory: ~/workdir
+    macos:
+      xcode: "12.1.0"
 
 commands:
   fetch_repo:
@@ -31,7 +43,9 @@ commands:
     steps:
       - run:
           name: store toolset hash to files
-          command: deplo -w test/projects/dev info version -o json | jq -jr .toolset > /tmp/deplo-toolset.hash
+          command: |
+            deplo -w test/projects/dev info version -o json | \
+              jq -jr .toolset > /tmp/deplo-toolset.hash
       - restore_cache:
           keys:
             - deplo-tools-v1-{{ arch }}-{{ checksum "/tmp/deplo-toolset.hash" }}
@@ -41,20 +55,59 @@ commands:
           key: deplo-tools-v1-{{ arch }}-{{ checksum "/tmp/deplo-toolset.hash" }}
           paths:
             - "/deplo-tools"
+  load_deplo_osx_tools:
+    steps:
+      - run:
+          name: store toolset hash to files
+          command: |
+            deplo -w test/projects/dev info version -o json | \
+              jq -jr .toolset > /tmp/deplo-toolset.hash
+      - restore_cache:
+          keys:
+            - deplo-tools-v1-{{ arch }}-{{ checksum "/tmp/deplo-toolset.hash" }}
+  save_deplo_osx_tools:
+    steps:
+      - save_cache:
+          key: deplo-tools-v1-{{ arch }}-{{ checksum "/tmp/deplo-toolset.hash" }}
+          paths:
+            - "/Applications/DeploTools"
 
 workflows:
   version: 2
-  main:
+  deplo-main:
+    when: 
+      equal: [false, << pipeline.parameters.osx >>]
     jobs:
-      - main
-          
+      - deplo-main
+  deplo-osx:
+    when:
+      and:
+        - equal: [true, << pipeline.parameters.osx >>]
+        - not: 
+          equal: ["", << pipeline.parameters.command >>]
+    jobs:
+      - deplo-osx:
+          command: << pipeline.parameters.command >>
+            
 jobs:
-  main:
-    executor: deplo
+  deplo-main:
+    executor: deplo-main
     steps:
       - fetch_repo
       - load_deplo_tools
       - run:
-          name: 'running CI jobs'
+          name: 'start deplo'
           command: deplo -w test/projects/dev ci kick
       - save_deplo_tools
+  deplo-osx:
+    executor: deplo-osx
+    parameters:
+      command:
+        type: string
+    steps:
+      - fetch_repo
+      - load_deplo_osx_tools
+      - run:
+          name: 'running deplo task'
+          command: << parameters.command >>
+      - save_deplo_osx_tools

@@ -1,4 +1,5 @@
 use std::fs;
+use std::path;
 use std::error::Error;
 use std::result::Result;
 
@@ -6,7 +7,7 @@ use crate::config;
 use crate::ci;
 use crate::shell;
 use crate::module;
-use crate::util::{escalate};
+use crate::util::{escalate,rm};
 
 pub struct Circle<S: shell::Shell = shell::Default> {
     pub config: config::Container,
@@ -21,7 +22,7 @@ impl<'a, S: shell::Shell> module::Module for Circle<S> {
         let circle_yml_path = format!("{}/.circleci/config.yml", repository_root);
         let cli_opts = config.ci_cli_options();
         if reinit {
-            fs::remove_file(&circle_yml_path)?;
+            rm(&circle_yml_path);
         }
         match fs::metadata(&circle_yml_path) {
             Ok(_) => log::debug!("config file for circle ci already created"),

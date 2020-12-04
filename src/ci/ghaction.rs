@@ -1,4 +1,5 @@
 use std::fs;
+use std::path;
 use std::error::Error;
 use std::result::Result;
 
@@ -8,7 +9,7 @@ use crate::config;
 use crate::ci;
 use crate::shell;
 use crate::module;
-use crate::util::{escalate,seal,MultilineFormatString};
+use crate::util::{escalate,seal,MultilineFormatString,rm};
 
 #[derive(Serialize, Deserialize)]
 struct RepositoryPublicKeyResponse {
@@ -27,8 +28,10 @@ impl<'a, S: shell::Shell> module::Module for GhAction<S> {
         let config = self.config.borrow();
         let repository_root = config.vcs_service()?.repository_root()?;
         let deplo_yml_path = format!("{}/.github/workflows/deplo.yml", repository_root);
+        let deplo_osx_yml_path = format!("{}/.github/workflows/deplo-osx.yml", repository_root);
         if reinit {
-            fs::remove_file(&deplo_yml_path)?;
+            rm(&deplo_yml_path);
+            rm(&deplo_osx_yml_path);
         }
         match fs::metadata(&deplo_yml_path) {
             Ok(_) => log::debug!("config file for github action already created"),
@@ -49,6 +52,12 @@ impl<'a, S: shell::Shell> module::Module for GhAction<S> {
                     MultilineFormatString{ strings: &env_inject_settings, postfix: None },
                     config.common.deplo_image, config::DEPLO_GIT_HASH,
                     cli_opts, cli_opts
+                ))?;
+                fs::write(&deplo_osx_yml_path, format!(
+                    include_str!("../../rsc/ci/ghaction/deplo-osx.yml.tmpl"), 
+                    MultilineFormatString{ strings: &env_inject_settings, postfix: None },
+                    config.common.deplo_image, config::DEPLO_GIT_HASH,
+                    cli_opts
                 ))?;
             }
         }

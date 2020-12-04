@@ -195,6 +195,71 @@ impl<'a> fmt::Display for MultilineFormatString<'a> {
     }
 }
 
+// fs
+use std::fs;
+use std::path::Path;
+pub fn rm<P: AsRef<Path>>(path: P) {
+    match fs::remove_file(path.as_ref()) {
+        Ok(_) => {},
+        Err(err) => { 
+            log::error!(
+                "fail to remove {} with {:?}", path.as_ref().to_string_lossy(), err
+            )
+        },
+    }
+}
+pub fn rmdir<P: AsRef<Path>>(path: P) {
+    match fs::remove_dir_all(path.as_ref()) {
+        Ok(_) => {},
+        Err(err) => { 
+            log::error!(
+                "fail to cleanup for reinitialize: fail to remove {} with {:?}",
+                path.as_ref().to_string_lossy(), err
+            )
+        },
+    }
+}
+pub fn dircp<P: AsRef<Path>>(src: P, dest: P) -> Result<(), Box<dyn Error>> {
+    match fs::metadata(dest.as_ref()) {
+        Ok(d) => log::info!(
+            "infra setup scripts for {}({:?}) already copied",
+            dest.as_ref().to_string_lossy(), fs::canonicalize(&dest)
+        ),
+        Err(_) => {
+            log::debug!("copy infra setup scripts: {}=>{}", 
+                src.as_ref().to_string_lossy(), dest.as_ref().to_string_lossy());
+            fs_extra::dir::copy(
+                src, dest,
+                &fs_extra::dir::CopyOptions{
+                    overwrite: true,
+                    skip_exist: false,
+                    buffer_size: 64 * 1024, //64kb
+                    copy_inside: true,
+                    depth: 0
+                }
+            )?;
+        }
+    }
+    Ok(())
+}
+pub fn write_file<F, P: AsRef<Path>>(dest: P, make_contents: F) -> Result<bool, Box<dyn Error>> 
+where F: Fn () -> Result<String, Box<dyn Error>> {
+    match fs::metadata(dest.as_ref()) {
+        Ok(_) => {
+            log::debug!(
+                "file {}({:?}) already exists",
+                dest.as_ref().to_string_lossy(), fs::canonicalize(&dest)
+            );
+            Ok(false)
+        },
+        Err(_) => {
+            log::debug!("create file {}", dest.as_ref().to_string_lossy());
+            fs::write(&dest, &make_contents()?)?;
+            Ok(true)
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

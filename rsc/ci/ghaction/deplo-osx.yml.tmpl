@@ -1,18 +1,14 @@
-name: Deplo CI/CD
+name: Deplo Task on OSX
 
-on: 
-  push:
-    branches: [{}]
-  pull_request:
-    branches: [{}]
-  
+on: repository_dispatch
+
 env:
   DEPLO_GHACTION_PULL_REQUEST_URL: ${{{{ github.event.pull_request.url }}}}
 {:>2}
 jobs:
   deplo:
     name: Running CI jobs
-    runs-on: ubuntu-latest
+    runs-on: macos-10.15
     container: {}:{}
     steps:
       - name: Checkout
@@ -26,10 +22,10 @@ jobs:
       - name: Cache runtime dependencies
         uses: actions/cache@v2
         with:
-          path: /deplo-tools
+          path: /Applications/DeploTools
           key: deplo-tools-v1-${{{{ runner.os }}}}-${{{{ env.DEPLO_TOOL_CACHE_KEY }}}}
-      - name: Run main cli
-        run: deplo {} ci kick
+      - name: Run comand
+        run: bash -c "$(echo \"${{ toJSON(github.event.client_payload) }}\" | jq -jr .command)"
       - name: Setup ssh session to debug
         if: ${{{{ failure() }}}}
         uses: mxschmitt/action-tmate@v3
