@@ -1,6 +1,11 @@
 name: Deplo Task on OSX
 
-on: repository_dispatch
+on: 
+  workflow_dispatch:
+    inputs:
+      command:
+        description: 'command to execute'
+        required: true
 
 env:
   DEPLO_GHACTION_PULL_REQUEST_URL: ${{{{ github.event.pull_request.url }}}}
