@@ -12,6 +12,7 @@ use indexmap::IndexMap;
 use crate::config;
 use crate::shell;
 use crate::cloud;
+use crate::builder;
 use crate::util::{escalate, envsubst, to_kv_ref};
 
 #[derive(Debug)]
@@ -64,7 +65,7 @@ pub enum DistributionConfig {
         bucket_name: String
     }
 }
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(tag = "type")]
 pub enum UnityPlatformBuildConfig {
     Android {
@@ -83,17 +84,15 @@ pub enum UnityPlatformBuildConfig {
         singing_provision_path: String,
     }
 }
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(tag = "type")]
-pub enum Builder {
+pub enum BuilderConfig {
     Unity {
         unity_version: String,
         serial_code: String,
         account: String,
         password: String,
         platform: UnityPlatformBuildConfig,
-    },
-    CreateReactApp {
     }
 }
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -138,7 +137,7 @@ enum Step {
         app_id: String,
         project_path: String,
         artifact_path: Option<String>,
-        builder: Builder,
+        builder: BuilderConfig,
     },
     Distribution {
         config: DistributionConfig,
@@ -175,6 +174,12 @@ impl Step {
                 let cloud = config.cloud_service(&plan.cloud_account_name())?;
                 return cloud.deploy_storage(cloud::StorageKind::Service{plan}, &copymap);
             },
+            Self::Build { org_name, app_name, app_id, project_path, artifact_path, builder } => {
+                return Ok(())
+            },
+            Self::Distribution { config } => {
+                return Ok(())
+            },
             _ => {
                 return Ok(())
             }
@@ -200,7 +205,7 @@ pub struct Plan {
 }
 impl Plan {
     fn make_unity_build_step(platform_build_config: UnityPlatformBuildConfig) -> Step {
-        Self::make_build_step(Builder::Unity {
+        Self::make_build_step(BuilderConfig::Unity {
             unity_version: "${DEPLO_BUILD_UNITY_VERSION}".to_string(),
             serial_code: "${DEPLO_BUILD_UNITY_SERIAL_CODE}".to_string(),
             account: "${DEPLO_BUILD_UNITY_ACCOUNT_EMAIL}".to_string(),
@@ -208,7 +213,7 @@ impl Plan {
             platform: platform_build_config
         })
     }
-    fn make_build_step(builder: Builder) -> Step {
+    fn make_build_step(builder: BuilderConfig) -> Step {
         return Step::Build {
             org_name: "${DEPLO_ORG_NAME}".to_string(),
             app_name: "${DEPLO_APP_NAME}".to_string(),
@@ -296,14 +301,6 @@ impl Plan {
                             Step::Distribution {
                                 config: DistributionConfig::Google {
                                     key: "${DEPLO_DISTRIBUTION_GOOGLE_ACCESS_KEY}".to_string()
-                                }
-                            }
-                        ),
-                        "cra" => vec!(
-                            Self::make_build_step(Builder::CreateReactApp{}),
-                            Step::Distribution {
-                                config: DistributionConfig::Storage {
-                                    bucket_name: "${DEPLO_DISTRIBUTION_STORAGE_BUCKET_NAME}".to_string()
                                 }
                             }
                         ),

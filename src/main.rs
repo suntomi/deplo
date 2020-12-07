@@ -15,6 +15,7 @@ mod ci;
 mod util;
 mod plan;
 mod module;
+mod builder;
 
 use log;
 
