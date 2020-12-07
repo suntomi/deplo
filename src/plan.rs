@@ -12,6 +12,7 @@ use indexmap::IndexMap;
 use crate::config;
 use crate::shell;
 use crate::cloud;
+use crate::builder;
 use crate::util::{escalate, envsubst, to_kv_ref};
 
 #[derive(Debug)]
@@ -64,7 +65,7 @@ pub enum DistributionConfig {
         bucket_name: String
     }
 }
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(tag = "type")]
 pub enum UnityPlatformBuildConfig {
     Android {
@@ -81,19 +82,21 @@ pub enum UnityPlatformBuildConfig {
         signing_plist_path: String,
         signing_p12_path: String,
         singing_provision_path: String,
+        automatic_sign: Option<bool>,
     }
 }
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(tag = "type")]
-pub enum Builder {
+pub enum BuilderConfig {
     Unity {
         unity_version: String,
+        version: String,
+        batch_method_name: Option<String>,
+        define: String,
         serial_code: String,
         account: String,
         password: String,
         platform: UnityPlatformBuildConfig,
-    },
-    CreateReactApp {
     }
 }
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -138,7 +141,7 @@ enum Step {
         app_id: String,
         project_path: String,
         artifact_path: Option<String>,
-        builder: Builder,
+        builder: BuilderConfig,
     },
     Distribution {
         config: DistributionConfig,
@@ -175,6 +178,17 @@ impl Step {
                 let cloud = config.cloud_service(&plan.cloud_account_name())?;
                 return cloud.deploy_storage(cloud::StorageKind::Service{plan}, &copymap);
             },
+            Self::Build { version, org_name, app_name, app_id, project_path, artifact_path, builder } => {
+                let builder = builder::factory(&plan.config, builder)?;
+                return builder.build(
+                    config.next_endpoint_version(&plan.service), version,
+                    org_name, app_name, app_id, 
+                    project_path, artifact_path.as_ref()
+                );
+            },
+            Self::Distribution { config } => {
+                return Ok(())
+            },
             _ => {
                 return Ok(())
             }
@@ -200,7 +214,7 @@ pub struct Plan {
 }
 impl Plan {
     fn make_unity_build_step(platform_build_config: UnityPlatformBuildConfig) -> Step {
-        Self::make_build_step(Builder::Unity {
+        Self::make_build_step(BuilderConfig::Unity {
             unity_version: "${DEPLO_BUILD_UNITY_VERSION}".to_string(),
             serial_code: "${DEPLO_BUILD_UNITY_SERIAL_CODE}".to_string(),
             account: "${DEPLO_BUILD_UNITY_ACCOUNT_EMAIL}".to_string(),
@@ -208,7 +222,7 @@ impl Plan {
             platform: platform_build_config
         })
     }
-    fn make_build_step(builder: Builder) -> Step {
+    fn make_build_step(builder: BuilderConfig) -> Step {
         return Step::Build {
             org_name: "${DEPLO_ORG_NAME}".to_string(),
             app_name: "${DEPLO_APP_NAME}".to_string(),
@@ -299,14 +313,6 @@ impl Plan {
                                 }
                             }
                         ),
-                        "cra" => vec!(
-                            Self::make_build_step(Builder::CreateReactApp{}),
-                            Step::Distribution {
-                                config: DistributionConfig::Storage {
-                                    bucket_name: "${DEPLO_DISTRIBUTION_STORAGE_BUCKET_NAME}".to_string()
-                                }
-                            }
-                        ),
                         _ => return escalate!(Box::new(DeployError {
                             cause: format!("invalid deploy type: {:?}", kind)
                         }))
@@ -390,13 +396,13 @@ impl Plan {
     pub fn deployment_kind(&self) -> Result<DeployKind, Box<dyn Error>> {
         for step in &self.data.deploy.steps {
             match step {
-                Step::Container { target:_, image:_, port:_, extra_endpoints:_, env:_, options:_ } => {
+                Step::Container {..} => {
                     return Ok(DeployKind::Service);
                 },
-                Step::Storage { copymap:_ } => {
+                Step::Storage {..} => {
                     return Ok(DeployKind::Storage);
                 },
-                Step::Distribution { config:_ } => {
+                Step::Distribution {..} => {
                     return Ok(DeployKind::Distribution);
                 },
                 _ => {}
@@ -420,8 +426,8 @@ impl Plan {
                     ports.entry("".to_string()).or_insert(Port{ port:*port, lb_name: None });
                     return Ok(Some(ports))
                 },
-                Step::Storage { copymap:_ } => return Ok(None),
-                Step::Distribution { config:_ } => return Ok(None),
+                Step::Storage {..} => return Ok(None),
+                Step::Distribution {..} => return Ok(None),
                 _ => {}
             }
         }
@@ -455,17 +461,17 @@ impl Plan {
             let pr = steps as *const _ == &self.data.pr.steps as *const _;
             for step in steps {
                 match step {
-                    Step::Container { target:_, image:_, port:_, extra_endpoints:_, env:_, options:_ } => {
+                    Step::Container {..} => {
                         if pr { return Err(err) }
                         if deployment_found { return Err(err) }
                         deployment_found = true;
                     },
-                    Step::Storage { copymap:_ } => {
+                    Step::Storage {..} => {
                         if pr { return Err(err) }
                         if deployment_found { return Err(err) }
                         deployment_found = true;
                     },
-                    Step::Distribution { config:_ } => {
+                    Step::Distribution {..} => {
                         if pr { return Err(err) }
                         if deployment_found { return Err(err) }
                         deployment_found = true;

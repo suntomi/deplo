@@ -3,7 +3,6 @@
 # install settings
 CLOUDSDK_PYTHON_SITEPACKAGES=1
 CLOUDSDK_VERSION="292.0.0"
-INSTALL_DIR=${DEPLO_TOOLS_PATH:-"/tmp/deplo-tools"}
 
 echo "-----------------------------------------------"
 echo "install gcloud sdk"
@@ -28,5 +27,5 @@ sed -i -- 's/\"disable_updater\": false/\"disable_updater\": true/g' google-clou
 
 echo "move destination path"
 rm google-cloud-sdk.zip
-mkdir -p $INSTALL_DIR
-mv google-cloud-sdk $INSTALL_DIR/cloud
+mkdir -p $DEPLO_TOOLS_PATH/cloud
+mv google-cloud-sdk $DEPLO_TOOLS_PATH/cloud

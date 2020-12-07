@@ -77,20 +77,20 @@ pub enum CloudProviderConfig {
 impl CloudProviderConfig {
     fn code(&self) -> String {
         match self {
-            Self::GCP{key:_,project_id:_,dns_zone:_,region:_} => "GCP".to_string(),
-            Self::AWS{key_id:_, secret_key:_,dns_zone:_,region:_} => "AWS".to_string(),
-            Self::ALI{key_id:_, secret_key:_,region:_} => "ALI".to_string(),
-            Self::AZR{subscription_id:_,tenant_id:_,region:_} => "AZR".to_string(),
+            Self::GCP{..} => "GCP".to_string(),
+            Self::AWS{..} => "AWS".to_string(),
+            Self::ALI{..} => "ALI".to_string(),
+            Self::AZR{..} => "AZR".to_string(),
         }
     }
 }
 impl fmt::Display for CloudProviderConfig {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::GCP{key:_,project_id:_,dns_zone:_,region:_} => write!(f, "gcp"),
-            Self::AWS{key_id:_, secret_key:_,dns_zone:_,region:_} => write!(f, "aws"),
-            Self::ALI{key_id:_, secret_key:_,region:_} => write!(f, "ali"),
-            Self::AZR{subscription_id:_,tenant_id:_,region:_} => write!(f, "azr"),
+            Self::GCP{..} => write!(f, "gcp"),
+            Self::AWS{..} => write!(f, "aws"),
+            Self::ALI{..} => write!(f, "ali"),
+            Self::AZR{..} => write!(f, "azr"),
         }
     }    
 }
@@ -115,8 +115,8 @@ pub enum CIConfig {
 impl CIConfig {
     pub fn type_matched(&self, t: &str) -> bool {
         match self {
-            Self::GhAction{key:_,account:_, action:_} => t == "GhAction",
-            Self::Circle{key:_, action:_} => t == "Circle"
+            Self::GhAction{..} => t == "GhAction",
+            Self::Circle{..} => t == "Circle"
         }
     }
     pub fn action<'a>(&'a self) -> &'a ActionConfig {
@@ -129,8 +129,8 @@ impl CIConfig {
 impl fmt::Display for CIConfig {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::GhAction{key:_,account:_, action:_} => write!(f, "github-action"),
-            Self::Circle{key:_, action:_} => write!(f, "circle"),
+            Self::GhAction{..} => write!(f, "github-action"),
+            Self::Circle{..} => write!(f, "circle"),
         }
     }    
 }
@@ -151,8 +151,8 @@ pub enum VCSConfig {
 impl fmt::Display for VCSConfig {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::Github{ email:_, account:_, key:_ } => write!(f, "github"),
-            Self::Gitlab{ email:_, account:_, key:_ } => write!(f, "gitlab"),
+            Self::Github{..} => write!(f, "github"),
+            Self::Gitlab{..} => write!(f, "gitlab"),
         }
     }    
 }

@@ -101,7 +101,7 @@ pub fn factory<'a>(
     account_name: &str
 ) -> Result<Box<dyn Cloud + 'a>, Box<dyn Error>> {
     match &config.borrow().cloud.account(account_name) {
-        config::CloudProviderConfig::GCP {key:_, project_id:_, dns_zone:_, region:_} => {
+        config::CloudProviderConfig::GCP {..} => {
             return factory_by::<gcp::Gcp>(config, account_name);
         },
         _ => return Err(Box::new(CloudError {

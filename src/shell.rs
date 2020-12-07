@@ -89,7 +89,7 @@ macro_rules! macro_ignore_exit_code {
         match $exec {
             Ok(_) => {},
             Err(err) => match err {
-                shell::ShellError::ExitStatus{ status:_, stderr:_, cmd:_ } => {},
+                shell::ShellError::ExitStatus{..} => {},
                 _ => return escalate!(Box::new(err))
             }
         }

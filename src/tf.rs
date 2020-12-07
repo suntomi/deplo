@@ -50,11 +50,7 @@ pub fn factory<'a>(
     config: &config::Container
 ) -> Result<Box<dyn Terraformer + 'a>, Box<dyn Error>> {
     match &config.borrow().cloud.terraformer {
-        config::TerraformerConfig::Terraform {
-            backend:_,
-            backend_bucket: _,
-            resource_prefix: _
-        } => {
+        config::TerraformerConfig::Terraform {..} => {
             return factory_by::<terraform::Terraform>(config);
         }
     };

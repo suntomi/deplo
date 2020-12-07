@@ -33,4 +33,3 @@ ENV HOME /
 
 # defiine on-demand command install path
 ENV DEPLO_TOOLS_PATH=/deplo-tools
-RUN mkdir -p ${DEPLO_TOOLS_PATH}/cloud

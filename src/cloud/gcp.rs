@@ -740,11 +740,7 @@ impl<'a, S: shell::Shell> module::Module for Gcp<S> {
             },
             Err(_) => {
                 // it takes sooooooo long time on container in docker mac
-                self.shell.eval(include_str!("../../rsc/scripts/install/gcloud.sh"), &hashmap!{
-                    "CLOUDSDK_PYTHON_SITEPACKAGES" => "1",
-                    "CLOUDSDK_VERSION" => "292.0.0",
-                    "INSTALL_PATH" => &install_path
-                }, false)?;
+                self.shell.eval(include_str!("../../rsc/scripts/install/gcloud.sh"), shell::no_env(), false)?;
             }
         };
         // link and modify path
@@ -855,11 +851,6 @@ impl<'a, S: shell::Shell> cloud::Cloud for Gcp<S> {
                 )));
             },
             "terraform.tfvars" => {
-                let config::TerraformerConfig::Terraform {
-                    backend: _,
-                    backend_bucket:_,
-                    resource_prefix:_,
-                } = &config.cloud.terraformer;
                 let root_domain_dns_name = self.root_domain_dns_name()?;
                 let zone_and_project = self.get_zone_and_project();
                 return Ok(
@@ -986,7 +977,7 @@ impl<'a, S: shell::Shell> cloud::Cloud for Gcp<S> {
             shell::no_env(), false) {
             Ok(_) => Ok(()),
             Err(err) => match err {
-                shell::ShellError::ExitStatus{ status:_, stderr:_, cmd:_ } => Ok(()),
+                shell::ShellError::ExitStatus{..} => Ok(()),
                 _ => return escalate!(Box::new(err))
             }            
         }
@@ -999,7 +990,7 @@ impl<'a, S: shell::Shell> cloud::Cloud for Gcp<S> {
             shell::no_env(), false) {
             Ok(_) => Ok(()),
             Err(err) => match err {
-                shell::ShellError::ExitStatus{ status:_, stderr:_, cmd:_  } => Ok(()),
+                shell::ShellError::ExitStatus{..} => Ok(()),
                 _ => return escalate!(Box::new(err))
             }            
         }

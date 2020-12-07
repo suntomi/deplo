@@ -1,5 +1,4 @@
 use std::fs;
-use std::path;
 use std::error::Error;
 use std::result::Result;
 
@@ -74,7 +73,7 @@ impl<'a, S: shell::Shell> ci::CI for Circle<S> {
         let config = self.config.borrow();
         let token = match &config.ci_config(&self.account_name) {
             config::CIConfig::Circle { key, action:_ } => { key },
-            config::CIConfig::GhAction{ account:_, key:_, action:_ } => { 
+            config::CIConfig::GhAction{..} => { 
                 return escalate!(Box::new(ci::CIError {
                     cause: "should have circle CI config but ghaction config provided".to_string()
                 }));

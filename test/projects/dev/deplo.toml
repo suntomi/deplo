@@ -47,7 +47,7 @@ type = "GhAction"
 account = "suntomi-bot"
 key = "${DEPLO_VCS_ACCESS_KEY}"
 [ci.github.action.pr]
-"client/.*" = "deplo service action client"
+"client/.*" = "deplo service action ios && deplo service action android"
 [ci.github.action.deploy]
 "api/.*" = "deplo service action api"
-"client/.*" = "deplo service action client"
+"client/.*" = "deplo service action ios && deplo service action android"

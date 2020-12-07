@@ -71,7 +71,7 @@ pub fn factory<'a>(
     config: &config::Container
 ) -> Result<Box<dyn VCS + 'a>, Box<dyn Error>> {
     match &config.borrow().vcs {
-        config::VCSConfig::Github { email:_,  account:_, key:_ } => {
+        config::VCSConfig::Github {..} => {
             return factory_by::<github::Github>(config);
         },
         _ => return Err(Box::new(VCSError {
