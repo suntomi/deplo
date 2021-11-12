@@ -1,177 +1,129 @@
-### setup
-- gcp
-  1. create project
-  2. create service account 
-    - Compute Admin
-    - Compute Network Admin
-    - DNS Admin
-    - Cloud Run Admin
-    - Storage Admin 
-    - Quota Admin
-  3. if dns is managed by other project, please give above service account to DNS Admin role for another project 
-    - ```dns_zone``` variable of ```[cloud.terraformer]``` section should be ```"${dns-zone-resource-name}@${project-belongs-to}"```.
-- aws
-  - TBD
-- ali
-  - TBD
+## Deplo
+deplo is set of command line tool that standardized CI/CD process. 
+we aim to provide environment of "write once, run anywhere" for CI/CD. 
+that is, if you build your CI/CD pipeline with deplo, you can run the pipeline not only in any major CI/CD service also on localhost.
+you can use multiple CI/CD at the same time too. also you have the ability to run pipeline with more fine-grained control.
+for instance, you can run specific pipeline only when some part of your repository changed. 
+this is extremely useful for running pipelines on monorepo (and we love modular monolith approach for building service with microservice architecture :D)
 
-### commands
-- ```deplo init```: init deplo project structure
-    - mkdir config.common.data_dir
-    - 
-- ```deplo exec```: execute 3rd party command (aws, aliyun, gcloud, terraform, etc.)
-- ```deplo ci```: run ci with configuration
-- ```deplo service```: service related subcommand
-    - ```deplo service create```: create service
-    - ```deplo service deploy```: run service
-- ```deplo infra```: control infrastructure
-    - ```deplo infra plan```: generate plan
-    - ```deplo infra apply```: apply generated plan
-    - ```deplo infra eval```: evaluate value of infrastructure  
 
-### basic usage
-```
-# create deplo.toml beforehand
-vi deplo.toml
+### Init project for deplo
 
-# initialize project. it initialized basic terraform script and apply them to your provider
-deplo init 
-
-# create service 
-deplo service create srv_a
-...
-deplo service create srv_z
-
-# set changeset handler for PR/deployment
-vi deplo.toml
+``` bash
+deplo init # will create Deplo.toml, .circleci configuration, .github/workflows configuration.
 ```
 
-### deplo datadir structure
-```
-- deplo
-    +- infra 
-        +- modules          # terraform modules
-    +- services             # service scripts
-    +- versions             # metadata json
-    +- resources            # data files like mobileprovision of iOS app
-```
 
-### deplo.toml example
+### Glossary
+- release environment
+A name given to a group of infrastructures that are prepared to run different revisions of the software you are developing. eg. dev/staging/production
+
+- release target
+branch name which is related with some CD target. for example, if your project always update release environment `dev` when branch `main` is updated, we call `main` is `release target branch` for environment `dev`.
+
+- development branch
+branches that each developper add actual commits as the output of their daily development.
+
+- changeset
+actual changes for the repository that development branch made. deplo uses file names of changeset as filtering which pipelines need to run.
+
+- deploy
+set of pipelines which runs when `release target branch` is updated. usually we understand these pipelines as `CD(Continuous Delivery) pipeline`.
+
+- integrate
+set of pipelines which runs when `development branch` is created or updated. usually we understand these pipelines as `CI(Continuous Integration) pipeline`.
+
+
+### Edit Deplo.toml
+- example
+
 ``` toml
 [common]
-deplo_image = "suntomi/deplo"
-data_dir = "meta"
-no_confirm_for_prod_deploy = false
+project_name = "deplo"
+data_dir = "deplo"
 
 [common.release_targets]
-dev = "master"
-stage = "stage/.*"
-prod = "release/.*"
-
-[cloud.provider]
-type = "GCP"
-key = "$DEPLO_CLOUD_ACCESS_KEY"
-
-[cloud.terraformer]
-type = "TerraformGCP"
-backend_bucket = "suntomi-publishing-generic-terraform"
-backend_bucket_prefix = "vault"
-dns_zone = "suntomi.dev"
-project_id = "suntomi"
-region = "asia-northeast1"
+# key value pair of `release environment` = `release target branch`
+dev = "main"
+prod = "release"
 
 [vcs]
+# account information of version control system
 type = "Github"
-email = "suntomi.inc@gmail.com"
+email = "${DEPLO_VCS_ACCESS_EMAIL}"
 account = "suntomi-bot"
-key = "$DEPLO_VCS_ACCESS_KEY"
-    
-[ci]
-type = "Circle"
-key = "$DEPLO_CI_ACCESS_KEY"
+key = "${DEPLO_VCS_ACCESS_KEY}"
 
-[client]
-org_name = "suntomi, inc."
-app_name = "dungeon of zoars"
-app_code = "doz"
-app_id = "dev.suntomi.app.doz"
-client_project_path = "./client"
-artifact_path = "/tmp/doz"
-version_config_path = "./meta/client/version"
+# you can use multiple ci service with [ci.$account_name]
+[ci.default]
+type = "CircleCI"
+key = "${DEPLO_CI_ACCESS_KEY}"
 
-unity_path = "/Applications/Unity_2018.4.2f1/Unity.app/Contents/MacOS/Unity"
-serial_code = "$DEPLO_CLIENT_UNITY_SERIAL_CODE"
-account = "dokyogames@gmail.com"
-password = "$DEPLO_CLIENT_UNITY_ACCOUNT_PASSWORD"
+# `integrate` contains key value pair of `pipeline name` = `[patterns, container, command, cache]`
+# changeset is detected as following rule
+# if the branch has related pull/merge request, git diff ${base branch}...${head branch} is used.
+# if the branch does not have any pull/merge request, deplo try to find nearest ancestor branch with the same manner as
+# https://stackoverflow.com/a/17843908/1982282, and use it as base branch.
+[ci.default.action.integrate.data]
+# regexp of file name pattern appeared in changeset. any of regexp matched then this pipeline will be invoked
+patterns = ["data/.*"]
+# invoking command for CI
+command = """
+bash ./tools/data/build.sh
+""" 
+# cache setting. multiple cache can be set. execution order is: 
+# restore: array appearing order
+# save: reverse array appearing order
+[[ci.default.action.integrate.data.cache]]
+# keys for using find cache entry. some directive like {{ .Branch }} can be used but because it is CI service specific,
+# consulting each CI service document for detail. 
+# (I hope each CI service provider offers cache feature with command line, then it will be more standardized)
+restore_keys = ["source-v1-{{ .Branch }}-{{ .Revision }}", "source-v1-{{ .Branch }}-", "source-v1-"]
+save_key = "source-v1-{{ .Branch }}-{{ .Revision }}"
+path = "data/caches"
 
-[[client.platform_build_configs]]
-type = "Android"
-keystore_password = "$DEPLO_CLIENT_ANDROID_KEYSTORE_PASSWORD"
-keyalias_name = "doz"
-keyalias_password = "$DEPLO_CLIENT_ANDROID_KEYALIAS_PASSWORD"
-keystore_path = "./meta/client/Android/user.keystore"
-use_expansion_file = false      
+# key value pair of `pipeline name` = `[patterns, container, command, cache]`
+# where patterns, container, command, cache are same as above
+#
+# changeset is detected by git diff HEAD^
+[ci.default.action.deploy.data]
+patterns = ["data/.*"]
+container = "suntomi/aws-cli"
+command = """
+bash ./tools/data/upload.sh
+"""
+[[ci.default.action.deploy.data.cache]]
+restore_keys = ["source-v1-{{ .Branch }}-{{ .Revision }}", "source-v1-{{ .Branch }}-", "source-v1-"]
+# omitting save_key or path refrains from saving cache
 
-[[client.platform_build_configs]]
-type = "IOS"
-team_id = "$DEPLO_CLIENT_IOS_TEAM_ID"
-numeric_team_id = "$DEPLO_CLIENT_IOS_NUMERIC_TEAM_ID"
-signing_password = "$DEPLO_CLIENT_IOS_P12_SIGNING_PASSWORD"
-signing_plist_path = "./meta/client/iOS/suntomi_distribution.plist"
-signing_p12_path = "./meta/client/iOS/suntomi_distribution.p12"
-singing_provision_path = "./meta/client/iOS/suntomi_doz_appstore.mobileprovision"
+# non-default CI setting example
+[ci.github]
+type = "GhAction"
+account = "suntomi-bot"
+key = "${DEPLO_VCS_ACCESS_KEY}"
 
-[[client.stores]]
-type = "Apple"
-account = "suntomi.inc@gmail.com"
-password = "$DEPLO_CLIENT_STORE_APPLE_PASSWORD"
+[ci.github.action.integrate.client]
+patterns = ["client/.*"]
+command = """
+bash ./tools/client/build.sh
+"""
 
-[[client.stores]]
-type = "Google"
-key = "$DEPLO_CLIENT_STORE_GOOGLE_ACCESS_KEY"
-
-[deploy.pr]
-"./master-data/.*" = "deplo service deploy master-data-build"
-
-[deploy.release]
-"./client/.*" = "deplo service deploy client"
-
-
+[ci.github.action.deploy.client]
+patterns = ["client/.*"]
+command = """
+bash ./tools/client/upload.sh
+"""
 ```
 
 
+### Secrets
+deplo supports .env file to inject sensitive values as environment variable. when run on localhost, .env is present in repository
+and deplo automatically load and use values. you can upload .env contents as CI service's secret by using `deplo ci setenv`.
 
-### service.toml example
-``` toml
-# using bash script to get ull control over deployment.
-[script]
-code = '''
-make -C server build IMAGE=$IMAGE
-# some script using specific command like gcloud/aws/aliyun/...
-docker tag $IMAGE $DEPLO_CONTAINER_REPOSITORY_URL:$DEPLO_PROJECT_ID-game-server #>/dev/null 2>&1 
-# you can wrap with deplo exec to dryrun
-deplo exec gcloud compute instance-templates create-with-container ...
-'''
-code = "./path/to/deploy/script.sh"
 
-[script.env]
-IMAGE=doz/server
+### Running deplo
 
-# or specified by parameter
-[container.image]
-id = "doz/server"
-build = "make -C server build"
-
-[container.deploy]
-type = "instance" # or "serverless"
-ports = [8080, 11111]
-
-[container.deploy.env]  
-GOOGLE_APPLICATION_CREDENTIALS = "/path/to/cred.json"
-
-[container.deploy.command_options]
-"max-num-replicas" = 64
-"min-num-replicas" = 1
-"target-cpu-utilization" = 0.5
-flags = ["scale-based-on-cpu"]
+``` bash
+deplo ci kick # uses Deplo.toml of current directory
+deplo ci kick "data/.*" # run pipeline that related with specific changeset
 ```

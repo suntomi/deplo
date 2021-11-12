@@ -1,3 +1,0 @@
-bucket = "deplo-terraform-state"
-prefix = "deplo"
-credentials = "/tmp/gcp-secret.json"

@@ -39,38 +39,6 @@ commands:
           key: deplo-git-v1-{{ arch }}-{{ .Branch }}-{{ .Revision }}
           paths:
             - ".git"
-  load_deplo_tools:
-    steps:
-      - run:
-          name: store toolset hash to files
-          command: |
-            deplo -w test/projects/dev info version -o json | \
-              jq -jr .toolset > /tmp/deplo-toolset.hash
-      - restore_cache:
-          keys:
-            - deplo-tools-v1-{{ arch }}-{{ checksum "/tmp/deplo-toolset.hash" }}
-  save_deplo_tools:
-    steps:
-      - save_cache:
-          key: deplo-tools-v1-{{ arch }}-{{ checksum "/tmp/deplo-toolset.hash" }}
-          paths:
-            - "/deplo-tools"
-  load_deplo_osx_tools:
-    steps:
-      - run:
-          name: store toolset hash to files
-          command: |
-            deplo -w test/projects/dev info version -o json | \
-              jq -jr .toolset > /tmp/deplo-toolset.hash
-      - restore_cache:
-          keys:
-            - deplo-tools-v1-{{ arch }}-{{ checksum "/tmp/deplo-toolset.hash" }}
-  save_deplo_osx_tools:
-    steps:
-      - save_cache:
-          key: deplo-tools-v1-{{ arch }}-{{ checksum "/tmp/deplo-toolset.hash" }}
-          paths:
-            - "/Applications/DeploTools"
 
 workflows:
   version: 2
@@ -94,11 +62,9 @@ jobs:
     executor: deplo-main
     steps:
       - fetch_repo
-      - load_deplo_tools
       - run:
-          name: 'start deplo'
-          command: deplo -w test/projects/dev ci kick
-      - save_deplo_tools
+          name: start deplo
+          command: deplo ci kick
   deplo-osx:
     executor: deplo-osx
     parameters:
@@ -106,8 +72,6 @@ jobs:
         type: string
     steps:
       - fetch_repo
-      - load_deplo_osx_tools
       - run:
           name: 'running deplo task'
           command: << parameters.command >>
-      - save_deplo_osx_tools

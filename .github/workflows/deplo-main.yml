@@ -1,12 +1,11 @@
-name: Deplo Task on OSX
+name: Deplo CI/CD
 
 on: 
-  workflow_dispatch:
-    inputs:
-      command:
-        description: 'command to execute'
-        required: true
-
+  push:
+    branches: [master,release]
+  pull_request:
+    branches: [master,release]
+  
 env:
   DEPLO_GHACTION_PULL_REQUEST_URL: ${{ github.event.pull_request.url }}
   DEPLO_ORG_NAME: ${{ secrets.DEPLO_ORG_NAME }}
@@ -34,7 +33,7 @@ env:
 jobs:
   deplo:
     name: Running CI jobs
-    runs-on: macos-10.15
+    runs-on: ubuntu-latest
     container: suntomi/deplo:latest
     steps:
       - name: Checkout
@@ -43,8 +42,8 @@ jobs:
           lfs: true
           # deplo needs to refer previous commit of current HEAD to determine diff
           fetch-depth: 2
-      - name: Run comand
-        run: bash -c "$(echo \"${ toJSON(github.event.client_payload) }\" | jq -jr .command)"
+      - name: start deplo
+        run: deplo ci kick
       - name: Setup ssh session to debug
         if: ${{ failure() }}
         uses: mxschmitt/action-tmate@v3
