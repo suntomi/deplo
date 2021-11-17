@@ -21,8 +21,8 @@ impl<S: shell::Shell> CI<S> {
         let (account_name, ci_config) = config.ci_config_by_env();
         let ci = config.ci_service(account_name)?;
         let action_config = match ci.pull_request_url()? {
-            Some(_) => &ci_config.action().integrate,
-            None => &ci_config.action().deploy,
+            Some(_) => &ci_config.workflow().integrate,
+            None => &ci_config.workflow().deploy,
         };
         let vcs = config.vcs_service()?;
         if action_config.len() > 0 {
@@ -37,7 +37,7 @@ impl<S: shell::Shell> CI<S> {
                 }
             }
         } else {
-            // if no action config and has some plan files, deplo try to find diff files
+            // if no workflow config and has some plan files, deplo try to find diff files
             // which path is start with the same name of plan file's basename
             // eg. if we have plan file which name is 'foo.toml', deplo check diff with 
             // pattern 'foo/.*' and if diff exists, call 'deplo service adtion foo'
@@ -48,7 +48,7 @@ impl<S: shell::Shell> CI<S> {
                         log::debug!("plan file path:{},stem:{}", path.to_string_lossy(), stem);
                         match std::env::current_dir()?.join(&stem).join(".*").to_str() {
                             Some(p) => if vcs.changed(&vec!(p)) {
-                                self.shell.eval(&format!("deplo service action {}", stem), shell::no_env(), false)?;
+                                self.shell.eval(&format!("deplo service workflow {}", stem), shell::no_env(), false)?;
                             },
                             None => {}
                         }

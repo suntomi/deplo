@@ -18,8 +18,9 @@ impl<'a, S: shell::Shell> module::Module for CircleCI<S> {
     fn prepare(&self, reinit: bool) -> Result<(), Box<dyn Error>> {
         let config = self.config.borrow();
         let repository_root = config.vcs_service()?.repository_root()?;
+        let mut workflows = config.select_workflows("GhAction")?;
+        workflows.insert(0, "main".to_string());
         let circle_yml_path = format!("{}/.circleci/config.yml", repository_root);
-        let cli_opts = config.ci_cli_options();
         if reinit {
             rm(&circle_yml_path);
         }
@@ -31,9 +32,7 @@ impl<'a, S: shell::Shell> module::Module for CircleCI<S> {
                 fs::create_dir_all(&format!("{}/.circleci", repository_root))?;
                 fs::write(&circle_yml_path, format!(
                     include_str!("../../rsc/ci/circleci/config.yml.tmpl"),
-                    config.common.deplo_image,
-                    config::DEPLO_GIT_HASH, 
-                    cli_opts, cli_opts
+                    image = config.common.deplo_image, tag = config::DEPLO_GIT_HASH
                 ))?;
             }
         }
@@ -72,7 +71,7 @@ impl<'a, S: shell::Shell> ci::CI for CircleCI<S> {
     fn set_secret(&self, key: &str, val: &str) -> Result<(), Box<dyn Error>> {
         let config = self.config.borrow();
         let token = match &config.ci_config(&self.account_name) {
-            config::CIConfig::CircleCI { key, action:_ } => { key },
+            config::CIConfig::CircleCI { key, workflow:_ } => { key },
             config::CIConfig::GhAction{..} => { 
                 return escalate!(Box::new(ci::CIError {
                     cause: "should have circleci CI config but ghaction config provided".to_string()

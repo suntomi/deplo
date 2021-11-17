@@ -26,38 +26,45 @@ impl<'a, S: shell::Shell> module::Module for GhAction<S> {
     fn prepare(&self, reinit: bool) -> Result<(), Box<dyn Error>> {
         let config = self.config.borrow();
         let repository_root = config.vcs_service()?.repository_root()?;
-        let deplo_yml_path = format!("{}/.github/workflows/deplo.yml", repository_root);
-        let deplo_osx_yml_path = format!("{}/.github/workflows/deplo-osx.yml", repository_root);
+        let mut workflows = config.select_workflows("GhAction")?;
+        workflows.insert(0, "main".to_string());
         if reinit {
-            rm(&deplo_yml_path);
-            rm(&deplo_osx_yml_path);
+            for (name, _) in workflows {
+                let wf_yml_path = format!("{}/.github/workflows/deplo-{}.yml", repository_root, name);
+                rm(&wf_yml_path);
+            }
         }
-        match fs::metadata(&deplo_yml_path) {
-            Ok(_) => log::debug!("config file for github action already created"),
-            Err(_) => {
-                let target_branches = config.common.release_targets
-                    .values().map(|s| &**s)
-                    .collect::<Vec<&str>>().join(",");
-                let cli_opts = config.ci_cli_options();
-                let mut env_inject_settings = vec!();
-                config.parse_dotenv(|k,v| {
-                    (self as &dyn ci::CI).set_secret(k, v)?;
-                    Ok(env_inject_settings.push(format!("{}: ${{{{ secrets.{} }}}}", k, k)))
-                })?;
-                fs::create_dir_all(&format!("{}/.github/workflows", repository_root))?;
-                fs::write(&deplo_yml_path, format!(
-                    include_str!("../../rsc/ci/ghaction/deplo.yml.tmpl"), 
-                    target_branches, target_branches, 
-                    MultilineFormatString{ strings: &env_inject_settings, postfix: None },
-                    config.common.deplo_image, config::DEPLO_GIT_HASH,
-                    cli_opts, cli_opts
-                ))?;
-                fs::write(&deplo_osx_yml_path, format!(
-                    include_str!("../../rsc/ci/ghaction/deplo-osx.yml.tmpl"), 
-                    MultilineFormatString{ strings: &env_inject_settings, postfix: None },
-                    config.common.deplo_image, config::DEPLO_GIT_HASH,
-                    cli_opts
-                ))?;
+        for (name, wf) in workflows {
+            let wf_yml_path = format!("{}/.github/workflows/deplo-{}.yml", repository_root, name);            
+            match fs::metadata(&wf_yml_path) {
+                Ok(_) => log::debug!("config file for github workflow already created at {}". wf_yml_path),
+                Err(_) => {
+                    let target_branches = config.common.release_targets
+                        .values().map(|s| &**s)
+                        .collect::<Vec<&str>>().join(",");
+                    let mut env_inject_settings = vec!();
+                    config.parse_dotenv(|k,v| {
+                        (self as &dyn ci::CI).set_secret(k, v)?;
+                        Ok(env_inject_settings.push(format!("{}: ${{{{ secrets.{} }}}}", k, k)))
+                    })?;
+                    fs::create_dir_all(&format!("{}/.github/workflows", repository_root))?;
+                    fs::write(&deplo_yml_path, 
+                        if name == "main" { 
+                            format!(
+                                include_str!("../../res/ci/ghaction/main.yml.tmpl")
+                                target_branches, target_branches, 
+                                MultilineFormatString{ strings: &env_inject_settings, postfix: None },
+                                config.common.deplo_image, config::DEPLO_GIT_HASH
+                            )
+                        } else {
+                            format!(
+                                include_str!("../../res/ci/ghaction/workflow.yml.tmpl"), name,
+                                MultilineFormatString{ strings: &env_inject_settings, postfix: None },
+                                config.common.deplo_image, config::DEPLO_GIT_HASH
+                            )
+                        }
+                    )?;
+                }
             }
         }
         Ok(())
@@ -95,7 +102,7 @@ impl<S: shell::Shell> ci::CI for GhAction<S> {
     fn set_secret(&self, key: &str, _: &str) -> Result<(), Box<dyn Error>> {
         let config = self.config.borrow();
         let token = match &config.ci_config(&self.account_name) {
-            config::CIConfig::GhAction { account:_, key, action:_ } => { key },
+            config::CIConfig::GhAction { account:_, key, workflow:_ } => { key },
             config::CIConfig::CircleCI{..} => { 
                 return escalate!(Box::new(ci::CIError {
                     cause: "should have ghaction CI config but circleci config provided".to_string()

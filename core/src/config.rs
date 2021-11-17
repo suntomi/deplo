@@ -41,21 +41,39 @@ impl Error for ConfigError {
 }
 
 #[derive(Serialize, Deserialize)]
-pub struct ActionConfig {
-    pub integrate: HashMap<String, String>,
-    pub deploy: HashMap<String, String>,
+pub struct Cache {
+    pub restore_keys: Vec<String>,
+    pub save_key: String,
+    pub path: String
 }
 #[derive(Serialize, Deserialize)]
+pub struct Job {
+    pub patterns: Vec<String>,
+    pub machine: String,
+    pub container: String,
+    pub command: String,
+    pub workdir: Option<String>,
+    pub caches: Vec<Cache>,
+    pub depends_on: Vec<String>,
+}
+#[derive(Serialize, Deserialize)]
+pub struct WorkflowConfig {
+    pub checkout_opts: Map<String, String>
+    // we call workflow as combination of jobs
+    pub integrate: HashMap<String, Job>,
+    pub deploy: HashMap<String, Job>,
+}
+#[derive(Serialize, Deseriaslize)]
 #[serde(tag = "type")]
 pub enum CIConfig {
     GhAction {
         account: String,
         key: String,
-        action: ActionConfig
+        workflow: WorkflowConfig
     },
     CircleCI {
         key: String,
-        action: ActionConfig
+        workflow: WorkflowConfig
     }
 }
 impl CIConfig {
@@ -65,17 +83,17 @@ impl CIConfig {
             Self::CircleCI{..} => t == "CircleCI"
         }
     }
-    pub fn action<'a>(&'a self) -> &'a ActionConfig {
+    pub fn workflow<'a>(&'a self) -> &'a WorkflowConfig {
         match &self {
-            Self::GhAction{key:_,account:_, action} => action,
-            Self::CircleCI{key:_, action} => action
+            Self::GhAction{key:_,account:_, workflow} => workflow,
+            Self::CircleCI{key:_, workflow} => workflow
         }
     }
 }
 impl fmt::Display for CIConfig {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::GhAction{..} => write!(f, "github-action"),
+            Self::GhAction{..} => write!(f, "ghaction"),
             Self::CircleCI{..} => write!(f, "circleci"),
         }
     }    
@@ -411,5 +429,13 @@ impl Config {
     }
     pub fn should_silent_shell_exec(&self) -> bool {
         return self.runtime.verbosity <= 0;
+    }
+    pub fn select_workflows<'a>(&self, ci: &str) -> Option<&'a Map<String, Workflow>> {
+        for (_, ci_config) in self.ci.iter() {
+            if ci_config.type_matched(ci) {
+                return Some(ci_config.workflow());
+            }
+        }
+        return None;
     }
 }

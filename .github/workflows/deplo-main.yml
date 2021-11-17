@@ -46,6 +46,6 @@ jobs:
         run: deplo ci kick
       - name: Setup ssh session to debug
         if: ${{ failure() }}
-        uses: mxschmitt/action-tmate@v3
+        uses: mxschmitt/workflow-tmate@v3
         with:
           sudo: false

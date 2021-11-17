@@ -1,0 +1,3 @@
+[submodule "tools/sandbox"]
+	path = tools/sandbox
+	url = https://github.com/suntomi/deplo-sandbox

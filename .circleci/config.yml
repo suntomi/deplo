@@ -1,13 +1,5 @@
 version: 2.1
 
-parameters:
-  osx:
-    type: boolean
-    default: false
-  command:
-    type: string
-    default: ''
-
 executors:
   deplo-main:
     working_directory: /workdir
@@ -43,8 +35,6 @@ commands:
 workflows:
   version: 2
   deplo-main:
-    when: 
-      equal: [false, << pipeline.parameters.osx >>]
     jobs:
       - deplo-main
   deplo-osx:

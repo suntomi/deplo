@@ -1,0 +1,45 @@
+version: 2.1
+
+executors:
+  deplo:
+    working_directory: /workdir
+    docker:
+      - image: {image}:{tag}
+{executors:>2}
+
+commands:
+  fetch_repo:
+    steps:
+      - restore_cache:
+          keys:
+            - deplo-git-v1-{{{{ .Branch }}}}-{{{{ .Revision }}}}
+            - deplo-git-v1-{{{{ .Branch }}}}-
+            - deplo-git-v1-
+  setup_repo:
+    steps:
+      - fetch_repo
+      - checkout
+      - run:
+          name: 'maintain git'
+          command: git gc
+      - save_cache:
+          key: deplo-git-v1-{{{{ .Branch }}}}-{{{{ .Revision }}}}
+          paths:
+            - ".git"
+
+workflows:
+  version: 2
+  deplo-main:
+    jobs:
+      - main
+{workflows:>2}
+
+jobs:
+  main:
+    executor: deplo
+    steps:
+      - setup_repo
+      - run:
+          name: 'running CI jobs'
+          command: deplo ci kick
+{jobs:>2}

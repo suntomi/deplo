@@ -69,13 +69,13 @@ lazy_static! {
                     App::new("version")
                         .about("get deplo version")
                         .arg(Arg::new("output")
-                        .help("output format")
-                        .short('o')
-                        .long("output")
-                        .possible_values(
-                            &["plain", "json"]
-                        )
-                        .required(false))
+                            .help("output format")
+                            .short('o')
+                            .long("output")
+                            .possible_values(
+                                &["plain", "json"]
+                            )
+                            .required(false))
                 )
         )
         .subcommand(
@@ -92,6 +92,14 @@ lazy_static! {
                 .subcommand(
                     App::new("kick")
                     .about("entry point of CI/CD process")
+                )
+                .subcommand(
+                    App::new("workflow")
+                    .about("run specific workflow in Deplo.toml. used for auto generated CI/CD settings")
+                    .arg(Arg::new("name")
+                        .help("workflow name")
+                        .index(1)
+                        .required(true))
                 )
                 .subcommand(
                     App::new("setenv")
