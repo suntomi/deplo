@@ -1,13 +1,19 @@
-{name}:
-  name: Running Deplo workflow {name}
-  runs-on: {machine}
-  {container}
-  steps:
-{checkout:>4}
-    - name: Start workflow
-      run: deplo ci workflow {name}
-    - name: Setup ssh session to debug
-      if: ${{{{ failure() }}}}
-      uses: mxschmitt/action-tmate@v3
-      with:
-        sudo: false
+name: Deplo Job {name}
+on: workflow_dispatch
+env:
+  DEPLO_GHACTION_PULL_REQUEST_URL: ${{{{ github.event.pull_request.url }}}}
+{secrets:>2}
+jobs:
+  {name}:
+    name: Running job {name}
+    runs-on: {machine}
+    {container}
+    steps:
+{checkout:>6}
+      - name: Start workflow
+        run: deplo ci workflow {name}
+      - name: Setup ssh session to debug
+        if: ${{{{ failure() }}}}
+        uses: mxschmitt/action-tmate@v3
+        with:
+          sudo: {sudo}

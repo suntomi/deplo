@@ -1,14 +1,19 @@
-- name: Cache repository
+- name: Fetch repository cache
+  id: fetch-repository-cache
   uses: actions/cache@v2
   with:
     path: .git
-    key: deplo-git-v1-${{ runner.os }}-${{ github.ref }}-${{ github.sha }}
+    key: deplo-git-v1-{name}-${{{{ github.sha }}}}
     restore-keys:
-      deplo-git-v1-${{ runner.os }}-${{ github.ref }}-${{ github.sha }}
-      deplo-git-v1-${{ runner.os }}-${{ github.ref }}-
-      deplo-git-v1-${{ runner.os }}-
+      deplo-git-v1-{name}-
+      deplo-git-v1-
 - name: Checkout
-  if: steps.cache-repository.outputs.cache-hit != 'true'
+  if: steps.fetch-repository-cache.outputs.cache-hit != 'true'
   uses: actions/checkout@v2
   with:
+    # deplo needs to refer previous commit of current HEAD to determine diff
+    fetch-depth: 2
 {checkout_opts:>4}
+- name: Restore repository from cache
+  if: steps.fetch-repository-cache.outputs.cache-hit == 'true'
+  run: git reset --hard HEAD

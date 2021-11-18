@@ -2,6 +2,7 @@ use std::fs;
 use std::error::Error;
 use std::result::Result;
 
+use glob::glob;
 use serde::{Deserialize, Serialize};
 
 use crate::config;
@@ -22,48 +23,90 @@ pub struct GhAction<S: shell::Shell = shell::Default> {
     pub shell: S,
 }
 
+impl<S: shell::Shell> GhAction<S> {
+    fn generate_container_setting<'a>(&self, container: &'a Option<String>) -> String {
+        let container = container.map_or_else(|| "", |v| format!("container: {}", v);
+        format!("{}/{}", self.account_name, container)
+    }
+    fn generate_checkout_steps<'a>(&self, job_name: &'a str, options: &'a Option<HashMap<String, String>>>) -> String {
+        let checkout_opts = options.map_or_else(
+            || "", 
+            |v| v.iter().map(|(k,v)| {
+                return if k == "lfs" {
+                    format!("{}: {}", k, v))
+                } else {
+                    log::warn!("deplo only support lfs options for github action checkout but {}({}) is specified", k, v)
+                    ""
+                }
+            }).collect::<Vec<String>>().join("\n")
+        );
+        format!(
+            include_str!("../../res/ci/ghaction/checkout.yml.tmpl"), 
+            name = job_name, checkout_opts = checkout_opts,
+        )
+    }
+}
+
 impl<'a, S: shell::Shell> module::Module for GhAction<S> {
     fn prepare(&self, reinit: bool) -> Result<(), Box<dyn Error>> {
         let config = self.config.borrow();
         let repository_root = config.vcs_service()?.repository_root()?;
-        let mut workflows = config.select_workflows("GhAction")?;
-        workflows.insert(0, "main".to_string());
+        let mut jobs = config.select_jobs("GhAction")?;
+        let create_main = config.is_main_ci("GhAction");
+        if create_main {
+            jobs["main"] = None
+        }
+        fs::create_dir_all(&format!("{}/.github/workflows", repository_root))?;
         if reinit {
-            for (name, _) in workflows {
-                let wf_yml_path = format!("{}/.github/workflows/deplo-{}.yml", repository_root, name);
-                rm(&wf_yml_path);
+            for (name, _) in &jobs {
+                let yml_path = format!("{}/.github/workflows/deplo-{}.yml", repository_root, name);
+                rm(&yml_path);
             }
         }
-        for (name, wf) in workflows {
-            let wf_yml_path = format!("{}/.github/workflows/deplo-{}.yml", repository_root, name);            
-            match fs::metadata(&wf_yml_path) {
-                Ok(_) => log::debug!("config file for github workflow already created at {}". wf_yml_path),
+        // first time or reinit 
+        let secrets_need_init = glob(format!("{}/.github/workflows/deplo-*.yml", repository_root)).next().is_none();
+        // get target branch
+        let target_branches = config.common.release_targets
+            .values().map(|s| &**s)
+            .collect::<Vec<&str>>().join(",");
+        // inject secrets from dotenv file
+        let mut secrets = vec!();
+        config.parse_dotenv(|k,v| {
+            if secrets_need_init {
+                (self as &dyn ci::CI).set_secret(k, v)?;
+            }
+            Ok(secrets.push(format!("{}: ${{{{ secrets.{} }}}}", k, k)))
+        })?;
+        for (name, job) in &jobs {
+            let yml_path = format!("{}/.github/workflows/deplo-{}.yml", repository_root, name);            
+            match fs::metadata(&yml_path) {
+                Ok(_) => log::debug!("config file for github workflow already created at {}". yml_path),
                 Err(_) => {
-                    let target_branches = config.common.release_targets
-                        .values().map(|s| &**s)
-                        .collect::<Vec<&str>>().join(",");
-                    let mut env_inject_settings = vec!();
-                    config.parse_dotenv(|k,v| {
-                        (self as &dyn ci::CI).set_secret(k, v)?;
-                        Ok(env_inject_settings.push(format!("{}: ${{{{ secrets.{} }}}}", k, k)))
+                    fs::write(&deplo_yml_path, if name == "main" { 
+                        format!(
+                            include_str!("../../res/ci/ghaction/main.yml.tmpl"), target = target_branches, 
+                            secrets = MultilineFormatString{ strings: &secrets, postfix: None },
+                            image = config.common.deplo_image, tag = config::DEPLO_GIT_HASH
+                            checkout = MultilineFormatString{
+                                strings: self.generate_checkout_steps(name, None),
+                                postfix: None
+                            }
+                        )
+                    } else {
+                        let j = job.unwrap(); //should exists always
+                        format!(
+                            include_str!("../../res/ci/ghaction/job.yml.tmpl"), name = name,
+                            image = config.common.deplo_image, tag = config::DEPLO_GIT_HASH,
+                            secrets = MultilineFormatString{ strings: &secrets, postfix: None },
+                            machine = j.machine.unwarp_or_else("ubuntu-latest"),
+                            container = self.generate_container_setting(j.container),
+                            checkout = MultilineFormatString{
+                                strings: self.generate_checkout_steps(name, j.checkout_opts),
+                                postfix: None
+                            },
+                            sudo = j.container.is_some()
+                        )
                     })?;
-                    fs::create_dir_all(&format!("{}/.github/workflows", repository_root))?;
-                    fs::write(&deplo_yml_path, 
-                        if name == "main" { 
-                            format!(
-                                include_str!("../../res/ci/ghaction/main.yml.tmpl")
-                                target_branches, target_branches, 
-                                MultilineFormatString{ strings: &env_inject_settings, postfix: None },
-                                config.common.deplo_image, config::DEPLO_GIT_HASH
-                            )
-                        } else {
-                            format!(
-                                include_str!("../../res/ci/ghaction/workflow.yml.tmpl"), name,
-                                MultilineFormatString{ strings: &env_inject_settings, postfix: None },
-                                config.common.deplo_image, config::DEPLO_GIT_HASH
-                            )
-                        }
-                    )?;
                 }
             }
         }

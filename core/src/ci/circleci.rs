@@ -14,28 +14,78 @@ pub struct CircleCI<S: shell::Shell = shell::Default> {
     pub shell: S,
 }
 
+impl<S: shell::Shell> CircleCI<S> {
+    fn generate_executor_setting<'a>(&self, job: &'a Option<config::Job>) -> String {
+        return match job.container {
+            Some(ref c) => format!("image: {}", c)
+            None => match job.machine {
+                Some(ref m) => format!("machine: {}", m),
+                None => panic!("either machine or container need to specify for job")
+            }
+        }
+    }
+    fn generate_workdir_setting<'a>(&self, job: &'a Option<config::Job>) -> String {
+        return job.workdir.map_or_else(|| "".to_string(), |wd| format!("workdir: {}", wd));
+    }
+    fn generate_checkout_steps(&self, job_name: &str, options: &Option<HashMap<String, String>>>) -> String {
+        let mut checkout_opts = options.map_or_else(
+            || Vec::new(), 
+            |v| v.iter().map(|(k,v)| {
+                return if k == "lfs" {
+                    format!("{}: {}", k, v))
+                } else {
+                    log::warn!("deplo only support lfs options for github action checkout but {}({}) is specified", k, v)
+                    ""
+                }
+            }).collect::<Vec<String>>()
+        );
+        checkout_opts.push(format!("name: {}", job_name));
+        format!(
+            include_str!("../../res/ci/circleci/checkout.yml.tmpl"), 
+            checkout_opts = checkout_opts.join("\n"),
+        )
+    }
+}
+
 impl<'a, S: shell::Shell> module::Module for CircleCI<S> {
     fn prepare(&self, reinit: bool) -> Result<(), Box<dyn Error>> {
         let config = self.config.borrow();
         let repository_root = config.vcs_service()?.repository_root()?;
-        let mut workflows = config.select_workflows("GhAction")?;
-        workflows.insert(0, "main".to_string());
+        let jobs = config.select_jobs("GhAction")?;
+        let create_main = config.is_main_ci("GhAction");
         let circle_yml_path = format!("{}/.circleci/config.yml", repository_root);
+        fs::create_dir_all(&format!("{}/.circleci", repository_root))?;
         if reinit {
             rm(&circle_yml_path);
         }
         match fs::metadata(&circle_yml_path) {
             Ok(_) => log::debug!("config file for circleci ci already created"),
             Err(_) => {
+                // generate job entries
+                let mut job_descs = Vec::new();
+                for (name, job) in jobs {
+                    job_descs.push(format!(
+                        include_str!("../../res/ci/circleci/job.yml.tmpl"),
+                        name = name, machine_or_container = self.generate_executor_setting(job),
+                        workdir = self.generate_workdir_setting(job),
+                        checkout = self.generate_checkout_steps(name, job.options),
+                    ))
+                }
                 // sync dotenv secrets with ci system
                 config.parse_dotenv(|k,v| (self as &dyn ci::CI).set_secret(k, v))?;
-                fs::create_dir_all(&format!("{}/.circleci", repository_root))?;
                 fs::write(&circle_yml_path, format!(
                     include_str!("../../rsc/ci/circleci/config.yml.tmpl"),
-                    image = config.common.deplo_image, tag = config::DEPLO_GIT_HASH
+                    image = config.common.deplo_image, tag = config::DEPLO_GIT_HASH,
+                    workflow = if create_main {
+                        include_str!("../../res/ci/circleci/workflow.yml.tmpl")
+                    } else {
+                        ""
+                    },
+                    jobs = job_descs.join("\n")
                 ))?;
             }
         }
+        //TODO: we need to provide the way to embed user defined circle ci configuration with our generated config.yml
         Ok(())
     }
 }

@@ -198,24 +198,26 @@ impl<'a> fmt::Display for MultilineFormatString<'a> {
 // fs
 use std::fs;
 use std::path::Path;
-pub fn rm<P: AsRef<Path>>(path: P) {
+pub fn rm<P: AsRef<Path>>(path: P) -> bool {
     match fs::remove_file(path.as_ref()) {
-        Ok(_) => {},
+        Ok(_) => return true,
         Err(err) => { 
             log::error!(
                 "fail to remove {} with {:?}", path.as_ref().to_string_lossy(), err
             )
+            return false
         },
     }
 }
-pub fn rmdir<P: AsRef<Path>>(path: P) {
+pub fn rmdir<P: AsRef<Path>>(path: P) -> bool {
     match fs::remove_dir_all(path.as_ref()) {
-        Ok(_) => {},
+        Ok(_) => return true,
         Err(err) => { 
             log::error!(
                 "fail to cleanup for reinitialize: fail to remove {} with {:?}",
                 path.as_ref().to_string_lossy(), err
             )
+            return alse
         },
     }
 }

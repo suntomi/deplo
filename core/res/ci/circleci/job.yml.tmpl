@@ -1,15 +1,8 @@
-push-tx:
-  parameters:
-  executor: {name}
+{name}:
+  name: Running job {name}
+{machine_or_container:>2}
+{workdir:>2}
   steps:
-    - name: Checkout
-      uses: actions/checkout@v2
-      with:
-{checkout_opts:>8}
+{checkout:>4}
     - name: Start workflow
-      run: deplo ci workflow {name} '${{ toJSON(github.event.client_payload) }}'
-    - name: Setup ssh session to debug
-      if: ${{{{ failure() }}}}
-      uses: mxschmitt/action-tmate@v3
-      with:
-        sudo: false
+      run: deplo ci workflow {name}

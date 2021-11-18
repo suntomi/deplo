@@ -5,41 +5,55 @@ executors:
     working_directory: /workdir
     docker:
       - image: {image}:{tag}
-{executors:>2}
 
 commands:
   fetch_repo:
+    parameters:
+      name: 
+        type: string
+        default: ""
     steps:
       - restore_cache:
           keys:
-            - deplo-git-v1-{{{{ .Branch }}}}-{{{{ .Revision }}}}
-            - deplo-git-v1-{{{{ .Branch }}}}-
+            - deplo-git-v1-<< parameters.name >>-{{{{ .Revision }}}}
+            - deplo-git-v1-<< parameters.name >>-
             - deplo-git-v1-
   setup_repo:
+    parameters:
+      lfs: 
+        type: string
+        default: ""
+      name: 
+        type: string
+        default: ""
     steps:
       - fetch_repo
+        name: << parameters.name >>
       - checkout
       - run:
           name: 'maintain git'
           command: git gc
+      - run:
+          name: 'pull files in git LFS if required'
+          command: |
+            if [ ! -z "<< parameters.lfs >>" ]; then
+              git lfs pull
+            else
+              echo "skip git LFS checkout"
+            fi
       - save_cache:
-          key: deplo-git-v1-{{{{ .Branch }}}}-{{{{ .Revision }}}}
+          key: deplo-git-v1-<< parameters.name >>-{{{{ .Revision }}}}
           paths:
             - ".git"
 
-workflows:
-  version: 2
-  deplo-main:
-    jobs:
-      - main
-{workflows:>2}
+{workflows}
 
 jobs:
-  main:
+  deplo-main:
     executor: deplo
     steps:
       - setup_repo
       - run:
-          name: 'running CI jobs'
+          name: 'Start Deplo'
           command: deplo ci kick
 {jobs:>2}

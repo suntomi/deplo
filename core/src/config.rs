@@ -48,41 +48,43 @@ pub struct Cache {
 }
 #[derive(Serialize, Deserialize)]
 pub struct Job {
+    pub account: String,
     pub patterns: Vec<String>,
-    pub machine: String,
-    pub container: String,
+    pub machine: Option<String>,
+    pub container: Option<String>,
     pub command: String,
     pub workdir: Option<String>,
+    pub checkout: Option<HashMap<String, String>>,
     pub caches: Vec<Cache>,
     pub depends_on: Vec<String>,
 }
 #[derive(Serialize, Deserialize)]
 pub struct WorkflowConfig {
-    pub checkout_opts: Map<String, String>
     // we call workflow as combination of jobs
     pub integrate: HashMap<String, Job>,
     pub deploy: HashMap<String, Job>,
 }
 #[derive(Serialize, Deseriaslize)]
 #[serde(tag = "type")]
-pub enum CIConfig {
+pub enum CIAccount {
     GhAction {
         account: String,
         key: String,
-        workflow: WorkflowConfig
     },
     CircleCI {
         key: String,
-        workflow: WorkflowConfig
     }
 }
-impl CIConfig {
+impl CIAccount {
     pub fn type_matched(&self, t: &str) -> bool {
-        match self {
-            Self::GhAction{..} => t == "GhAction",
-            Self::CircleCI{..} => t == "CircleCI"
-        }
+        return t == self.type_as_str()
     }
+    pub fn type_as_str(&self) -> &'static str {
+        match self {
+            Self::GhAction{..} => "GhAction",
+            Self::CircleCI{..} => "CircleCI"
+        }
+    } 
     pub fn workflow<'a>(&'a self) -> &'a WorkflowConfig {
         match &self {
             Self::GhAction{key:_,account:_, workflow} => workflow,
@@ -90,13 +92,18 @@ impl CIConfig {
         }
     }
 }
-impl fmt::Display for CIConfig {
+impl fmt::Display for CIAccount {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::GhAction{..} => write!(f, "ghaction"),
             Self::CircleCI{..} => write!(f, "circleci"),
         }
     }    
+}
+#[derive(Serialize, Deserialize)]
+pub struct CIConfig {
+    pub accounts: Map<String, CIAccount>,
+    pub workflow: WorkflowConfig,
 }
 #[derive(Serialize, Deserialize)]
 #[serde(tag = "type")]
@@ -146,7 +153,7 @@ pub struct Config {
     pub runtime: RuntimeConfig,
     pub common: CommonConfig,
     pub vcs: VCSConfig,
-    pub ci: HashMap<String, CIConfig>,
+    pub ci: CIConfig,
 
     // object cache
     #[serde(skip)]
@@ -352,14 +359,14 @@ impl Config {
         })
     }
     pub fn ci_config<'a>(&'a self, account_name: &str) -> &'a CIConfig {
-        match &self.ci.get(account_name) {
+        match &self.ci.accounts.get(account_name) {
             Some(c) => c,
             None => panic!("provider corresponding to account {} does not exist", account_name)
         }
     }
     pub fn ci_config_by_env<'b>(&'b self) -> (&'b str, &'b CIConfig) {
         let t = Self::ci_type().unwrap();
-        for (account_name, config) in &self.ci {
+        for (account_name, config) in &self.ci.accounts {
             if config.type_matched(&t) { return (account_name, config) }
         }
         panic!("ci_type = {}, but does not have corresponding CI Config", t)
@@ -384,10 +391,8 @@ impl Config {
         let mut caches = hashmap!{};
         {
             let immc = c.borrow();
-            // default always should exist
-            let _ = &immc.ci.get("default").unwrap();
-            for (account, _) in &immc.ci {
-                caches.insert(account.to_string(), ci::factory(c, account)?);
+            for (account_name, _) in &immc.ci.accounts {
+                caches.insert(account_name.to_string(), ci::factory(c, account_name)?);
             }
         }
         {
@@ -430,12 +435,19 @@ impl Config {
     pub fn should_silent_shell_exec(&self) -> bool {
         return self.runtime.verbosity <= 0;
     }
-    pub fn select_workflows<'a>(&self, ci: &str) -> Option<&'a Map<String, Workflow>> {
-        for (_, ci_config) in self.ci.iter() {
-            if ci_config.type_matched(ci) {
-                return Some(ci_config.workflow());
+    pub fn select_jobs<'a>(&self, ci_type: &str) -> Map<String, Option<&'a Job>> {
+        let mut related_jobs = hashmap!{}
+        for jobs in vec![&self.ci.workflow.integrate, &self.ci.workflow.deploy]
+            for (name, job) in jobs {
+                if job.account.type_matched(ci_type) {
+                    related_jobs[name] = Some(job)
+                }
             }
         }
-        return None;
+        return related_jobs
+    }
+    pub fn is_main_ci(&self, ci_type: &str) -> bool {
+        // default always should exist
+        return self.ci.accounts.get("default").unwrap().type_matched(ci_type);
     }
 }
