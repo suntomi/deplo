@@ -2,15 +2,10 @@ use std::error::Error;
 use std::fmt;
 
 use core::config;
-use core::util::escalate;
 
 use crate::args;
 use crate::command;
-
-const VERSION: &'static str = env!("CARGO_PKG_VERSION");
-pub fn version() -> &'static str {
-    VERSION
-}
+use crate::util::escalate;
 
 #[derive(Debug)]
 pub struct CliError {

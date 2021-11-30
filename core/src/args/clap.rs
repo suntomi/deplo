@@ -4,7 +4,7 @@ use std::result::Result;
 use clap::{App, Arg, ArgMatches};
 
 use crate::args;
-use crate::cli;
+use crate::config;
 
 pub struct Clap<'a> {
     pub hierarchy: Vec<&'a str>,
@@ -13,54 +13,54 @@ pub struct Clap<'a> {
     
 lazy_static! {
     static ref G_ROOT_MATCH: ArgMatches = App::new("deplo")
-        .version(cli::version())
+        .version(config::DEPLO_VERSION)
         .author("umegaya <iyatomi@gmail.com>")
         .about("write once, run anywhere for CI/CD")
-        .arg(Arg::with_name("config")
+        .arg(Arg::new("config")
             .short('c')
             .long("config")
             .value_name("FILE")
-            .help("Sets a custom config file")
+            .about("Sets a custom config file")
             .takes_value(true))
-        .arg(Arg::with_name("debug")
+        .arg(Arg::new("debug")
             .short('d')
             .long("debug")
             .value_name("KEY(=VALUE),...")
-            .help("Activate debug feature\n\
+            .about("Activate debug feature\n\
                 possible settings(concat with comma when specify multiple values): \n\
                 skip_rebase=flag)\n\
                 infra_debug=(flag)\n\
                 force_set_release_target_to=(one of your release target)\n\
             ")
             .takes_value(true))
-        .arg(Arg::with_name("dotenv")
+        .arg(Arg::new("dotenv")
             .short('e')
             .long("dotenv")
             .value_name(".ENV FILE OR TEXT")
-            .help("specify .env file path or .env file content directly")
+            .about("specify .env file path or .env file content directly")
             .takes_value(true))
-        .arg(Arg::with_name("dryrun")
+        .arg(Arg::new("dryrun")
             .long("dryrun")
-            .help("Prints executed commands instead of invoking them")
+            .about("Prints executed commands instead of invoking them")
             .takes_value(false))
         .arg(Arg::new("reinit")
             .long("reinit")
-            .help("initialize component")
+            .about("initialize component")
             .required(false)
             .takes_value(true)
             .possible_values(
                 &["tf", "cloud", "ci", "vcs", "all"]
             ))            
-        .arg(Arg::with_name("verbosity")
+        .arg(Arg::new("verbosity")
             .short('v')
             .long("verbose")
-            .multiple(true)
-            .help("Sets the level of verbosity")
+            .multiple_values(true)
+            .about("Sets the level of verbosity")
             .takes_value(false))
-        .arg(Arg::with_name("workdir")
+        .arg(Arg::new("workdir")
             .short('w')
             .long("workdir")
-            .help("Sets working directory of entire process")
+            .about("Sets working directory of entire process")
             .takes_value(true))
         .subcommand(
             App::new("info")
@@ -69,7 +69,7 @@ lazy_static! {
                     App::new("version")
                         .about("get deplo version")
                         .arg(Arg::new("output")
-                            .help("output format")
+                            .about("output format")
                             .short('o')
                             .long("output")
                             .possible_values(
@@ -94,10 +94,10 @@ lazy_static! {
                     .about("entry point of CI/CD process")
                 )
                 .subcommand(
-                    App::new("workflow")
-                    .about("run specific workflow in Deplo.toml. used for auto generated CI/CD settings")
+                    App::new("run")
+                    .about("run specific job in Deplo.toml. used for auto generated CI/CD settings")
                     .arg(Arg::new("name")
-                        .help("workflow name")
+                        .about("job name")
                         .index(1)
                         .required(true))
                 )

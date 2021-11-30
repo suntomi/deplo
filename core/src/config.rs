@@ -12,8 +12,6 @@ use simple_logger;
 use serde::{Deserialize, Serialize};
 use dotenv::dotenv;
 use maplit::hashmap;
-use indexmap::IndexMap;
-use glob::glob;
 use regex::Regex;
 
 use crate::args;
@@ -23,7 +21,6 @@ use crate::util::{escalate,envsubst};
 
 pub const DEPLO_GIT_HASH: &'static str = env!("GIT_HASH");
 pub const DEPLO_VERSION: &'static str = "0.1.0";
-pub const DEPLO_TOOLSET_HASH: &'static str = env!("TOOLSET_HASH");
 
 #[derive(Debug)]
 pub struct ConfigError {
@@ -64,7 +61,7 @@ pub struct WorkflowConfig {
     pub integrate: HashMap<String, Job>,
     pub deploy: HashMap<String, Job>,
 }
-#[derive(Serialize, Deseriaslize)]
+#[derive(Serialize, Deserialize)]
 #[serde(tag = "type")]
 pub enum CIAccount {
     GhAction {
@@ -85,12 +82,6 @@ impl CIAccount {
             Self::CircleCI{..} => "CircleCI"
         }
     } 
-    pub fn workflow<'a>(&'a self) -> &'a WorkflowConfig {
-        match &self {
-            Self::GhAction{key:_,account:_, workflow} => workflow,
-            Self::CircleCI{key:_, workflow} => workflow
-        }
-    }
 }
 impl fmt::Display for CIAccount {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -102,8 +93,13 @@ impl fmt::Display for CIAccount {
 }
 #[derive(Serialize, Deserialize)]
 pub struct CIConfig {
-    pub accounts: Map<String, CIAccount>,
+    pub accounts: HashMap<String, CIAccount>,
     pub workflow: WorkflowConfig,
+}
+impl CIConfig {
+    pub fn workflow<'a>(&'a self) -> &'a WorkflowConfig {
+        return &self.workflow;
+    }
 }
 #[derive(Serialize, Deserialize)]
 #[serde(tag = "type")]
@@ -358,16 +354,16 @@ impl Config {
             cause: "you don't set CI type and deplo cannot detect it. abort".to_string()
         })
     }
-    pub fn ci_config<'a>(&'a self, account_name: &str) -> &'a CIConfig {
+    pub fn ci_config<'a>(&'a self, account_name: &str) -> &'a CIAccount {
         match &self.ci.accounts.get(account_name) {
             Some(c) => c,
             None => panic!("provider corresponding to account {} does not exist", account_name)
         }
     }
-    pub fn ci_config_by_env<'b>(&'b self) -> (&'b str, &'b CIConfig) {
+    pub fn ci_config_by_env<'b>(&'b self) -> (&'b str, &'b CIAccount) {
         let t = Self::ci_type().unwrap();
-        for (account_name, config) in &self.ci.accounts {
-            if config.type_matched(&t) { return (account_name, config) }
+        for (account_name, account) in &self.ci.accounts {
+            if account.type_matched(&t) { return (account_name, account) }
         }
         panic!("ci_type = {}, but does not have corresponding CI Config", t)
     }
@@ -378,6 +374,9 @@ impl Config {
                 cause: format!("no ci service for {}", account_name) 
             }))
         } 
+    }
+    pub fn ci_workflow<'a>(&'a self) -> &'a WorkflowConfig {
+        return &self.ci.workflow
     }
     fn prepare_ci(c: &Container, reinit: bool) -> Result<(), Box<dyn Error>> {
         let c = c.ptr.borrow();
@@ -423,7 +422,7 @@ impl Config {
         } else {
             escalate!(Box::new(ConfigError{ 
                 cause: format!("no vcs service") 
-            }))            
+            }))
         }
     }
     pub fn has_debug_option(&self, name: &str) -> bool {
@@ -435,12 +434,17 @@ impl Config {
     pub fn should_silent_shell_exec(&self) -> bool {
         return self.runtime.verbosity <= 0;
     }
-    pub fn select_jobs<'a>(&self, ci_type: &str) -> Map<String, Option<&'a Job>> {
-        let mut related_jobs = hashmap!{}
-        for jobs in vec![&self.ci.workflow.integrate, &self.ci.workflow.deploy]
+    pub fn enumerate_jobs<'a>(&'a self) -> HashMap<String, &'a Job> {
+        let mut related_jobs: HashMap<String, &'a Job> = hashmap!{};
+        for (kind, jobs) in hashmap!{
+            "integrate" => &self.ci.workflow.integrate,
+            "deploy" => &self.ci.workflow.deploy
+        } {
             for (name, job) in jobs {
-                if job.account.type_matched(ci_type) {
-                    related_jobs[name] = Some(job)
+                let key = format!("{}-{}", kind, name);
+                match related_jobs.insert(key, job) {
+                    None => {},
+                    Some(_) => panic!("duplicated job name for {}: {}", kind, name)
                 }
             }
         }

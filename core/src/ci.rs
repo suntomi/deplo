@@ -48,10 +48,10 @@ pub fn factory<'a>(
     account_name: &str
 ) -> Result<Box<dyn CI + 'a>, Box<dyn Error>> {
     match &config.borrow().ci_config(account_name) {
-        config::CIConfig::GhAction {..} => {
+        config::CIAccount::GhAction {..} => {
             return factory_by::<ghaction::GhAction>(config, account_name);
         },
-        config::CIConfig::CircleCI {..} => {
+        config::CIAccount::CircleCI {..} => {
             return factory_by::<circleci::CircleCI>(config, account_name);
         }
     };

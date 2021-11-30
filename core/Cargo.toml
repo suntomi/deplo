@@ -8,8 +8,10 @@ edition = "2021"
 [dependencies]
 base64 = "0.13.0"
 blake2 = "0.9.2"
+clap = { git = "https://github.com/clap-rs/clap/" }
 dotenv = { git = "https://github.com/umegaya/dotenv/" }
 indexmap = { version = "1.7.0", features = ["serde-1"] }
+fs_extra = "1.2.0"
 glob = "0.3.0"
 lazy_static = "1.4.0"
 log = "0.4.8"

@@ -1,12 +1,13 @@
 use std::fs;
 use std::error::Error;
 use std::result::Result;
+use std::collections::{HashMap};
 
 use crate::config;
 use crate::ci;
 use crate::shell;
 use crate::module;
-use crate::util::{escalate,rm};
+use crate::util::{escalate,MultilineFormatString,rm};
 
 pub struct CircleCI<S: shell::Shell = shell::Default> {
     pub config: config::Container,
@@ -15,27 +16,31 @@ pub struct CircleCI<S: shell::Shell = shell::Default> {
 }
 
 impl<S: shell::Shell> CircleCI<S> {
-    fn generate_executor_setting<'a>(&self, job: &'a Option<config::Job>) -> String {
-        return match job.container {
-            Some(ref c) => format!("image: {}", c)
-            None => match job.machine {
-                Some(ref m) => format!("machine: {}", m),
+    fn generate_entrypoint<'a>(&self, _: &'a config::Config) -> Vec<String> {
+        include_str!("../../res/ci/circleci/entrypoint.yml.tmpl")
+            .to_string().split("\n").map(|s| s.trim().to_string()).collect()
+    }
+    fn generate_executor_setting<'a>(&self, job: &'a config::Job) -> String {
+        return match job.container.as_ref() {
+            Some(c) => format!("image: {}", c),
+            None => match job.machine.as_ref() {
+                Some(m) => format!("machine: {}", m),
                 None => panic!("either machine or container need to specify for job")
             }
         }
     }
-    fn generate_workdir_setting<'a>(&self, job: &'a Option<config::Job>) -> String {
-        return job.workdir.map_or_else(|| "".to_string(), |wd| format!("workdir: {}", wd));
+    fn generate_workdir_setting<'a>(&self, job: &'a config::Job) -> String {
+        return job.workdir.as_ref().map_or_else(|| "".to_string(), |wd| format!("workdir: {}", wd));
     }
-    fn generate_checkout_steps(&self, job_name: &str, options: &Option<HashMap<String, String>>>) -> String {
-        let mut checkout_opts = options.map_or_else(
+    fn generate_checkout_steps(&self, job_name: &str, options: &Option<HashMap<String, String>>) -> String {
+        let mut checkout_opts = options.as_ref().map_or_else(
             || Vec::new(), 
             |v| v.iter().map(|(k,v)| {
                 return if k == "lfs" {
-                    format!("{}: {}", k, v))
+                    format!("{}: {}", k, v)
                 } else {
-                    log::warn!("deplo only support lfs options for github action checkout but {}({}) is specified", k, v)
-                    ""
+                    log::warn!("deplo only support lfs options for github action checkout but {}({}) is specified", k, v);
+                    "".to_string()
                 }
             }).collect::<Vec<String>>()
         );
@@ -51,7 +56,7 @@ impl<'a, S: shell::Shell> module::Module for CircleCI<S> {
     fn prepare(&self, reinit: bool) -> Result<(), Box<dyn Error>> {
         let config = self.config.borrow();
         let repository_root = config.vcs_service()?.repository_root()?;
-        let jobs = config.select_jobs("GhAction")?;
+        let jobs = config.enumerate_jobs();
         let create_main = config.is_main_ci("GhAction");
         let circle_yml_path = format!("{}/.circleci/config.yml", repository_root);
         fs::create_dir_all(&format!("{}/.circleci", repository_root))?;
@@ -63,25 +68,28 @@ impl<'a, S: shell::Shell> module::Module for CircleCI<S> {
             Err(_) => {
                 // generate job entries
                 let mut job_descs = Vec::new();
-                for (name, job) in jobs {
-                    job_descs.push(format!(
+                for (name, job) in &jobs {
+                    let lines = format!(
                         include_str!("../../res/ci/circleci/job.yml.tmpl"),
                         name = name, machine_or_container = self.generate_executor_setting(job),
                         workdir = self.generate_workdir_setting(job),
-                        checkout = self.generate_checkout_steps(name, job.options),
-                    ))
+                        checkout = self.generate_checkout_steps(&name, &job.checkout),
+                    ).split("\n").map(|s| s.trim().to_string()).collect::<Vec<String>>();
+                    job_descs = job_descs.into_iter().chain(lines.into_iter()).collect();
                 }
                 // sync dotenv secrets with ci system
                 config.parse_dotenv(|k,v| (self as &dyn ci::CI).set_secret(k, v))?;
                 fs::write(&circle_yml_path, format!(
-                    include_str!("../../rsc/ci/circleci/config.yml.tmpl"),
+                    include_str!("../../res/ci/circleci/main.yml.tmpl"),
                     image = config.common.deplo_image, tag = config::DEPLO_GIT_HASH,
-                    workflow = if create_main {
-                        include_str!("../../res/ci/circleci/workflow.yml.tmpl")
-                    } else {
-                        ""
+                    entrypoint = MultilineFormatString{ 
+                        strings: &(if create_main { self.generate_entrypoint(&config) } else { vec![] }),
+                        postfix: None
                     },
-                    jobs = job_descs.join("\n")
+                    jobs = MultilineFormatString{ 
+                        strings: &job_descs,
+                        postfix: None
+                    }
                 ))?;
             }
         }
@@ -109,20 +117,23 @@ impl<'a, S: shell::Shell> ci::CI for CircleCI<S> {
             }
         }
     }
-    fn run_job(&self, job_name: &str) -> Result<String, Box<dyn Error>> {
+    fn run_job(&self, _: &str) -> Result<String, Box<dyn Error>> {
+        log::warn!("TODO: implement run_job for circleci");
         Ok("".to_string())
     }
-    fn wait_job(&self, job_id: &str) -> Result<(), Box<dyn Error>> {
+    fn wait_job(&self, _: &str) -> Result<(), Box<dyn Error>> {
+        log::warn!("TODO: implement wait_job for circleci");
         Ok(())
     }
-    fn wait_job_by_name(&self, job_name: &str) -> Result<(), Box<dyn Error>> {
+    fn wait_job_by_name(&self, _: &str) -> Result<(), Box<dyn Error>> {
+        log::warn!("TODO: implement wait_job_by_name for circleci");
         Ok(())
     }
     fn set_secret(&self, key: &str, val: &str) -> Result<(), Box<dyn Error>> {
         let config = self.config.borrow();
         let token = match &config.ci_config(&self.account_name) {
-            config::CIConfig::CircleCI { key, workflow:_ } => { key },
-            config::CIConfig::GhAction{..} => { 
+            config::CIAccount::CircleCI { key } => { key },
+            config::CIAccount::GhAction{..} => { 
                 return escalate!(Box::new(ci::CIError {
                     cause: "should have circleci CI config but ghaction config provided".to_string()
                 }));

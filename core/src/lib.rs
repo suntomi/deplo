@@ -1,7 +1,12 @@
+#[macro_use]
+extern crate lazy_static;
+
+pub mod args;
+pub mod config;
+pub mod shell;
+pub mod util;
+
 mod ci;
-mod config;
-mod shell;
-mod util;
 mod vcs;
 mod module;
 

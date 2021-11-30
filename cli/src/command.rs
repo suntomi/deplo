@@ -1,10 +1,10 @@
 use std::error::Error;
 use std::fmt;
 
+use core::args;
 use core::config;
-use core::util::escalate;
 
-use super::args;
+use crate::util::escalate;
 
 pub trait Command<A: args::Args> {
     fn new(config: &config::Container) -> Result<Self, Box<dyn Error>> where Self : Sized;

@@ -1,25 +1,45 @@
 name: Deplo CI/CD
 
 on: 
-  push:
-    branches: [{targets}]
-  pull_request:
-    branches: [{targets}]
+{entrypoint:>2}
+  workflow_dispatch:
+    inputs:
+      deplo_job_name:
+        description: The name of the job to run
+        requred: true
   
 env:
   DEPLO_GHACTION_PULL_REQUEST_URL: ${{{{ github.event.pull_request.url }}}}
+  DEPLO_GHACTION_RUN_JOB_NAME: ${{{{ github.event.inputs.deplo_job_name }}}}
 {secrets:>2}
 jobs:
   deplo-main:
     name: Start CI
     runs-on: ubuntu-latest
     container: {image}:{tag}
+    outputs:
+{outputs:>6}
     steps:
 {checkout:>6}
       - name: Start deplo
+        id: deplo-ci-kick
         run: deplo ci kick
       - name: Setup ssh session to debug
         if: ${{{{ failure() }}}}
         uses: mxschmitt/action-tmate@v3
         with:
           sudo: false
+  deplo-finish:
+    name: Finish CI
+    runs-on: ubuntu-latest
+    container: {image}:{tag}
+    steps:
+{checkout:>6}
+      - name: Finish deplo
+        run: deplo ci finish
+      - name: Setup ssh session to debug
+        if: ${{{{ failure() }}}}
+        uses: mxschmitt/action-tmate@v3
+        with:
+          sudo: false
+{jobs:>2}

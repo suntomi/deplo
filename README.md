@@ -55,62 +55,75 @@ account = "suntomi-bot"
 key = "${DEPLO_VCS_ACCESS_KEY}"
 
 # you can use multiple ci service with [ci.$account_name]
-[ci.default]
+[ci.account.default]
+type = "GhAction"
+account = "suntomi-bot"
+key = "${DEPLO_VCS_ACCESS_KEY}"
+
+# non-default CI setting example
+[ci.account.circleci]
 type = "CircleCI"
 key = "${DEPLO_CI_ACCESS_KEY}"
 
-# `integrate` contains key value pair of `pipeline name` = `[patterns, container, command, cache]`
+# ====== continuous integration ======
+# `integrate` contains key value pair of `job name` = `{account, patterns, machine, container, command, cache, workdir, depends_on}`
 # changeset is detected as following rule
 # if the branch has related pull/merge request, git diff ${base branch}...${head branch} is used.
 # if the branch does not have any pull/merge request, deplo try to find nearest ancestor branch with the same manner as
 # https://stackoverflow.com/a/17843908/1982282, and use it as base branch.
-[ci.default.workflow.integrate.data]
+[ci.workflow.integrate.data]
+# account to be used to run job, if omitted, default account will be used
+account = circleci
+
 # regexp of file name pattern appeared in changeset. any of regexp matched then this pipeline will be invoked
 patterns = ["data/.*"]
-# workdir. if omitted, deplo will use container default
+
+# machine type
+machine = "ubuntu-latest"
+
+# workdir. if omitted, deplo will use container/machine default
 workdir = "/tmp/workdir"
+
 # invoking command for CI
 command = """
 bash ./tools/data/build.sh
 """ 
+
+# dependent job
+depends_on = ["integrate-client"]
+
 # cache setting. multiple cache can be set. execution order is: 
 # restore: array appearing order
 # save: reverse array appearing order
-[[ci.default.workflow.integrate.data.cache]]
+[[ci.workflow.integrate.data.cache]]
 # keys for using find cache entry. some directive like {{ .Branch }} can be used but because it is CI service specific,
 # consulting each CI service document for detail. 
-# (I hope each CI service provider offers cache feature with command line, then it will be more standardized)
+# (I hope each CI service provider offers cache feature with cli, then this can be more standardized)
 restore_keys = ["source-v1-{{ .Branch }}-{{ .Revision }}", "source-v1-{{ .Branch }}-", "source-v1-"]
 save_key = "source-v1-{{ .Branch }}-{{ .Revision }}"
-path = "data/caches"
+path = "data/built"
 
-# key value pair of `workflow name` = `[patterns, container, command, cache]`
-# where patterns, container, command, cache are same as above
-#
-# changeset is detected by git diff HEAD^
-[ci.default.workflow.deploy.data]
+
+# ====== continuous deployment ======
+# deploy is also key value pair of `job name` = `Job(same object as for integrate config)`
+# for deploy, changeset is detected by git diff HEAD^
+[ci.workflow.deploy.data]
 patterns = ["data/.*"]
 container = "suntomi/aws-cli"
 command = """
 bash ./tools/data/upload.sh
 """
-[[ci.default.workflow.deploy.data.cache]]
+[[ci.workflow.deploy.data.cache]]
 restore_keys = ["source-v1-{{ .Branch }}-{{ .Revision }}", "source-v1-{{ .Branch }}-", "source-v1-"]
 # omitting save_key or path refrains from saving cache
 
-# non-default CI setting example
-[ci.github]
-type = "GhAction"
-account = "suntomi-bot"
-key = "${DEPLO_VCS_ACCESS_KEY}"
-
-[ci.github.workflow.integrate.client]
+[ci.workflow.integrate.client]
 patterns = ["client/.*"]
 command = """
 bash ./tools/client/run-test.sh
 """
 
-[ci.github.workflow.deploy.client]
+[ci.workflow.deploy.client]
 patterns = ["client/.*"]
 command = """
 bash ./tools/client/build-and-upload.sh

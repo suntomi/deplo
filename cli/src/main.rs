@@ -1,11 +1,10 @@
 extern crate core;
-#[macro_use]
-extern crate lazy_static;
 
-mod args;
 mod cli;
 mod command;
+mod util;
 
+use core::args;
 use core::config;
 use log;
 

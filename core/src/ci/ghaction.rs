@@ -1,8 +1,8 @@
 use std::fs;
 use std::error::Error;
 use std::result::Result;
+use std::collections::{HashMap};
 
-use glob::glob;
 use serde::{Deserialize, Serialize};
 
 use crate::config;
@@ -24,26 +24,42 @@ pub struct GhAction<S: shell::Shell = shell::Default> {
 }
 
 impl<S: shell::Shell> GhAction<S> {
-    fn generate_container_setting<'a>(&self, container: &'a Option<String>) -> String {
-        let container = container.map_or_else(|| "", |v| format!("container: {}", v);
-        format!("{}/{}", self.account_name, container)
+    fn generate_entrypoint<'a>(&self, config: &'a config::Config) -> Vec<String> {
+        // get target branch
+        let target_branches = config.common.release_targets
+            .values().map(|s| &**s)
+            .collect::<Vec<&str>>().join(",");
+        format!(
+            include_str!("../../res/ci/ghaction/entrypoint.yml.tmpl"), 
+            targets = target_branches
+        ).split("\n").map(|s| s.trim().to_string()).collect()
     }
-    fn generate_checkout_steps<'a>(&self, job_name: &'a str, options: &'a Option<HashMap<String, String>>>) -> String {
-        let checkout_opts = options.map_or_else(
-            || "", 
+    fn generate_outputs<'a>(&self, jobs: &HashMap<String, &'a config::Job>) -> Vec<String> {
+        jobs.keys().map(|s| format!("{}: steps.deplo-ci-kick.{}", s, s)).collect()
+    }
+    fn generate_job_dependencies<'a>(&self, _: &'a config::Job) -> String {
+        //TODO: support job.depends 
+        format!("\"{}\"", ["deplo-main"].join("\",\""))
+    }
+    fn generate_container_setting<'a>(&self, container: &'a Option<String>) -> String {
+        return container.as_ref().map_or_else(|| "".to_string(), |v| format!("container: {}", v));
+    }
+    fn generate_checkout_steps<'a>(&self, job_name: &'a str, options: &'a Option<HashMap<String, String>>) -> Vec<String> {
+        let checkout_opts = options.as_ref().map_or_else(
+            || "".to_string(), 
             |v| v.iter().map(|(k,v)| {
                 return if k == "lfs" {
-                    format!("{}: {}", k, v))
+                    format!("{}: {}", k, v)
                 } else {
-                    log::warn!("deplo only support lfs options for github action checkout but {}({}) is specified", k, v)
-                    ""
+                    log::warn!("deplo only support lfs options for github action checkout but {}({}) is specified", k, v);
+                    "".to_string()
                 }
             }).collect::<Vec<String>>().join("\n")
         );
         format!(
             include_str!("../../res/ci/ghaction/checkout.yml.tmpl"), 
             name = job_name, checkout_opts = checkout_opts,
-        )
+        ).split("\n").map(|s| s.trim().to_string()).collect()
     }
 }
 
@@ -51,63 +67,65 @@ impl<'a, S: shell::Shell> module::Module for GhAction<S> {
     fn prepare(&self, reinit: bool) -> Result<(), Box<dyn Error>> {
         let config = self.config.borrow();
         let repository_root = config.vcs_service()?.repository_root()?;
-        let mut jobs = config.select_jobs("GhAction")?;
+        let workflow_yml_path = format!("{}/.github/workflows/deplo-main.yml", repository_root);
         let create_main = config.is_main_ci("GhAction");
-        if create_main {
-            jobs["main"] = None
-        }
         fs::create_dir_all(&format!("{}/.github/workflows", repository_root))?;
         if reinit {
-            for (name, _) in &jobs {
-                let yml_path = format!("{}/.github/workflows/deplo-{}.yml", repository_root, name);
-                rm(&yml_path);
-            }
+            rm(&workflow_yml_path);
         }
-        // first time or reinit 
-        let secrets_need_init = glob(format!("{}/.github/workflows/deplo-*.yml", repository_root)).next().is_none();
-        // get target branch
-        let target_branches = config.common.release_targets
-            .values().map(|s| &**s)
-            .collect::<Vec<&str>>().join(",");
-        // inject secrets from dotenv file
-        let mut secrets = vec!();
-        config.parse_dotenv(|k,v| {
-            if secrets_need_init {
-                (self as &dyn ci::CI).set_secret(k, v)?;
-            }
-            Ok(secrets.push(format!("{}: ${{{{ secrets.{} }}}}", k, k)))
-        })?;
-        for (name, job) in &jobs {
-            let yml_path = format!("{}/.github/workflows/deplo-{}.yml", repository_root, name);            
-            match fs::metadata(&yml_path) {
-                Ok(_) => log::debug!("config file for github workflow already created at {}". yml_path),
-                Err(_) => {
-                    fs::write(&deplo_yml_path, if name == "main" { 
-                        format!(
-                            include_str!("../../res/ci/ghaction/main.yml.tmpl"), target = target_branches, 
-                            secrets = MultilineFormatString{ strings: &secrets, postfix: None },
-                            image = config.common.deplo_image, tag = config::DEPLO_GIT_HASH
-                            checkout = MultilineFormatString{
-                                strings: self.generate_checkout_steps(name, None),
-                                postfix: None
-                            }
-                        )
-                    } else {
-                        let j = job.unwrap(); //should exists always
-                        format!(
-                            include_str!("../../res/ci/ghaction/job.yml.tmpl"), name = name,
-                            image = config.common.deplo_image, tag = config::DEPLO_GIT_HASH,
-                            secrets = MultilineFormatString{ strings: &secrets, postfix: None },
-                            machine = j.machine.unwarp_or_else("ubuntu-latest"),
-                            container = self.generate_container_setting(j.container),
-                            checkout = MultilineFormatString{
-                                strings: self.generate_checkout_steps(name, j.checkout_opts),
-                                postfix: None
-                            },
-                            sudo = j.container.is_some()
-                        )
-                    })?;
+        match fs::metadata(&workflow_yml_path) {
+            Ok(_) => log::debug!("config file for github workflow already created at {}", workflow_yml_path),
+            Err(_) => {
+                // inject secrets from dotenv file
+                let mut secrets = vec!();
+                config.parse_dotenv(|k,v| {
+                    (self as &dyn ci::CI).set_secret(k, v)?;
+                    Ok(secrets.push(format!("{}: ${{{{ secrets.{} }}}}", k, k)))
+                })?;
+                // generate job entries
+                let mut job_descs = Vec::new();
+                let jobs = config.enumerate_jobs();
+                for (name, job) in &jobs {
+                    let lines = format!(
+                        include_str!("../../res/ci/ghaction/job.yml.tmpl"), name = name,
+                        needs = self.generate_job_dependencies(job),
+                        machine = match job.machine.as_ref() {
+                            Some(v) => v.as_str(),
+                            None => "ubuntu-latest",
+                        },
+                        container = self.generate_container_setting(&job.container),
+                        checkout = MultilineFormatString{
+                            strings: &self.generate_checkout_steps(&name, &job.checkout),
+                            postfix: None
+                        },
+                        //if in container, sudo does not required to install debug instrument
+                        sudo = job.container.is_none()
+                    ).split("\n").map(|s| s.trim().to_string()).collect::<Vec<String>>();
+                    job_descs = job_descs.into_iter().chain(lines.into_iter()).collect();
                 }
+                fs::write(&workflow_yml_path,
+                    format!(
+                        include_str!("../../res/ci/ghaction/main.yml.tmpl"), 
+                        entrypoint = MultilineFormatString{ 
+                            strings: &(if create_main { self.generate_entrypoint(&config) } else { vec![] }),
+                            postfix: None
+                        },
+                        secrets = MultilineFormatString{ strings: &secrets, postfix: None },
+                        outputs = MultilineFormatString{ 
+                            strings: &self.generate_outputs(&jobs),
+                            postfix: None
+                        },
+                        image = config.common.deplo_image, tag = config::DEPLO_GIT_HASH,
+                        checkout = MultilineFormatString{
+                            strings: &self.generate_checkout_steps("main", &None),
+                            postfix: None
+                        },
+                        jobs = MultilineFormatString{
+                            strings: &job_descs,
+                            postfix: None
+                        }
+                    )
+                )?;
             }
         }
         Ok(())
@@ -133,20 +151,23 @@ impl<S: shell::Shell> ci::CI for GhAction<S> {
             }
         }
     }
-    fn run_job(&self, job_name: &str) -> Result<String, Box<dyn Error>> {
+    fn run_job(&self, _: &str) -> Result<String, Box<dyn Error>> {
+        log::warn!("TODO: implement run_job for ghaction");
         Ok("".to_string())
     }
-    fn wait_job(&self, job_id: &str) -> Result<(), Box<dyn Error>> {
+    fn wait_job(&self, _: &str) -> Result<(), Box<dyn Error>> {
+        log::warn!("TODO: implement wait_job for ghaction");
         Ok(())
     }
-    fn wait_job_by_name(&self, job_name: &str) -> Result<(), Box<dyn Error>> {
+    fn wait_job_by_name(&self, _: &str) -> Result<(), Box<dyn Error>> {
+        log::warn!("TODO: implement wait_job_by_name for ghaction");
         Ok(())
     }
     fn set_secret(&self, key: &str, _: &str) -> Result<(), Box<dyn Error>> {
         let config = self.config.borrow();
         let token = match &config.ci_config(&self.account_name) {
-            config::CIConfig::GhAction { account:_, key, workflow:_ } => { key },
-            config::CIConfig::CircleCI{..} => { 
+            config::CIAccount::GhAction { account:_, key } => { key },
+            config::CIAccount::CircleCI{..} => { 
                 return escalate!(Box::new(ci::CIError {
                     cause: "should have ghaction CI config but circleci config provided".to_string()
                 }));

@@ -59,7 +59,7 @@ impl Error for EscalateError {
 }
 
 #[macro_export]
-macro_rules! macro_escalate  {
+macro_rules! macro_escalate {
     ( $err:expr ) => {
         Err(Box::new(crate::util::EscalateError {
             at: (crate::util::func!(), file!(), line!()),
@@ -198,13 +198,14 @@ impl<'a> fmt::Display for MultilineFormatString<'a> {
 // fs
 use std::fs;
 use std::path::Path;
+use fs_extra;
 pub fn rm<P: AsRef<Path>>(path: P) -> bool {
     match fs::remove_file(path.as_ref()) {
         Ok(_) => return true,
         Err(err) => { 
             log::error!(
                 "fail to remove {} with {:?}", path.as_ref().to_string_lossy(), err
-            )
+            );
             return false
         },
     }
@@ -216,14 +217,14 @@ pub fn rmdir<P: AsRef<Path>>(path: P) -> bool {
             log::error!(
                 "fail to cleanup for reinitialize: fail to remove {} with {:?}",
                 path.as_ref().to_string_lossy(), err
-            )
-            return alse
+            );
+            return false
         },
     }
 }
 pub fn dircp<P: AsRef<Path>>(src: P, dest: P) -> Result<(), Box<dyn Error>> {
     match fs::metadata(dest.as_ref()) {
-        Ok(d) => log::info!(
+        Ok(_) => log::info!(
             "infra setup scripts for {}({:?}) already copied",
             dest.as_ref().to_string_lossy(), fs::canonicalize(&dest)
         ),
@@ -233,6 +234,7 @@ pub fn dircp<P: AsRef<Path>>(src: P, dest: P) -> Result<(), Box<dyn Error>> {
             fs_extra::dir::copy(
                 src, dest,
                 &fs_extra::dir::CopyOptions{
+                    content_only: true,
                     overwrite: true,
                     skip_exist: false,
                     buffer_size: 64 * 1024, //64kb
