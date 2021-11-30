@@ -1,0 +1,66 @@
+# common settings
+[common]
+project_name = "deplo"
+
+[common.release_targets]
+dev = "main"
+prod = "release"
+
+# version control system account settings
+[vcs]
+type = "Github"
+email = "${SUNTOMI_VCS_ACCOUNT_EMAIL}"
+account = "${SUNTOMI_VCS_ACCOUNT}"
+key = "${SUNTOMI_VCS_ACCOUNT_KEY}"
+
+# ci account setting, default should always be set
+[ci.account.default]
+type = "GhAction"
+account = "${SUNTOMI_VCS_ACCOUNT}"
+key = "${SUNTOMI_VCS_ACCOUNT_KEY}"
+
+# workflow settings (CI)
+[ci.workflow.integrate.src]
+patterns = ["src/.*", "Cargo.*"]
+container = "rust:slim"
+command = "cargo build"
+[[ci.workflow.deploy.src.cache]]
+keys = ["integrate-build-${{ runner.os }}-v1-${{ github.sha }}", "integrate-build-${{ runner.os }}-v1-"]
+path = "target"
+
+# workflow settings (CD)
+[ci.workflow.deploy.osx]
+patterns = ["src/.*", "Cargo.*"]
+machine = "osx"
+command = """
+echo "TODO: build for osx"
+"""
+[[ci.workflow.deploy.src.cache]]
+keys = ["deploy-build-${{ runner.os }}-v1-${{ github.sha }}", "deploy-build-${{ runner.os }}-v1-"]
+path = "target"
+
+
+[ci.workflow.deploy.win]
+patterns = ["src/.*", "Cargo.*"]
+machine = "windows"
+command = """
+echo "TODO: build for windows"
+"""
+[[ci.workflow.deploy.src.cache]]
+keys = ["deploy-build-${{ runner.os }}-v1-${{ github.sha }}", "deploy-build-${{ runner.os }}-v1-"]
+path = "target"
+
+
+[ci.workflow.deploy.product]
+depends_on = ["osx", "win"]
+patterns = ["src/.*", "Cargo.*"]
+machine = "linux" # linux/osx/windows can be used
+command = """
+cargo build --release
+docker build -t suntomi:deplo -f tools/docker/Dockerfile target/release
+echo ${SUNTOMI_VCS_ACCOUNT_KEY} | docker login ghcr.io -u ${SUNTOMI_VCS_ACCOUNT} --password-stdin
+docker push ghcr.io/suntomi/deplo:${DEPLO_VCS_CURRENT_SHA}
+"""
+[[ci.workflow.deploy.src.cache]]
+keys = ["deploy-build-${{ runner.os }}-v1-${{ github.sha }}", "deploy-build-${{ runner.os }}-v1-"]
+path = "target"

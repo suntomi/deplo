@@ -42,6 +42,9 @@ impl<S: shell::Shell> CI<S> {
         let ci = config.ci_service(account_name)?;
         config.parse_dotenv(|k,v| ci.set_secret(k, v))
     }
+    fn fin<A: args::Args>(&self, _: &A) -> Result<(), Box<dyn Error>> {
+        Ok(())
+    }
 }
 
 impl<S: shell::Shell, A: args::Args> command::Command<A> for CI<S> {
@@ -55,6 +58,7 @@ impl<S: shell::Shell, A: args::Args> command::Command<A> for CI<S> {
         match args.subcommand() {
             Some(("kick", subargs)) => return self.kick(&subargs),
             Some(("setenv", subargs)) => return self.setenv(&subargs),
+            Some(("fin", subargs)) => return self.fin(&subargs),
             Some((name, _)) => return escalate!(args.error(
                 &format!("no such subcommand: [{}]", name) 
             )),

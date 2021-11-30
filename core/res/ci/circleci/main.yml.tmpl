@@ -23,12 +23,12 @@ commands:
       lfs: 
         type: string
         default: ""
-      name: 
+      opts_hash: 
         type: string
         default: ""
     steps:
       - fetch_repo
-        name: << parameters.name >>
+        opts_hash: << parameters.opts_hash >>
       - checkout
       - run:
           name: 'maintain git'
@@ -42,7 +42,7 @@ commands:
               echo "skip git LFS checkout"
             fi
       - save_cache:
-          key: deplo-git-v1-<< parameters.name >>-{{{{ .Revision }}}}
+          key: deplo-git-v1<< parameters.opts_hash >>-{{{{ .Revision }}}}
           paths:
             - ".git"
 

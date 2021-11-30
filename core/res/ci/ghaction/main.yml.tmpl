@@ -30,13 +30,14 @@ jobs:
         with:
           sudo: false
   deplo-finish:
-    name: Finish CI
+    name: Cleanup CI
     runs-on: ubuntu-latest
     container: {image}:{tag}
     steps:
 {checkout:>6}
-      - name: Finish deplo
-        run: deplo ci finish
+      - name: Cleanup deplo
+        id: deplo-ci-fin
+        run: deplo ci fin
       - name: Setup ssh session to debug
         if: ${{{{ failure() }}}}
         uses: mxschmitt/action-tmate@v3

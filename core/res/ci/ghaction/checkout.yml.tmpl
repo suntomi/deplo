@@ -3,9 +3,9 @@
   uses: actions/cache@v2
   with:
     path: .git
-    key: deplo-git-v1-{name}-${{{{ github.sha }}}}
+    key: deplo-git-v1{opts_hash}-${{{{ github.sha }}}}
     restore-keys:
-      deplo-git-v1-{name}-
+      deplo-git-v1{opts_hash}-
       deplo-git-v1-
 - name: Checkout
   if: steps.fetch-repository-cache.outputs.cache-hit != 'true'

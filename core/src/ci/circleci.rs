@@ -7,7 +7,7 @@ use crate::config;
 use crate::ci;
 use crate::shell;
 use crate::module;
-use crate::util::{escalate,MultilineFormatString,rm};
+use crate::util::{escalate,MultilineFormatString,rm,maphash};
 
 pub struct CircleCI<S: shell::Shell = shell::Default> {
     pub config: config::Container,
@@ -44,7 +44,10 @@ impl<S: shell::Shell> CircleCI<S> {
                 }
             }).collect::<Vec<String>>()
         );
-        checkout_opts.push(format!("name: {}", job_name));
+        checkout_opts.push(format!("name: {}", options.as_ref().map_or_else(
+            || "".to_string(), 
+            |v| maphash(v)
+        )));
         format!(
             include_str!("../../res/ci/circleci/checkout.yml.tmpl"), 
             checkout_opts = checkout_opts.join("\n"),

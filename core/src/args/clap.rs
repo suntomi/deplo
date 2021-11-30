@@ -105,6 +105,10 @@ lazy_static! {
                     App::new("setenv")
                     .about("upload current .env contents as CI service secrets")
                 )
+                .subcommand(
+                    App::new("fin")
+                    .about("cleanup CI/CD process after all related job finished")
+                )
         )
         .get_matches();
 }

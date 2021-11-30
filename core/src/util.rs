@@ -264,6 +264,19 @@ where F: Fn () -> Result<String, Box<dyn Error>> {
     }
 }
 
+use crc::{Crc, CRC_64_ECMA_182};
+
+const crc: Crc<u64> = Crc::<u64>::new(&CRC_64_ECMA_182);
+
+pub fn maphash(h: &HashMap<String, String>) -> String {
+    // hash value for separating repository cache according to checkout options
+    let mut v: Vec<_> = h.into_iter().collect();
+    let mut digest = crc.digest();
+    v.sort_by(|x,y| x.0.cmp(&y.0));
+    digest.update(v.iter().map(|(k,v)| format!("{}={}", k, v)).collect::<Vec<String>>().join(",").as_bytes());
+    format!("{:X}", digest.finalize())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

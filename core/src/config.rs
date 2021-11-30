@@ -39,8 +39,8 @@ impl Error for ConfigError {
 
 #[derive(Serialize, Deserialize)]
 pub struct Cache {
-    pub restore_keys: Vec<String>,
-    pub save_key: String,
+    pub keys: Vec<String>,
+    pub save_key: Option<String>,
     pub path: String
 }
 #[derive(Serialize, Deserialize)]
@@ -127,7 +127,7 @@ impl fmt::Display for VCSConfig {
 pub struct CommonConfig {
     pub project_name: String,
     pub deplo_image: String,
-    pub data_dir: String,
+    pub data_dir: Option<String>,
     pub no_confirm_for_prod_deploy: bool,
     pub release_targets: HashMap<String, String>,
 }
@@ -282,7 +282,10 @@ impl Config {
         return Ok(c);
     }
     pub fn root_path(&self) -> &path::Path {
-        return path::Path::new(&self.common.data_dir);
+        return path::Path::new(match self.common.data_dir {
+            Some(ref v) => v.as_str(),
+            None => "."
+        });
     }
     pub fn project_name(&self) -> &str {
         &self.common.project_name

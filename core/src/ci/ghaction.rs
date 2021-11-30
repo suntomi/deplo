@@ -9,7 +9,7 @@ use crate::config;
 use crate::ci;
 use crate::shell;
 use crate::module;
-use crate::util::{escalate,seal,MultilineFormatString,rm};
+use crate::util::{escalate,seal,MultilineFormatString,rm,maphash};
 
 #[derive(Serialize, Deserialize)]
 struct RepositoryPublicKeyResponse {
@@ -44,7 +44,7 @@ impl<S: shell::Shell> GhAction<S> {
     fn generate_container_setting<'a>(&self, container: &'a Option<String>) -> String {
         return container.as_ref().map_or_else(|| "".to_string(), |v| format!("container: {}", v));
     }
-    fn generate_checkout_steps<'a>(&self, job_name: &'a str, options: &'a Option<HashMap<String, String>>) -> Vec<String> {
+    fn generate_checkout_steps<'a>(&self, _: &'a str, options: &'a Option<HashMap<String, String>>) -> Vec<String> {
         let checkout_opts = options.as_ref().map_or_else(
             || "".to_string(), 
             |v| v.iter().map(|(k,v)| {
@@ -56,9 +56,14 @@ impl<S: shell::Shell> GhAction<S> {
                 }
             }).collect::<Vec<String>>().join("\n")
         );
+        // hash value for separating repository cache according to checkout options
+        let opts_hash = options.as_ref().map_or_else(
+            || "".to_string(), 
+            |v| { maphash(v) }
+        );
         format!(
             include_str!("../../res/ci/ghaction/checkout.yml.tmpl"), 
-            name = job_name, checkout_opts = checkout_opts,
+            checkout_opts = checkout_opts, opts_hash = opts_hash
         ).split("\n").map(|s| s.trim().to_string()).collect()
     }
 }
