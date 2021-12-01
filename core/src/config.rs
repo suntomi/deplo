@@ -37,6 +37,22 @@ impl Error for ConfigError {
     }
 }
 
+#[derive(Serialize, Deserialize, Clone, Copy)]
+pub enum RunnerOS {
+    Linux,
+    Windows,
+    MacOS,
+}
+impl RunnerOS {
+    pub fn from_str(s: &str) -> Result<Self, &'static str> {
+        match s {
+            "linux" => Ok(RunnerOS::Linux),
+            "windows" => Ok(RunnerOS::Windows),
+            "macos" => Ok(RunnerOS::MacOS),
+            _ => Err("unknown OS"),
+        }
+    }
+}
 #[derive(Serialize, Deserialize)]
 pub struct Cache {
     pub keys: Vec<String>,
@@ -44,16 +60,41 @@ pub struct Cache {
     pub path: String
 }
 #[derive(Serialize, Deserialize)]
+#[serde(tag = "type")]
+pub enum Runner {
+    Machine {
+        os: RunnerOS,
+        image: Option<String>,
+        class: Option<String>,
+    },
+    Container {
+        image: String,
+    }
+}
+#[derive(Serialize, Deserialize)]
 pub struct Job {
-    pub account: String,
+    pub account: Option<String>,
     pub patterns: Vec<String>,
-    pub machine: Option<String>,
-    pub container: Option<String>,
+    pub runner: Runner,
     pub command: String,
     pub workdir: Option<String>,
     pub checkout: Option<HashMap<String, String>>,
-    pub caches: Vec<Cache>,
-    pub depends_on: Vec<String>,
+    pub caches: Option<Vec<Cache>>,
+    pub depends: Option<Vec<String>>,
+}
+impl Job {
+    pub fn runner_os(&self) -> RunnerOS {
+        match &self.runner {
+            Runner::Machine{ os, image:_, class:_ } => *os,
+            Runner::Container{ image: _ } => RunnerOS::Linux
+        }
+    }
+    pub fn runs_on_machine(&self) -> bool {
+        match &self.runner {
+            Runner::Machine{ os:_, image:_, class:_ } => true,
+            Runner::Container{ image: _ } => false
+        }
+    }
 }
 #[derive(Serialize, Deserialize)]
 pub struct WorkflowConfig {
@@ -126,9 +167,8 @@ impl fmt::Display for VCSConfig {
 #[derive(Serialize, Deserialize)]
 pub struct CommonConfig {
     pub project_name: String,
-    pub deplo_image: String,
+    pub deplo_image: Option<String>,
     pub data_dir: Option<String>,
-    pub no_confirm_for_prod_deploy: bool,
     pub release_targets: HashMap<String, String>,
 }
 #[derive(Default)]
@@ -289,6 +329,12 @@ impl Config {
     }
     pub fn project_name(&self) -> &str {
         &self.common.project_name
+    }
+    pub fn deplo_image(&self) -> &str {
+        match &self.common.deplo_image {
+            Some(v) => v,
+            None => "suntomi/deplo"
+        }
     }
     pub fn release_target(&self) -> Option<&str> {
         match &self.runtime.release_target {

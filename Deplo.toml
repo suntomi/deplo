@@ -14,7 +14,7 @@ account = "${SUNTOMI_VCS_ACCOUNT}"
 key = "${SUNTOMI_VCS_ACCOUNT_KEY}"
 
 # ci account setting, default should always be set
-[ci.account.default]
+[ci.accounts.default]
 type = "GhAction"
 account = "${SUNTOMI_VCS_ACCOUNT}"
 key = "${SUNTOMI_VCS_ACCOUNT_KEY}"
@@ -22,45 +22,45 @@ key = "${SUNTOMI_VCS_ACCOUNT_KEY}"
 # workflow settings (CI)
 [ci.workflow.integrate.src]
 patterns = ["src/.*", "Cargo.*"]
-container = "rust:slim"
+runner = { type = "Container", image = "rust:slim" }
 command = "cargo build"
-[[ci.workflow.deploy.src.cache]]
+[[ci.workflow.integrate.src.cache]]
 keys = ["integrate-build-${{ runner.os }}-v1-${{ github.sha }}", "integrate-build-${{ runner.os }}-v1-"]
 path = "target"
 
 # workflow settings (CD)
-[ci.workflow.deploy.osx]
+[ci.workflow.deploy.mac]
 patterns = ["src/.*", "Cargo.*"]
-machine = "osx"
+runner = { type = "Machine", os = "MacOS" }
 command = """
-echo "TODO: build for osx"
+echo "TODO: build for mac"
 """
-[[ci.workflow.deploy.src.cache]]
+[[ci.workflow.deploy.mac.cache]]
 keys = ["deploy-build-${{ runner.os }}-v1-${{ github.sha }}", "deploy-build-${{ runner.os }}-v1-"]
 path = "target"
 
 
 [ci.workflow.deploy.win]
 patterns = ["src/.*", "Cargo.*"]
-machine = "windows"
+runner = { type = "Machine", os = "Windows" }
 command = """
 echo "TODO: build for windows"
 """
-[[ci.workflow.deploy.src.cache]]
+[[ci.workflow.deploy.win.cache]]
 keys = ["deploy-build-${{ runner.os }}-v1-${{ github.sha }}", "deploy-build-${{ runner.os }}-v1-"]
 path = "target"
 
 
 [ci.workflow.deploy.product]
-depends_on = ["osx", "win"]
+depends_on = ["mac", "win"]
 patterns = ["src/.*", "Cargo.*"]
-machine = "linux" # linux/osx/windows can be used
+runner = { type = "Machine", os = "Linux" }
 command = """
 cargo build --release
 docker build -t suntomi:deplo -f tools/docker/Dockerfile target/release
 echo ${SUNTOMI_VCS_ACCOUNT_KEY} | docker login ghcr.io -u ${SUNTOMI_VCS_ACCOUNT} --password-stdin
 docker push ghcr.io/suntomi/deplo:${DEPLO_VCS_CURRENT_SHA}
 """
-[[ci.workflow.deploy.src.cache]]
+[[ci.workflow.deploy.product.cache]]
 keys = ["deploy-build-${{ runner.os }}-v1-${{ github.sha }}", "deploy-build-${{ runner.os }}-v1-"]
 path = "target"

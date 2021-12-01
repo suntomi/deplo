@@ -78,8 +78,8 @@ account = circleci
 # regexp of file name pattern appeared in changeset. any of regexp matched then this pipeline will be invoked
 patterns = ["data/.*"]
 
-# machine type
-machine = "ubuntu-latest"
+# machine type. linux/macos/windows can be used
+machine = "linux"
 
 # workdir. if omitted, deplo will use container/machine default
 workdir = "/tmp/workdir"

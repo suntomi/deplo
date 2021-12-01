@@ -41,8 +41,11 @@ impl<S: shell::Shell> GhAction<S> {
         //TODO: support job.depends 
         format!("\"{}\"", ["deplo-main"].join("\",\""))
     }
-    fn generate_container_setting<'a>(&self, container: &'a Option<String>) -> String {
-        return container.as_ref().map_or_else(|| "".to_string(), |v| format!("container: {}", v));
+    fn generate_container_setting<'a>(&self, runner: &'a config::Runner) -> String {
+        match runner {
+            config::Runner::Machine{ image:_, os:_, class:_ } => "".to_string(),
+            config::Runner::Container{ image } => format!("container: {}", image)
+        }
     }
     fn generate_checkout_steps<'a>(&self, _: &'a str, options: &'a Option<HashMap<String, String>>) -> Vec<String> {
         let checkout_opts = options.as_ref().map_or_else(
@@ -69,70 +72,70 @@ impl<S: shell::Shell> GhAction<S> {
 }
 
 impl<'a, S: shell::Shell> module::Module for GhAction<S> {
-    fn prepare(&self, reinit: bool) -> Result<(), Box<dyn Error>> {
+    fn prepare(&self, _: bool) -> Result<(), Box<dyn Error>> {
         let config = self.config.borrow();
         let repository_root = config.vcs_service()?.repository_root()?;
         let workflow_yml_path = format!("{}/.github/workflows/deplo-main.yml", repository_root);
         let create_main = config.is_main_ci("GhAction");
         fs::create_dir_all(&format!("{}/.github/workflows", repository_root))?;
-        if reinit {
-            rm(&workflow_yml_path);
-        }
-        match fs::metadata(&workflow_yml_path) {
-            Ok(_) => log::debug!("config file for github workflow already created at {}", workflow_yml_path),
-            Err(_) => {
-                // inject secrets from dotenv file
-                let mut secrets = vec!();
-                config.parse_dotenv(|k,v| {
-                    (self as &dyn ci::CI).set_secret(k, v)?;
-                    Ok(secrets.push(format!("{}: ${{{{ secrets.{} }}}}", k, k)))
-                })?;
-                // generate job entries
-                let mut job_descs = Vec::new();
-                let jobs = config.enumerate_jobs();
-                for (name, job) in &jobs {
-                    let lines = format!(
-                        include_str!("../../res/ci/ghaction/job.yml.tmpl"), name = name,
-                        needs = self.generate_job_dependencies(job),
-                        machine = match job.machine.as_ref() {
-                            Some(v) => v.as_str(),
-                            None => "ubuntu-latest",
-                        },
-                        container = self.generate_container_setting(&job.container),
-                        checkout = MultilineFormatString{
-                            strings: &self.generate_checkout_steps(&name, &job.checkout),
-                            postfix: None
-                        },
-                        //if in container, sudo does not required to install debug instrument
-                        sudo = job.container.is_none()
-                    ).split("\n").map(|s| s.trim().to_string()).collect::<Vec<String>>();
-                    job_descs = job_descs.into_iter().chain(lines.into_iter()).collect();
-                }
-                fs::write(&workflow_yml_path,
-                    format!(
-                        include_str!("../../res/ci/ghaction/main.yml.tmpl"), 
-                        entrypoint = MultilineFormatString{ 
-                            strings: &(if create_main { self.generate_entrypoint(&config) } else { vec![] }),
-                            postfix: None
-                        },
-                        secrets = MultilineFormatString{ strings: &secrets, postfix: None },
-                        outputs = MultilineFormatString{ 
-                            strings: &self.generate_outputs(&jobs),
-                            postfix: None
-                        },
-                        image = config.common.deplo_image, tag = config::DEPLO_GIT_HASH,
-                        checkout = MultilineFormatString{
-                            strings: &self.generate_checkout_steps("main", &None),
-                            postfix: None
-                        },
-                        jobs = MultilineFormatString{
-                            strings: &job_descs,
-                            postfix: None
+        rm(&workflow_yml_path);
+        // inject secrets from dotenv file
+        let mut secrets = vec!();
+        config.parse_dotenv(|k,v| {
+            (self as &dyn ci::CI).set_secret(k, v)?;
+            Ok(secrets.push(format!("{}: ${{{{ secrets.{} }}}}", k, k)))
+        })?;
+        // generate job entries
+        let mut job_descs = Vec::new();
+        let jobs = config.enumerate_jobs();
+        for (name, job) in &jobs {
+            let lines = format!(
+                include_str!("../../res/ci/ghaction/job.yml.tmpl"), name = name,
+                needs = self.generate_job_dependencies(job),
+                machine = match job.runner {
+                    config::Runner::Machine{ref image, ref os, class:_} => match image {
+                        Some(v) => v.as_str(),
+                        None => match os {
+                            config::RunnerOS::Linux => "ubuntu-latest",
+                            config::RunnerOS::Windows => "macos-latest",
+                            config::RunnerOS::MacOS => "windows-latest",
                         }
-                    )
-                )?;
-            }
+                    },
+                    config::Runner::Container{image:_} => "ubuntu-latest",
+                },
+                container = self.generate_container_setting(&job.runner),
+                checkout = MultilineFormatString{
+                    strings: &self.generate_checkout_steps(&name, &job.checkout),
+                    postfix: None
+                },
+                //if in container, sudo does not required to install debug instrument
+                sudo = job.runs_on_machine()
+            ).split("\n").map(|s| s.trim().to_string()).collect::<Vec<String>>();
+            job_descs = job_descs.into_iter().chain(lines.into_iter()).collect();
         }
+        fs::write(&workflow_yml_path,
+            format!(
+                include_str!("../../res/ci/ghaction/main.yml.tmpl"), 
+                entrypoint = MultilineFormatString{ 
+                    strings: &(if create_main { self.generate_entrypoint(&config) } else { vec![] }),
+                    postfix: None
+                },
+                secrets = MultilineFormatString{ strings: &secrets, postfix: None },
+                outputs = MultilineFormatString{ 
+                    strings: &self.generate_outputs(&jobs),
+                    postfix: None
+                },
+                image = config.deplo_image(), tag = config::DEPLO_GIT_HASH,
+                checkout = MultilineFormatString{
+                    strings: &self.generate_checkout_steps("main", &None),
+                    postfix: None
+                },
+                jobs = MultilineFormatString{
+                    strings: &job_descs,
+                    postfix: None
+                }
+            )
+        )?;
         Ok(())
     }
 }
