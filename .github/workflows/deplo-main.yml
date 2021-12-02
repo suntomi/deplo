@@ -22,9 +22,11 @@ jobs:
     runs-on: ubuntu-latest
     container: suntomi/deplo:496e99267cb36559ea953d4f344a7fe356d1e70f
     outputs:
+      deploy-builder: steps.deplo-ci-kick.deploy-builder
       deploy-mac: steps.deplo-ci-kick.deploy-mac
       deploy-product: steps.deplo-ci-kick.deploy-product
       deploy-win: steps.deplo-ci-kick.deploy-win
+      integrate-builder: steps.deplo-ci-kick.integrate-builder
       integrate-src: steps.deplo-ci-kick.integrate-src
     steps:
       - name: Fetch repository cache
@@ -85,6 +87,38 @@ jobs:
         uses: mxschmitt/action-tmate@v3
         with:
           sudo: false
+  deploy-builder:
+    needs: [deplo-main]
+    if: needs.deplo-main.outputs.deploy-builder
+    name: Running job deploy-builder
+    runs-on: ubuntu-latest
+  
+    steps:
+      - name: Fetch repository cache
+        id: fetch-repository-cache
+        uses: actions/cache@v2
+        with:
+          path: .git
+          key: deplo-git-v1-${{ github.sha }}
+          restore-keys:
+            deplo-git-v1-
+      - name: Checkout
+        if: steps.fetch-repository-cache.outputs.cache-hit != 'true'
+        uses: actions/checkout@v2
+        with:
+          # deplo needs to refer previous commit of current HEAD to determine diff
+          fetch-depth: 2
+      
+      - name: Restore repository from cache
+        if: steps.fetch-repository-cache.outputs.cache-hit == 'true'
+        run: git reset --hard HEAD
+      - name: Run job deploy-builder
+        run: deplo ci run deploy-builder
+      - name: Setup ssh session to debug
+        if: ${{ failure() }}
+        uses: mxschmitt/action-tmate@v3
+        with:
+          sudo: true
   deploy-mac:
     needs: [deplo-main]
     if: needs.deplo-main.outputs.deploy-mac
@@ -118,7 +152,7 @@ jobs:
         with:
           sudo: true
   deploy-product:
-    needs: [deplo-main]
+    needs: ["deploy-mac","deploy-win","deploy-builder","deplo-main"]
     if: needs.deplo-main.outputs.deploy-product
     name: Running job deploy-product
     runs-on: ubuntu-latest
@@ -176,6 +210,38 @@ jobs:
         run: git reset --hard HEAD
       - name: Run job deploy-win
         run: deplo ci run deploy-win
+      - name: Setup ssh session to debug
+        if: ${{ failure() }}
+        uses: mxschmitt/action-tmate@v3
+        with:
+          sudo: true
+  integrate-builder:
+    needs: [deplo-main]
+    if: needs.deplo-main.outputs.integrate-builder
+    name: Running job integrate-builder
+    runs-on: ubuntu-latest
+  
+    steps:
+      - name: Fetch repository cache
+        id: fetch-repository-cache
+        uses: actions/cache@v2
+        with:
+          path: .git
+          key: deplo-git-v1-${{ github.sha }}
+          restore-keys:
+            deplo-git-v1-
+      - name: Checkout
+        if: steps.fetch-repository-cache.outputs.cache-hit != 'true'
+        uses: actions/checkout@v2
+        with:
+          # deplo needs to refer previous commit of current HEAD to determine diff
+          fetch-depth: 2
+      
+      - name: Restore repository from cache
+        if: steps.fetch-repository-cache.outputs.cache-hit == 'true'
+        run: git reset --hard HEAD
+      - name: Run job integrate-builder
+        run: deplo ci run integrate-builder
       - name: Setup ssh session to debug
         if: ${{ failure() }}
         uses: mxschmitt/action-tmate@v3

@@ -1,5 +1,5 @@
-FROM rust:slim
+FROM alpine:latest
 
-ADD cli /usr/local/bin/deplo
+ADD bin/cli /usr/local/bin/deplo
 
 ENTRYPOINT ["deplo"]
