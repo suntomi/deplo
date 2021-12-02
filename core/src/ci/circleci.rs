@@ -67,14 +67,14 @@ impl<S: shell::Shell> CircleCI<S> {
 }
 
 impl<'a, S: shell::Shell> module::Module for CircleCI<S> {
-    fn prepare(&self, _: bool) -> Result<(), Box<dyn Error>> {
+    fn prepare(&self, reinit: bool) -> Result<(), Box<dyn Error>> {
         let config = self.config.borrow();
         let repository_root = config.vcs_service()?.repository_root()?;
         let jobs = config.enumerate_jobs();
         let create_main = config.is_main_ci("GhAction");
         let circle_yml_path = format!("{}/.circleci/config.yml", repository_root);
         fs::create_dir_all(&format!("{}/.circleci", repository_root))?;
-        rm(&circle_yml_path);
+        let previously_no_file = !rm(&circle_yml_path);
         // generate job entries
         let mut job_descs = Vec::new();
         for (name, job) in &jobs {
@@ -86,8 +86,14 @@ impl<'a, S: shell::Shell> module::Module for CircleCI<S> {
             ).split("\n").map(|s| s.to_string()).collect::<Vec<String>>();
             job_descs = job_descs.into_iter().chain(lines.into_iter()).collect();
         }
-        // sync dotenv secrets with ci system
-        config.parse_dotenv(|k,v| (self as &dyn ci::CI).set_secret(k, v))?;
+        if previously_no_file || reinit {
+            // sync dotenv secrets with ci system
+            config.parse_dotenv(|k,v| {
+                (self as &dyn ci::CI).set_secret(k, v)?;
+                log::info!("set secret value of {}", k);
+                Ok(())
+            })?;
+        }
         fs::write(&circle_yml_path, format!(
             include_str!("../../res/ci/circleci/main.yml.tmpl"),
             image = config.deplo_image(), tag = config::DEPLO_GIT_HASH,

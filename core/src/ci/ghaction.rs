@@ -76,18 +76,20 @@ impl<S: shell::Shell> GhAction<S> {
 }
 
 impl<'a, S: shell::Shell> module::Module for GhAction<S> {
-    fn prepare(&self, _: bool) -> Result<(), Box<dyn Error>> {
+    fn prepare(&self, reinit: bool) -> Result<(), Box<dyn Error>> {
         let config = self.config.borrow();
         let repository_root = config.vcs_service()?.repository_root()?;
         let workflow_yml_path = format!("{}/.github/workflows/deplo-main.yml", repository_root);
         let create_main = config.is_main_ci("GhAction");
         fs::create_dir_all(&format!("{}/.github/workflows", repository_root))?;
-        rm(&workflow_yml_path);
+        let previously_no_file = !rm(&workflow_yml_path);
         // inject secrets from dotenv file
         let mut secrets = vec!();
         config.parse_dotenv(|k,v| {
-            (self as &dyn ci::CI).set_secret(k, v)?;
-            log::info!("set secret value of {}", k);
+            if previously_no_file || reinit {
+                (self as &dyn ci::CI).set_secret(k, v)?;
+                log::info!("set secret value of {}", k);
+            }
             Ok(secrets.push(format!("{}: ${{{{ secrets.{} }}}}", k, k)))
         })?;
         // generate job entries

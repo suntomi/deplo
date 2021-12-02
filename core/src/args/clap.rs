@@ -28,8 +28,7 @@ lazy_static! {
             .value_name("KEY(=VALUE),...")
             .about("Activate debug feature\n\
                 possible settings(concat with comma when specify multiple values): \n\
-                skip_rebase=flag)\n\
-                infra_debug=(flag)\n\
+                skip_set_secret=flag)\n\
                 force_set_release_target_to=(one of your release target)\n\
             ")
             .takes_value(true))
