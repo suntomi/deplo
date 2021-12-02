@@ -9,8 +9,8 @@ on:
         requred: true
   
 env:
-  DEPLO_GHACTION_PULL_REQUEST_URL: ${{{{ github.event.pull_request.url }}}}
-  DEPLO_GHACTION_RUN_JOB_NAME: ${{{{ github.event.inputs.deplo_job_name }}}}
+  DEPLO_CI_PULL_REQUEST_URL: ${{{{ github.event.pull_request.url }}}}
+  DEPLO_CI_RUN_JOB_NAME: ${{{{ github.event.inputs.deplo_job_name }}}}
 {secrets:>2}
 jobs:
   deplo-main:

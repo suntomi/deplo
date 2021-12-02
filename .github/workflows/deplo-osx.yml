@@ -8,7 +8,7 @@ on:
         required: true
 
 env:
-  DEPLO_GHACTION_PULL_REQUEST_URL: ${{ github.event.pull_request.url }}
+  DEPLO_CI_PULL_REQUEST_URL: ${{ github.event.pull_request.url }}
   DEPLO_ORG_NAME: ${{ secrets.DEPLO_ORG_NAME }}
   DEPLO_APP_NAME: ${{ secrets.DEPLO_APP_NAME }}
   DEPLO_APP_ID: ${{ secrets.DEPLO_APP_ID }}

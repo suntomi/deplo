@@ -6,7 +6,6 @@
     key: deplo-git-v1{opts_hash}-${{{{ github.sha }}}}
     restore-keys:
       deplo-git-v1{opts_hash}-
-      deplo-git-v1-
 - name: Checkout
   if: steps.fetch-repository-cache.outputs.cache-hit != 'true'
   uses: actions/checkout@v2

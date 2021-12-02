@@ -3,6 +3,7 @@ use std::error::Error;
 use std::result::Result;
 use std::collections::{HashMap};
 
+use log;
 use serde::{Deserialize, Serialize};
 
 use crate::config;
@@ -49,7 +50,7 @@ impl<S: shell::Shell> GhAction<S> {
     }
     fn generate_checkout_steps<'a>(&self, _: &'a str, options: &'a Option<HashMap<String, String>>) -> Vec<String> {
         let checkout_opts = options.as_ref().map_or_else(
-            || "".to_string(), 
+            || vec![], 
             |v| v.iter().map(|(k,v)| {
                 return if k == "lfs" {
                     format!("{}: {}", k, v)
@@ -57,16 +58,19 @@ impl<S: shell::Shell> GhAction<S> {
                     log::warn!("deplo only support lfs options for github action checkout but {}({}) is specified", k, v);
                     "".to_string()
                 }
-            }).collect::<Vec<String>>().join("\n")
+            }).collect::<Vec<String>>()
         );
         // hash value for separating repository cache according to checkout options
         let opts_hash = options.as_ref().map_or_else(
             || "".to_string(), 
-            |v| { maphash(v) }
+            |v| { format!("-{}", maphash(v)) }
         );
         format!(
             include_str!("../../res/ci/ghaction/checkout.yml.tmpl"), 
-            checkout_opts = checkout_opts, opts_hash = opts_hash
+            checkout_opts = MultilineFormatString{
+                strings: &checkout_opts,
+                postfix: None
+            }, opts_hash = opts_hash
         ).split("\n").map(|s| s.to_string()).collect()
     }
 }
@@ -83,6 +87,7 @@ impl<'a, S: shell::Shell> module::Module for GhAction<S> {
         let mut secrets = vec!();
         config.parse_dotenv(|k,v| {
             (self as &dyn ci::CI).set_secret(k, v)?;
+            log::info!("set secret value of {}", k);
             Ok(secrets.push(format!("{}: ${{{{ secrets.{} }}}}", k, k)))
         })?;
         // generate job entries
@@ -149,7 +154,7 @@ impl<S: shell::Shell> ci::CI for GhAction<S> {
         });
     }
     fn pull_request_url(&self) -> Result<Option<String>, Box<dyn Error>> {
-        match std::env::var("DEPLO_GHACTION_PULL_REQUEST_URL") {
+        match std::env::var("DEPLO_CI_PULL_REQUEST_URL") {
             Ok(v) => Ok(Some(v)),
             Err(e) => {
                 match e {
