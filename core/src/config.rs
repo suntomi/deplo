@@ -333,7 +333,7 @@ impl Config {
     pub fn deplo_image(&self) -> &str {
         match &self.common.deplo_image {
             Some(v) => v,
-            None => "suntomi/deplo"
+            None => "ghcr.io/suntomi/deplo"
         }
     }
     pub fn release_target(&self) -> Option<&str> {
