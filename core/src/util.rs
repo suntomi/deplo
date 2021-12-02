@@ -285,6 +285,12 @@ pub fn maphash(h: &HashMap<String, String>) -> String {
     format!("{:X}", digest.finalize())
 }
 
+pub fn sorted_key_iter<K: std::cmp::Ord,V>(h: &HashMap<K, V>) -> impl Iterator<Item=(&K, &V)> {
+    let mut v: Vec<_> = h.into_iter().collect();
+    v.sort_by(|x,y| x.0.cmp(&y.0));
+    v.into_iter()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -10,7 +10,7 @@ use crate::config;
 use crate::ci;
 use crate::shell;
 use crate::module;
-use crate::util::{escalate,seal,MultilineFormatString,rm,maphash};
+use crate::util::{escalate,seal,MultilineFormatString,rm,maphash,sorted_key_iter};
 
 #[derive(Serialize, Deserialize)]
 struct RepositoryPublicKeyResponse {
@@ -27,8 +27,8 @@ pub struct GhAction<S: shell::Shell = shell::Default> {
 impl<S: shell::Shell> GhAction<S> {
     fn generate_entrypoint<'a>(&self, config: &'a config::Config) -> Vec<String> {
         // get target branch
-        let target_branches = config.common.release_targets
-            .values().map(|s| &**s)
+        let target_branches = sorted_key_iter(&config.common.release_targets)
+            .map(|(_,v)| &**v)
             .collect::<Vec<&str>>().join(",");
         format!(
             include_str!("../../res/ci/ghaction/entrypoint.yml.tmpl"), 
@@ -36,7 +36,9 @@ impl<S: shell::Shell> GhAction<S> {
         ).split("\n").map(|s| s.to_string()).collect()
     }
     fn generate_outputs<'a>(&self, jobs: &HashMap<String, &'a config::Job>) -> Vec<String> {
-        jobs.keys().map(|s| format!("{}: steps.deplo-ci-kick.{}", s, s)).collect()
+        sorted_key_iter(jobs).map(|(k,_)| {
+            format!("{}: steps.deplo-ci-kick.{}", k, k)
+        }).collect()
     }
     fn generate_job_dependencies<'a>(&self, _: &'a config::Job) -> String {
         //TODO: support job.depends 
@@ -94,7 +96,7 @@ impl<'a, S: shell::Shell> module::Module for GhAction<S> {
         // generate job entries
         let mut job_descs = Vec::new();
         let jobs = config.enumerate_jobs();
-        for (name, job) in &jobs {
+        for (name, job) in sorted_key_iter(&jobs) {
             let lines = format!(
                 include_str!("../../res/ci/ghaction/job.yml.tmpl"), name = name,
                 needs = self.generate_job_dependencies(job),
