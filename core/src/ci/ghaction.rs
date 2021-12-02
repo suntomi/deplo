@@ -184,9 +184,10 @@ impl<S: shell::Shell> ci::CI for GhAction<S> {
         let user_and_repo = config.vcs_service()?.user_and_repo()?;
         let public_key_info = match serde_json::from_str::<RepositoryPublicKeyResponse>(
             &self.shell.eval_output_of(&format!(r#"
-                curl https://api.github.com/repos/{}/{}/actions/secrets/public-key?access_token={}
-            "#, user_and_repo.0, user_and_repo.1, token), shell::no_env())?
-        ) {
+                curl https://api.github.com/repos/{}/{}/actions/secrets/public-key \
+                -H "Authorization: token {}"
+            "#, user_and_repo.0, user_and_repo.1, token), shell::no_env()
+        )?) {
             Ok(v) => v,
             Err(e) => return escalate!(Box::new(e))
         };
@@ -198,11 +199,12 @@ impl<S: shell::Shell> ci::CI for GhAction<S> {
         let status = self.shell.exec(&vec!(
             "curl", "-X", "PUT",
             &format!(
-                "https://api.github.com/repos/{}/{}/actions/secrets/{}?access_token={}",
-                user_and_repo.0, user_and_repo.1, key, token
+                "https://api.github.com/repos/{}/{}/actions/secrets/{}",
+                user_and_repo.0, user_and_repo.1, key
             ),
             "-H", "Content-Type: application/json",
             "-H", "Accept: application/json",
+            "-H", &format!("Authorization: token {}", token),
             "-d", &json, "-w", "%{http_code}", "-o", "/dev/null"
         ), shell::no_env(), true)?.parse::<u32>()?;
         if status >= 200 && status < 300 {
