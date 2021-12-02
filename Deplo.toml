@@ -27,6 +27,7 @@ key = "${SUNTOMI_VCS_ACCOUNT_KEY}"
 patterns = ["tools/docker/Dockerfile.builder", "Cargo.*"]
 runner = { type = "Machine", os = "Linux" }
 command = """
+bash tools/scripts/copy_manifests.sh
 docker build -t ghcr.io/suntomi/deplo:builder -f tools/docker/Dockerfile.builder tools/docker
 """
 
@@ -44,6 +45,7 @@ path = "target"
 patterns = ["tools/docker/Dockerfile.builder", "Cargo.*"]
 runner = { type = "Machine", os = "Linux" }
 command = """
+bash tools/scripts/copy_manifests.sh
 docker build -t ghcr.io/suntomi/deplo:builder -f tools/docker/Dockerfile.builder tools/docker
 echo ${SUNTOMI_VCS_ACCOUNT_KEY} | docker login ghcr.io -u ${SUNTOMI_VCS_ACCOUNT} --password-stdin
 docker push ghcr.io/suntomi/deplo:builder
@@ -55,10 +57,9 @@ patterns = ["src/.*", "Cargo.*"]
 runner = { type = "Machine", os = "Linux" }
 command = """
 mkdir -p tools/docker/bin
-docker run --rm -ti -v $(pwd):/workdir -w /workdir -e CARGO_BUILD_TARGET_DIR=/tmp/target \
-    ghcr.io/suntomi/deplo:builder \
+docker run --rm -ti -v $(pwd):/workdir -w /workdir ghcr.io/suntomi/deplo:builder \
     bash -c "cargo build --release --target=x86_64-unknown-linux-musl && \
-        cp /tmp/target/x86_64-unknown-linux-musl/relase/cli /workdir"
+        cp /tmp/target/x86_64-unknown-linux-musl/release/cli /workdir/tools/docker/bin"
 docker build -t ghcr.io/suntomi/deplo:${DEPLO_VCS_CURRENT_SHA} -f tools/docker/Dockerfile tools/docker
 echo ${SUNTOMI_VCS_ACCOUNT_KEY} | docker login ghcr.io -u ${SUNTOMI_VCS_ACCOUNT} --password-stdin
 docker push ghcr.io/suntomi/deplo:${DEPLO_VCS_CURRENT_SHA}

@@ -20,7 +20,7 @@ jobs:
   deplo-main:
     name: Start CI
     runs-on: ubuntu-latest
-    container: suntomi/deplo:496e99267cb36559ea953d4f344a7fe356d1e70f
+    container: suntomi/deplo:8fecd6e3ef826fa16811e22b244f92f26741e97a
     outputs:
       deploy-builder: steps.deplo-ci-kick.deploy-builder
       deploy-mac: steps.deplo-ci-kick.deploy-mac
@@ -59,7 +59,7 @@ jobs:
     name: Cleanup CI
     needs: [deplo-main]
     runs-on: ubuntu-latest
-    container: suntomi/deplo:496e99267cb36559ea953d4f344a7fe356d1e70f
+    container: suntomi/deplo:8fecd6e3ef826fa16811e22b244f92f26741e97a
     steps:
       - name: Fetch repository cache
         id: fetch-repository-cache
