@@ -3,10 +3,10 @@
   if: needs.deplo-main.outputs.{name}
   name: Running job {name}
   runs-on: {machine}
-  {container}
+{container:>2}
   steps:
-{checkout:>6}
-    - name: Run job ${name}
+{checkout:>4}
+    - name: Run job {name}
       run: deplo ci run {name}
     - name: Setup ssh session to debug
       if: ${{{{ failure() }}}}

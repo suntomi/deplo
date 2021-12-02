@@ -55,13 +55,16 @@ impl<S: shell::Shell> CircleCI<S> {
                 }
             }).collect::<Vec<String>>()
         );
-        checkout_opts.push(format!("name: {}", options.as_ref().map_or_else(
+        checkout_opts.push(format!("opts_hash: {}", options.as_ref().map_or_else(
             || "".to_string(), 
             |v| maphash(v)
         )));
         format!(
             include_str!("../../res/ci/circleci/checkout.yml.tmpl"), 
-            checkout_opts = checkout_opts.join("\n"),
+            checkout_opts = MultilineFormatString{
+                strings: &checkout_opts,
+                postfix: None
+            }
         )
     }
 }

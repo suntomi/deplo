@@ -181,16 +181,24 @@ pub struct MultilineFormatString<'a> {
 impl<'a> fmt::Display for MultilineFormatString<'a> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let indent = f.width().unwrap_or(0);
-        for s in self.strings {
+        // iterate over element and index
+        for (i, s) in self.strings.iter().enumerate() {
             for _ in 0..indent {
                 write!(f, " ")?;
             }
             f.write_str(s)?;
+            // because template usually contains newline after {value:>2},
+            // last linefeed is not needed
+            if i == self.strings.len() - 1 {
+                continue;
+            }
             match self.postfix {
                 Some(v) => f.write_str(&format!("{}\n", v))?,
                 None => f.write_str("\n")?
             }
         }
+        //TODO: if strings has no element, we cannot cancel linefeed in template.
+        //need to find someway to do this.
         Ok(())
     }
 }

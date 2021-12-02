@@ -42,10 +42,10 @@ impl<S: shell::Shell> GhAction<S> {
         //TODO: support job.depends 
         format!("\"{}\"", ["deplo-main"].join("\",\""))
     }
-    fn generate_container_setting<'a>(&self, runner: &'a config::Runner) -> String {
+    fn generate_container_setting<'a>(&self, runner: &'a config::Runner) -> Vec<String> {
         match runner {
-            config::Runner::Machine{ image:_, os:_, class:_ } => "".to_string(),
-            config::Runner::Container{ image } => format!("container: {}", image)
+            config::Runner::Machine{ image:_, os:_, class:_ } => vec![],
+            config::Runner::Container{ image } => vec![format!("container: {}", image)]
         }
     }
     fn generate_checkout_steps<'a>(&self, _: &'a str, options: &'a Option<HashMap<String, String>>) -> Vec<String> {
@@ -55,8 +55,7 @@ impl<S: shell::Shell> GhAction<S> {
                 return if k == "lfs" {
                     format!("{}: {}", k, v)
                 } else {
-                    log::warn!("deplo only support lfs options for github action checkout but {}({}) is specified", k, v);
-                    "".to_string()
+                    format!("# warning: deplo only support lfs options for github action checkout but {}({}) is specified", k, v)
                 }
             }).collect::<Vec<String>>()
         );
@@ -110,7 +109,10 @@ impl<'a, S: shell::Shell> module::Module for GhAction<S> {
                     },
                     config::Runner::Container{image:_} => "ubuntu-latest",
                 },
-                container = self.generate_container_setting(&job.runner),
+                container = MultilineFormatString{
+                    strings: &self.generate_container_setting(&job.runner),
+                    postfix: None
+                },
                 checkout = MultilineFormatString{
                     strings: &self.generate_checkout_steps(&name, &job.checkout),
                     postfix: None
