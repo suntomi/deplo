@@ -52,7 +52,7 @@ jobs:
         run: deplo ci kick
       - name: Setup ssh session to debug
         if: ${{ failure() }}
-        uses: mxschmitt/action-tmate@v3
+        uses: umegaya/action-tmate@132a4fe73c61b3459556a7c1baf1eefc8c3e15d2
         with:
           sudo: false
   deplo-finish:
@@ -84,7 +84,7 @@ jobs:
         run: deplo ci fin
       - name: Setup ssh session to debug
         if: ${{ failure() }}
-        uses: mxschmitt/action-tmate@v3
+        uses: umegaya/action-tmate@132a4fe73c61b3459556a7c1baf1eefc8c3e15d2
         with:
           sudo: false
   deploy-builder:
@@ -116,7 +116,7 @@ jobs:
         run: deplo ci run deploy-builder
       - name: Setup ssh session to debug
         if: ${{ failure() }}
-        uses: mxschmitt/action-tmate@v3
+        uses: umegaya/action-tmate@132a4fe73c61b3459556a7c1baf1eefc8c3e15d2
         with:
           sudo: true
   deploy-mac:
@@ -148,7 +148,7 @@ jobs:
         run: deplo ci run deploy-mac
       - name: Setup ssh session to debug
         if: ${{ failure() }}
-        uses: mxschmitt/action-tmate@v3
+        uses: umegaya/action-tmate@132a4fe73c61b3459556a7c1baf1eefc8c3e15d2
         with:
           sudo: true
   deploy-product:
@@ -180,7 +180,7 @@ jobs:
         run: deplo ci run deploy-product
       - name: Setup ssh session to debug
         if: ${{ failure() }}
-        uses: mxschmitt/action-tmate@v3
+        uses: umegaya/action-tmate@132a4fe73c61b3459556a7c1baf1eefc8c3e15d2
         with:
           sudo: true
   deploy-win:
@@ -212,7 +212,7 @@ jobs:
         run: deplo ci run deploy-win
       - name: Setup ssh session to debug
         if: ${{ failure() }}
-        uses: mxschmitt/action-tmate@v3
+        uses: umegaya/action-tmate@132a4fe73c61b3459556a7c1baf1eefc8c3e15d2
         with:
           sudo: true
   integrate-builder:
@@ -244,7 +244,7 @@ jobs:
         run: deplo ci run integrate-builder
       - name: Setup ssh session to debug
         if: ${{ failure() }}
-        uses: mxschmitt/action-tmate@v3
+        uses: umegaya/action-tmate@132a4fe73c61b3459556a7c1baf1eefc8c3e15d2
         with:
           sudo: true
   integrate-src:
@@ -276,6 +276,6 @@ jobs:
         run: deplo ci run integrate-src
       - name: Setup ssh session to debug
         if: ${{ failure() }}
-        uses: mxschmitt/action-tmate@v3
+        uses: umegaya/action-tmate@132a4fe73c61b3459556a7c1baf1eefc8c3e15d2
         with:
           sudo: false

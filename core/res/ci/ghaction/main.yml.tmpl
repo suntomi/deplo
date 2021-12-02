@@ -25,7 +25,7 @@ jobs:
         run: deplo ci kick
       - name: Setup ssh session to debug
         if: ${{{{ failure() }}}}
-        uses: mxschmitt/action-tmate@v3
+        uses: umegaya/action-tmate@132a4fe73c61b3459556a7c1baf1eefc8c3e15d2
         with:
           sudo: false
   deplo-finish:
@@ -40,7 +40,7 @@ jobs:
         run: deplo ci fin
       - name: Setup ssh session to debug
         if: ${{{{ failure() }}}}
-        uses: mxschmitt/action-tmate@v3
+        uses: umegaya/action-tmate@132a4fe73c61b3459556a7c1baf1eefc8c3e15d2
         with:
           sudo: false
 {jobs:>2}
