@@ -182,11 +182,14 @@ impl<S: shell::Shell> ci::CI for GhAction<S> {
             }
         };
         let user_and_repo = config.vcs_service()?.user_and_repo()?;
-        let public_key_info = serde_json::from_str::<RepositoryPublicKeyResponse>(
+        let public_key_info = match serde_json::from_str::<RepositoryPublicKeyResponse>(
             &self.shell.eval_output_of(&format!(r#"
                 curl https://api.github.com/repos/{}/{}/actions/secrets/public-key?access_token={}
             "#, user_and_repo.0, user_and_repo.1, token), shell::no_env())?
-        )?;
+        ) {
+            Ok(v) => v,
+            Err(e) => return escalate!(Box::new(e))
+        };
         let json = format!("{{\"encrypted_value\":\"{}\",\"key_id\":\"{}\"}}", 
             //get value from env to unescapse
             seal(&std::env::var(key).unwrap(), &public_key_info.key)?,

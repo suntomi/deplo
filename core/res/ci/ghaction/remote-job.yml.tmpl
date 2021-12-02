@@ -1,0 +1,15 @@
+{name}:
+  needs: [{needs}]
+  if: needs.deplo-main.outputs.{name}
+  name: Running job {name}
+  runs-on: {machine}
+  {container}
+  steps:
+{checkout:>4}
+    - name: Run job ${name}
+      run: deplo ci run {name}
+    - name: Setup ssh session to debug
+      if: ${{{{ failure() }}}}
+      uses: mxschmitt/action-tmate@v3
+      with:
+        sudo: {sudo}
