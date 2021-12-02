@@ -18,7 +18,7 @@ pub struct CircleCI<S: shell::Shell = shell::Default> {
 impl<S: shell::Shell> CircleCI<S> {
     fn generate_entrypoint<'a>(&self, _: &'a config::Config) -> Vec<String> {
         include_str!("../../res/ci/circleci/entrypoint.yml.tmpl")
-            .to_string().split("\n").map(|s| s.trim().to_string()).collect()
+            .to_string().split("\n").map(|s| s.to_string()).collect()
     }
     fn generate_executor_setting<'a>(&self, runner: &'a config::Runner) -> String {
         return match runner {
@@ -83,7 +83,7 @@ impl<'a, S: shell::Shell> module::Module for CircleCI<S> {
                 name = name, machine_or_container = self.generate_executor_setting(&job.runner),
                 workdir = self.generate_workdir_setting(job),
                 checkout = self.generate_checkout_steps(&name, &job.checkout),
-            ).split("\n").map(|s| s.trim().to_string()).collect::<Vec<String>>();
+            ).split("\n").map(|s| s.to_string()).collect::<Vec<String>>();
             job_descs = job_descs.into_iter().chain(lines.into_iter()).collect();
         }
         // sync dotenv secrets with ci system

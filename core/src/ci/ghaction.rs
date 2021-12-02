@@ -32,7 +32,7 @@ impl<S: shell::Shell> GhAction<S> {
         format!(
             include_str!("../../res/ci/ghaction/entrypoint.yml.tmpl"), 
             targets = target_branches
-        ).split("\n").map(|s| s.trim().to_string()).collect()
+        ).split("\n").map(|s| s.to_string()).collect()
     }
     fn generate_outputs<'a>(&self, jobs: &HashMap<String, &'a config::Job>) -> Vec<String> {
         jobs.keys().map(|s| format!("{}: steps.deplo-ci-kick.{}", s, s)).collect()
@@ -67,7 +67,7 @@ impl<S: shell::Shell> GhAction<S> {
         format!(
             include_str!("../../res/ci/ghaction/checkout.yml.tmpl"), 
             checkout_opts = checkout_opts, opts_hash = opts_hash
-        ).split("\n").map(|s| s.trim().to_string()).collect()
+        ).split("\n").map(|s| s.to_string()).collect()
     }
 }
 
@@ -110,7 +110,7 @@ impl<'a, S: shell::Shell> module::Module for GhAction<S> {
                 },
                 //if in container, sudo does not required to install debug instrument
                 sudo = job.runs_on_machine()
-            ).split("\n").map(|s| s.trim().to_string()).collect::<Vec<String>>();
+            ).split("\n").map(|s| s.to_string()).collect::<Vec<String>>();
             job_descs = job_descs.into_iter().chain(lines.into_iter()).collect();
         }
         fs::write(&workflow_yml_path,
