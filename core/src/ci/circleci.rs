@@ -80,7 +80,8 @@ impl<'a, S: shell::Shell> module::Module for CircleCI<S> {
         let previously_no_file = !rm(&circle_yml_path);
         // generate job entries
         let mut job_descs = Vec::new();
-        for (name, job) in &jobs {
+        for (names, job) in &jobs {
+            let name = format!("{}-{}", names.0, names.1);
             let lines = format!(
                 include_str!("../../res/ci/circleci/job.yml.tmpl"),
                 name = name, machine_or_container = self.generate_executor_setting(&job.runner),

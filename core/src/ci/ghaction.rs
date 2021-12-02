@@ -35,14 +35,21 @@ impl<S: shell::Shell> GhAction<S> {
             targets = target_branches
         ).split("\n").map(|s| s.to_string()).collect()
     }
-    fn generate_outputs<'a>(&self, jobs: &HashMap<String, &'a config::Job>) -> Vec<String> {
-        sorted_key_iter(jobs).map(|(k,_)| {
-            format!("{}: steps.deplo-ci-kick.{}", k, k)
+    fn generate_outputs<'a>(&self, jobs: &HashMap<(&'a str, &'a str), &'a config::Job>) -> Vec<String> {
+        sorted_key_iter(jobs).map(|(v,_)| {
+            format!("{kind}-{name}: steps.deplo-ci-kick.{kind}-{name}", kind = v.0, name = v.1)
         }).collect()
     }
-    fn generate_job_dependencies<'a>(&self, _: &'a config::Job) -> String {
-        //TODO: support job.depends 
-        format!("\"{}\"", ["deplo-main"].join("\",\""))
+    fn generate_job_dependencies<'a>(&self, kind: &'a str, depends: &'a Option<Vec<String>>) -> String {
+        depends.as_ref().map_or_else(
+            || "deplo-main".to_string(),
+            |v| {
+                let mut vs = v.iter().map(|d| {
+                    format!("{}-{}", kind, d)
+                }).collect::<Vec<String>>();
+                vs.push("deplo-main".to_string());
+                format!("\"{}\"", vs.join("\",\""))
+            })
     }
     fn generate_container_setting<'a>(&self, runner: &'a config::Runner) -> Vec<String> {
         match runner {
@@ -96,10 +103,11 @@ impl<'a, S: shell::Shell> module::Module for GhAction<S> {
         // generate job entries
         let mut job_descs = Vec::new();
         let jobs = config.enumerate_jobs();
-        for (name, job) in sorted_key_iter(&jobs) {
+        for (names, job) in sorted_key_iter(&jobs) {
+            let name = format!("{}-{}", names.0, names.1);
             let lines = format!(
                 include_str!("../../res/ci/ghaction/job.yml.tmpl"), name = name,
-                needs = self.generate_job_dependencies(job),
+                needs = self.generate_job_dependencies(names.0, &job.depends),
                 machine = match job.runner {
                     config::Runner::Machine{ref image, ref os, class:_} => match image {
                         Some(v) => v.as_str(),
@@ -144,7 +152,8 @@ impl<'a, S: shell::Shell> module::Module for GhAction<S> {
                 jobs = MultilineFormatString{
                     strings: &job_descs,
                     postfix: None
-                }
+                },
+                needs = &self.generate_job_dependencies("deplo", &None)
             )
         )?;
         Ok(())

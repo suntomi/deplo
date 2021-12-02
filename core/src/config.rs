@@ -483,15 +483,14 @@ impl Config {
     pub fn should_silent_shell_exec(&self) -> bool {
         return self.runtime.verbosity <= 0;
     }
-    pub fn enumerate_jobs<'a>(&'a self) -> HashMap<String, &'a Job> {
-        let mut related_jobs: HashMap<String, &'a Job> = hashmap!{};
+    pub fn enumerate_jobs<'a>(&'a self) -> HashMap<(&'a str, &'a str), &'a Job> {
+        let mut related_jobs: HashMap<(&'a str, &'a str), &'a Job> = hashmap!{};
         for (kind, jobs) in hashmap!{
             "integrate" => &self.ci.workflow.integrate,
             "deploy" => &self.ci.workflow.deploy
         } {
             for (name, job) in jobs {
-                let key = format!("{}-{}", kind, name);
-                match related_jobs.insert(key, job) {
+                match related_jobs.insert((kind, name), job) {
                     None => {},
                     Some(_) => panic!("duplicated job name for {}: {}", kind, name)
                 }

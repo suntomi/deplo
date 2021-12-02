@@ -52,7 +52,7 @@ path = "target"
 
 
 [ci.workflow.deploy.product]
-depends_on = ["mac", "win"]
+depends = ["mac", "win"]
 patterns = ["src/.*", "Cargo.*"]
 runner = { type = "Machine", os = "Linux" }
 command = """

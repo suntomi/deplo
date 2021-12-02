@@ -20,7 +20,7 @@ jobs:
   deplo-main:
     name: Start CI
     runs-on: ubuntu-latest
-    container: suntomi/deplo:a54f9b89f5200178328805d6ec2078636fbf8a8f
+    container: suntomi/deplo:496e99267cb36559ea953d4f344a7fe356d1e70f
     outputs:
       deploy-mac: steps.deplo-ci-kick.deploy-mac
       deploy-product: steps.deplo-ci-kick.deploy-product
@@ -55,8 +55,9 @@ jobs:
           sudo: false
   deplo-finish:
     name: Cleanup CI
+    needs: [deplo-main]
     runs-on: ubuntu-latest
-    container: suntomi/deplo:a54f9b89f5200178328805d6ec2078636fbf8a8f
+    container: suntomi/deplo:496e99267cb36559ea953d4f344a7fe356d1e70f
     steps:
       - name: Fetch repository cache
         id: fetch-repository-cache
@@ -85,7 +86,7 @@ jobs:
         with:
           sudo: false
   deploy-mac:
-    needs: ["deplo-main"]
+    needs: [deplo-main]
     if: needs.deplo-main.outputs.deploy-mac
     name: Running job deploy-mac
     runs-on: windows-latest
@@ -117,7 +118,7 @@ jobs:
         with:
           sudo: true
   deploy-product:
-    needs: ["deplo-main"]
+    needs: [deplo-main]
     if: needs.deplo-main.outputs.deploy-product
     name: Running job deploy-product
     runs-on: ubuntu-latest
@@ -149,7 +150,7 @@ jobs:
         with:
           sudo: true
   deploy-win:
-    needs: ["deplo-main"]
+    needs: [deplo-main]
     if: needs.deplo-main.outputs.deploy-win
     name: Running job deploy-win
     runs-on: macos-latest
@@ -181,7 +182,7 @@ jobs:
         with:
           sudo: true
   integrate-src:
-    needs: ["deplo-main"]
+    needs: [deplo-main]
     if: needs.deplo-main.outputs.integrate-src
     name: Running job integrate-src
     runs-on: ubuntu-latest

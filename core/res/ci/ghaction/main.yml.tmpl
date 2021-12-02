@@ -30,6 +30,7 @@ jobs:
           sudo: false
   deplo-finish:
     name: Cleanup CI
+    needs: [{needs}]
     runs-on: ubuntu-latest
     container: {image}:{tag}
     steps:
