@@ -20,12 +20,14 @@ jobs:
   deplo-main:
     name: Start CI
     runs-on: ubuntu-latest
-    container: ghcr.io/suntomi/deplo:043f57b50710c6632b2fafd4832c1679c97d255d
+    container: ghcr.io/suntomi/deplo:08db7f95d20a863729c6f7a71bddf31dae18bf5d
     outputs:
+      deploy-base: steps.deplo-ci-kick.deploy-base
       deploy-builder: steps.deplo-ci-kick.deploy-builder
       deploy-mac: steps.deplo-ci-kick.deploy-mac
       deploy-product: steps.deplo-ci-kick.deploy-product
       deploy-win: steps.deplo-ci-kick.deploy-win
+      integrate-base: steps.deplo-ci-kick.integrate-base
       integrate-builder: steps.deplo-ci-kick.integrate-builder
       integrate-src: steps.deplo-ci-kick.integrate-src
     steps:
@@ -59,7 +61,7 @@ jobs:
     name: Cleanup CI
     needs: [deplo-main]
     runs-on: ubuntu-latest
-    container: ghcr.io/suntomi/deplo:043f57b50710c6632b2fafd4832c1679c97d255d
+    container: ghcr.io/suntomi/deplo:08db7f95d20a863729c6f7a71bddf31dae18bf5d
     steps:
       - name: Fetch repository cache
         id: fetch-repository-cache
@@ -87,6 +89,38 @@ jobs:
         uses: umegaya/action-tmate@132a4fe73c61b3459556a7c1baf1eefc8c3e15d2
         with:
           sudo: false
+  deploy-base:
+    needs: [deplo-main]
+    if: needs.deplo-main.outputs.deploy-base
+    name: Running job deploy-base
+    runs-on: ubuntu-latest
+  
+    steps:
+      - name: Fetch repository cache
+        id: fetch-repository-cache
+        uses: actions/cache@v2
+        with:
+          path: .git
+          key: deplo-git-v1-${{ github.sha }}
+          restore-keys:
+            deplo-git-v1-
+      - name: Checkout
+        if: steps.fetch-repository-cache.outputs.cache-hit != 'true'
+        uses: actions/checkout@v2
+        with:
+          # deplo needs to refer previous commit of current HEAD to determine diff
+          fetch-depth: 2
+      
+      - name: Restore repository from cache
+        if: steps.fetch-repository-cache.outputs.cache-hit == 'true'
+        run: git reset --hard HEAD
+      - name: Run job deploy-base
+        run: deplo ci run deploy-base
+      - name: Setup ssh session to debug
+        if: ${{ failure() }}
+        uses: umegaya/action-tmate@132a4fe73c61b3459556a7c1baf1eefc8c3e15d2
+        with:
+          sudo: true
   deploy-builder:
     needs: [deplo-main]
     if: needs.deplo-main.outputs.deploy-builder
@@ -210,6 +244,38 @@ jobs:
         run: git reset --hard HEAD
       - name: Run job deploy-win
         run: deplo ci run deploy-win
+      - name: Setup ssh session to debug
+        if: ${{ failure() }}
+        uses: umegaya/action-tmate@132a4fe73c61b3459556a7c1baf1eefc8c3e15d2
+        with:
+          sudo: true
+  integrate-base:
+    needs: [deplo-main]
+    if: needs.deplo-main.outputs.integrate-base
+    name: Running job integrate-base
+    runs-on: ubuntu-latest
+  
+    steps:
+      - name: Fetch repository cache
+        id: fetch-repository-cache
+        uses: actions/cache@v2
+        with:
+          path: .git
+          key: deplo-git-v1-${{ github.sha }}
+          restore-keys:
+            deplo-git-v1-
+      - name: Checkout
+        if: steps.fetch-repository-cache.outputs.cache-hit != 'true'
+        uses: actions/checkout@v2
+        with:
+          # deplo needs to refer previous commit of current HEAD to determine diff
+          fetch-depth: 2
+      
+      - name: Restore repository from cache
+        if: steps.fetch-repository-cache.outputs.cache-hit == 'true'
+        run: git reset --hard HEAD
+      - name: Run job integrate-base
+        run: deplo ci run integrate-base
       - name: Setup ssh session to debug
         if: ${{ failure() }}
         uses: umegaya/action-tmate@132a4fe73c61b3459556a7c1baf1eefc8c3e15d2

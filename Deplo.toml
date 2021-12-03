@@ -23,6 +23,13 @@ key = "${SUNTOMI_VCS_ACCOUNT_KEY}"
 
 
 # workflow settings (CI)
+[ci.workflow.integrate.base]
+patterns = ["tools/docker/Dockerfile.base"]
+runner = { type = "Machine", os = "Linux" }
+command = """
+docker build -t ghcr.io/suntomi/deplo:base -f tools/docker/Dockerfile.base tools/docker
+"""
+
 [ci.workflow.integrate.builder]
 patterns = ["tools/docker/Dockerfile.builder", "Cargo.*"]
 runner = { type = "Machine", os = "Linux" }
@@ -41,6 +48,15 @@ path = "target"
 
 
 # workflow settings (CD)
+[ci.workflow.deploy.base]
+patterns = ["tools/docker/Dockerfile.base"]
+runner = { type = "Machine", os = "Linux" }
+command = """
+docker build -t ghcr.io/suntomi/deplo:base -f tools/docker/Dockerfile.base tools/docker
+echo ${SUNTOMI_VCS_ACCOUNT_KEY} | docker login ghcr.io -u ${SUNTOMI_VCS_ACCOUNT} --password-stdin
+docker push ghcr.io/suntomi/deplo:base
+"""
+
 [ci.workflow.deploy.builder]
 patterns = ["tools/docker/Dockerfile.builder", "Cargo.*"]
 runner = { type = "Machine", os = "Linux" }
