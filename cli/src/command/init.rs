@@ -21,12 +21,18 @@ impl<S: shell::Shell, A: args::Args> command::Command<A> for Init<S> {
             shell: S::new(config)
         });
     }
-    fn run(&self, _: &A) -> Result<(), Box<dyn Error>> {
+    fn run(&self, args: &A) -> Result<(), Box<dyn Error>> {
         log::info!("init command invoked");
-        let config = self.config.borrow();
-        fs::create_dir_all(&config.root_path())?;
+        {
+            // use block to release ownership of config before prepare_XXX call
+            let config = self.config.borrow();
+            fs::create_dir_all(&config.root_path())?;
+        }
+        // do preparation
+        let reinit = args.value_of("reinit").unwrap_or("none");
+        config::Config::prepare_ci(&self.config, reinit == "all" || reinit == "ci")?;
+        config::Config::prepare_vcs(&self.config, reinit == "all" || reinit == "vcs")?;
 
-        log::info!("create new environment by terraformer");
         return Ok(())
     }
 }

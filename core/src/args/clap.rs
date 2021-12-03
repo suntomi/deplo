@@ -42,14 +42,6 @@ lazy_static! {
             .long("dryrun")
             .about("Prints executed commands instead of invoking them")
             .takes_value(false))
-        .arg(Arg::new("reinit")
-            .long("reinit")
-            .about("initialize component")
-            .required(false)
-            .takes_value(true)
-            .possible_values(
-                &["tf", "cloud", "ci", "vcs", "all"]
-            ))            
         .arg(Arg::new("verbosity")
             .short('v')
             .long("verbose")
@@ -80,6 +72,14 @@ lazy_static! {
         .subcommand(
             App::new("init")
                 .about("initialize deplo project. need to configure deplo.json beforehand")
+                .arg(Arg::new("reinit")
+                    .long("reinit")
+                    .about("initialize component")
+                    .required(false)
+                    .takes_value(true)
+                    .possible_values(
+                        &["ci", "vcs", "all"]
+                    ))
         )
         .subcommand(
             App::new("destroy")

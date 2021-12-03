@@ -292,10 +292,10 @@ impl Config {
         }
         return Ok(c);
     }
-    pub fn setup<'a, A: args::Args>(c: &'a mut Container, args: &A) -> Result<&'a Container, Box<dyn Error>> {
+    pub fn setup<'a, A: args::Args>(c: &'a mut Container, _: &A) -> Result<&'a Container, Box<dyn Error>> {
         // setup module cache
-        Self::ensure_ci_init(&c)?;
-        Self::ensure_vcs_init(&c)?;
+        Self::setup_ci(&c)?;
+        Self::setup_vcs(&c)?;
         // set release target
         {
             // because vcs_service create object which have reference of `c` ,
@@ -314,11 +314,6 @@ impl Config {
                 )
             }
         }
-        // do preparation
-        let reinit = args.value_of("reinit").unwrap_or("none");
-        Self::prepare_ci(&c, reinit == "all" || reinit == "ci")?;
-        Self::prepare_vcs(&c, reinit == "all" || reinit == "vcs")?;
-
         return Ok(c);
     }
     pub fn root_path(&self) -> &path::Path {
@@ -427,15 +422,8 @@ impl Config {
     pub fn ci_workflow<'a>(&'a self) -> &'a WorkflowConfig {
         return &self.ci.workflow
     }
-    fn prepare_ci(c: &Container, reinit: bool) -> Result<(), Box<dyn Error>> {
-        let c = c.ptr.borrow();
-        let cache = &c.ci_caches;
-        for (_, ci) in cache {
-            ci.prepare(reinit)?;
-        }
-        Ok(())
-    }
-    fn ensure_ci_init(c: &Container) -> Result<(), Box<dyn Error>> {
+    // setup_XXX is called any subcommand invocation. just create module objects
+    fn setup_ci(c: &Container) -> Result<(), Box<dyn Error>> {
         let mut caches = hashmap!{};
         {
             let immc = c.borrow();
@@ -449,7 +437,22 @@ impl Config {
         }
         Ok(())
     }
-    fn prepare_vcs(c: &Container, reinit: bool) -> Result<(), Box<dyn Error>> {
+    fn setup_vcs(c: &Container) -> Result<(), Box<dyn Error>> {
+        let vcs = vcs::factory(c)?;
+        let mut mutc = c.ptr.borrow_mut();
+        mutc.vcs_cache.push(vcs);
+        Ok(())
+    }
+    // prepare_XXX called from deplo init only. first time initialization
+    pub fn prepare_ci(c: &Container, reinit: bool) -> Result<(), Box<dyn Error>> {
+        let c = c.ptr.borrow();
+        let cache = &c.ci_caches;
+        for (_, ci) in cache {
+            ci.prepare(reinit)?;
+        }
+        Ok(())
+    }
+    pub fn prepare_vcs(c: &Container, reinit: bool) -> Result<(), Box<dyn Error>> {
         let c = c.ptr.borrow();
         let cache = &c.vcs_cache;
         if cache.len() <= 0 {
@@ -458,12 +461,6 @@ impl Config {
             }))
         }
         cache[0].prepare(reinit)
-    }
-    fn ensure_vcs_init(c: &Container) -> Result<(), Box<dyn Error>> {
-        let vcs = vcs::factory(c)?;
-        let mut mutc = c.ptr.borrow_mut();
-        mutc.vcs_cache.push(vcs);
-        Ok(())
     }
     pub fn vcs_service<'a>(&'a self) -> Result<&'a Box<dyn vcs::VCS>, Box<dyn Error>> {
         return if self.vcs_cache.len() > 0 {
