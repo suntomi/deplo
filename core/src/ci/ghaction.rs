@@ -4,6 +4,7 @@ use std::result::Result;
 use std::collections::{HashMap};
 
 use log;
+use maplit::hashmap;
 use serde::{Deserialize, Serialize};
 
 use crate::config;
@@ -108,7 +109,8 @@ impl<'a, S: shell::Shell> module::Module for GhAction<S> {
             let name = format!("{}-{}", names.0, names.1);
             all_job_names.push(name.clone());
             let lines = format!(
-                include_str!("../../res/ci/ghaction/job.yml.tmpl"), name = name,
+                include_str!("../../res/ci/ghaction/job.yml.tmpl"), 
+                full_name = name, kind = names.0, name = names.1,
                 needs = self.generate_job_dependencies(names.0, &job.depends),
                 machine = match job.runner {
                     config::Runner::Machine{ref image, ref os, class:_} => match image {
@@ -182,7 +184,6 @@ impl<S: shell::Shell> ci::CI for GhAction<S> {
         }
     }
     fn run_job(&self, _: &str) -> Result<String, Box<dyn Error>> {
-        log::warn!("TODO: implement run_job for ghaction");
         Ok("".to_string())
     }
     fn wait_job(&self, _: &str) -> Result<(), Box<dyn Error>> {
@@ -192,6 +193,11 @@ impl<S: shell::Shell> ci::CI for GhAction<S> {
     fn wait_job_by_name(&self, _: &str) -> Result<(), Box<dyn Error>> {
         log::warn!("TODO: implement wait_job_by_name for ghaction");
         Ok(())
+    }
+    fn job_env(&self) -> HashMap<String, String> {
+        return hashmap!{
+
+        }
     }
     fn set_secret(&self, key: &str, _: &str) -> Result<(), Box<dyn Error>> {
         let config = self.config.borrow();
@@ -208,7 +214,7 @@ impl<S: shell::Shell> ci::CI for GhAction<S> {
             &self.shell.eval_output_of(&format!(r#"
                 curl https://api.github.com/repos/{}/{}/actions/secrets/public-key \
                 -H "Authorization: token {}"
-            "#, user_and_repo.0, user_and_repo.1, token), shell::no_env()
+            "#, user_and_repo.0, user_and_repo.1, token), shell::no_env(), shell::no_cwd()
         )?) {
             Ok(v) => v,
             Err(e) => return escalate!(Box::new(e))
@@ -228,7 +234,7 @@ impl<S: shell::Shell> ci::CI for GhAction<S> {
             "-H", "Accept: application/json",
             "-H", &format!("Authorization: token {}", token),
             "-d", &json, "-w", "%{http_code}", "-o", "/dev/null"
-        ), shell::no_env(), true)?.parse::<u32>()?;
+        ), shell::no_env(), shell::no_cwd(), true)?.parse::<u32>()?;
         if status >= 200 && status < 300 {
             Ok(())
         } else {

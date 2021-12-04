@@ -1,8 +1,8 @@
-{name}:
-  name: Running job {name}
+{full_name}:
+  name: Running job {full_name}
 {machine_or_container:>2}
 {workdir:>2}
   steps:
 {checkout:>4}
-    - name: Start workflow
-      run: deplo ci workflow {name}
+    - name: {kind} {name}
+      run: deplo ci {kind} {name}

@@ -13,7 +13,7 @@ pub struct CI<S: shell::Shell = shell::Default> {
     pub config: config::Container,
     pub shell: S
 }
-impl<S: shell::Shell> CI<S> {
+impl<S: shell::Shell> CI<S> {    
     fn kick<A: args::Args>(&self, _: &A) -> Result<(), Box<dyn Error>> {
         log::info!("kick command invoked");
         let config = self.config.borrow();
@@ -31,7 +31,7 @@ impl<S: shell::Shell> CI<S> {
                     .to_string_lossy().to_string()
             }).collect::<Vec<String>>();
             if vcs.changed(&ps.iter().map(std::ops::Deref::deref).collect()) {
-                self.shell.run_code_or_file(&job.command, shell::no_env())?;
+                self.shell.run_code_or_file(&job.command, shell::no_env(), shell::no_cwd())?;
             }
         }
         Ok(())
@@ -44,6 +44,11 @@ impl<S: shell::Shell> CI<S> {
     }
     fn fin<A: args::Args>(&self, _: &A) -> Result<(), Box<dyn Error>> {
         Ok(())
+    }
+    fn exec<A: args::Args>(&self, kind: &str, args: &A) -> Result<(), Box<dyn Error>> {
+        let config = self.config.borrow();
+        config.run_job(&self.shell, &format!("{}-{}", kind, args.value_of("name").unwrap()))?;
+        return Ok(())
     }
 }
 
@@ -59,6 +64,8 @@ impl<S: shell::Shell, A: args::Args> command::Command<A> for CI<S> {
             Some(("kick", subargs)) => return self.kick(&subargs),
             Some(("setenv", subargs)) => return self.setenv(&subargs),
             Some(("fin", subargs)) => return self.fin(&subargs),
+            Some(("deploy", subargs)) => return self.exec("deploy", &subargs),
+            Some(("integrate", subargs)) => return self.exec("integrate", &subargs),
             Some((name, _)) => return escalate!(args.error(
                 &format!("no such subcommand: [{}]", name) 
             )),

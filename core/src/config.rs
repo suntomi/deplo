@@ -17,6 +17,7 @@ use regex::Regex;
 use crate::args;
 use crate::vcs;
 use crate::ci;
+use crate::shell;
 use crate::util::{escalate,envsubst};
 
 pub const DEPLO_GIT_HASH: &'static str = env!("GIT_HASH");
@@ -37,7 +38,7 @@ impl Error for ConfigError {
     }
 }
 
-#[derive(Serialize, Deserialize, Clone, Copy)]
+#[derive(Serialize, Deserialize, Clone, Copy, Eq, PartialEq)]
 pub enum RunnerOS {
     Linux,
     Windows,
@@ -46,10 +47,19 @@ pub enum RunnerOS {
 impl RunnerOS {
     pub fn from_str(s: &str) -> Result<Self, &'static str> {
         match s {
-            "linux" => Ok(RunnerOS::Linux),
-            "windows" => Ok(RunnerOS::Windows),
-            "macos" => Ok(RunnerOS::MacOS),
+            "linux" => Ok(Self::Linux),
+            "windows" => Ok(Self::Windows),
+            "macos" => Ok(Self::MacOS),
             _ => Err("unknown OS"),
+        }
+    }
+}
+impl fmt::Display for RunnerOS {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Linux{..} => write!(f, "Linux"),
+            Self::Windows{..} => write!(f, "Windows"),
+            Self::MacOS{..} => write!(f, "MacOS"),
         }
     }
 }
@@ -77,10 +87,12 @@ pub struct Job {
     pub patterns: Vec<String>,
     pub runner: Runner,
     pub command: String,
+    pub env: Option<HashMap<String, String>>,
     pub workdir: Option<String>,
     pub checkout: Option<HashMap<String, String>>,
     pub caches: Option<Vec<Cache>>,
     pub depends: Option<Vec<String>>,
+    pub options: Option<HashMap<String, String>>,
 }
 impl Job {
     pub fn runner_os(&self) -> RunnerOS {
@@ -94,6 +106,18 @@ impl Job {
             Runner::Machine{ os:_, image:_, class:_ } => true,
             Runner::Container{ image: _ } => false
         }
+    }
+    pub fn job_env<'a>(&self, config: &'a Config) -> HashMap<String, String> {
+        let ci = config.ci_service_by_job(&self).unwrap();
+        let env = ci.job_env();
+        return match &self.env {
+            Some(v) => {
+                let mut h = env.clone();
+                h.extend(v.clone());
+                h
+            },
+            None => env
+        };
     }
 }
 #[derive(Serialize, Deserialize)]
@@ -419,6 +443,15 @@ impl Config {
             }))
         } 
     }
+    pub fn ci_service_by_job<'a, 'b>(&'a self, job: &'b Job) -> Result<&'a Box<dyn ci::CI>, Box<dyn Error>> {
+        let account_name = job.account.as_ref().map_or_else(||"default", |v| v.as_str());
+        return match self.ci_caches.get(account_name) {
+            Some(ci) => Ok(ci),
+            None => escalate!(Box::new(ConfigError{ 
+                cause: format!("no ci service for {}", account_name) 
+            }))
+        } 
+    }
     pub fn ci_workflow<'a>(&'a self) -> &'a WorkflowConfig {
         return &self.ci.workflow
     }
@@ -495,6 +528,52 @@ impl Config {
         }
         return related_jobs
     }
+    pub fn find_job<'a>(&'a self, name: &str) -> Option<&'a Job> {
+        let key = match name.find("-").map(|i| name.split_at(i)).map(|(k, v)| (k, v)) {
+            Some(v) => v,
+            None => return None
+        };
+        return match self.enumerate_jobs().get(&key) {
+            Some(v) => Some(v),
+            None => None
+        };
+    }
+    pub fn run_job(&self, shell: &impl shell::Shell, name: &str) -> Result<String, Box<dyn Error>> {
+        match self.find_job(name) {
+            Some(v) => {
+                match v.runner {
+                    Runner::Machine{image:_, ref os, class:_} => {
+                        let current_os = shell.detect_os()?;
+                        if *os == current_os {
+                            // run command directly here
+                            shell.eval(&v.command, shell::inherit_and(&v.job_env(self)), v.workdir.as_ref(), false)?;
+                        } else {
+                            log::debug!("runner os is different from current os {} {}", os, current_os);
+                            // runner os is not linux and not same as current os. need to run in CI.
+                            let ci = self.ci_service_by_job(v)?;
+                            return ci.run_job(name);
+                        }
+                    },
+                    Runner::Container{ ref image } => {
+                        if std::env::var("CI").is_ok() {
+                            // already run inside container `image`, run command directly here
+                            shell.eval(&v.command, shell::inherit_and(&v.job_env(self)), v.workdir.as_ref(), false)?;
+                        } else {
+                            // running on host. run command in container `image` with docker
+                            shell.eval_on_container(
+                                image, &v.command, shell::inherit_and(&v.job_env(self)), 
+                                v.workdir.as_ref(), false
+                            )?;
+                        }
+                    }
+                }
+            },
+            None => return escalate!(Box::new(
+                ConfigError{ cause: format!("job {} not found", name) }
+            ))
+        }
+        Ok("".to_string())
+    }    
     pub fn is_main_ci(&self, ci_type: &str) -> bool {
         // default always should exist
         return self.ci.accounts.get("default").unwrap().type_matched(ci_type);

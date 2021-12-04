@@ -3,6 +3,8 @@ use std::error::Error;
 use std::result::Result;
 use std::collections::{HashMap};
 
+use maplit::hashmap;
+
 use crate::config;
 use crate::ci;
 use crate::shell;
@@ -84,7 +86,8 @@ impl<'a, S: shell::Shell> module::Module for CircleCI<S> {
             let name = format!("{}-{}", names.0, names.1);
             let lines = format!(
                 include_str!("../../res/ci/circleci/job.yml.tmpl"),
-                name = name, machine_or_container = self.generate_executor_setting(&job.runner),
+                full_name = name, kind = names.0, name = names.1, 
+                machine_or_container = self.generate_executor_setting(&job.runner),
                 workdir = self.generate_workdir_setting(job),
                 checkout = self.generate_checkout_steps(&name, &job.checkout),
             ).split("\n").map(|s| s.to_string()).collect::<Vec<String>>();
@@ -146,6 +149,11 @@ impl<'a, S: shell::Shell> ci::CI for CircleCI<S> {
         log::warn!("TODO: implement wait_job_by_name for circleci");
         Ok(())
     }
+    fn job_env(&self) -> HashMap<String, String> {
+        return hashmap!{
+
+        }
+    }
     fn set_secret(&self, key: &str, val: &str) -> Result<(), Box<dyn Error>> {
         let config = self.config.borrow();
         let token = match &config.ci_config(&self.account_name) {
@@ -167,7 +175,7 @@ impl<'a, S: shell::Shell> ci::CI for CircleCI<S> {
             "-H", "Content-Type: application/json",
             "-H", "Accept: application/json",
             "-d", &json, "-w", "%{http_code}", "-o", "/dev/null"
-        ), shell::no_env(), true)?.parse::<u32>()?;
+        ), shell::no_env(), shell::no_cwd(), true)?.parse::<u32>()?;
         if status >= 200 && status < 300 {
             Ok(())
         } else {

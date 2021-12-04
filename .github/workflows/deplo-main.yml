@@ -20,7 +20,7 @@ jobs:
   deplo-main:
     name: Start CI
     runs-on: ubuntu-latest
-    container: ghcr.io/suntomi/deplo:dbacd9599427986136acd470334d234ab9541405
+    container: ghcr.io/suntomi/deplo:0808caf2c25e7ad1716ab89737771f83096d8d98
     outputs:
       deploy-base: steps.deplo-ci-kick.deploy-base
       deploy-builder: steps.deplo-ci-kick.deploy-builder
@@ -61,7 +61,7 @@ jobs:
     name: Cleanup CI
     needs: ["deplo-main","deploy-base","deploy-builder","deploy-mac","deploy-product","deploy-win","integrate-base","integrate-builder","integrate-src"]
     runs-on: ubuntu-latest
-    container: ghcr.io/suntomi/deplo:dbacd9599427986136acd470334d234ab9541405
+    container: ghcr.io/suntomi/deplo:0808caf2c25e7ad1716ab89737771f83096d8d98
     steps:
       - name: Fetch repository cache
         id: fetch-repository-cache
@@ -89,7 +89,7 @@ jobs:
         uses: umegaya/action-tmate@a3d459813f3429bd95fc48bcd980b2fb40f10ad0
         with:
           sudo: false
-  deploy-base:
+  base:
     needs: [deplo-main]
     if: needs.deplo-main.outputs.deploy-base
     name: Running job deploy-base
@@ -114,14 +114,14 @@ jobs:
       - name: Restore repository from cache
         if: steps.fetch-repository-cache.outputs.cache-hit == 'true'
         run: git reset --hard HEAD
-      - name: Run job deploy-base
-        run: deplo ci run deploy-base
+      - name: deploy base
+        run: deplo ci deploy base
       - name: Setup ssh session to debug
         if: ${{ failure() }}
         uses: umegaya/action-tmate@a3d459813f3429bd95fc48bcd980b2fb40f10ad0
         with:
           sudo: true
-  deploy-builder:
+  builder:
     needs: [deplo-main]
     if: needs.deplo-main.outputs.deploy-builder
     name: Running job deploy-builder
@@ -146,14 +146,14 @@ jobs:
       - name: Restore repository from cache
         if: steps.fetch-repository-cache.outputs.cache-hit == 'true'
         run: git reset --hard HEAD
-      - name: Run job deploy-builder
-        run: deplo ci run deploy-builder
+      - name: deploy builder
+        run: deplo ci deploy builder
       - name: Setup ssh session to debug
         if: ${{ failure() }}
         uses: umegaya/action-tmate@a3d459813f3429bd95fc48bcd980b2fb40f10ad0
         with:
           sudo: true
-  deploy-mac:
+  mac:
     needs: [deplo-main]
     if: needs.deplo-main.outputs.deploy-mac
     name: Running job deploy-mac
@@ -178,14 +178,14 @@ jobs:
       - name: Restore repository from cache
         if: steps.fetch-repository-cache.outputs.cache-hit == 'true'
         run: git reset --hard HEAD
-      - name: Run job deploy-mac
-        run: deplo ci run deploy-mac
+      - name: deploy mac
+        run: deplo ci deploy mac
       - name: Setup ssh session to debug
         if: ${{ failure() }}
         uses: umegaya/action-tmate@a3d459813f3429bd95fc48bcd980b2fb40f10ad0
         with:
           sudo: true
-  deploy-product:
+  product:
     needs: ["deploy-mac","deploy-win","deploy-builder","deplo-main"]
     if: needs.deplo-main.outputs.deploy-product
     name: Running job deploy-product
@@ -210,14 +210,14 @@ jobs:
       - name: Restore repository from cache
         if: steps.fetch-repository-cache.outputs.cache-hit == 'true'
         run: git reset --hard HEAD
-      - name: Run job deploy-product
-        run: deplo ci run deploy-product
+      - name: deploy product
+        run: deplo ci deploy product
       - name: Setup ssh session to debug
         if: ${{ failure() }}
         uses: umegaya/action-tmate@a3d459813f3429bd95fc48bcd980b2fb40f10ad0
         with:
           sudo: true
-  deploy-win:
+  win:
     needs: [deplo-main]
     if: needs.deplo-main.outputs.deploy-win
     name: Running job deploy-win
@@ -242,14 +242,14 @@ jobs:
       - name: Restore repository from cache
         if: steps.fetch-repository-cache.outputs.cache-hit == 'true'
         run: git reset --hard HEAD
-      - name: Run job deploy-win
-        run: deplo ci run deploy-win
+      - name: deploy win
+        run: deplo ci deploy win
       - name: Setup ssh session to debug
         if: ${{ failure() }}
         uses: umegaya/action-tmate@a3d459813f3429bd95fc48bcd980b2fb40f10ad0
         with:
           sudo: true
-  integrate-base:
+  base:
     needs: [deplo-main]
     if: needs.deplo-main.outputs.integrate-base
     name: Running job integrate-base
@@ -274,14 +274,14 @@ jobs:
       - name: Restore repository from cache
         if: steps.fetch-repository-cache.outputs.cache-hit == 'true'
         run: git reset --hard HEAD
-      - name: Run job integrate-base
-        run: deplo ci run integrate-base
+      - name: integrate base
+        run: deplo ci integrate base
       - name: Setup ssh session to debug
         if: ${{ failure() }}
         uses: umegaya/action-tmate@a3d459813f3429bd95fc48bcd980b2fb40f10ad0
         with:
           sudo: true
-  integrate-builder:
+  builder:
     needs: [deplo-main]
     if: needs.deplo-main.outputs.integrate-builder
     name: Running job integrate-builder
@@ -306,14 +306,14 @@ jobs:
       - name: Restore repository from cache
         if: steps.fetch-repository-cache.outputs.cache-hit == 'true'
         run: git reset --hard HEAD
-      - name: Run job integrate-builder
-        run: deplo ci run integrate-builder
+      - name: integrate builder
+        run: deplo ci integrate builder
       - name: Setup ssh session to debug
         if: ${{ failure() }}
         uses: umegaya/action-tmate@a3d459813f3429bd95fc48bcd980b2fb40f10ad0
         with:
           sudo: true
-  integrate-src:
+  src:
     needs: [deplo-main]
     if: needs.deplo-main.outputs.integrate-src
     name: Running job integrate-src
@@ -338,8 +338,8 @@ jobs:
       - name: Restore repository from cache
         if: steps.fetch-repository-cache.outputs.cache-hit == 'true'
         run: git reset --hard HEAD
-      - name: Run job integrate-src
-        run: deplo ci run integrate-src
+      - name: integrate src
+        run: deplo ci integrate src
       - name: Setup ssh session to debug
         if: ${{ failure() }}
         uses: umegaya/action-tmate@a3d459813f3429bd95fc48bcd980b2fb40f10ad0

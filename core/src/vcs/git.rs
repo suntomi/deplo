@@ -10,12 +10,14 @@ use crate::util::defer;
 // because defer uses Drop trait behaviour, this cannot be de-duped as function
 macro_rules! setup_remote {
     ($git:expr, $url:expr) => {
-        $git.shell.exec(&vec!("git", "remote", "add", "latest", $url), shell::no_env(), false)?;
+        $git.shell.exec(&vec!(
+            "git", "remote", "add", "latest", $url
+        ), shell::no_env(), shell::no_cwd(), false)?;
         // defered removal of latest
         defer!(
             $git.shell.exec(&vec!(
                 "git", "remote", "remove", "latest"
-            ), shell::no_env(), false).unwrap();
+            ), shell::no_env(), shell::no_cwd(), false).unwrap();
         );
     };
 }
@@ -51,8 +53,12 @@ pub trait GitHubFeatures {
 impl<S: shell::Shell> Git<S> {
     fn setup_author(&self) -> Result<(), Box<dyn Error>> {
         log::info!("git: setup {}/{}", self.email, self.username);
-        self.shell.exec(&vec!("git", "config", "--global", "user.email", &self.email), shell::no_env(), false)?;
-        self.shell.exec(&vec!("git", "config", "--global", "user.name", &self.username), shell::no_env(), false)?;
+        self.shell.exec(&vec!(
+            "git", "config", "--global", "user.email", &self.email
+        ), shell::no_env(), shell::no_cwd(), false)?;
+        self.shell.exec(&vec!(
+            "git", "config", "--global", "user.name", &self.username
+        ), shell::no_env(), shell::no_cwd(), false)?;
         Ok(())
     }
     fn hub_env(&self) -> Result<HashMap<String, String>, Box<dyn Error>> {
@@ -81,22 +87,22 @@ impl<S: shell::Shell> GitFeatures for Git<S> {
     fn current_branch(&self) -> Result<String, Box<dyn Error>> {
         Ok(self.shell.output_of(&vec!(
             "git", "symbolic-ref" , "--short", "HEAD"
-        ), shell::no_env())?)
+        ), shell::no_env(), shell::no_cwd())?)
     }
     fn commit_hash(&self) -> Result<String, Box<dyn Error>> {
         Ok(self.shell.output_of(&vec!(
             "git", "rev-parse" , "--short", "HEAD"
-        ), shell::no_env())?)
+        ), shell::no_env(), shell::no_cwd())?)
     }
     fn remote_origin(&self) -> Result<String, Box<dyn Error>> {
         Ok(self.shell.output_of(&vec!(
             "git", "config", "--get", "remote.origin.url"
-        ), shell::no_env())?)
+        ), shell::no_env(), shell::no_cwd())?)
     }
     fn repository_root(&self) -> Result<String, Box<dyn Error>> {
         Ok(self.shell.output_of(&vec!(
             "git", "rev-parse", "--show-toplevel"
-        ), shell::no_env())?)
+        ), shell::no_env(), shell::no_cwd())?)
     }
     fn push(
         &self, url: &str, remote_branch: &str, msg: &str, 
@@ -111,16 +117,16 @@ impl<S: shell::Shell> GitFeatures for Git<S> {
             // this useless diffing is for making lfs tracked files refreshed.
             // otherwise if lfs tracked file is written, codes below seems to treat these write as git diff.
             // even if actually no change.        
-		    self.shell.eval("git --no-pager diff > /dev/null", shell::no_env(), false)?;
+		    self.shell.eval("git --no-pager diff > /dev/null", shell::no_env(), shell::no_cwd(), false)?;
         }
 		let mut changed = false;
 
 		for pattern in patterns {
-            self.shell.exec(&vec!("git", "add", "-N", pattern), shell::no_env(), false)?;
-            let diff = self.shell.exec(&vec!("git", "add", "-n", pattern), shell::no_env(), true)?;
+            self.shell.exec(&vec!("git", "add", "-N", pattern), shell::no_env(), shell::no_cwd(), false)?;
+            let diff = self.shell.exec(&vec!("git", "add", "-n", pattern), shell::no_env(), shell::no_cwd(), true)?;
 			if !diff.is_empty() {
                 log::info!("diff found for {} [{}]", pattern, diff);
-                self.shell.exec(&vec!("git", "add", pattern), shell::no_env(), false)?;
+                self.shell.exec(&vec!("git", "add", pattern), shell::no_env(), shell::no_cwd(), false)?;
 				changed = true
             }
         }
@@ -129,9 +135,9 @@ impl<S: shell::Shell> GitFeatures for Git<S> {
 			return Ok(false)
         } else {
 			if use_lfs {
-				self.shell.eval("git lfs fetch --all > /tmp/lfs_error 2>&1", shell::no_env(), false)?;
+				self.shell.eval("git lfs fetch --all > /tmp/lfs_error 2>&1", shell::no_env(), shell::no_cwd(), false)?;
             }
-			self.shell.exec(&vec!("git", "commit", "-m", msg), shell::no_env(), false)?;
+			self.shell.exec(&vec!("git", "commit", "-m", msg), shell::no_env(), shell::no_cwd(), false)?;
 			log::info!("commit done: [{}]", msg);
 			match config.release_target() {
                 Some(_) => {
@@ -142,21 +148,21 @@ impl<S: shell::Shell> GitFeatures for Git<S> {
                     // here, $CI_BASE_BRANCH_NAME before colon means branch which name is $CI_BASE_BRANCH_NAME at remote `latest`
                     self.shell.exec(&vec!(
                         "git", "fetch", "--force", "latest", &format!("{}:remotes/latest/{}", b, b)
-                    ), shell::no_env(), false)?;
+                    ), shell::no_env(), shell::no_cwd(), false)?;
                     // deploy branch: rebase CI branch with remotes `latest`. 
                     // because if other changes commit to the branch, below causes push error without rebasing it
                     self.shell.exec(&vec!(
                         "git", "rebase", &format!("remotes/latest/{}", b)
-                    ), shell::no_env(), false)?;
+                    ), shell::no_env(), shell::no_cwd(), false)?;
                 },
                 None => {}
             }
 			if use_lfs {
-                self.shell.exec(&vec!("git", "lfs", "push", url, "--all"), shell::no_env(), false)?;
+                self.shell.exec(&vec!("git", "lfs", "push", url, "--all"), shell::no_env(), shell::no_cwd(), false)?;
             }
             self.shell.exec(&vec!(
                 "git", "push", "--no-verify", url, &format!("HEAD:{}", remote_branch)
-            ), shell::no_env(), false)?;
+            ), shell::no_env(), shell::no_cwd(), false)?;
 			return Ok(true)
         }
     }
@@ -169,7 +175,7 @@ impl<S: shell::Shell> GitFeatures for Git<S> {
         if config.has_debug_option("skip_rebase") {
             return Ok(self.shell.output_of(
                 &vec!("git", "diff", "--name-only", "HEAD~1...HEAD"),
-                shell::no_env()
+                shell::no_env(), shell::no_cwd()
             )?)
         }
         setup_remote!(self, url);
@@ -179,10 +185,10 @@ impl<S: shell::Shell> GitFeatures for Git<S> {
         // to invoke all possible deployment that need to run
         let commit = self.shell.output_of(&vec!(
             "git", "rev-parse" ,"HEAD"
-        ), shell::no_env())?;
+        ), shell::no_env(), shell::no_cwd())?;
         let base = self.shell.exec(&vec!(
             "git", "rev-parse", &format!("{}^", commit)
-        ), shell::no_env(), true)?;
+        ), shell::no_env(), shell::no_cwd(), true)?;
 
         // we cannot `git pull latest $remote_branch` here. eg. $remote_branch = master case on circleCI. 
         // sometimes latest/master and master diverged, and pull causes merge FETCH_HEAD into master.
@@ -194,15 +200,15 @@ impl<S: shell::Shell> GitFeatures for Git<S> {
         self.shell.exec(&vec!(
             "git", "fetch", "--force", "latest", 
             &format!("{}:remotes/latest/{}", remote_branch, remote_branch)
-        ), shell::no_env(), false)?;
+        ), shell::no_env(), shell::no_cwd(), false)?;
         // because sometimes build on deploy branch made commit to $CI_BRANCH (eg. commit meta data)
         self.shell.exec(&vec!(
             "git", "rebase", &format!("remotes/latest/{}", remote_branch)
-        ), shell::no_env(), false)?;
+        ), shell::no_env(), shell::no_cwd(), false)?;
         // actually get diff
         Ok(self.shell.output_of(
             &vec!("git", "diff", "--name-only", &format!("{}...HEAD", base)),
-            shell::no_env()
+            shell::no_env(), shell::no_cwd()
         )?)
     }
 }
@@ -216,13 +222,13 @@ impl<S: shell::Shell> GitHubFeatures for Git<S> {
                 self.shell.exec(&vec!(
                     "hub", "pull-request", "-f", "-m", title, 
                     "-h", head_branch, "-b", base_branch, "-l", l
-                ), self.hub_env()?, false)?;
+                ), self.hub_env()?, shell::no_cwd(), false)?;
             },
             None => {
                 self.shell.exec(&vec!(
                     "hub", "pull-request", "-f", "-m", title, 
                     "-h", head_branch, "-b", base_branch,
-                ), self.hub_env()?, false)?;
+                ), self.hub_env()?, shell::no_cwd(), false)?;
             }
         }
         Ok(())

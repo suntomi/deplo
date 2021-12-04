@@ -36,17 +36,17 @@ impl<'a> shell::Shell for Native {
         ent.and_modify(|e| *e = val.clone()).or_insert(val);
         Ok(())
     }
-    fn output_of<I, K, V>(
-        &self, args: &Vec<&str>, envs: I
+    fn output_of<I, K, V, P>(
+        &self, args: &Vec<&str>, envs: I, cwd: Option<&P>
     ) -> Result<String, shell::ShellError> 
-    where I: IntoIterator<Item = (K, V)>, K: AsRef<OsStr>, V: AsRef<OsStr> {
-        let mut cmd = self.create_command(args, envs, true);
+    where I: IntoIterator<Item = (K, V)>, K: AsRef<OsStr>, V: AsRef<OsStr>, P: AsRef<Path> {
+        let mut cmd = self.create_command(args, envs, cwd, true);
         return Native::get_output(&mut cmd);
     }
-    fn exec<I, K, V>(
-        &self, args: &Vec<&str>, envs: I, capture: bool
+    fn exec<I, K, V, P>(
+        &self, args: &Vec<&str>, envs: I, cwd: Option<&P>, capture: bool
     ) -> Result<String, shell::ShellError> 
-    where I: IntoIterator<Item = (K, V)>, K: AsRef<OsStr>, V: AsRef<OsStr>{
+    where I: IntoIterator<Item = (K, V)>, K: AsRef<OsStr>, V: AsRef<OsStr>, P: AsRef<Path> {
         let config = self.config.borrow();
         if config.runtime.dryrun {
             let cmd = args.join(" ");
@@ -54,31 +54,34 @@ impl<'a> shell::Shell for Native {
             return Ok(cmd);
         } else if config.should_silent_shell_exec() {
             // regardless for the value of `capture`, always capture value
-            let mut cmd = self.create_command(args, envs, true);
+            let mut cmd = self.create_command(args, envs, cwd, true);
             return Native::run_as_child(&mut cmd);
         } else {
-            let mut cmd = self.create_command(args, envs, capture);
+            let mut cmd = self.create_command(args, envs, cwd, capture);
             return Native::run_as_child(&mut cmd);
         }
     }
 }
 impl Native {
-    fn create_command<I, K, V>(
-        &self, args: &Vec<&str>, envs: I, capture: bool
+    fn create_command<I, K, V, P>(
+        &self, args: &Vec<&str>, envs: I, cwd: Option<&P>, capture: bool
     ) -> Command 
-    where I: IntoIterator<Item = (K, V)>, K: AsRef<OsStr>, V: AsRef<OsStr> {
+    where I: IntoIterator<Item = (K, V)>, K: AsRef<OsStr>, V: AsRef<OsStr>, P: AsRef<Path> {
         let mut c = Command::new(args[0]);
         c.args(&args[1..]);
         c.envs(envs);
-        match &self.cwd {
-            Some(cwd) => { 
-                c.current_dir(cwd); 
-                log::trace!("create_command:[{}]@[{}]", args.join(" "), cwd);
-            },
-            _ => {
-                log::trace!("create_command:[{}]", args.join(" "));
+        match cwd {
+            Some(d) => { c.current_dir(d.as_ref()); },
+            None => match &self.cwd {
+                Some(cwd) => {
+                    c.current_dir(cwd); 
+                    log::trace!("create_command:[{}]@[{}]", args.join(" "), cwd);
+                },
+                _ => {
+                    log::trace!("create_command:[{}]", args.join(" "));
+                }
             }
-        };
+        }
         c.envs(&self.envs);
         if capture {
             c.stdout(Stdio::piped());
