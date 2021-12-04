@@ -102,9 +102,11 @@ impl<'a, S: shell::Shell> module::Module for GhAction<S> {
         })?;
         // generate job entries
         let mut job_descs = Vec::new();
+        let mut all_job_names = vec!["deplo-main".to_string()];
         let jobs = config.enumerate_jobs();
         for (names, job) in sorted_key_iter(&jobs) {
             let name = format!("{}-{}", names.0, names.1);
+            all_job_names.push(name.clone());
             let lines = format!(
                 include_str!("../../res/ci/ghaction/job.yml.tmpl"), name = name,
                 needs = self.generate_job_dependencies(names.0, &job.depends),
@@ -153,7 +155,7 @@ impl<'a, S: shell::Shell> module::Module for GhAction<S> {
                     strings: &job_descs,
                     postfix: None
                 },
-                needs = &self.generate_job_dependencies("deplo", &None)
+                needs = format!("\"{}\"", all_job_names.join("\",\""))
             )
         )?;
         Ok(())
