@@ -14,7 +14,7 @@ pub trait CI : module::Module {
     fn wait_job(&self, job_id: &str) -> Result<(), Box<dyn Error>>;
     fn wait_job_by_name(&self, job_id: &str) -> Result<(), Box<dyn Error>>;
     fn set_secret(&self, key: &str, val: &str) -> Result<(), Box<dyn Error>>;
-    fn job_env(&self) -> HashMap<String, String>;
+    fn job_env(&self) -> HashMap<&str, String>;
 }
 
 #[derive(Debug)]

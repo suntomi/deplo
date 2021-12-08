@@ -194,9 +194,11 @@ impl<S: shell::Shell> ci::CI for GhAction<S> {
         log::warn!("TODO: implement wait_job_by_name for ghaction");
         Ok(())
     }
-    fn job_env(&self) -> HashMap<String, String> {
+    fn job_env(&self) -> HashMap<&str, String> {
         return hashmap!{
-
+            // DEPLO_CI_PULL_REQUEST_URL is set by generated deplo-main.yml by default
+            // "DEPLO_CI_PULL_REQUEST_URL" => std::env::var("CIRCLE_PULL_REQUEST").unwrap_or_else(|_| "".to_string()),
+            "DEPLO_CI_TYPE" => "GhAction".to_string(),
         }
     }
     fn set_secret(&self, key: &str, _: &str) -> Result<(), Box<dyn Error>> {

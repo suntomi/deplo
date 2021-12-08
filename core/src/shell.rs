@@ -138,10 +138,14 @@ pub fn no_cwd() -> Option<&'static Box<Path>> {
     let none: Option<&Box<Path>> = None;
     return none;
 }
-pub fn inherit_and(envs: &HashMap<String, String>) -> HashMap<String, String> {
+pub fn inherit_and<I, K, V>(envs: I) -> HashMap<String, String>
+where I: IntoIterator<Item = (K, V)>, K: AsRef<OsStr>, V: AsRef<OsStr> {
     let mut new_envs: HashMap<String, String> = std::env::vars().collect();
     for (k, v) in envs {
-        new_envs.insert(k.to_string(), v.to_string());
+        new_envs.insert(
+            k.as_ref().to_string_lossy().to_string(),
+            v.as_ref().to_string_lossy().to_string()
+        );
     }
     return new_envs;
 }

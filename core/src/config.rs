@@ -107,16 +107,25 @@ impl Job {
             Runner::Container{ image: _ } => false
         }
     }
-    pub fn job_env<'a>(&self, config: &'a Config) -> HashMap<String, String> {
+    pub fn job_env<'a>(&'a self, name: &str, config: &'a Config) -> HashMap<&'a str, String> {
         let ci = config.ci_service_by_job(&self).unwrap();
         let env = ci.job_env();
+        let common_envs = hashmap!{
+            "DEPLO_CI_RUN_JOB_NAME" => name.to_string(),
+            "DEPLO_CLI_GIT_HASH" => DEPLO_GIT_HASH.to_string(),
+            "DEPLO_CLI_VERSION" => DEPLO_VERSION.to_string(),
+        };
+        let mut h = env.clone();
         return match &self.env {
             Some(v) => {
-                let mut h = env.clone();
-                h.extend(v.clone());
+                h.extend(common_envs);
+                h.extend(v.iter().map(|(k,v)| (k.as_str(), v.to_string())));
                 h
             },
-            None => env
+            None => {
+                h.extend(common_envs);
+                h
+            }
         };
     }
 }
@@ -546,7 +555,7 @@ impl Config {
                         let current_os = shell.detect_os()?;
                         if *os == current_os {
                             // run command directly here
-                            shell.eval(&v.command, shell::inherit_and(&v.job_env(self)), v.workdir.as_ref(), false)?;
+                            shell.eval(&v.command, shell::inherit_and(&v.job_env(name, self)), v.workdir.as_ref(), false)?;
                         } else {
                             log::debug!("runner os is different from current os {} {}", os, current_os);
                             // runner os is not linux and not same as current os. need to run in CI.
@@ -557,11 +566,11 @@ impl Config {
                     Runner::Container{ ref image } => {
                         if std::env::var("CI").is_ok() {
                             // already run inside container `image`, run command directly here
-                            shell.eval(&v.command, shell::inherit_and(&v.job_env(self)), v.workdir.as_ref(), false)?;
+                            shell.eval(&v.command, shell::inherit_and(&v.job_env(name, self)), v.workdir.as_ref(), false)?;
                         } else {
                             // running on host. run command in container `image` with docker
                             shell.eval_on_container(
-                                image, &v.command, shell::inherit_and(&v.job_env(self)), 
+                                image, &v.command, shell::inherit_and(&v.job_env(name, self)),
                                 v.workdir.as_ref(), false
                             )?;
                         }

@@ -149,9 +149,10 @@ impl<'a, S: shell::Shell> ci::CI for CircleCI<S> {
         log::warn!("TODO: implement wait_job_by_name for circleci");
         Ok(())
     }
-    fn job_env(&self) -> HashMap<String, String> {
+    fn job_env(&self) -> HashMap<&str, String> {
         return hashmap!{
-
+            "DEPLO_CI_PULL_REQUEST_URL" => std::env::var("CIRCLE_PULL_REQUEST").unwrap_or_else(|_| "".to_string()),
+            "DEPLO_CI_TYPE" => "CircleCI".to_string(),
         }
     }
     fn set_secret(&self, key: &str, val: &str) -> Result<(), Box<dyn Error>> {
