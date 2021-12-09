@@ -116,7 +116,8 @@ impl<S: shell::Shell> GitFeatures for Git<S> {
         if use_lfs {
             // this useless diffing is for making lfs tracked files refreshed.
             // otherwise if lfs tracked file is written, codes below seems to treat these write as git diff.
-            // even if actually no change.        
+            // even if actually no change.
+            // TODO_PATH: use Path to generate path of /dev/null
 		    self.shell.eval("git --no-pager diff > /dev/null", shell::no_env(), shell::no_cwd(), false)?;
         }
 		let mut changed = false;
@@ -135,6 +136,7 @@ impl<S: shell::Shell> GitFeatures for Git<S> {
 			return Ok(false)
         } else {
 			if use_lfs {
+                // TODO_PATH: use Path to generate path of /tmp/lfs_error
 				self.shell.eval("git lfs fetch --all > /tmp/lfs_error 2>&1", shell::no_env(), shell::no_cwd(), false)?;
             }
 			self.shell.exec(&vec!("git", "commit", "-m", msg), shell::no_env(), shell::no_cwd(), false)?;

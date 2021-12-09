@@ -1,7 +1,17 @@
 {
     "version": "0.2.0",
-    "configurations": [{
-        "name": "Launch",
+    "configurations": [    {
+        "name": "Deploy",
+        "type": "lldb",
+        "request": "launch",
+        "program": "${workspaceFolder}/target/debug/cli",
+        "args": [
+            "ci", "deploy", "product"
+        ],
+        "preLaunchTask": "git reset --hard"
+    },
+    {
+        "name": "Init",
         "type": "lldb",
         "request": "launch",
         "program": "${workspaceFolder}/target/debug/cli",

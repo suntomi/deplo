@@ -1,0 +1,6 @@
+FROM ubuntu:20.04
+
+RUN apt-get update && \
+    apt-get install -y lsb-release sudo wget && \
+    apt-get clean
+RUN touch /etc/waagent.conf

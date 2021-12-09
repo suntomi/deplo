@@ -7,7 +7,7 @@ use std::ffi::OsStr;
 use std::convert::AsRef;
 
 use crate::config;
-use crate::util::escalate;
+use crate::util::{escalate,make_absolute};
 
 pub mod native;
 
@@ -15,6 +15,7 @@ pub trait Shell {
     fn new(config: &config::Container) -> Self;
     fn set_cwd<P: AsRef<Path>>(&mut self, dir: Option<&P>) -> Result<(), Box<dyn Error>>;
     fn set_env(&mut self, key: &str, val: String) -> Result<(), Box<dyn Error>>;
+    fn config(&self) -> &config::Container;
     fn output_of<I, K, V, P>(
         &self, args: &Vec<&str>, envs: I, cwd: Option<&P>
     ) -> Result<String, ShellError>
@@ -23,25 +24,6 @@ pub trait Shell {
         &self, args: &Vec<&str>, envs: I, cwd: Option<&P>, capture: bool
     ) -> Result<String, ShellError>
     where I: IntoIterator<Item = (K, V)>, K: AsRef<OsStr>, V: AsRef<OsStr>, P: AsRef<Path>;
-    fn detect_os(&self) -> Result<config::RunnerOS, Box<dyn Error>> {
-        match self.eval_output_of("uname", no_env(), no_cwd()) {
-            Ok(output) => {
-                if output.contains("Darwin") {
-                    Ok(config::RunnerOS::MacOS)
-                } else if output.contains("Linux") {
-                    Ok(config::RunnerOS::Linux)
-                } else if output.contains("Windows") {
-                    Ok(config::RunnerOS::Windows)
-                } else {
-                    escalate!(Box::new(ShellError::OtherFailure{ 
-                        cmd: "uname".to_string(), 
-                        cause: format!("Unsupported OS: {}", output) 
-                    }))
-                }
-            },
-            Err(err) => Err(Box::new(err))
-        }
-    }
     fn eval<I, K, V, P>(
         &self, code: &str, envs: I, cwd: Option<&P>, capture: bool
     ) -> Result<String, ShellError> 
@@ -50,18 +32,33 @@ pub trait Shell {
     }
     fn eval_on_container<I, K, V, P>(
         &self, image: &str, code: &str, envs: I, cwd: Option<&P>, capture: bool
-    ) -> Result<String, ShellError>
+    ) -> Result<String, Box<dyn Error>>
     where I: IntoIterator<Item = (K, V)> + Clone, K: AsRef<OsStr>, V: AsRef<OsStr>, P: AsRef<Path> {
-        let envs_vec: Vec<String> = envs.clone().into_iter().map(|(k,_)| {
-            return vec!["-e".to_string(), format!("{k}=${k}", k = k.as_ref().to_string_lossy())]
+        let mut may_repository_mount_path: Option<String> = None;
+        let envs_vec: Vec<String> = envs.clone().into_iter().map(|(k,v)| {
+            let key = k.as_ref().to_string_lossy();
+            let val = v.as_ref().to_string_lossy();
+            if key == "DEPLO_CI_REPOSITORY_PATH" {
+                may_repository_mount_path = Some(val.to_string());
+            }
+            return vec!["-e".to_string(), format!("{k}={v}", k = key, v = val)]
         }).collect::<Vec<Vec<String>>>().concat();
-        return self.exec(&vec![
+        let repository_mount_path = may_repository_mount_path.unwrap();
+        let workdir = match cwd {
+            Some(dir) => make_absolute(dir.as_ref(), &repository_mount_path.clone()),
+            None => repository_mount_path.clone()
+        };
+        let config = self.config().borrow();
+        let result = self.exec(&vec![
             vec!["docker", "run", "--rm", "-ti"],
-            if cwd.is_none() { vec![] } else { vec!["--workdir", cwd.unwrap().as_ref().to_str().unwrap()] },
+            vec!["--workdir", &workdir],
             envs_vec.iter().map(|s| s.as_ref()).collect::<Vec<&str>>(),
+            // TODO_PATH: use Path to generate path of /var/run/docker.sock (left(host) side)
             vec!["-v", "/var/run/docker.sock:/var/run/docker.sock"],
+            vec!["-v", &format!("{}:{}", config.vcs_service()?.repository_root()?, &repository_mount_path)],
             vec![image, "bash", "-c", code]
-        ].concat(), envs, cwd, capture);
+        ].concat(), envs, cwd, capture)?;
+        return Ok(result);
     }
     fn eval_output_of<I, K, V, P>(
         &self, code: &str, envs: I, cwd: Option<&P>
@@ -84,6 +81,25 @@ pub trait Shell {
         match r {
             Ok(_) => Ok(()),
             Err(err) => escalate!(Box::new(err))
+        }
+    }
+    fn detect_os(&self) -> Result<config::RunnerOS, Box<dyn Error>> {
+        match self.eval_output_of("uname", no_env(), no_cwd()) {
+            Ok(output) => {
+                if output.contains("Darwin") {
+                    Ok(config::RunnerOS::MacOS)
+                } else if output.contains("Linux") {
+                    Ok(config::RunnerOS::Linux)
+                } else if output.contains("Windows") {
+                    Ok(config::RunnerOS::Windows)
+                } else {
+                    escalate!(Box::new(ShellError::OtherFailure{ 
+                        cmd: "uname".to_string(), 
+                        cause: format!("Unsupported OS: {}", output) 
+                    }))
+                }
+            },
+            Err(err) => Err(Box::new(err))
         }
     }
 }
@@ -138,14 +154,6 @@ pub fn no_cwd() -> Option<&'static Box<Path>> {
     let none: Option<&Box<Path>> = None;
     return none;
 }
-pub fn inherit_and<I, K, V>(envs: I) -> HashMap<String, String>
-where I: IntoIterator<Item = (K, V)>, K: AsRef<OsStr>, V: AsRef<OsStr> {
-    let mut new_envs: HashMap<String, String> = std::env::vars().collect();
-    for (k, v) in envs {
-        new_envs.insert(
-            k.as_ref().to_string_lossy().to_string(),
-            v.as_ref().to_string_lossy().to_string()
-        );
-    }
-    return new_envs;
+pub fn inherit_env() -> HashMap<String, String> {
+    return std::env::vars().collect();
 }

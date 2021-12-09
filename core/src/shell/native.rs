@@ -36,6 +36,9 @@ impl<'a> shell::Shell for Native {
         ent.and_modify(|e| *e = val.clone()).or_insert(val);
         Ok(())
     }
+    fn config(&self) -> &config::Container {
+        return &self.config;
+    }
     fn output_of<I, K, V, P>(
         &self, args: &Vec<&str>, envs: I, cwd: Option<&P>
     ) -> Result<String, shell::ShellError> 

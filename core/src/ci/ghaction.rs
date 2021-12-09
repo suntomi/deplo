@@ -88,6 +88,7 @@ impl<'a, S: shell::Shell> module::Module for GhAction<S> {
     fn prepare(&self, reinit: bool) -> Result<(), Box<dyn Error>> {
         let config = self.config.borrow();
         let repository_root = config.vcs_service()?.repository_root()?;
+        // TODO_PATH: use Path to generate path of /.github/...
         let workflow_yml_path = format!("{}/.github/workflows/deplo-main.yml", repository_root);
         let create_main = config.is_main_ci("GhAction");
         fs::create_dir_all(&format!("{}/.github/workflows", repository_root))?;
@@ -195,10 +196,19 @@ impl<S: shell::Shell> ci::CI for GhAction<S> {
         Ok(())
     }
     fn job_env(&self) -> HashMap<&str, String> {
+        let config = self.config.borrow();
+        let user_and_repo = config.vcs_service().unwrap().user_and_repo().unwrap();
         return hashmap!{
             // DEPLO_CI_PULL_REQUEST_URL is set by generated deplo-main.yml by default
-            // "DEPLO_CI_PULL_REQUEST_URL" => std::env::var("CIRCLE_PULL_REQUEST").unwrap_or_else(|_| "".to_string()),
+            //TODO_CI: need to get pr URL value on local execution
+            "DEPLO_CI_PULL_REQUEST_URL" => std::env::var("DEPLO_CI_PULL_REQUEST_URL").unwrap_or_else(|_| "".to_string()),
             "DEPLO_CI_TYPE" => "GhAction".to_string(),
+            "DEPLO_CI_REPOSITORY_PATH" => std::env::var("GITHUB_WORKSPACE").unwrap_or_else(
+                |_| format!("/home/runner/work/{repo}/{repo}", repo = user_and_repo.1)
+            ),
+            "DEPLO_CI_CURRENT_SHA" => std::env::var("GITHUB_SHA").unwrap_or_else(
+                |_| config.vcs_service().unwrap().commit_hash().unwrap()
+            ),
         }
     }
     fn set_secret(&self, key: &str, _: &str) -> Result<(), Box<dyn Error>> {
@@ -226,6 +236,7 @@ impl<S: shell::Shell> ci::CI for GhAction<S> {
             seal(&std::env::var(key).unwrap(), &public_key_info.key)?,
             public_key_info.key_id
         );
+        // TODO_PATH: use Path to generate path of /dev/null
         let status = self.shell.exec(&vec!(
             "curl", "-X", "PUT",
             &format!(

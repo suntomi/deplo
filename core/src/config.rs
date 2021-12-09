@@ -268,28 +268,30 @@ impl Config {
             3 => log::Level::Trace,
             _ => log::Level::Warn
         }).unwrap();
-        // load dotenv
-        match args.value_of("dotenv") {
-            Some(dotenv_path) => match fs::metadata(dotenv_path) {
-                Ok(_) => { dotenv::from_filename(dotenv_path).unwrap(); },
-                Err(_) => { dotenv::from_readable(dotenv_path.as_bytes()).unwrap(); },
-            },
-            None => match dotenv() {
-                Ok(path) => log::debug!("using .env file at {}", path.to_string_lossy()),
-                Err(err) => match Self::ci_type() {
-                    Ok(v) => log::info!("ci type = {}, environment variable is provided by CI system", v),
-                    Err(_) => log::warn!("non-ci environment but .env not present or cannot load by error [{:?}], this usually means:\n\
-                        1. command will be run with incorrect parameter or\n\
-                        2. secrets are directly written in deplo.toml\n\
-                        please use $repo/.env to provide secrets, or use -e flag to specify its path", 
-                        err)
-                }
-            },
-        };
-        // println!("DEPLO_CLOUD_ACCESS_KEY:{}", std::env::var("DEPLO_CLOUD_ACCESS_KEY").unwrap());    
+        // if the cli running on host, need to load dotenv to inject secrets
+        if !Self::is_running_on_ci() {
+            // load dotenv
+            match args.value_of("dotenv") {
+                Some(dotenv_path) => match fs::metadata(dotenv_path) {
+                    Ok(_) => { dotenv::from_filename(dotenv_path).unwrap(); },
+                    Err(_) => { dotenv::from_readable(dotenv_path.as_bytes()).unwrap(); },
+                },
+                None => match dotenv() {
+                    Ok(path) => log::debug!("using .env file at {}", path.to_string_lossy()),
+                    Err(err) => match Self::ci_type() {
+                        Ok(v) => log::info!("ci type = {}, environment variable is provided by CI system", v),
+                        Err(_) => log::warn!("non-ci environment but .env not present or cannot load by error [{:?}], this usually means:\n\
+                            1. command will be run with incorrect parameter or\n\
+                            2. secrets are directly written in deplo.toml\n\
+                            please use $repo/.env to provide secrets, or use -e flag to specify its path", 
+                            err)
+                    }
+                },
+            };
+        }
         let c = Container{
             ptr: Rc::new(RefCell::new(
-                Config::load(args.value_of("config").unwrap_or("./Deplo.toml")).unwrap()
+                Config::load(args.value_of("config").unwrap_or("Deplo.toml")).unwrap()
             ))
         };
         // setup runtime configuration (except release_target)
@@ -369,6 +371,9 @@ impl Config {
             Some(s) => Some(&s),
             None => None
         }
+    }
+    pub fn is_running_on_ci() -> bool {
+        std::env::var("CI").is_ok()        
     }
     pub fn ci_cli_options(&self) -> String {
         let wdref = self.runtime.workdir.as_ref();
@@ -464,6 +469,23 @@ impl Config {
     pub fn ci_workflow<'a>(&'a self) -> &'a WorkflowConfig {
         return &self.ci.workflow
     }
+    pub fn job_env(&self, name: &str, job: &Job) -> Result<HashMap<String, String>, Box<dyn Error>> {
+        let mut inherits: HashMap<String, String> = if Self::is_running_on_ci() {
+            shell::inherit_env()
+        } else {
+            let mut inherits_from_dotenv = HashMap::new();
+            self.parse_dotenv(|k, v| {
+                inherits_from_dotenv.insert(k.to_string(), v.to_string());
+                Ok(())
+            })?;
+            inherits_from_dotenv
+        };
+        for (k, v) in job.job_env(name, self) {
+            inherits.insert(k.to_string(), v.to_string());
+        }
+        return Ok(inherits);
+    
+    }
     // setup_XXX is called any subcommand invocation. just create module objects
     fn setup_ci(c: &Container) -> Result<(), Box<dyn Error>> {
         let mut caches = hashmap!{};
@@ -538,16 +560,16 @@ impl Config {
         return related_jobs
     }
     pub fn find_job<'a>(&'a self, name: &str) -> Option<&'a Job> {
-        let key = match name.find("-").map(|i| name.split_at(i)).map(|(k, v)| (k, v)) {
-            Some(v) => v,
+        let tuple = match name.find("-").map(|i| name.split_at(i)).map(|(k, v)| (k, v.split_at(1).1)) {
+            Some((kind, name)) => (kind, name),
             None => return None
         };
-        return match self.enumerate_jobs().get(&key) {
-            Some(v) => Some(v),
-            None => None
-        };
+        match self.enumerate_jobs().get(&tuple) {
+            Some(job) => return Some(job),
+            None => return None
+        }
     }
-    pub fn run_job(&self, shell: &impl shell::Shell, name: &str) -> Result<String, Box<dyn Error>> {
+    pub fn run_job(&self, shell: &impl shell::Shell, name: &str) -> Result<(), Box<dyn Error>> {
         match self.find_job(name) {
             Some(v) => {
                 match v.runner {
@@ -555,23 +577,36 @@ impl Config {
                         let current_os = shell.detect_os()?;
                         if *os == current_os {
                             // run command directly here
-                            shell.eval(&v.command, shell::inherit_and(&v.job_env(name, self)), v.workdir.as_ref(), false)?;
+                            shell.eval(&v.command, self.job_env(name, &v)?, v.workdir.as_ref(), false)?;
                         } else {
                             log::debug!("runner os is different from current os {} {}", os, current_os);
-                            // runner os is not linux and not same as current os. need to run in CI.
+                            match &v.options {
+                                Some(o) => match o.get("local_fallback_container_image"){
+                                    Some(image) => {
+                                        // running on host. run command in container `image` with docker
+                                        shell.eval_on_container(
+                                            image, &v.command, self.job_env(name, &v)?, v.workdir.as_ref(), false
+                                        )?;
+                                        return Ok(());
+                                    },
+                                    None => ()
+                                },
+                                None => ()
+                            };
+                            // runner os is not linux and not same as current os, and no fallback container specified.
+                            // need to run in CI.
                             let ci = self.ci_service_by_job(v)?;
-                            return ci.run_job(name);
+                            ci.run_job(name)?;
                         }
                     },
                     Runner::Container{ ref image } => {
-                        if std::env::var("CI").is_ok() {
+                        if Self::is_running_on_ci() {
                             // already run inside container `image`, run command directly here
-                            shell.eval(&v.command, shell::inherit_and(&v.job_env(name, self)), v.workdir.as_ref(), false)?;
+                            shell.eval(&v.command, self.job_env(name, &v)?, v.workdir.as_ref(), false)?;
                         } else {
                             // running on host. run command in container `image` with docker
                             shell.eval_on_container(
-                                image, &v.command, shell::inherit_and(&v.job_env(name, self)),
-                                v.workdir.as_ref(), false
+                                image, &v.command, self.job_env(name, &v)?, v.workdir.as_ref(), false
                             )?;
                         }
                     }
@@ -581,7 +616,7 @@ impl Config {
                 ConfigError{ cause: format!("job {} not found", name) }
             ))
         }
-        Ok("".to_string())
+        Ok(())
     }    
     pub fn is_main_ci(&self, ci_type: &str) -> bool {
         // default always should exist

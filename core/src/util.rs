@@ -204,9 +204,10 @@ impl<'a> fmt::Display for MultilineFormatString<'a> {
 }
 
 // fs
-use std::fs;
-use std::path::Path;
 use fs_extra;
+use std::ffi::OsStr;
+use std::fs;
+use std::path::{Path,PathBuf};
 pub fn rm<P: AsRef<Path>>(path: P) -> bool {
     match fs::remove_file(path.as_ref()) {
         Ok(_) => return true,
@@ -270,6 +271,17 @@ where F: Fn () -> Result<String, Box<dyn Error>> {
             Ok(true)
         }
     }
+}
+pub fn make_absolute(rel_or_abs: impl AsRef<OsStr>, root_directory: impl AsRef<OsStr>) -> String {
+    {
+        let path = Path::new(&rel_or_abs);
+        if path.is_absolute() {
+            return rel_or_abs.as_ref().to_string_lossy().to_string();
+        }
+    }
+    let mut pathbuf = PathBuf::from(root_directory.as_ref());
+    pathbuf.push(rel_or_abs.as_ref());
+    return pathbuf.to_string_lossy().to_string();
 }
 
 use crc::{Crc, CRC_64_ECMA_182};

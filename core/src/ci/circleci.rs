@@ -77,6 +77,7 @@ impl<'a, S: shell::Shell> module::Module for CircleCI<S> {
         let repository_root = config.vcs_service()?.repository_root()?;
         let jobs = config.enumerate_jobs();
         let create_main = config.is_main_ci("GhAction");
+        // TODO_PATH: use Path to generate path of /.circleci/...
         let circle_yml_path = format!("{}/.circleci/config.yml", repository_root);
         fs::create_dir_all(&format!("{}/.circleci", repository_root))?;
         let previously_no_file = !rm(&circle_yml_path);
@@ -150,9 +151,15 @@ impl<'a, S: shell::Shell> ci::CI for CircleCI<S> {
         Ok(())
     }
     fn job_env(&self) -> HashMap<&str, String> {
+        let config = self.config.borrow();
         return hashmap!{
+            //TODO_CI: need to get pr URL value on local execution
             "DEPLO_CI_PULL_REQUEST_URL" => std::env::var("CIRCLE_PULL_REQUEST").unwrap_or_else(|_| "".to_string()),
             "DEPLO_CI_TYPE" => "CircleCI".to_string(),
+            "DEPLO_CI_REPOSITORY_PATH" => "/home/circleci/project".to_string(),
+            "DEPLO_CI_CURRENT_SHA" => std::env::var("CIRCLE_SHA1").unwrap_or_else(
+                |_| config.vcs_service().unwrap().commit_hash().unwrap()
+            ),
         }
     }
     fn set_secret(&self, key: &str, val: &str) -> Result<(), Box<dyn Error>> {

@@ -28,8 +28,8 @@ lazy_static! {
             .value_name("KEY(=VALUE),...")
             .about("Activate debug feature\n\
                 possible settings(concat with comma when specify multiple values): \n\
-                skip_set_secret=flag)\n\
-                force_set_release_target_to=(one of your release target)\n\
+                \tskip_set_secret=$flag\n\
+                \tforce_set_release_target_to=$(one of your release target)\n\
             ")
             .takes_value(true))
         .arg(Arg::new("dotenv")
@@ -93,8 +93,16 @@ lazy_static! {
                     .about("entry point of CI/CD process")
                 )
                 .subcommand(
-                    App::new("run")
-                    .about("run specific job in Deplo.toml. used for auto generated CI/CD settings")
+                    App::new("deploy")
+                    .about("run specific deploy job in Deplo.toml. used for auto generated CI/CD settings")
+                    .arg(Arg::new("name")
+                        .about("job name")
+                        .index(1)
+                        .required(true))
+                )
+                .subcommand(
+                    App::new("integrate")
+                    .about("run specific integrate job in Deplo.toml. used for auto generated CI/CD settings")
                     .arg(Arg::new("name")
                         .about("job name")
                         .index(1)
