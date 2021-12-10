@@ -25,20 +25,18 @@ key = "${SUNTOMI_VCS_ACCOUNT_KEY}"
 # workflow settings (CI)
 [ci.workflow.integrate.base]
 patterns = ["tools/docker/Dockerfile.base"]
-runner = { type = "Machine", os = "Linux" }
+runner = { type = "Machine", os = "Linux", local_fallback = { image = "docker:20.10", shell = "sh" } }
 command = """
 docker build -t ghcr.io/suntomi/deplo:base -f tools/docker/Dockerfile.base tools/docker
 """
-options = { local_fallback_container_image = "docker:20.10" }
 
 [ci.workflow.integrate.builder]
 patterns = ["tools/docker/Dockerfile.builder", "Cargo.*"]
-runner = { type = "Machine", os = "Linux" }
+runner = { type = "Machine", os = "Linux", local_fallback = { image = "docker:20.10", shell = "sh" } }
 command = """
 bash tools/scripts/copy_manifests.sh
 docker build -t ghcr.io/suntomi/deplo:builder -f tools/docker/Dockerfile.builder tools/docker
 """
-options = { local_fallback_container_image = "docker:20.10" }
 
 [ci.workflow.integrate.src]
 patterns = ["src/.*", "Cargo.*"]
@@ -52,29 +50,27 @@ path = "target"
 # workflow settings (CD)
 [ci.workflow.deploy.base]
 patterns = ["tools/docker/Dockerfile.base"]
-runner = { type = "Machine", os = "Linux" }
+runner = { type = "Machine", os = "Linux", local_fallback = { image = "docker:20.10", shell = "sh" } }
 command = """
 docker build -t ghcr.io/suntomi/deplo:base -f tools/docker/Dockerfile.base tools/docker
 echo ${SUNTOMI_VCS_ACCOUNT_KEY} | docker login ghcr.io -u ${SUNTOMI_VCS_ACCOUNT} --password-stdin
 docker push ghcr.io/suntomi/deplo:base
 """
-options = { local_fallback_container_image = "docker:20.10" }
 
 [ci.workflow.deploy.builder]
 patterns = ["tools/docker/Dockerfile.builder", "Cargo.*"]
-runner = { type = "Machine", os = "Linux" }
+runner = { type = "Machine", os = "Linux", local_fallback = { image = "docker:20.10", shell = "sh" } }
 command = """
 bash tools/scripts/copy_manifests.sh
 docker build -t ghcr.io/suntomi/deplo:builder -f tools/docker/Dockerfile.builder tools/docker
 echo ${SUNTOMI_VCS_ACCOUNT_KEY} | docker login ghcr.io -u ${SUNTOMI_VCS_ACCOUNT} --password-stdin
 docker push ghcr.io/suntomi/deplo:builder
 """
-options = { local_fallback_container_image = "docker:20.10" }
 
 [ci.workflow.deploy.product]
 depends = ["mac", "win", "builder"]
 patterns = ["src/.*", "Cargo.*"]
-runner = { type = "Machine", os = "Linux" }
+runner = { type = "Machine", os = "Linux", local_fallback = { image = "docker:20.10", shell = "sh" } }
 command = """
 mkdir -p tools/docker/bin
 docker run --rm -ti -v $(pwd):/workdir -w /workdir ghcr.io/suntomi/deplo:builder \

@@ -24,14 +24,14 @@ impl<S: shell::Shell> CI<S> {
             None => &config.ci_workflow().deploy,
         };
         let vcs = config.vcs_service()?;
-        for (_, job) in jobs {
+        for (name, job) in jobs {
             let ps = job.patterns.iter().map(|p| {
                 std::env::current_dir().unwrap()
                     .join(p)
                     .to_string_lossy().to_string()
             }).collect::<Vec<String>>();
             if vcs.changed(&ps.iter().map(std::ops::Deref::deref).collect()) {
-                self.shell.run_code_or_file(&job.command, shell::no_env(), shell::no_cwd())?;
+                config.run_job(&self.shell, name, job)?
             }
         }
         Ok(())
@@ -47,7 +47,7 @@ impl<S: shell::Shell> CI<S> {
     }
     fn exec<A: args::Args>(&self, kind: &str, args: &A) -> Result<(), Box<dyn Error>> {
         let config = self.config.borrow();
-        config.run_job(&self.shell, &format!("{}-{}", kind, args.value_of("name").unwrap()))?;
+        config.run_job_by_name(&self.shell, &format!("{}-{}", kind, args.value_of("name").unwrap()))?;
         return Ok(())
     }
 }

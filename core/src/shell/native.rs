@@ -1,4 +1,4 @@
-use std::process::{Command, Stdio};
+use std::process::{Command, Stdio, ChildStdout};
 use std::collections::HashMap;
 use std::error::Error;
 use std::io::Read;
@@ -123,6 +123,21 @@ impl Native {
             })
         }
     }
+    fn read_stdout_or_empty(stdout: Option<ChildStdout>) -> String {
+        let mut buf = String::new();
+        match stdout {
+            Some(mut stream) => {
+                match stream.read_to_string(&mut buf) {
+                    Ok(_) => {},
+                    Err(err) => {
+                        log::error!("read_stdout_or_empty error: {:?}", err);
+                    }
+                }
+            },
+            None => {}
+        }
+        return buf;
+    }
     fn run_as_child(cmd: &mut Command) -> Result<String,shell::ShellError> {
         match cmd.spawn() {
             Ok(mut process) => {
@@ -141,28 +156,27 @@ impl Native {
                                 None => Ok("".to_string())
                             }
                         } else {
-                            return match status.code() {
-                                Some(_) => match process.stderr {
-                                    Some(mut stream) => {
-                                        let mut s = String::new();
-                                        match stream.read_to_string(&mut s) {
-                                            Ok(_) => Err(shell::ShellError::ExitStatus{ 
-                                                status, stderr: s,
-                                                cmd: format!("{:?}", cmd)
-                                            }),
-                                            Err(err) => Err(shell::ShellError::ExitStatus{
-                                                status, stderr: format!("cannot get stderr by {:?}", err),
-                                                cmd: format!("{:?}", cmd)
-                                            })
-                                        }
-                                    },
-                                    None => Err(shell::ShellError::ExitStatus{ 
-                                        status, stderr: "no stderr".to_string(),
-                                        cmd: format!("{:?}", cmd)
-                                    })
+                            let mut s = String::new();
+                            let output = match process.stderr {
+                                Some(mut stream) => {
+                                    match stream.read_to_string(&mut s) {
+                                        Ok(_) => if s.is_empty() { Self::read_stdout_or_empty(process.stdout) } else { s },
+                                        Err(_) => Self::read_stdout_or_empty(process.stdout)
+                                    }
                                 },
+                                None => Self::read_stdout_or_empty(process.stdout)
+                            };           
+                            return match status.code() {
+                                Some(_) => Err(shell::ShellError::ExitStatus{ 
+                                    status, stderr: output,
+                                    cmd: format!("{:?}", cmd)
+                                }),
                                 None => Err(shell::ShellError::OtherFailure{
-                                    cause: format!("cmd terminated by signal"),
+                                    cause: if output.is_empty() { 
+                                        format!("cmd terminated by signal")
+                                    } else {
+                                        format!("cmd failed. output: {}", output)
+                                    },
                                     cmd: format!("{:?}", cmd)
                                 }),
                             }

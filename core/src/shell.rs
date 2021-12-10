@@ -1,5 +1,4 @@
 use std::fmt;
-use std::fs;
 use std::path::Path;
 use std::collections::HashMap;
 use std::error::Error;
@@ -25,13 +24,13 @@ pub trait Shell {
     ) -> Result<String, ShellError>
     where I: IntoIterator<Item = (K, V)>, K: AsRef<OsStr>, V: AsRef<OsStr>, P: AsRef<Path>;
     fn eval<I, K, V, P>(
-        &self, code: &str, envs: I, cwd: Option<&P>, capture: bool
+        &self, code: &str, shell: Option<&String>, envs: I, cwd: Option<&P>, capture: bool
     ) -> Result<String, ShellError> 
     where I: IntoIterator<Item = (K, V)>, K: AsRef<OsStr>, V: AsRef<OsStr>, P: AsRef<Path> {
-        return self.exec(&vec!("bash", "-c", code), envs, cwd, capture);
+        return self.exec(&vec!(shell.map_or_else(|| "bash", |v| v.as_str()), "-c", code), envs, cwd, capture);
     }
     fn eval_on_container<I, K, V, P>(
-        &self, image: &str, code: &str, envs: I, cwd: Option<&P>, capture: bool
+        &self, image: &str, code: &str, shell: Option<&String>, envs: I, cwd: Option<&P>, capture: bool
     ) -> Result<String, Box<dyn Error>>
     where I: IntoIterator<Item = (K, V)> + Clone, K: AsRef<OsStr>, V: AsRef<OsStr>, P: AsRef<Path> {
         let mut may_repository_mount_path: Option<String> = None;
@@ -56,35 +55,18 @@ pub trait Shell {
             // TODO_PATH: use Path to generate path of /var/run/docker.sock (left(host) side)
             vec!["-v", "/var/run/docker.sock:/var/run/docker.sock"],
             vec!["-v", &format!("{}:{}", config.vcs_service()?.repository_root()?, &repository_mount_path)],
-            vec![image, "bash", "-c", code]
+            vec![image, shell.map_or_else(|| "bash", |v| v.as_str()), "-c", code]
         ].concat(), envs, cwd, capture)?;
         return Ok(result);
     }
     fn eval_output_of<I, K, V, P>(
-        &self, code: &str, envs: I, cwd: Option<&P>
+        &self, code: &str, shell: Option<&String>, envs: I, cwd: Option<&P>
     ) -> Result<String, ShellError>
     where I: IntoIterator<Item = (K, V)>, K: AsRef<OsStr>, V: AsRef<OsStr>, P: AsRef<Path> {
-        return self.output_of(&vec!("bash", "-c", code), envs, cwd);
-    }
-    fn run_code_or_file<I, K, V, P>(
-        &self, code_or_file: &str, envs: I, cwd: Option<&P>
-    ) -> Result<(), Box<dyn Error>>
-    where I: IntoIterator<Item = (K, V)>, K: AsRef<OsStr>, V: AsRef<OsStr>, P: AsRef<Path> {
-        let r = match fs::metadata(code_or_file) {
-            Ok(_) => self.exec(
-                &vec!(code_or_file), envs, cwd, false
-            ),
-            Err(_) => self.eval(
-                &format!("echo \'{}\' | bash", code_or_file), envs, cwd, false
-            )
-        };
-        match r {
-            Ok(_) => Ok(()),
-            Err(err) => escalate!(Box::new(err))
-        }
+        return self.output_of(&vec!(shell.map_or_else(|| "bash", |v| v.as_str()), "-c", code), envs, cwd);
     }
     fn detect_os(&self) -> Result<config::RunnerOS, Box<dyn Error>> {
-        match self.eval_output_of("uname", no_env(), no_cwd()) {
+        match self.eval_output_of("uname", default(), no_env(), no_cwd()) {
             Ok(output) => {
                 if output.contains("Darwin") {
                     Ok(config::RunnerOS::MacOS)
@@ -121,7 +103,7 @@ impl fmt::Display for ShellError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::ExitStatus { status, stderr, cmd } => {
-                write!(f, "cmd:{}, exit status:{}, stedrr:{}", cmd, status, stderr)
+                write!(f, "cmd:{}, {}, stedrr:{}", cmd, status, stderr)
             },
             Self::OtherFailure { cmd, cause } => write!(f, "cmd:{}, err:{}", cmd, cause)
         }
@@ -153,6 +135,9 @@ pub fn no_env() -> HashMap<String, String> {
 pub fn no_cwd() -> Option<&'static Box<Path>> {
     let none: Option<&Box<Path>> = None;
     return none;
+}
+pub fn default<'a>() -> Option<&'a String> {
+    return None;
 }
 pub fn inherit_env() -> HashMap<String, String> {
     return std::env::vars().collect();

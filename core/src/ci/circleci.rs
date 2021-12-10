@@ -24,7 +24,7 @@ impl<S: shell::Shell> CircleCI<S> {
     }
     fn generate_executor_setting<'a>(&self, runner: &'a config::Runner) -> String {
         return match runner {
-            config::Runner::Machine{ os, image, class } => format!(
+            config::Runner::Machine{ os, image, class, .. } => format!(
                 include_str!("../../res/ci/circleci/machine.yml.tmpl"), 
                 image = match image {
                     Some(v) => v,

@@ -70,12 +70,18 @@ pub struct Cache {
     pub path: String
 }
 #[derive(Serialize, Deserialize)]
+pub struct FallbackContainer {
+    pub image: String,
+    pub shell: Option<String>,
+}
+#[derive(Serialize, Deserialize)]
 #[serde(tag = "type")]
 pub enum Runner {
     Machine {
         os: RunnerOS,
         image: Option<String>,
         class: Option<String>,
+        local_fallback: Option<FallbackContainer>,
     },
     Container {
         image: String,
@@ -86,6 +92,7 @@ pub struct Job {
     pub account: Option<String>,
     pub patterns: Vec<String>,
     pub runner: Runner,
+    pub shell: Option<String>,
     pub command: String,
     pub env: Option<HashMap<String, String>>,
     pub workdir: Option<String>,
@@ -93,17 +100,18 @@ pub struct Job {
     pub caches: Option<Vec<Cache>>,
     pub depends: Option<Vec<String>>,
     pub options: Option<HashMap<String, String>>,
+    pub local_fallback: Option<FallbackContainer>,
 }
 impl Job {
     pub fn runner_os(&self) -> RunnerOS {
         match &self.runner {
-            Runner::Machine{ os, image:_, class:_ } => *os,
+            Runner::Machine{ os, .. } => *os,
             Runner::Container{ image: _ } => RunnerOS::Linux
         }
     }
     pub fn runs_on_machine(&self) -> bool {
         match &self.runner {
-            Runner::Machine{ os:_, image:_, class:_ } => true,
+            Runner::Machine{ .. } => true,
             Runner::Container{ image: _ } => false
         }
     }
@@ -569,52 +577,51 @@ impl Config {
             None => return None
         }
     }
-    pub fn run_job(&self, shell: &impl shell::Shell, name: &str) -> Result<(), Box<dyn Error>> {
+    pub fn run_job_by_name(&self, shell: &impl shell::Shell, name: &str) -> Result<(), Box<dyn Error>> {
         match self.find_job(name) {
-            Some(v) => {
-                match v.runner {
-                    Runner::Machine{image:_, ref os, class:_} => {
-                        let current_os = shell.detect_os()?;
-                        if *os == current_os {
-                            // run command directly here
-                            shell.eval(&v.command, self.job_env(name, &v)?, v.workdir.as_ref(), false)?;
-                        } else {
-                            log::debug!("runner os is different from current os {} {}", os, current_os);
-                            match &v.options {
-                                Some(o) => match o.get("local_fallback_container_image"){
-                                    Some(image) => {
-                                        // running on host. run command in container `image` with docker
-                                        shell.eval_on_container(
-                                            image, &v.command, self.job_env(name, &v)?, v.workdir.as_ref(), false
-                                        )?;
-                                        return Ok(());
-                                    },
-                                    None => ()
-                                },
-                                None => ()
-                            };
-                            // runner os is not linux and not same as current os, and no fallback container specified.
-                            // need to run in CI.
-                            let ci = self.ci_service_by_job(v)?;
-                            ci.run_job(name)?;
-                        }
-                    },
-                    Runner::Container{ ref image } => {
-                        if Self::is_running_on_ci() {
-                            // already run inside container `image`, run command directly here
-                            shell.eval(&v.command, self.job_env(name, &v)?, v.workdir.as_ref(), false)?;
-                        } else {
-                            // running on host. run command in container `image` with docker
-                            shell.eval_on_container(
-                                image, &v.command, self.job_env(name, &v)?, v.workdir.as_ref(), false
-                            )?;
-                        }
-                    }
-                }
-            },
+            Some(job) => self.run_job(shell, name, job),
             None => return escalate!(Box::new(
                 ConfigError{ cause: format!("job {} not found", name) }
-            ))
+            )),
+        }
+    }
+    pub fn run_job(&self, shell: &impl shell::Shell, name: &str, job: &Job) -> Result<(), Box<dyn Error>> {
+        match job.runner {
+            Runner::Machine{image:_, ref os, ref local_fallback, class:_} => {
+                let current_os = shell.detect_os()?;
+                if *os == current_os {
+                    // run command directly here
+                    shell.eval(&job.command, job.shell.as_ref(), self.job_env(name, &job)?, job.workdir.as_ref(), false)?;
+                } else {
+                    log::debug!("runner os is different from current os {} {}", os, current_os);
+                    match local_fallback {
+                        Some(f) => {
+                            // running on host. run command in container `image` with docker
+                            shell.eval_on_container(
+                                &f.image, &job.command, f.shell.as_ref(), 
+                                self.job_env(name, &job)?, job.workdir.as_ref(), false
+                            )?;
+                            return Ok(());
+                        },
+                        None => ()
+                    };
+                    // runner os is not linux and not same as current os, and no fallback container specified.
+                    // need to run in CI.
+                    let ci = self.ci_service_by_job(job)?;
+                    ci.run_job(name)?;
+                }
+            },
+            Runner::Container{ ref image } => {
+                if Self::is_running_on_ci() {
+                    // already run inside container `image`, run command directly here
+                    shell.eval(&job.command, job.shell.as_ref(), self.job_env(name, &job)?, job.workdir.as_ref(), false)?;
+                } else {
+                    // running on host. run command in container `image` with docker
+                    shell.eval_on_container(
+                        image, &job.command, job.shell.as_ref(), self.job_env(name, &job)?, job.workdir.as_ref(), false
+                    )?;
+                }
+            }
         }
         Ok(())
     }    

@@ -54,7 +54,7 @@ impl<S: shell::Shell> GhAction<S> {
     }
     fn generate_container_setting<'a>(&self, runner: &'a config::Runner) -> Vec<String> {
         match runner {
-            config::Runner::Machine{ image:_, os:_, class:_ } => vec![],
+            config::Runner::Machine{ .. } => vec![],
             config::Runner::Container{ image } => vec![format!("container: {}", image)]
         }
     }
@@ -114,7 +114,7 @@ impl<'a, S: shell::Shell> module::Module for GhAction<S> {
                 full_name = name, kind = names.0, name = names.1,
                 needs = self.generate_job_dependencies(names.0, &job.depends),
                 machine = match job.runner {
-                    config::Runner::Machine{ref image, ref os, class:_} => match image {
+                    config::Runner::Machine{ref image, ref os, ..} => match image {
                         Some(v) => v.as_str(),
                         None => match os {
                             config::RunnerOS::Linux => "ubuntu-latest",
@@ -226,7 +226,7 @@ impl<S: shell::Shell> ci::CI for GhAction<S> {
             &self.shell.eval_output_of(&format!(r#"
                 curl https://api.github.com/repos/{}/{}/actions/secrets/public-key \
                 -H "Authorization: token {}"
-            "#, user_and_repo.0, user_and_repo.1, token), shell::no_env(), shell::no_cwd()
+            "#, user_and_repo.0, user_and_repo.1, token), shell::default(), shell::no_env(), shell::no_cwd()
         )?) {
             Ok(v) => v,
             Err(e) => return escalate!(Box::new(e))
