@@ -177,13 +177,15 @@ impl fmt::Display for CIAccount {
 pub struct CIConfig {
     pub accounts: HashMap<String, CIAccount>,
     pub workflow: WorkflowConfig,
+    pub invoke_for_all_branches: Option<bool>,
+    pub rebase_before_diff: Option<bool>
 }
 impl CIConfig {
     pub fn workflow<'a>(&'a self) -> &'a WorkflowConfig {
         return &self.workflow;
     }
 }
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Debug)]
 #[serde(tag = "type")]
 pub enum VCSConfig {
     Github {
@@ -289,13 +291,13 @@ impl Config {
                 },
                 None => match dotenv() {
                     Ok(path) => log::debug!("using .env file at {}", path.to_string_lossy()),
-                    Err(err) => match Self::ci_type() {
-                        Ok(v) => log::info!("ci type = {}, environment variable is provided by CI system", v),
-                        Err(_) => log::warn!("non-ci environment but .env not present or cannot load by error [{:?}], this usually means:\n\
+                    Err(err) => if Self::is_running_on_ci() {
+                        log::info!("run on CI: environment variable is provided by CI system")
+                    } else {
+                        log::warn!("non-ci environment but .env not present or cannot load by error [{:?}], this usually means:\n\
                             1. command will be run with incorrect parameter or\n\
                             2. secrets are directly written in deplo.toml\n\
-                            please use $repo/.env to provide secrets, or use -e flag to specify its path", 
-                            err)
+                            please use $repo/.env to provide secrets, or use -e flag to specify its path", err)
                     }
                 },
             };
@@ -428,19 +430,25 @@ impl Config {
         }
         return Ok(())
     }
-    pub fn ci_type() -> Result<String, ConfigError> {
+    pub fn ci_type(&self) -> Result<String, ConfigError> {
+        let cis = hashmap!{
+            "CIRCLE_SHA1" => "CircleCI",
+            "GITHUB_ACTION" => "GhAction"
+        };
         match std::env::var("DEPLO_CI_TYPE") {
             Ok(v) => return Ok(v),
             Err(_) => {
-                for (key, value) in hashmap!{
-                    "CIRCLE_SHA1" => "CircleCI",
-                    "GITHUB_ACTION" => "GhAction"
-                } {
+                for (key, value) in &cis {
                     match std::env::var(key) {
                         Ok(_) => return Ok(value.to_string()),
                         Err(_) => continue
                     }
                 }
+            }
+        }
+        for (_, value) in &cis {
+            if self.is_main_ci(value) {
+                return Ok(value.to_string());
             }
         }
         return Err(ConfigError{ 
@@ -454,7 +462,7 @@ impl Config {
         }
     }
     pub fn ci_config_by_env<'b>(&'b self) -> (&'b str, &'b CIAccount) {
-        let t = Self::ci_type().unwrap();
+        let t = self.ci_type().unwrap();
         for (account_name, account) in &self.ci.accounts {
             if account.type_matched(&t) { return (account_name, account) }
         }

@@ -184,6 +184,14 @@ impl<S: shell::Shell> ci::CI for GhAction<S> {
             }
         }
     }
+    fn mark_job_executed(&self, job_name: &str) -> Result<(), Box<dyn Error>> {
+        if config::Config::is_running_on_ci() {
+            println!("::set-output name={}::true", job_name);
+        } else {
+            self.config.borrow().run_job_by_name(&self.shell, job_name)?;
+        }
+        Ok(())
+    }
     fn run_job(&self, _: &str) -> Result<String, Box<dyn Error>> {
         Ok("".to_string())
     }
@@ -197,16 +205,38 @@ impl<S: shell::Shell> ci::CI for GhAction<S> {
     }
     fn job_env(&self) -> HashMap<&str, String> {
         let config = self.config.borrow();
-        let user_and_repo = config.vcs_service().unwrap().user_and_repo().unwrap();
-        return hashmap!{
+        let mut envs = hashmap!{
             // DEPLO_CI_PULL_REQUEST_URL is set by generated deplo-main.yml by default
             //TODO_CI: need to get pr URL value on local execution
             "DEPLO_CI_PULL_REQUEST_URL" => std::env::var("DEPLO_CI_PULL_REQUEST_URL").unwrap_or_else(|_| "".to_string()),
             "DEPLO_CI_TYPE" => "GhAction".to_string(),
             "DEPLO_CI_CURRENT_SHA" => std::env::var("GITHUB_SHA").unwrap_or_else(
-                |_| config.vcs_service().unwrap().commit_hash().unwrap()
+                |_| config.vcs_service().unwrap().commit_hash(None).unwrap()
             ),
-        }
+        };
+        match std::env::var("GITHUB_REF_TYPE") {
+            Ok(ref_type) => {
+                match std::env::var("GITHUB_REF") {
+                    Ok(ref_name) => {
+                        match ref_type.as_str() {
+                            "branch" => envs.insert("DEPLO_CI_BRANCH_NAME", ref_name),
+                            "tag" => envs.insert("DEPLO_CI_TAG", ref_name),
+                            v => panic!("invalid ref_type {}", v),
+                        };
+                    },
+                    Err(_) => panic!("GITHUB_REF_TYPE is set but GITHUB_REF is not set"),
+                }
+            },
+            Err(_) => {
+                let (name, is_branch) = config.vcs_service().unwrap().current_branch().unwrap();
+                if is_branch {
+                    envs.insert("DEPLO_CI_BRANCH_NAME", name);
+                } else {
+                    envs.insert("DEPLO_CI_TAG", name);
+                };
+            }
+        };
+        envs
     }
     fn set_secret(&self, key: &str, _: &str) -> Result<(), Box<dyn Error>> {
         let config = self.config.borrow();

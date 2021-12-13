@@ -19,19 +19,26 @@ impl<S: shell::Shell> CI<S> {
         let config = self.config.borrow();
         let (account_name, _) = config.ci_config_by_env();
         let ci = config.ci_service(account_name)?;
-        let jobs = match ci.pull_request_url()? {
-            Some(_) => &config.ci_workflow().integrate,
-            None => &config.ci_workflow().deploy,
-        };
         let vcs = config.vcs_service()?;
-        for (name, job) in jobs {
-            let ps = job.patterns.iter().map(|p| {
-                std::env::current_dir().unwrap()
-                    .join(p)
-                    .to_string_lossy().to_string()
-            }).collect::<Vec<String>>();
-            if vcs.changed(&ps.iter().map(std::ops::Deref::deref).collect()) {
-                config.run_job(&self.shell, name, job)?
+        let jobs_and_kind = match ci.pull_request_url()? {
+            Some(_) => (&config.ci_workflow().integrate, "integrate"),
+            None => match vcs.release_target() {
+                Some(_) => (&config.ci_workflow().deploy, "deploy"),
+                None => if config.ci.invoke_for_all_branches.unwrap_or(false) {
+                    (&config.ci_workflow().integrate, "integrate")
+                } else {
+                    log::info!("deplo is configured as ignoring non-release-target, non-pull-requested branches");
+                    return Ok(());
+                },
+            }
+        };
+        for (name, job) in jobs_and_kind.0 {
+            let full_name = &format!("{}-{}", jobs_and_kind.1, name);
+            if vcs.changed(&job.patterns.iter().map(|p| p.as_ref()).collect()) {
+                log::debug!("========== invoking {}, pattern [{}] ==========", full_name, job.patterns.join(", "));
+                ci.mark_job_executed(&full_name)?;
+            } else {
+                log::debug!("========== not invoking {}, pattern [{}] ==========", full_name, job.patterns.join(", "));
             }
         }
         Ok(())

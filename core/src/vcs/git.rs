@@ -5,7 +5,8 @@ use maplit::hashmap;
 
 use crate::config;
 use crate::shell;
-use crate::util::defer;
+use crate::util::{defer, escalate, jsonpath};
+use crate::vcs;
 
 // because defer uses Drop trait behaviour, this cannot be de-duped as function
 macro_rules! setup_remote {
@@ -31,23 +32,28 @@ pub struct Git<S: shell::Shell = shell::Default> {
 
 pub trait GitFeatures {
     fn new(username: &str, email: &str, config: &config::Container) -> Self;
-    fn current_branch(&self) -> Result<String, Box<dyn Error>>;
-    fn commit_hash(&self) -> Result<String, Box<dyn Error>>;
+    fn current_branch(&self) -> Result<(String, bool), Box<dyn Error>>;
+    fn commit_hash(&self, expr: Option<&str>) -> Result<String, Box<dyn Error>>;
     fn remote_origin(&self) -> Result<String, Box<dyn Error>>;
     fn repository_root(&self) -> Result<String, Box<dyn Error>>;
+    fn diff_paths(&self, expression: &str) -> Result<String, Box<dyn Error>>;
     fn rebase_with_remote_counterpart(
         &self, url: &str, remote_branch: &str
-    ) -> Result<String, Box<dyn Error>>;
+    ) -> Result<(), Box<dyn Error>>;
     fn push(
         &self, url: &str, remote_branch: &str, msg: &str, 
         patterns: &Vec<&str>, options: &HashMap<&str, &str>
     ) -> Result<bool, Box<dyn Error>>;
+    fn tags(&self) -> Result<Vec<String>, Box<dyn Error>>;
 }
 
 pub trait GitHubFeatures {
     fn pr(
         &self, title: &str, head_branch: &str, base_branch: &str, options: &HashMap<&str, &str>
-    ) -> Result<(), Box<dyn Error>>;    
+    ) -> Result<(), Box<dyn Error>>;  
+    fn pr_data(
+        &self, pr_url: &str, accont: &str, token: &str, json_path: &str
+    ) -> Result<String, Box<dyn Error>>;
 }
 
 impl<S: shell::Shell> Git<S> {
@@ -84,14 +90,24 @@ impl<S: shell::Shell> GitFeatures for Git<S> {
             shell: S::new(config)
         }
     }
-    fn current_branch(&self) -> Result<String, Box<dyn Error>> {
-        Ok(self.shell.output_of(&vec!(
+    fn current_branch(&self) -> Result<(String, bool), Box<dyn Error>> {
+        let branch = self.shell.output_of(&vec!(
             "git", "symbolic-ref" , "--short", "HEAD"
-        ), shell::no_env(), shell::no_cwd())?)
+        ), shell::no_env(), shell::no_cwd())?;
+        if !branch.is_empty() {
+            return Ok((branch, true));
+        }
+        let tag = self.shell.output_of(&vec!(
+            "git", "describe" , "--tags", "--exact-match"
+        ), shell::no_env(), shell::no_cwd())?;
+        if !tag.is_empty() {
+            return Ok((tag, false));
+        }
+        return escalate!(Box::new(vcs::VCSError{cause: "no current branch or tag".to_string()}));
     }
-    fn commit_hash(&self) -> Result<String, Box<dyn Error>> {
+    fn commit_hash(&self, expr: Option<&str>) -> Result<String, Box<dyn Error>> {
         Ok(self.shell.output_of(&vec!(
-            "git", "rev-parse" , "HEAD"
+            "git", "rev-parse" , expr.unwrap_or("HEAD")
         ), shell::no_env(), shell::no_cwd())?)
     }
     fn remote_origin(&self) -> Result<String, Box<dyn Error>> {
@@ -103,6 +119,20 @@ impl<S: shell::Shell> GitFeatures for Git<S> {
         Ok(self.shell.output_of(&vec!(
             "git", "rev-parse", "--show-toplevel"
         ), shell::no_env(), shell::no_cwd())?)
+    }
+    fn diff_paths(&self, expression: &str) -> Result<String, Box<dyn Error>> {
+        Ok(self.shell.output_of(
+            &vec!("git", "--no-pager", "diff", "--name-only", expression),
+            shell::no_env(), shell::no_cwd()
+        )?)
+    }
+    fn tags(&self) -> Result<Vec<String>, Box<dyn Error>> {
+        self.shell.exec(&vec!(
+            "git", "pull", "--tags"
+        ), shell::no_env(), shell::no_cwd(), false)?;
+        Ok(self.shell.output_of(&vec!(
+            "git", "tag"
+        ), shell::no_env(), shell::no_cwd())?.split('\n').map(|s| s.to_string()).collect())
     }
     fn push(
         &self, url: &str, remote_branch: &str, msg: &str, 
@@ -147,7 +177,11 @@ impl<S: shell::Shell> GitFeatures for Git<S> {
 			match config.release_target() {
                 Some(_) => {
                     setup_remote!(self, url);
-                    let b = self.current_branch()?;
+                    let (b, is_branch) = self.current_branch()?;
+                    if !is_branch {
+                        log::info!("skip push because current ref is not a branch {}", b);
+                        return Ok(false)
+                    }
                     // update remote counter part of the deploy branch again
                     // because sometimes other commits are made (eg. merging pull request, job updates metadata)
                     // here, $CI_BASE_BRANCH_NAME before colon means branch which name is $CI_BASE_BRANCH_NAME at remote `latest`
@@ -173,48 +207,26 @@ impl<S: shell::Shell> GitFeatures for Git<S> {
     }
     fn rebase_with_remote_counterpart(
         &self, url: &str, remote_branch: &str
-    ) -> Result<String, Box<dyn Error>> {
-        let config = self.config.borrow();
+    ) -> Result<(), Box<dyn Error>> {
         // user and email
         self.setup_author()?;
-        if config.has_debug_option("skip_rebase") {
-            return Ok(self.shell.output_of(
-                &vec!("git", "diff", "--name-only", "HEAD~1...HEAD"),
-                shell::no_env(), shell::no_cwd()
-            )?)
-        }
         setup_remote!(self, url);
-        // get current base commit hash (that is, HEAD^1). 
-        // because below we do rebase, which may change HEAD.
-        // but we want to know the diff between "current" HEAD^1 and "rebased" HEAD with ... 
-        // to invoke all possible deployment that need to run
-        let commit = self.shell.output_of(&vec!(
-            "git", "rev-parse" ,"HEAD"
-        ), shell::no_env(), shell::no_cwd())?;
-        let base = self.shell.exec(&vec!(
-            "git", "rev-parse", &format!("{}^", commit)
-        ), shell::no_env(), shell::no_cwd(), true)?;
-
         // we cannot `git pull latest $remote_branch` here. eg. $remote_branch = master case on circleCI. 
         // sometimes latest/master and master diverged, and pull causes merge FETCH_HEAD into master.
         // then it raises error if no mail/user name specified, because these are diverged branches. 
         // (but we don't know how master and latest/master are diverged with cached .git of circleCI)
 
         // here, remote_branch before colon means branch which name is $remote_branch at remote `latest`
-        // fetch remote counter part of the branch, which may change HEAD by commiting something 
+        // fetch remote counter part of the branch to temporary remote 'latest' for rebasing.
         self.shell.exec(&vec!(
             "git", "fetch", "--force", "latest", 
             &format!("{}:remotes/latest/{}", remote_branch, remote_branch)
         ), shell::no_env(), shell::no_cwd(), false)?;
-        // because sometimes build on deploy branch made commit to $CI_BRANCH (eg. commit meta data)
+        // rebase with fetched remote latest branch. it may change HEAD.
         self.shell.exec(&vec!(
             "git", "rebase", &format!("remotes/latest/{}", remote_branch)
         ), shell::no_env(), shell::no_cwd(), false)?;
-        // actually get diff
-        Ok(self.shell.output_of(
-            &vec!("git", "diff", "--name-only", &format!("{}...HEAD", base)),
-            shell::no_env(), shell::no_cwd()
-        )?)
+        Ok(())
     }
 }
 
@@ -237,5 +249,15 @@ impl<S: shell::Shell> GitHubFeatures for Git<S> {
             }
         }
         Ok(())
-    }    
+    }
+    fn pr_data(
+        &self, pr_url: &str, _: &str, token: &str, json_path: &str
+    ) -> Result<String, Box<dyn Error>> {
+        let api_url = format!("https://api.github.com/repos/${pr_part}", pr_part = &pr_url[19..]);
+        let output = self.shell.eval(
+            &format!("curl -s -H \"Authorization: token ${token}\" ${api_url}", token = token, api_url = api_url), 
+            shell::default(), shell::no_env(), shell::no_cwd(), false
+        )?;
+        Ok(jsonpath!(&output, &format!("$${}", json_path)).unwrap_or("".to_string()))
+    }
 }

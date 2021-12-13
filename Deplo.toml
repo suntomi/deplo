@@ -34,7 +34,7 @@ docker build -t ghcr.io/suntomi/deplo:base -f tools/docker/Dockerfile.base tools
 patterns = ["tools/docker/Dockerfile.builder", "Cargo.*"]
 runner = { type = "Machine", os = "Linux", local_fallback = { image = "docker:20.10", shell = "sh" } }
 command = """
-bash tools/scripts/copy_manifests.sh
+sh tools/scripts/copy_manifests.sh
 docker build -t ghcr.io/suntomi/deplo:builder -f tools/docker/Dockerfile.builder tools/docker
 """
 
@@ -61,7 +61,7 @@ docker push ghcr.io/suntomi/deplo:base
 patterns = ["tools/docker/Dockerfile.builder", "Cargo.*"]
 runner = { type = "Machine", os = "Linux", local_fallback = { image = "docker:20.10", shell = "sh" } }
 command = """
-bash tools/scripts/copy_manifests.sh
+sh tools/scripts/copy_manifests.sh
 docker build -t ghcr.io/suntomi/deplo:builder -f tools/docker/Dockerfile.builder tools/docker
 echo ${SUNTOMI_VCS_ACCOUNT_KEY} | docker login ghcr.io -u ${SUNTOMI_VCS_ACCOUNT} --password-stdin
 docker push ghcr.io/suntomi/deplo:builder

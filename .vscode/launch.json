@@ -1,6 +1,16 @@
 {
     "version": "0.2.0",
-    "configurations": [    {
+    "configurations": [{
+        "name": "Kick",
+        "type": "lldb",
+        "request": "launch",
+        "program": "${workspaceFolder}/target/debug/cli",
+        "args": [
+            "-v=3", "ci", "kick"
+        ],
+        "preLaunchTask": "git reset --hard"
+    },
+    {
         "name": "Deploy",
         "type": "lldb",
         "request": "launch",

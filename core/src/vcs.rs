@@ -10,10 +10,10 @@ use crate::module;
 pub trait VCS : module::Module {
     fn new(config: &config::Container) -> Result<Self, Box<dyn Error>> where Self : Sized;
     fn release_target(&self) -> Option<String>;
-    fn current_branch(&self) -> Result<String, Box<dyn Error>>;
-    fn commit_hash(&self) -> Result<String, Box<dyn Error>>;
+    fn current_branch(&self) -> Result<(String, bool), Box<dyn Error>>;
+    fn commit_hash(&self, expr: Option<&str>) -> Result<String, Box<dyn Error>>;
     fn repository_root(&self) -> Result<String, Box<dyn Error>>;
-    fn rebase_with_remote_counterpart(&self, branch: &str) -> Result<String, Box<dyn Error>>;
+    fn rebase_with_remote_counterpart(&self, branch: &str) -> Result<(), Box<dyn Error>>;
     fn push(
         &self, remote_branch: &str, msg: &str, patterns: &Vec<&str>, option: &HashMap<&str, &str>
     ) -> Result<bool, Box<dyn Error>>;
@@ -24,6 +24,10 @@ pub trait VCS : module::Module {
     fn diff<'b>(&'b self) -> &'b Vec<String>;
     fn changed<'b>(&'b self, patterns: &Vec<&str>) -> bool {
         let difflines = self.diff();
+        if difflines.len() == 1 && difflines[0] == "*" {
+            // this specifal pattern indicates everything changed
+            return true;
+        }
         for pattern in patterns {
             match Regex::new(pattern) {
                 Ok(re) => for diff in difflines {

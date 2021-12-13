@@ -138,6 +138,15 @@ impl<'a, S: shell::Shell> ci::CI for CircleCI<S> {
             }
         }
     }
+    fn mark_job_executed(&self, job_name: &str) -> Result<(), Box<dyn Error>> {
+        if config::Config::is_running_on_ci() {
+            fs::create_dir_all("/tmp/deplo/marked_jobs")?;
+            fs::write(format!("/tmp/deplo/marked_jobs/{}", job_name), "")?;
+        } else {
+            self.config.borrow().run_job_by_name(&self.shell, job_name)?;
+        }
+        Ok(())
+    }
     fn run_job(&self, _: &str) -> Result<String, Box<dyn Error>> {
         log::warn!("TODO: implement run_job for circleci");
         Ok("".to_string())
@@ -157,7 +166,7 @@ impl<'a, S: shell::Shell> ci::CI for CircleCI<S> {
             "DEPLO_CI_PULL_REQUEST_URL" => std::env::var("CIRCLE_PULL_REQUEST").unwrap_or_else(|_| "".to_string()),
             "DEPLO_CI_TYPE" => "CircleCI".to_string(),
             "DEPLO_CI_CURRENT_SHA" => std::env::var("CIRCLE_SHA1").unwrap_or_else(
-                |_| config.vcs_service().unwrap().commit_hash().unwrap()
+                |_| config.vcs_service().unwrap().commit_hash(None).unwrap()
             ),
         }
     }

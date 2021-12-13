@@ -3,6 +3,13 @@
 {machine_or_container:>2}
 {workdir:>2}
   steps:
+    - attach_workspace:
+        at: /tmp/deplo
+    - run: |
+        if [ ! -f "/tmp/deplo/marked_jobs/{full_name}" ]; then
+          echo "Job {full_name} is not marked to execute."
+          circleci-agent step halt
+        fi
 {checkout:>4}
     - name: {kind} {name}
       run: deplo ci {kind} {name}

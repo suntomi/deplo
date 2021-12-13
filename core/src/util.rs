@@ -303,6 +303,17 @@ pub fn sorted_key_iter<K: std::cmp::Ord,V>(h: &HashMap<K, V>) -> impl Iterator<I
     v.into_iter()
 }
 
+// json
+#[macro_export]
+macro_rules! macro_jsonpath {
+    ( $src:expr, $path:expr ) => {
+        jsonpath_lib::select_as_str($src, $path)
+    }
+}
+pub use macro_jsonpath as jsonpath;
+
+ 
+
 #[cfg(test)]
 mod tests {
     use super::*;
