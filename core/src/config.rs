@@ -268,7 +268,10 @@ impl Config {
             None => {}
         }
         // apply verbosity
-        let verbosity = args.occurence_of("verbosity");
+        let verbosity: u64 = match args.value_of("verbosity") {
+            Some(o) => o.parse().unwrap_or(0),
+            None => 0
+        };
         simple_logger::init_with_level(match verbosity {
             0 => log::Level::Warn,
             1 => log::Level::Info,

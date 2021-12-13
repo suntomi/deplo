@@ -45,7 +45,6 @@ lazy_static! {
         .arg(Arg::new("verbosity")
             .short('v')
             .long("verbose")
-            .multiple_values(true)
             .about("Sets the level of verbosity")
             .takes_value(true))
         .arg(Arg::new("workdir")
