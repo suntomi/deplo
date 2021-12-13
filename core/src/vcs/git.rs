@@ -91,7 +91,7 @@ impl<S: shell::Shell> GitFeatures for Git<S> {
     }
     fn commit_hash(&self) -> Result<String, Box<dyn Error>> {
         Ok(self.shell.output_of(&vec!(
-            "git", "rev-parse" , "--short", "HEAD"
+            "git", "rev-parse" , "HEAD"
         ), shell::no_env(), shell::no_cwd())?)
     }
     fn remote_origin(&self) -> Result<String, Box<dyn Error>> {
