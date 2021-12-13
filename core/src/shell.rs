@@ -33,28 +33,24 @@ pub trait Shell {
         &self, image: &str, code: &str, shell: Option<&String>, envs: I, cwd: Option<&P>, capture: bool
     ) -> Result<String, Box<dyn Error>>
     where I: IntoIterator<Item = (K, V)> + Clone, K: AsRef<OsStr>, V: AsRef<OsStr>, P: AsRef<Path> {
-        let mut may_repository_mount_path: Option<String> = None;
+        let config = self.config().borrow();
         let envs_vec: Vec<String> = envs.clone().into_iter().map(|(k,v)| {
             let key = k.as_ref().to_string_lossy();
             let val = v.as_ref().to_string_lossy();
-            if key == "DEPLO_CI_REPOSITORY_PATH" {
-                may_repository_mount_path = Some(val.to_string());
-            }
             return vec!["-e".to_string(), format!("{k}={v}", k = key, v = val)]
         }).collect::<Vec<Vec<String>>>().concat();
-        let repository_mount_path = may_repository_mount_path.unwrap();
+        let repository_mount_path = config.vcs_service()?.repository_root()?;
         let workdir = match cwd {
             Some(dir) => make_absolute(dir.as_ref(), &repository_mount_path.clone()),
             None => repository_mount_path.clone()
         };
-        let config = self.config().borrow();
         let result = self.exec(&vec![
             vec!["docker", "run", "--rm", "-ti"],
             vec!["--workdir", &workdir],
             envs_vec.iter().map(|s| s.as_ref()).collect::<Vec<&str>>(),
             // TODO_PATH: use Path to generate path of /var/run/docker.sock (left(host) side)
             vec!["-v", "/var/run/docker.sock:/var/run/docker.sock"],
-            vec!["-v", &format!("{}:{}", config.vcs_service()?.repository_root()?, &repository_mount_path)],
+            vec!["-v", &format!("{}:{}", &repository_mount_path, &repository_mount_path)],
             vec![image, shell.map_or_else(|| "bash", |v| v.as_str()), "-c", code]
         ].concat(), envs, cwd, capture)?;
         return Ok(result);

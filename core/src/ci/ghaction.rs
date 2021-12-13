@@ -203,9 +203,6 @@ impl<S: shell::Shell> ci::CI for GhAction<S> {
             //TODO_CI: need to get pr URL value on local execution
             "DEPLO_CI_PULL_REQUEST_URL" => std::env::var("DEPLO_CI_PULL_REQUEST_URL").unwrap_or_else(|_| "".to_string()),
             "DEPLO_CI_TYPE" => "GhAction".to_string(),
-            "DEPLO_CI_REPOSITORY_PATH" => std::env::var("GITHUB_WORKSPACE").unwrap_or_else(
-                |_| format!("/home/runner/work/{repo}/{repo}", repo = user_and_repo.1)
-            ),
             "DEPLO_CI_CURRENT_SHA" => std::env::var("GITHUB_SHA").unwrap_or_else(
                 |_| config.vcs_service().unwrap().commit_hash().unwrap()
             ),

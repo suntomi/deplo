@@ -156,7 +156,6 @@ impl<'a, S: shell::Shell> ci::CI for CircleCI<S> {
             //TODO_CI: need to get pr URL value on local execution
             "DEPLO_CI_PULL_REQUEST_URL" => std::env::var("CIRCLE_PULL_REQUEST").unwrap_or_else(|_| "".to_string()),
             "DEPLO_CI_TYPE" => "CircleCI".to_string(),
-            "DEPLO_CI_REPOSITORY_PATH" => "/home/circleci/project".to_string(),
             "DEPLO_CI_CURRENT_SHA" => std::env::var("CIRCLE_SHA1").unwrap_or_else(
                 |_| config.vcs_service().unwrap().commit_hash().unwrap()
             ),
