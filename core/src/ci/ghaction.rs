@@ -131,8 +131,8 @@ impl<'a, S: shell::Shell> module::Module for GhAction<S> {
                         Some(v) => v.as_str(),
                         None => match os {
                             config::RunnerOS::Linux => "ubuntu-latest",
-                            config::RunnerOS::Windows => "macos-latest",
-                            config::RunnerOS::MacOS => "windows-latest",
+                            config::RunnerOS::Windows => "windows-latest",
+                            config::RunnerOS::MacOS => "macos-latest",
                         }
                     },
                     config::Runner::Container{image:_} => "ubuntu-latest",
