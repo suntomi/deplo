@@ -67,7 +67,7 @@ impl fmt::Display for RunnerOS {
 pub struct Cache {
     pub keys: Vec<String>,
     pub save_key: Option<String>,
-    pub path: String
+    pub paths: Vec<String>
 }
 #[derive(Serialize, Deserialize)]
 pub struct FallbackContainer {
