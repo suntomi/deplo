@@ -24,18 +24,12 @@ jobs:
       - name: Start deplo
         id: deplo-ci-kick
         run: deplo ci kick
-      - name: Check deplo cli cached
-        id: cache-deplo-cli
-        uses: actions/cache@v2
-        with:
-          path: /usr/local/bin/deplo
-          key: deplo-cli-v1-${{{{ steps.deplo-ci-kick.outputs.DEPLO_OUTPUT_CLI_GIT_HASH }}}}
       - name: Cache deplo cli
-        if: steps.fetch-repository-cache.outputs.cache-hit != 'true'
         uses: actions/upload-artifact@v2
         with:
           name: deplo-cli-v1-${{{{ steps.deplo-ci-kick.outputs.DEPLO_OUTPUT_CLI_GIT_HASH }}}}
           path: /usr/local/bin/deplo
+          retention-days: 1
       - name: Setup ssh session to debug
         if: ${{{{ failure() }}}}
         uses: umegaya/action-tmate@a3d459813f3429bd95fc48bcd980b2fb40f10ad0

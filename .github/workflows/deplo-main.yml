@@ -20,7 +20,7 @@ jobs:
   deplo-main:
     name: Start CI
     runs-on: ubuntu-latest
-    container: ghcr.io/suntomi/deplo:161c4cc60b31b6e530199ebbbfd4025b42a1e439
+    container: ghcr.io/suntomi/deplo:7ce85c3dad803a215155421d538071ae9ab8646b
     outputs:
       DEPLO_OUTPUT_CLI_GIT_HASH: ${{ steps.deplo-ci-kick.outputs.DEPLO_OUTPUT_CLI_GIT_HASH }}
       deploy-base: ${ steps.deplo-ci-kick.outputs.deploy-base }
@@ -53,18 +53,12 @@ jobs:
       - name: Start deplo
         id: deplo-ci-kick
         run: deplo ci kick
-      - name: Check deplo cli cached
-        id: cache-deplo-cli
-        uses: actions/cache@v2
-        with:
-          path: /usr/local/bin/deplo
-          key: deplo-cli-v1-${{ steps.deplo-ci-kick.outputs.DEPLO_OUTPUT_CLI_GIT_HASH }}
       - name: Cache deplo cli
-        if: steps.fetch-repository-cache.outputs.cache-hit != 'true'
         uses: actions/upload-artifact@v2
         with:
           name: deplo-cli-v1-${{ steps.deplo-ci-kick.outputs.DEPLO_OUTPUT_CLI_GIT_HASH }}
           path: /usr/local/bin/deplo
+          retention-days: 1
       - name: Setup ssh session to debug
         if: ${{ failure() }}
         uses: umegaya/action-tmate@a3d459813f3429bd95fc48bcd980b2fb40f10ad0
@@ -74,7 +68,7 @@ jobs:
     name: Cleanup CI
     needs: ["deplo-main","deploy-base","deploy-builder","deploy-mac","deploy-product","deploy-win","integrate-base","integrate-builder","integrate-src"]
     runs-on: ubuntu-latest
-    container: ghcr.io/suntomi/deplo:161c4cc60b31b6e530199ebbbfd4025b42a1e439
+    container: ghcr.io/suntomi/deplo:183f843dee49a42db51e6f0ef566e818caff206e
     steps:
       - name: Fetch repository cache
         id: fetch-repository-cache
