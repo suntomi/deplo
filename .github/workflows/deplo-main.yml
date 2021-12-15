@@ -113,7 +113,9 @@ jobs:
         uses: actions/download-artifact@v2
         with:
           name: deplo-cli-v1-${{ needs.deplo-main.outputs.DEPLO_OUTPUT_CLI_GIT_HASH }}
-          path: /usr/local/bin/deplo
+          path: /usr/local/bin
+      - name: Change cli permission
+        run: chmod +x /usr/local/bin/deplo
       - name: Fetch repository cache
         id: fetch-repository-cache
         uses: actions/cache@v2
@@ -150,7 +152,9 @@ jobs:
         uses: actions/download-artifact@v2
         with:
           name: deplo-cli-v1-${{ needs.deplo-main.outputs.DEPLO_OUTPUT_CLI_GIT_HASH }}
-          path: /usr/local/bin/deplo
+          path: /usr/local/bin
+      - name: Change cli permission
+        run: chmod +x /usr/local/bin/deplo
       - name: Fetch repository cache
         id: fetch-repository-cache
         uses: actions/cache@v2
@@ -220,7 +224,9 @@ jobs:
         uses: actions/download-artifact@v2
         with:
           name: deplo-cli-v1-${{ needs.deplo-main.outputs.DEPLO_OUTPUT_CLI_GIT_HASH }}
-          path: /usr/local/bin/deplo
+          path: /usr/local/bin
+      - name: Change cli permission
+        run: chmod +x /usr/local/bin/deplo
       - name: Fetch repository cache
         id: fetch-repository-cache
         uses: actions/cache@v2
@@ -290,7 +296,9 @@ jobs:
         uses: actions/download-artifact@v2
         with:
           name: deplo-cli-v1-${{ needs.deplo-main.outputs.DEPLO_OUTPUT_CLI_GIT_HASH }}
-          path: /usr/local/bin/deplo
+          path: /usr/local/bin
+      - name: Change cli permission
+        run: chmod +x /usr/local/bin/deplo
       - name: Fetch repository cache
         id: fetch-repository-cache
         uses: actions/cache@v2
@@ -327,7 +335,9 @@ jobs:
         uses: actions/download-artifact@v2
         with:
           name: deplo-cli-v1-${{ needs.deplo-main.outputs.DEPLO_OUTPUT_CLI_GIT_HASH }}
-          path: /usr/local/bin/deplo
+          path: /usr/local/bin
+      - name: Change cli permission
+        run: chmod +x /usr/local/bin/deplo
       - name: Fetch repository cache
         id: fetch-repository-cache
         uses: actions/cache@v2
@@ -364,7 +374,9 @@ jobs:
         uses: actions/download-artifact@v2
         with:
           name: deplo-cli-v1-${{ needs.deplo-main.outputs.DEPLO_OUTPUT_CLI_GIT_HASH }}
-          path: /usr/local/bin/deplo
+          path: /usr/local/bin
+      - name: Change cli permission
+        run: chmod +x /usr/local/bin/deplo
       - name: Fetch repository cache
         id: fetch-repository-cache
         uses: actions/cache@v2
