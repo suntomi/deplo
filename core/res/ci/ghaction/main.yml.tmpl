@@ -30,7 +30,7 @@ jobs:
         with:
           path: /usr/local/bin/deplo
           key: deplo-cli-v1-${{{{ steps.deplo-ci-kick.outputs.DEPLO_OUTPUT_CLI_GIT_HASH }}}}
-      - name Cache deplo cli
+      - name: Cache deplo cli
         if: steps.fetch-repository-cache.outputs.cache-hit != 'true'
         uses: actions/upload-artifact@v2
         with:
