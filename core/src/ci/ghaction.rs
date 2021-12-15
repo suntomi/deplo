@@ -196,7 +196,7 @@ impl<S: shell::Shell> ci::CI for GhAction<S> {
     }
     fn pull_request_url(&self) -> Result<Option<String>, Box<dyn Error>> {
         match std::env::var("DEPLO_CI_PULL_REQUEST_URL") {
-            Ok(v) => Ok(Some(v)),
+            Ok(v) => if v.is_empty() { Ok(None) } else { Ok(Some(v)) },
             Err(e) => {
                 match e {
                     std::env::VarError::NotPresent => Ok(None),
