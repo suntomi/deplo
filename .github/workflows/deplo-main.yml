@@ -20,17 +20,17 @@ jobs:
   deplo-main:
     name: Start CI
     runs-on: ubuntu-latest
-    container: ghcr.io/suntomi/deplo:be7cfd0ba8cc8cb274b2fd1c394c580254728af4
+    container: ghcr.io/suntomi/deplo:70172f28a923f1f777283d5ffa24260e43359c6c
     outputs:
-      DEPLO_OUTPUT_CLI_GIT_HASH: steps.deplo-ci-kick.DEPLO_OUTPUT_CLI_GIT_HASH
-      deploy-base: steps.deplo-ci-kick.deploy-base
-      deploy-builder: steps.deplo-ci-kick.deploy-builder
-      deploy-mac: steps.deplo-ci-kick.deploy-mac
-      deploy-product: steps.deplo-ci-kick.deploy-product
-      deploy-win: steps.deplo-ci-kick.deploy-win
-      integrate-base: steps.deplo-ci-kick.integrate-base
-      integrate-builder: steps.deplo-ci-kick.integrate-builder
-      integrate-src: steps.deplo-ci-kick.integrate-src
+      DEPLO_OUTPUT_CLI_GIT_HASH: ${{ steps.deplo-ci-kick.DEPLO_OUTPUT_CLI_GIT_HASH }}
+      deploy-base: ${ steps.deplo-ci-kick.deploy-base }
+      deploy-builder: ${ steps.deplo-ci-kick.deploy-builder }
+      deploy-mac: ${ steps.deplo-ci-kick.deploy-mac }
+      deploy-product: ${ steps.deplo-ci-kick.deploy-product }
+      deploy-win: ${ steps.deplo-ci-kick.deploy-win }
+      integrate-base: ${ steps.deplo-ci-kick.integrate-base }
+      integrate-builder: ${ steps.deplo-ci-kick.integrate-builder }
+      integrate-src: ${ steps.deplo-ci-kick.integrate-src }
     steps:
       - name: Fetch repository cache
         id: fetch-repository-cache
@@ -68,7 +68,7 @@ jobs:
     name: Cleanup CI
     needs: ["deplo-main","deploy-base","deploy-builder","deploy-mac","deploy-product","deploy-win","integrate-base","integrate-builder","integrate-src"]
     runs-on: ubuntu-latest
-    container: ghcr.io/suntomi/deplo:be7cfd0ba8cc8cb274b2fd1c394c580254728af4
+    container: ghcr.io/suntomi/deplo:70172f28a923f1f777283d5ffa24260e43359c6c
     steps:
       - name: Fetch repository cache
         id: fetch-repository-cache

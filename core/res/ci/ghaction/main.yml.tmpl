@@ -17,7 +17,7 @@ jobs:
     runs-on: ubuntu-latest
     container: {image}:{tag}
     outputs:
-      DEPLO_OUTPUT_CLI_GIT_HASH: steps.deplo-ci-kick.DEPLO_OUTPUT_CLI_GIT_HASH
+      DEPLO_OUTPUT_CLI_GIT_HASH: ${{{{ steps.deplo-ci-kick.DEPLO_OUTPUT_CLI_GIT_HASH }}}}
 {outputs:>6}
     steps:
 {checkout:>6}
