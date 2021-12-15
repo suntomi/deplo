@@ -1,6 +1,6 @@
 {full_name}:
   needs: [{needs}]
-  if: needs.deplo-main.outputs.{full_name}
+  if: ${{{{ needs.deplo-main.outputs.{full_name} && !failure() }}}}
   name: Running job {full_name}
   runs-on: {machine}
 {container:>2}

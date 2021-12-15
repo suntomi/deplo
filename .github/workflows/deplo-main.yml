@@ -66,6 +66,7 @@ jobs:
           sudo: false
   deplo-finish:
     name: Cleanup CI
+    if: ${{ !failure() }}
     needs: ["deplo-main","deploy-base","deploy-builder","deploy-mac","deploy-product","deploy-win","integrate-base","integrate-builder","integrate-src"]
     runs-on: ubuntu-latest
     container: ghcr.io/suntomi/deplo:8ac44fba78571e1e6bb7af9ba0793550401d9ba4
@@ -98,7 +99,7 @@ jobs:
           sudo: false
   deploy-base:
     needs: [deplo-main]
-    if: needs.deplo-main.outputs.deploy-base
+    if: ${{ needs.deplo-main.outputs.deploy-base && !failure() }}
     name: Running job deploy-base
     runs-on: ubuntu-latest
   
@@ -137,7 +138,7 @@ jobs:
           sudo: true
   deploy-builder:
     needs: [deplo-main]
-    if: needs.deplo-main.outputs.deploy-builder
+    if: ${{ needs.deplo-main.outputs.deploy-builder && !failure() }}
     name: Running job deploy-builder
     runs-on: ubuntu-latest
   
@@ -176,7 +177,7 @@ jobs:
           sudo: true
   deploy-mac:
     needs: [deplo-main]
-    if: needs.deplo-main.outputs.deploy-mac
+    if: ${{ needs.deplo-main.outputs.deploy-mac && !failure() }}
     name: Running job deploy-mac
     runs-on: macos-latest
   
@@ -211,7 +212,7 @@ jobs:
           sudo: true
   deploy-product:
     needs: ["deploy-mac","deploy-win","deploy-builder","deplo-main"]
-    if: needs.deplo-main.outputs.deploy-product
+    if: ${{ needs.deplo-main.outputs.deploy-product && !failure() }}
     name: Running job deploy-product
     runs-on: ubuntu-latest
   
@@ -250,7 +251,7 @@ jobs:
           sudo: true
   deploy-win:
     needs: [deplo-main]
-    if: needs.deplo-main.outputs.deploy-win
+    if: ${{ needs.deplo-main.outputs.deploy-win && !failure() }}
     name: Running job deploy-win
     runs-on: windows-latest
   
@@ -285,7 +286,7 @@ jobs:
           sudo: true
   integrate-base:
     needs: [deplo-main]
-    if: needs.deplo-main.outputs.integrate-base
+    if: ${{ needs.deplo-main.outputs.integrate-base && !failure() }}
     name: Running job integrate-base
     runs-on: ubuntu-latest
   
@@ -324,7 +325,7 @@ jobs:
           sudo: true
   integrate-builder:
     needs: [deplo-main]
-    if: needs.deplo-main.outputs.integrate-builder
+    if: ${{ needs.deplo-main.outputs.integrate-builder && !failure() }}
     name: Running job integrate-builder
     runs-on: ubuntu-latest
   
@@ -363,7 +364,7 @@ jobs:
           sudo: true
   integrate-src:
     needs: [deplo-main]
-    if: needs.deplo-main.outputs.integrate-src
+    if: ${{ needs.deplo-main.outputs.integrate-src && !failure() }}
     name: Running job integrate-src
     runs-on: ubuntu-latest
   
