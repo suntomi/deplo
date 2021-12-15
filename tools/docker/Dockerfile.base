@@ -1,4 +1,4 @@
 FROM alpine:latest
 
 RUN apk add curl git
-
+RUN apk add --no-cache tar
