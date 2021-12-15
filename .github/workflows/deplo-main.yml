@@ -178,7 +178,7 @@ jobs:
     needs: [deplo-main]
     if: needs.deplo-main.outputs.deploy-mac
     name: Running job deploy-mac
-    runs-on: windows-latest
+    runs-on: macos-latest
   
     steps:
   
@@ -201,7 +201,9 @@ jobs:
         if: steps.fetch-repository-cache.outputs.cache-hit == 'true'
         run: git reset --hard HEAD
       - name: deploy mac
-        run: deplo ci deploy mac
+        run: |
+          echo "TODO: build for mac"
+          
       - name: Setup ssh session to debug
         if: ${{ failure() }}
         uses: umegaya/action-tmate@a3d459813f3429bd95fc48bcd980b2fb40f10ad0
@@ -250,7 +252,7 @@ jobs:
     needs: [deplo-main]
     if: needs.deplo-main.outputs.deploy-win
     name: Running job deploy-win
-    runs-on: macos-latest
+    runs-on: windows-latest
   
     steps:
   
@@ -273,7 +275,9 @@ jobs:
         if: steps.fetch-repository-cache.outputs.cache-hit == 'true'
         run: git reset --hard HEAD
       - name: deploy win
-        run: deplo ci deploy win
+        run: |
+          echo "TODO: build for windows"
+          
       - name: Setup ssh session to debug
         if: ${{ failure() }}
         uses: umegaya/action-tmate@a3d459813f3429bd95fc48bcd980b2fb40f10ad0

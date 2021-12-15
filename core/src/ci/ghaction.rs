@@ -41,6 +41,22 @@ impl<S: shell::Shell> GhAction<S> {
             format!("{kind}-{name}: ${{{{ steps.deplo-ci-kick.outputs.{kind}-{name} }}}}", kind = v.0, name = v.1)
         }).collect()
     }
+    fn generate_command<'a>(&self, names: &(&str, &str), job: &'a config::Job) -> Vec<String> {
+        match job.runner {
+            config::Runner::Machine{ref os, ..} => match os {
+                config::RunnerOS::Linux => return vec![format!("run: deplo ci {} {}", names.0, names.1)],
+                config::RunnerOS::Windows => (),
+                config::RunnerOS::MacOS => (),
+            },
+            config::Runner::Container{image:_} => return vec![format!("run: deplo ci {} {}", names.0, names.1)],
+        };
+        format!(include_str!("../../res/ci/ghaction/rawexec.yml.tmpl"),
+            scripts = MultilineFormatString{
+                strings: &job.command.split("\n").map(|s| s.to_string()).collect(),
+                postfix: None
+            }
+        ).split("\n").map(|s| s.to_string()).collect()
+    }
     fn generate_job_dependencies<'a>(&self, kind: &'a str, depends: &'a Option<Vec<String>>) -> String {
         depends.as_ref().map_or_else(
             || "deplo-main".to_string(),
@@ -136,6 +152,10 @@ impl<'a, S: shell::Shell> module::Module for GhAction<S> {
                         }
                     },
                     config::Runner::Container{image:_} => "ubuntu-latest",
+                },
+                command = MultilineFormatString{
+                    strings: &self.generate_command(&names, &job),
+                    postfix: None
                 },
                 container = MultilineFormatString{
                     strings: &self.generate_container_setting(&job.runner),
