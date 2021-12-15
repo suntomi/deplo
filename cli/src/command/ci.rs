@@ -19,6 +19,7 @@ impl<S: shell::Shell> CI<S> {
         let config = self.config.borrow();
         let (account_name, _) = config.ci_config_by_env();
         let ci = config.ci_service(account_name)?;
+        ci.kick()?;
         let vcs = config.vcs_service()?;
         let jobs_and_kind = match ci.pull_request_url()? {
             Some(_) => (&config.ci_workflow().integrate, "integrate"),

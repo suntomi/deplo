@@ -58,6 +58,19 @@ impl<S: shell::Shell> GhAction<S> {
             config::Runner::Container{ image } => vec![format!("container: {}", image)]
         }
     }
+    fn generate_fetchcli_steps<'a>(&self, runner: &'a config::Runner) ->Vec<String> {
+        match runner {
+            config::Runner::Machine{ref os, ..} => match os {
+                config::RunnerOS::Linux => (),
+                config::RunnerOS::Windows => return vec![],
+                config::RunnerOS::MacOS => return vec![],
+            },
+            config::Runner::Container{image:_} => (),
+        };
+        include_str!("../../res/ci/ghaction/fetchcli.yml.tmpl")
+            .split("\n").map(|s| s.to_string())
+            .collect::<Vec<String>>()
+    }
     fn generate_checkout_steps<'a>(&self, _: &'a str, options: &'a Option<HashMap<String, String>>) -> Vec<String> {
         let checkout_opts = options.as_ref().map_or_else(
             || vec![], 
@@ -128,6 +141,10 @@ impl<'a, S: shell::Shell> module::Module for GhAction<S> {
                     strings: &self.generate_container_setting(&job.runner),
                     postfix: None
                 },
+                fetchcli = MultilineFormatString{
+                    strings: &self.generate_fetchcli_steps(&job.runner),
+                    postfix: None
+                },
                 checkout = MultilineFormatString{
                     strings: &self.generate_checkout_steps(&name, &job.checkout),
                     postfix: None
@@ -172,6 +189,10 @@ impl<S: shell::Shell> ci::CI for GhAction<S> {
             account_name: account_name.to_string(),
             shell: S::new(config)
         });
+    }
+    fn kick(&self) -> Result<(), Box<dyn Error>> {
+        println!("::set-env name=DEPLO_OUTPUT_CLI_GIT_HASH::{}", config::DEPLO_GIT_HASH);
+        Ok(())
     }
     fn pull_request_url(&self) -> Result<Option<String>, Box<dyn Error>> {
         match std::env::var("DEPLO_CI_PULL_REQUEST_URL") {

@@ -1,0 +1,6 @@
+- name: Fetch deplo cli
+  id: fetch-deplo-cli
+  uses: actions/cache@v2
+  with:
+    path: /usr/local/bin/deplo
+    key: deplo-cli-v1-${{{{ deplo-main.outputs.DEPLO_OUTPUT_CLI_GIT_HASH }}}}
