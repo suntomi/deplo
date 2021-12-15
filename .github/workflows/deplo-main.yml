@@ -20,7 +20,7 @@ jobs:
   deplo-main:
     name: Start CI
     runs-on: ubuntu-latest
-    container: ghcr.io/suntomi/deplo:fd3ea40187385664ab16dac739993ec1a83fc3ed
+    container: ghcr.io/suntomi/deplo:3596416566c86c48f9e5ef72c51a7df150912c3e
     outputs:
       DEPLO_OUTPUT_CLI_GIT_HASH: ${{ steps.deplo-ci-kick.outputs.DEPLO_OUTPUT_CLI_GIT_HASH }}
       deploy-base: ${ steps.deplo-ci-kick.outputs.deploy-base }
@@ -68,7 +68,7 @@ jobs:
     name: Cleanup CI
     needs: ["deplo-main","deploy-base","deploy-builder","deploy-mac","deploy-product","deploy-win","integrate-base","integrate-builder","integrate-src"]
     runs-on: ubuntu-latest
-    container: ghcr.io/suntomi/deplo:fd3ea40187385664ab16dac739993ec1a83fc3ed
+    container: ghcr.io/suntomi/deplo:3596416566c86c48f9e5ef72c51a7df150912c3e
     steps:
       - name: Fetch repository cache
         id: fetch-repository-cache
