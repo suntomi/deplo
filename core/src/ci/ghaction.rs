@@ -191,7 +191,7 @@ impl<S: shell::Shell> ci::CI for GhAction<S> {
         });
     }
     fn kick(&self) -> Result<(), Box<dyn Error>> {
-        println!("::set-env name=DEPLO_OUTPUT_CLI_GIT_HASH::{}", config::DEPLO_GIT_HASH);
+        println!("::set-output name=DEPLO_OUTPUT_CLI_GIT_HASH::{}", config::DEPLO_GIT_HASH);
         Ok(())
     }
     fn pull_request_url(&self) -> Result<Option<String>, Box<dyn Error>> {
