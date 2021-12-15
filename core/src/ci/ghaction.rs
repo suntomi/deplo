@@ -67,7 +67,7 @@ impl<S: shell::Shell> GhAction<S> {
             },
             config::Runner::Container{image:_} => (),
         };
-        include_str!("../../res/ci/ghaction/fetchcli.yml.tmpl")
+        format!("{}", include_str!("../../res/ci/ghaction/fetchcli.yml.tmpl"))
             .split("\n").map(|s| s.to_string())
             .collect::<Vec<String>>()
     }

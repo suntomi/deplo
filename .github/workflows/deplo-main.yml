@@ -20,7 +20,7 @@ jobs:
   deplo-main:
     name: Start CI
     runs-on: ubuntu-latest
-    container: ghcr.io/suntomi/deplo:41ec82b273bbb81ce5ebb2415206e637ebd18a23
+    container: ghcr.io/suntomi/deplo:4bbe3b26d9da6dd2ecf6d01f1e22271bbf18d142
     outputs:
       DEPLO_OUTPUT_CLI_GIT_HASH: steps.deplo-ci-kick.DEPLO_OUTPUT_CLI_GIT_HASH
       deploy-base: steps.deplo-ci-kick.deploy-base
@@ -68,7 +68,7 @@ jobs:
     name: Cleanup CI
     needs: ["deplo-main","deploy-base","deploy-builder","deploy-mac","deploy-product","deploy-win","integrate-base","integrate-builder","integrate-src"]
     runs-on: ubuntu-latest
-    container: ghcr.io/suntomi/deplo:41ec82b273bbb81ce5ebb2415206e637ebd18a23
+    container: ghcr.io/suntomi/deplo:4bbe3b26d9da6dd2ecf6d01f1e22271bbf18d142
     steps:
       - name: Fetch repository cache
         id: fetch-repository-cache
@@ -109,7 +109,6 @@ jobs:
         with:
           path: /usr/local/bin/deplo
           key: deplo-cli-v1-${{{{ deplo-main.outputs.DEPLO_OUTPUT_CLI_GIT_HASH }}}}
-      
       - name: Fetch repository cache
         id: fetch-repository-cache
         uses: actions/cache@v2
@@ -148,7 +147,6 @@ jobs:
         with:
           path: /usr/local/bin/deplo
           key: deplo-cli-v1-${{{{ deplo-main.outputs.DEPLO_OUTPUT_CLI_GIT_HASH }}}}
-      
       - name: Fetch repository cache
         id: fetch-repository-cache
         uses: actions/cache@v2
@@ -220,7 +218,6 @@ jobs:
         with:
           path: /usr/local/bin/deplo
           key: deplo-cli-v1-${{{{ deplo-main.outputs.DEPLO_OUTPUT_CLI_GIT_HASH }}}}
-      
       - name: Fetch repository cache
         id: fetch-repository-cache
         uses: actions/cache@v2
@@ -292,7 +289,6 @@ jobs:
         with:
           path: /usr/local/bin/deplo
           key: deplo-cli-v1-${{{{ deplo-main.outputs.DEPLO_OUTPUT_CLI_GIT_HASH }}}}
-      
       - name: Fetch repository cache
         id: fetch-repository-cache
         uses: actions/cache@v2
@@ -331,7 +327,6 @@ jobs:
         with:
           path: /usr/local/bin/deplo
           key: deplo-cli-v1-${{{{ deplo-main.outputs.DEPLO_OUTPUT_CLI_GIT_HASH }}}}
-      
       - name: Fetch repository cache
         id: fetch-repository-cache
         uses: actions/cache@v2
@@ -370,7 +365,6 @@ jobs:
         with:
           path: /usr/local/bin/deplo
           key: deplo-cli-v1-${{{{ deplo-main.outputs.DEPLO_OUTPUT_CLI_GIT_HASH }}}}
-      
       - name: Fetch repository cache
         id: fetch-repository-cache
         uses: actions/cache@v2
