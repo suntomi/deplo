@@ -20,7 +20,7 @@ jobs:
   deplo-main:
     name: Start CI
     runs-on: ubuntu-latest
-    container: ghcr.io/suntomi/deplo:7ce85c3dad803a215155421d538071ae9ab8646b
+    container: ghcr.io/suntomi/deplo:183f843dee49a42db51e6f0ef566e818caff206e
     outputs:
       DEPLO_OUTPUT_CLI_GIT_HASH: ${{ steps.deplo-ci-kick.outputs.DEPLO_OUTPUT_CLI_GIT_HASH }}
       deploy-base: ${ steps.deplo-ci-kick.outputs.deploy-base }
