@@ -45,7 +45,7 @@ pub trait Shell {
             None => repository_mount_path.clone()
         };
         let result = self.exec(&vec![
-            vec!["docker", "run", "--rm", "-ti"],
+            vec!["docker", "run", "--rm"],
             vec!["--workdir", &workdir],
             envs_vec.iter().map(|s| s.as_ref()).collect::<Vec<&str>>(),
             // TODO_PATH: use Path to generate path of /var/run/docker.sock (left(host) side)
