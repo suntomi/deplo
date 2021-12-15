@@ -40,7 +40,7 @@ docker build -t ghcr.io/suntomi/deplo:builder -f tools/docker/Dockerfile.builder
 
 [ci.workflow.integrate.src]
 patterns = ["src/.*", "Cargo.*"]
-runner = { type = "Container", image = "rust:slim" }
+runner = { type = "Machine", os = "Linux", local_fallback = { image = "rust:slim" } }
 command = "cargo build"
 [[ci.workflow.integrate.src.cache]]
 keys = ["integrate-build-${{ runner.os }}-v1-${{ github.sha }}", "integrate-build-${{ runner.os }}-v1-"]

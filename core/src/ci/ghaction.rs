@@ -38,7 +38,7 @@ impl<S: shell::Shell> GhAction<S> {
     }
     fn generate_outputs<'a>(&self, jobs: &HashMap<(&'a str, &'a str), &'a config::Job>) -> Vec<String> {
         sorted_key_iter(jobs).map(|(v,_)| {
-            format!("{kind}-{name}: ${{ steps.deplo-ci-kick.outputs.{kind}-{name} }}", kind = v.0, name = v.1)
+            format!("{kind}-{name}: ${{{{ steps.deplo-ci-kick.outputs.{kind}-{name} }}}}", kind = v.0, name = v.1)
         }).collect()
     }
     fn generate_job_dependencies<'a>(&self, kind: &'a str, depends: &'a Option<Vec<String>>) -> String {
