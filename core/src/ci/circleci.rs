@@ -98,7 +98,7 @@ impl<'a, S: shell::Shell> module::Module for CircleCI<S> {
             // sync dotenv secrets with ci system
             config.parse_dotenv(|k,v| {
                 (self as &dyn ci::CI).set_secret(k, v)?;
-                log::info!("set secret value of {}", k);
+                log::debug!("set secret value of {}", k);
                 Ok(())
             })?;
         }

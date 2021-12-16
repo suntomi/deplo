@@ -145,7 +145,7 @@ impl<'a, S: shell::Shell> module::Module for GhAction<S> {
         config.parse_dotenv(|k,v| {
             if previously_no_file || reinit {
                 (self as &dyn ci::CI).set_secret(k, v)?;
-                log::info!("set secret value of {}", k);
+                log::debug!("set secret value of {}", k);
             }
             Ok(secrets.push(format!("{}: ${{{{ secrets.{} }}}}", k, k)))
         })?;

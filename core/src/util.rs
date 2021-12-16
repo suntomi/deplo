@@ -233,8 +233,8 @@ pub fn rmdir<P: AsRef<Path>>(path: P) -> bool {
 }
 pub fn dircp<P: AsRef<Path>>(src: P, dest: P) -> Result<(), Box<dyn Error>> {
     match fs::metadata(dest.as_ref()) {
-        Ok(_) => log::info!(
-            "infra setup scripts for {}({:?}) already copied",
+        Ok(_) => log::debug!(
+            "{}({:?}) already copied",
             dest.as_ref().to_string_lossy(), fs::canonicalize(&dest)
         ),
         Err(_) => {

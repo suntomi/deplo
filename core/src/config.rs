@@ -261,6 +261,25 @@ impl Config {
             Err(err) => escalate!(Box::new(err))
         }
     }
+    fn setup_logger(verbosity: u64) {
+        // apply verbosity
+        match std::env::var("RUST_LOG") {
+            Ok(v) => {
+                if !v.is_empty() {
+                    simple_logger::init_with_env().unwrap();
+                    return;
+                }
+            },
+            Err(_) => {},
+        };
+        simple_logger::init_with_level(match verbosity {
+            0 => log::Level::Warn,
+            1 => log::Level::Info,
+            2 => log::Level::Debug,
+            3 => log::Level::Trace,
+            _ => log::Level::Trace
+        }).unwrap();
+    }
     pub fn create<A: args::Args>(args: &A) -> Result<Container, Box<dyn Error>> {
         // apply working directory
         let may_workdir = args.value_of("workdir");
@@ -269,17 +288,11 @@ impl Config {
             None => {}
         }
         // apply verbosity
-        let verbosity: u64 = match args.value_of("verbosity") {
+        let verbosity = match args.value_of("verbosity") {
             Some(o) => o.parse().unwrap_or(0),
-            None => 0
+            None => 1
         };
-        simple_logger::init_with_level(match verbosity {
-            0 => log::Level::Warn,
-            1 => log::Level::Info,
-            2 => log::Level::Debug,
-            3 => log::Level::Trace,
-            _ => log::Level::Warn
-        }).unwrap();
+        Self::setup_logger(verbosity);
         // if the cli running on host, need to load dotenv to inject secrets
         if !Self::is_running_on_ci() {
             // load dotenv
@@ -291,7 +304,7 @@ impl Config {
                 None => match dotenv() {
                     Ok(path) => log::debug!("using .env file at {}", path.to_string_lossy()),
                     Err(err) => if Self::is_running_on_ci() {
-                        log::info!("run on CI: environment variable is provided by CI system")
+                        log::debug!("run on CI: environment variable is provided by CI system")
                     } else {
                         log::warn!("non-ci environment but .env not present or cannot load by error [{:?}], this usually means:\n\
                             1. command will be run with incorrect parameter or\n\

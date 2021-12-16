@@ -15,7 +15,7 @@ pub struct CI<S: shell::Shell = shell::Default> {
 }
 impl<S: shell::Shell> CI<S> {    
     fn kick<A: args::Args>(&self, _: &A) -> Result<(), Box<dyn Error>> {
-        log::info!("kick command invoked");
+        log::debug!("kick command invoked");
         let config = self.config.borrow();
         let (account_name, _) = config.ci_config_by_env();
         let ci = config.ci_service(account_name)?;

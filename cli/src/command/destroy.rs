@@ -22,7 +22,6 @@ impl<S: shell::Shell, A: args::Args> command::Command<A> for Destroy<S> {
     }
     fn run(&self, _: &A) -> Result<(), Box<dyn Error>> {
         log::debug!("destroy command invoked");
-        log::info!("destroy environment by terraformer");
         return Ok(())
     }
 }

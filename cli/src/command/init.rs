@@ -22,7 +22,7 @@ impl<S: shell::Shell, A: args::Args> command::Command<A> for Init<S> {
         });
     }
     fn run(&self, args: &A) -> Result<(), Box<dyn Error>> {
-        log::info!("init command invoked");
+        log::debug!("init command invoked");
         {
             // use block to release ownership of config before prepare_XXX call
             let config = self.config.borrow();

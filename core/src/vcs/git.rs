@@ -58,7 +58,7 @@ pub trait GitHubFeatures {
 
 impl<S: shell::Shell> Git<S> {
     fn setup_author(&self) -> Result<(), Box<dyn Error>> {
-        log::info!("git: setup {}/{}", self.email, self.username);
+        log::debug!("git: setup {}/{}", self.email, self.username);
         self.shell.exec(&vec!(
             "git", "config", "--global", "user.email", &self.email
         ), shell::no_env(), shell::no_cwd(), false)?;
@@ -156,13 +156,13 @@ impl<S: shell::Shell> GitFeatures for Git<S> {
             self.shell.exec(&vec!("git", "add", "-N", pattern), shell::no_env(), shell::no_cwd(), false)?;
             let diff = self.shell.exec(&vec!("git", "add", "-n", pattern), shell::no_env(), shell::no_cwd(), true)?;
 			if !diff.is_empty() {
-                log::info!("diff found for {} [{}]", pattern, diff);
+                log::debug!("diff found for {} [{}]", pattern, diff);
                 self.shell.exec(&vec!("git", "add", pattern), shell::no_env(), shell::no_cwd(), false)?;
 				changed = true
             }
         }
 		if !changed {
-			log::info!("skip push because no changes for provided pattern [{}]", patterns.join(" "));
+			log::debug!("skip push because no changes for provided pattern [{}]", patterns.join(" "));
 			return Ok(false)
         } else {
 			if use_lfs {
@@ -173,13 +173,13 @@ impl<S: shell::Shell> GitFeatures for Git<S> {
                 )?;
             }
 			self.shell.exec(&vec!("git", "commit", "-m", msg), shell::no_env(), shell::no_cwd(), false)?;
-			log::info!("commit done: [{}]", msg);
+			log::debug!("commit done: [{}]", msg);
 			match config.release_target() {
                 Some(_) => {
                     setup_remote!(self, url);
                     let (b, is_branch) = self.current_branch()?;
                     if !is_branch {
-                        log::info!("skip push because current ref is not a branch {}", b);
+                        log::debug!("skip push because current ref is not a branch {}", b);
                         return Ok(false)
                     }
                     // update remote counter part of the deploy branch again
