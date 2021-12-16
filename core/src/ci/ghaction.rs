@@ -41,6 +41,24 @@ impl<S: shell::Shell> GhAction<S> {
             format!("{kind}-{name}: ${{{{ steps.deplo-ci-kick.outputs.{kind}-{name} }}}}", kind = v.0, name = v.1)
         }).collect()
     }
+    fn generate_caches(&self, job: &config::Job) -> Vec<String> {
+        match job.caches {
+            Some(ref c) => sorted_key_iter(c).map(|(name,cache)| {
+                format!(
+                    include_str!("../../res/ci/ghaction/cache.yml.tmpl"), 
+                    name = name, key = cache.keys[0], 
+                    restore_keys = MultilineFormatString{
+                        strings: &cache.keys[1..].to_vec(), postfix: None
+                    },
+                    paths = MultilineFormatString{
+                        strings: &cache.paths, postfix: None
+                    },
+                    env_key = format!("DEPLO_CACHE_{}_HIT", name.to_uppercase())
+                ).split("\n").map(|s| s.to_string()).collect::<Vec<String>>()
+            }).collect(),
+            None => vec![]
+        }.concat()
+    }
     fn generate_command<'a>(&self, names: &(&str, &str), job: &'a config::Job) -> Vec<String> {
         match job.runner {
             config::Runner::Machine{ref os, ..} => match os {
@@ -152,6 +170,10 @@ impl<'a, S: shell::Shell> module::Module for GhAction<S> {
                         }
                     },
                     config::Runner::Container{image:_} => "ubuntu-latest",
+                },
+                caches = MultilineFormatString{
+                    strings: &self.generate_caches(&job),
+                    postfix: None
                 },
                 command = MultilineFormatString{
                     strings: &self.generate_command(&names, &job),

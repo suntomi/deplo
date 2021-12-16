@@ -20,7 +20,7 @@ jobs:
   deplo-main:
     name: Start CI
     runs-on: ubuntu-latest
-    container: ghcr.io/suntomi/deplo:e1f901537cb0036c44567048e47a3b06f97cdce8
+    container: ghcr.io/suntomi/deplo:3d9e1df8c2c0654ddc6f28364dc4d980e75c05e8
     outputs:
       DEPLO_OUTPUT_CLI_GIT_HASH: ${{ steps.deplo-ci-kick.outputs.DEPLO_OUTPUT_CLI_GIT_HASH }}
       deploy-base: ${{ steps.deplo-ci-kick.outputs.deploy-base }}
@@ -69,7 +69,7 @@ jobs:
     if: ${{ !failure() }}
     needs: ["deplo-main","deploy-base","deploy-builder","deploy-mac","deploy-product","deploy-win","integrate-base","integrate-builder","integrate-src"]
     runs-on: ubuntu-latest
-    container: ghcr.io/suntomi/deplo:e1f901537cb0036c44567048e47a3b06f97cdce8
+    container: ghcr.io/suntomi/deplo:3d9e1df8c2c0654ddc6f28364dc4d980e75c05e8
     steps:
       - name: Fetch repository cache
         id: fetch-repository-cache
@@ -129,6 +129,7 @@ jobs:
       - name: Restore repository from cache
         if: steps.fetch-repository-cache.outputs.cache-hit == 'true'
         run: git reset --hard HEAD
+  
       - name: deploy base
         run: deplo ci deploy base
       - name: Setup ssh session to debug
@@ -168,6 +169,7 @@ jobs:
       - name: Restore repository from cache
         if: steps.fetch-repository-cache.outputs.cache-hit == 'true'
         run: git reset --hard HEAD
+  
       - name: deploy builder
         run: deplo ci deploy builder
       - name: Setup ssh session to debug
@@ -201,6 +203,19 @@ jobs:
       - name: Restore repository from cache
         if: steps.fetch-repository-cache.outputs.cache-hit == 'true'
         run: git reset --hard HEAD
+      - name: Cache cargo
+        id: deplo-cache-cargo
+        uses: actions/cache@v2
+        with:
+          path: |
+            target
+            ~/.cargo
+          key: deploy-build-${{ runner.os }}-v1-${{ github.sha }}
+          restore-keys:
+            deploy-build-${{ runner.os }}-v1-
+      - name: Mark cache result
+        if: steps.deplo-cache-cargo.outputs.cache-hit == 'true'
+        run: echo "DEPLO_CACHE_CARGO_HIT=true" >> $GITHUB_ENV
       - name: deploy mac
         run: |
           echo "TODO: build for mac"
@@ -242,6 +257,19 @@ jobs:
       - name: Restore repository from cache
         if: steps.fetch-repository-cache.outputs.cache-hit == 'true'
         run: git reset --hard HEAD
+      - name: Cache cargo
+        id: deplo-cache-cargo
+        uses: actions/cache@v2
+        with:
+          path: |
+            target
+            ~/.cargo
+          key: deploy-build-${{ runner.os }}-v1-${{ github.sha }}
+          restore-keys:
+            deploy-build-${{ runner.os }}-v1-
+      - name: Mark cache result
+        if: steps.deplo-cache-cargo.outputs.cache-hit == 'true'
+        run: echo "DEPLO_CACHE_CARGO_HIT=true" >> $GITHUB_ENV
       - name: deploy product
         run: deplo ci deploy product
       - name: Setup ssh session to debug
@@ -275,6 +303,19 @@ jobs:
       - name: Restore repository from cache
         if: steps.fetch-repository-cache.outputs.cache-hit == 'true'
         run: git reset --hard HEAD
+      - name: Cache cargo
+        id: deplo-cache-cargo
+        uses: actions/cache@v2
+        with:
+          path: |
+            target
+            ~/.cargo
+          key: deploy-build-${{ runner.os }}-v1-${{ github.sha }}
+          restore-keys:
+            deploy-build-${{ runner.os }}-v1-
+      - name: Mark cache result
+        if: steps.deplo-cache-cargo.outputs.cache-hit == 'true'
+        run: echo "DEPLO_CACHE_CARGO_HIT=true" >> $GITHUB_ENV
       - name: deploy win
         run: |
           echo "TODO: build for windows"
@@ -316,6 +357,7 @@ jobs:
       - name: Restore repository from cache
         if: steps.fetch-repository-cache.outputs.cache-hit == 'true'
         run: git reset --hard HEAD
+  
       - name: integrate base
         run: deplo ci integrate base
       - name: Setup ssh session to debug
@@ -355,6 +397,7 @@ jobs:
       - name: Restore repository from cache
         if: steps.fetch-repository-cache.outputs.cache-hit == 'true'
         run: git reset --hard HEAD
+  
       - name: integrate builder
         run: deplo ci integrate builder
       - name: Setup ssh session to debug
@@ -394,6 +437,19 @@ jobs:
       - name: Restore repository from cache
         if: steps.fetch-repository-cache.outputs.cache-hit == 'true'
         run: git reset --hard HEAD
+      - name: Cache cargo
+        id: deplo-cache-cargo
+        uses: actions/cache@v2
+        with:
+          path: |
+            target
+            ~/.cargo
+          key: integrate-build-${{ runner.os }}-v1-${{ github.sha }}
+          restore-keys:
+            integrate-build-${{ runner.os }}-v1-
+      - name: Mark cache result
+        if: steps.deplo-cache-cargo.outputs.cache-hit == 'true'
+        run: echo "DEPLO_CACHE_CARGO_HIT=true" >> $GITHUB_ENV
       - name: integrate src
         run: deplo ci integrate src
       - name: Setup ssh session to debug

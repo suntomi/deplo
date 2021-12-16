@@ -42,7 +42,7 @@ docker build -t ghcr.io/suntomi/deplo:builder -f tools/docker/Dockerfile.builder
 patterns = [".*/src/.*", "Cargo.*"]
 runner = { type = "Machine", os = "Linux", local_fallback = { image = "ghcr.io/suntomi/deplo:builder" } }
 command = "cargo build"
-[[ci.workflow.integrate.src.cache]]
+[ci.workflow.integrate.src.caches.cargo]
 keys = ["integrate-build-${{ runner.os }}-v1-${{ github.sha }}", "integrate-build-${{ runner.os }}-v1-"]
 paths = ["target", "~/.cargo"]
 
@@ -81,8 +81,7 @@ docker build -t ghcr.io/suntomi/deplo:${DEPLO_CI_CURRENT_SHA} -f tools/docker/Do
 echo ${SUNTOMI_VCS_ACCOUNT_KEY} | docker login ghcr.io -u ${SUNTOMI_VCS_ACCOUNT} --password-stdin
 docker push ghcr.io/suntomi/deplo:${DEPLO_CI_CURRENT_SHA}
 """
-options = { local_fallback_container_image = "docker:20.10" }
-[[ci.workflow.deploy.product.cache]]
+[ci.workflow.deploy.product.caches.cargo]
 keys = ["deploy-build-${{ runner.os }}-v1-${{ github.sha }}", "deploy-build-${{ runner.os }}-v1-"]
 paths = ["target", "~/.cargo"]
 
@@ -92,7 +91,7 @@ runner = { type = "Machine", os = "MacOS" }
 command = """
 echo "TODO: build for mac"
 """
-[[ci.workflow.deploy.mac.cache]]
+[ci.workflow.deploy.mac.caches.cargo]
 keys = ["deploy-build-${{ runner.os }}-v1-${{ github.sha }}", "deploy-build-${{ runner.os }}-v1-"]
 paths = ["target", "~/.cargo"]
 
@@ -102,6 +101,6 @@ runner = { type = "Machine", os = "Windows" }
 command = """
 echo "TODO: build for windows"
 """
-[[ci.workflow.deploy.win.cache]]
+[ci.workflow.deploy.win.caches.cargo]
 keys = ["deploy-build-${{ runner.os }}-v1-${{ github.sha }}", "deploy-build-${{ runner.os }}-v1-"]
 paths = ["target", "~/.cargo"]

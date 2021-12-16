@@ -66,7 +66,6 @@ impl fmt::Display for RunnerOS {
 #[derive(Serialize, Deserialize)]
 pub struct Cache {
     pub keys: Vec<String>,
-    pub save_key: Option<String>,
     pub paths: Vec<String>
 }
 #[derive(Serialize, Deserialize)]
@@ -97,7 +96,7 @@ pub struct Job {
     pub env: Option<HashMap<String, String>>,
     pub workdir: Option<String>,
     pub checkout: Option<HashMap<String, String>>,
-    pub caches: Option<Vec<Cache>>,
+    pub caches: Option<HashMap<String, Cache>>,
     pub depends: Option<Vec<String>>,
     pub options: Option<HashMap<String, String>>,
     pub local_fallback: Option<FallbackContainer>,

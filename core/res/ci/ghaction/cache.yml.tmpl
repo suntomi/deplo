@@ -1,0 +1,12 @@
+- name: Cache {name}
+  id: deplo-cache-{name}
+  uses: actions/cache@v2
+  with:
+    path: |
+{paths:>6}
+    key: {key}
+    restore-keys:
+{restore_keys:>6}
+- name: Mark cache result
+  if: steps.deplo-cache-{name}.outputs.cache-hit == 'true'
+  run: echo "{env_key}=true" >> $GITHUB_ENV
