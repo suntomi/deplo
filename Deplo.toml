@@ -81,9 +81,6 @@ docker build -t ghcr.io/suntomi/deplo:${DEPLO_CI_CURRENT_SHA} -f tools/docker/Do
 echo ${SUNTOMI_VCS_ACCOUNT_KEY} | docker login ghcr.io -u ${SUNTOMI_VCS_ACCOUNT} --password-stdin
 docker push ghcr.io/suntomi/deplo:${DEPLO_CI_CURRENT_SHA}
 """
-[ci.workflow.deploy.product.caches.cargo]
-keys = ["deploy-build-${{ runner.os }}-v1-${{ github.sha }}", "deploy-build-${{ runner.os }}-v1-"]
-paths = ["target", "~/.cargo"]
 
 [ci.workflow.deploy.mac]
 patterns = [".*/src/.*", "Cargo.*"]
