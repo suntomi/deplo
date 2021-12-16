@@ -20,7 +20,7 @@ jobs:
   deplo-main:
     name: Start CI
     runs-on: ubuntu-latest
-    container: ghcr.io/suntomi/deplo:3d9e1df8c2c0654ddc6f28364dc4d980e75c05e8
+    container: ghcr.io/suntomi/deplo:7e65a0d256c660beb77793327c0062fa24241c25
     outputs:
       DEPLO_OUTPUT_CLI_GIT_HASH: ${{ steps.deplo-ci-kick.outputs.DEPLO_OUTPUT_CLI_GIT_HASH }}
       deploy-base: ${{ steps.deplo-ci-kick.outputs.deploy-base }}
@@ -69,7 +69,7 @@ jobs:
     if: ${{ !failure() }}
     needs: ["deplo-main","deploy-base","deploy-builder","deploy-mac","deploy-product","deploy-win","integrate-base","integrate-builder","integrate-src"]
     runs-on: ubuntu-latest
-    container: ghcr.io/suntomi/deplo:3d9e1df8c2c0654ddc6f28364dc4d980e75c05e8
+    container: ghcr.io/suntomi/deplo:7e65a0d256c660beb77793327c0062fa24241c25
     steps:
       - name: Fetch repository cache
         id: fetch-repository-cache
