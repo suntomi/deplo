@@ -2,6 +2,7 @@ use std::error::Error;
 use std::collections::HashMap;
 use std::result::Result;
 
+use glob::Pattern;
 use regex;
 
 use crate::config;
@@ -101,10 +102,10 @@ impl<GIT: (git::GitFeatures) + (git::GitHubFeatures)> vcs::VCS for Github<GIT> {
         let config = self.config.borrow();
         let (b, _) = self.git.current_branch().unwrap();
         for (k,v) in &config.common.release_targets {
-            let re = regex::Regex::new(v).unwrap();
-            match re.captures(&b) {
-                Some(_) => return Some(k.to_string()),
-                None => {}, 
+            let re = Pattern::new(v.path()).unwrap();
+            match re.matches(&b) {
+                true => return Some(k.to_string()),
+                false => {}, 
             }
         }
         None

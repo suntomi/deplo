@@ -29,11 +29,25 @@ impl<S: shell::Shell> GhAction<S> {
     fn generate_entrypoint<'a>(&self, config: &'a config::Config) -> Vec<String> {
         // get target branch
         let target_branches = sorted_key_iter(&config.common.release_targets)
-            .map(|(_,v)| &**v)
-            .collect::<Vec<&str>>().join(",");
+            .filter(|v| v.1.is_branch())
+            .map(|(_,v)| v.path())
+            .collect::<Vec<&str>>();
+        let target_tags = sorted_key_iter(&config.common.release_targets)
+            .filter(|v| v.1.is_tag())
+            .map(|(_,v)| v.path())
+            .collect::<Vec<&str>>();
+        let branches = if target_branches.len() > 0 { vec![format!("branches: [{}]", target_branches.join(","))] } else { vec![] };
+        let tags = if target_tags.len() > 0 { vec![format!("tags: [{}]", target_tags.join(","))] } else { vec![] };
         format!(
             include_str!("../../res/ci/ghaction/entrypoint.yml.tmpl"), 
-            targets = target_branches
+            branches = MultilineFormatString{
+                strings: &branches,
+                postfix: None
+            },
+            tags = MultilineFormatString{
+                strings: &tags,
+                postfix: None
+            },
         ).split("\n").map(|s| s.to_string()).collect()
     }
     fn generate_outputs<'a>(&self, jobs: &HashMap<(&'a str, &'a str), &'a config::Job>) -> Vec<String> {
@@ -208,7 +222,7 @@ impl<'a, S: shell::Shell> module::Module for GhAction<S> {
                     strings: &self.generate_outputs(&jobs),
                     postfix: None
                 },
-                image = config.deplo_image(), tag = config::DEPLO_GIT_HASH,
+                image = config.deplo_image(), tag = config::DEPLO_VERSION,
                 checkout = MultilineFormatString{
                     strings: &self.generate_checkout_steps("main", &None),
                     postfix: None
@@ -233,7 +247,7 @@ impl<S: shell::Shell> ci::CI for GhAction<S> {
         });
     }
     fn kick(&self) -> Result<(), Box<dyn Error>> {
-        println!("::set-output name=DEPLO_OUTPUT_CLI_GIT_HASH::{}", config::DEPLO_GIT_HASH);
+        println!("::set-output name=DEPLO_OUTPUT_CLI_VERSION::{}", config::DEPLO_VERSION);
         Ok(())
     }
     fn pull_request_url(&self) -> Result<Option<String>, Box<dyn Error>> {

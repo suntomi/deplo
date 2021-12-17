@@ -104,7 +104,7 @@ impl<'a, S: shell::Shell> module::Module for CircleCI<S> {
         }
         fs::write(&circle_yml_path, format!(
             include_str!("../../res/ci/circleci/main.yml.tmpl"),
-            image = config.deplo_image(), tag = config::DEPLO_GIT_HASH,
+            image = config.deplo_image(), tag = config::DEPLO_VERSION,
             entrypoint = MultilineFormatString{ 
                 strings: &(if create_main { self.generate_entrypoint(&config) } else { vec![] }),
                 postfix: None

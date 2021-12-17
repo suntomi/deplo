@@ -2,9 +2,10 @@ name: Deplo CI/CD
 
 on: 
   push:
-    branches: [main,release]
+    branches: [main]
+    tags: [v*]
   pull_request:
-    branches: [main,release]
+    branches: [main]
   workflow_dispatch:
     inputs:
       deplo_job_name:
@@ -20,9 +21,9 @@ jobs:
   deplo-main:
     name: Start CI
     runs-on: ubuntu-latest
-    container: ghcr.io/suntomi/deplo:2c58af17521e230d5f78691176000fc0adbf7726
+    container: ghcr.io/suntomi/deplo:0.1.0
     outputs:
-      DEPLO_OUTPUT_CLI_GIT_HASH: ${{ steps.deplo-ci-kick.outputs.DEPLO_OUTPUT_CLI_GIT_HASH }}
+      DEPLO_OUTPUT_CLI_VERSION: ${{ steps.deplo-ci-kick.outputs.DEPLO_OUTPUT_CLI_VERSION }}
       deploy-base: ${{ steps.deplo-ci-kick.outputs.deploy-base }}
       deploy-builder: ${{ steps.deplo-ci-kick.outputs.deploy-builder }}
       deploy-mac: ${{ steps.deplo-ci-kick.outputs.deploy-mac }}
@@ -56,7 +57,7 @@ jobs:
       - name: Cache deplo cli
         uses: actions/upload-artifact@v2
         with:
-          name: deplo-cli-v1-${{ steps.deplo-ci-kick.outputs.DEPLO_OUTPUT_CLI_GIT_HASH }}
+          name: deplo-cli-v1-${{ steps.deplo-ci-kick.outputs.DEPLO_OUTPUT_CLI_VERSION }}
           path: /usr/local/bin/deplo
           retention-days: 1
       - name: Setup ssh session to debug
@@ -69,7 +70,7 @@ jobs:
     if: ${{ !failure() }}
     needs: ["deplo-main","deploy-base","deploy-builder","deploy-mac","deploy-product","deploy-win","integrate-base","integrate-builder","integrate-src"]
     runs-on: ubuntu-latest
-    container: ghcr.io/suntomi/deplo:2c58af17521e230d5f78691176000fc0adbf7726
+    container: ghcr.io/suntomi/deplo:0.1.0
     steps:
       - name: Fetch repository cache
         id: fetch-repository-cache
@@ -107,7 +108,7 @@ jobs:
       - name: Fetch deplo cli
         uses: actions/download-artifact@v2
         with:
-          name: deplo-cli-v1-${{ needs.deplo-main.outputs.DEPLO_OUTPUT_CLI_GIT_HASH }}
+          name: deplo-cli-v1-${{ needs.deplo-main.outputs.DEPLO_OUTPUT_CLI_VERSION }}
           path: /usr/local/bin
       - name: Change cli permission
         run: chmod +x /usr/local/bin/deplo
@@ -147,7 +148,7 @@ jobs:
       - name: Fetch deplo cli
         uses: actions/download-artifact@v2
         with:
-          name: deplo-cli-v1-${{ needs.deplo-main.outputs.DEPLO_OUTPUT_CLI_GIT_HASH }}
+          name: deplo-cli-v1-${{ needs.deplo-main.outputs.DEPLO_OUTPUT_CLI_VERSION }}
           path: /usr/local/bin
       - name: Change cli permission
         run: chmod +x /usr/local/bin/deplo
@@ -235,7 +236,7 @@ jobs:
       - name: Fetch deplo cli
         uses: actions/download-artifact@v2
         with:
-          name: deplo-cli-v1-${{ needs.deplo-main.outputs.DEPLO_OUTPUT_CLI_GIT_HASH }}
+          name: deplo-cli-v1-${{ needs.deplo-main.outputs.DEPLO_OUTPUT_CLI_VERSION }}
           path: /usr/local/bin
       - name: Change cli permission
         run: chmod +x /usr/local/bin/deplo
@@ -323,7 +324,7 @@ jobs:
       - name: Fetch deplo cli
         uses: actions/download-artifact@v2
         with:
-          name: deplo-cli-v1-${{ needs.deplo-main.outputs.DEPLO_OUTPUT_CLI_GIT_HASH }}
+          name: deplo-cli-v1-${{ needs.deplo-main.outputs.DEPLO_OUTPUT_CLI_VERSION }}
           path: /usr/local/bin
       - name: Change cli permission
         run: chmod +x /usr/local/bin/deplo
@@ -363,7 +364,7 @@ jobs:
       - name: Fetch deplo cli
         uses: actions/download-artifact@v2
         with:
-          name: deplo-cli-v1-${{ needs.deplo-main.outputs.DEPLO_OUTPUT_CLI_GIT_HASH }}
+          name: deplo-cli-v1-${{ needs.deplo-main.outputs.DEPLO_OUTPUT_CLI_VERSION }}
           path: /usr/local/bin
       - name: Change cli permission
         run: chmod +x /usr/local/bin/deplo
@@ -403,7 +404,7 @@ jobs:
       - name: Fetch deplo cli
         uses: actions/download-artifact@v2
         with:
-          name: deplo-cli-v1-${{ needs.deplo-main.outputs.DEPLO_OUTPUT_CLI_GIT_HASH }}
+          name: deplo-cli-v1-${{ needs.deplo-main.outputs.DEPLO_OUTPUT_CLI_VERSION }}
           path: /usr/local/bin
       - name: Change cli permission
         run: chmod +x /usr/local/bin/deplo

@@ -3,8 +3,8 @@
 project_name = "deplo"
 
 [common.release_targets]
-dev = "main"
-prod = "release"
+dev = { type = "Branch", path = "main" }
+prod = { type = "Tag", path = "v*" }
 
 
 # version control system account settings
@@ -77,9 +77,9 @@ mkdir -p tools/docker/bin
 docker run --rm -v $(pwd):/workdir -w /workdir ghcr.io/suntomi/deplo:builder \
     bash -c "cargo build --release --target=x86_64-unknown-linux-musl && \
         cp /tmp/target/x86_64-unknown-linux-musl/release/cli /workdir/tools/docker/bin"
-docker build -t ghcr.io/suntomi/deplo:${DEPLO_CI_CURRENT_SHA} -f tools/docker/Dockerfile tools/docker
+docker build -t ghcr.io/suntomi/deplo:${DEPLO_CLI_VERSION} -f tools/docker/Dockerfile tools/docker
 echo ${SUNTOMI_VCS_ACCOUNT_KEY} | docker login ghcr.io -u ${SUNTOMI_VCS_ACCOUNT} --password-stdin
-docker push ghcr.io/suntomi/deplo:${DEPLO_CI_CURRENT_SHA}
+docker push ghcr.io/suntomi/deplo:${DEPLO_CLI_VERSION}
 """
 
 [ci.workflow.deploy.mac]

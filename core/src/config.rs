@@ -114,11 +114,10 @@ impl Job {
             Runner::Container{ image: _ } => false
         }
     }
-    pub fn job_env<'a>(&'a self, name: &str, config: &'a Config) -> HashMap<&'a str, String> {
+    pub fn job_env<'a>(&'a self, config: &'a Config) -> HashMap<&'a str, String> {
         let ci = config.ci_service_by_job(&self).unwrap();
         let env = ci.job_env();
         let common_envs = hashmap!{
-            "DEPLO_CI_RUN_JOB_NAME" => name.to_string(),
             "DEPLO_CLI_GIT_HASH" => DEPLO_GIT_HASH.to_string(),
             "DEPLO_CLI_VERSION" => DEPLO_VERSION.to_string(),
         };
@@ -207,11 +206,37 @@ impl fmt::Display for VCSConfig {
     }    
 }
 #[derive(Serialize, Deserialize)]
+#[serde(tag = "type", content = "path")]
+pub enum ReleaseTarget {
+    Branch(String),
+    Tag(String),
+}
+impl ReleaseTarget {
+    pub fn path<'a>(&'a self) -> &'a str {
+        match self {
+            Self::Branch(v) => v.as_ref(),
+            Self::Tag(v) => v.as_ref(),
+        }
+    }
+    pub fn is_branch(&self) -> bool {
+        match self {
+            Self::Branch(_) => true,
+            _ => false,
+        }
+    }
+    pub fn is_tag(&self) -> bool {
+        match self {
+            Self::Tag(_) => true,
+            _ => false,
+        }
+    }
+}
+#[derive(Serialize, Deserialize)]
 pub struct CommonConfig {
     pub project_name: String,
     pub deplo_image: Option<String>,
     pub data_dir: Option<String>,
-    pub release_targets: HashMap<String, String>,
+    pub release_targets: HashMap<String, ReleaseTarget>,
 }
 #[derive(Default)]
 pub struct RuntimeConfig {
@@ -500,7 +525,7 @@ impl Config {
     pub fn ci_workflow<'a>(&'a self) -> &'a WorkflowConfig {
         return &self.ci.workflow
     }
-    pub fn job_env(&self, name: &str, job: &Job) -> Result<HashMap<String, String>, Box<dyn Error>> {
+    pub fn job_env(&self, job: &Job) -> Result<HashMap<String, String>, Box<dyn Error>> {
         let mut inherits: HashMap<String, String> = if Self::is_running_on_ci() {
             shell::inherit_env()
         } else {
@@ -511,7 +536,7 @@ impl Config {
             })?;
             inherits_from_dotenv
         };
-        for (k, v) in job.job_env(name, self) {
+        for (k, v) in job.job_env(self) {
             inherits.insert(k.to_string(), v.to_string());
         }
         return Ok(inherits);
@@ -614,7 +639,7 @@ impl Config {
                 let current_os = shell.detect_os()?;
                 if *os == current_os {
                     // run command directly here
-                    shell.eval(&job.command, job.shell.as_ref(), self.job_env(name, &job)?, job.workdir.as_ref(), false)?;
+                    shell.eval(&job.command, job.shell.as_ref(), self.job_env(&job)?, job.workdir.as_ref(), false)?;
                 } else {
                     log::debug!("runner os is different from current os {} {}", os, current_os);
                     match local_fallback {
@@ -622,7 +647,7 @@ impl Config {
                             // running on host. run command in container `image` with docker
                             shell.eval_on_container(
                                 &f.image, &job.command, f.shell.as_ref(), 
-                                self.job_env(name, &job)?, job.workdir.as_ref(), false
+                                self.job_env(&job)?, job.workdir.as_ref(), false
                             )?;
                             return Ok(());
                         },
@@ -637,11 +662,11 @@ impl Config {
             Runner::Container{ ref image } => {
                 if Self::is_running_on_ci() {
                     // already run inside container `image`, run command directly here
-                    shell.eval(&job.command, job.shell.as_ref(), self.job_env(name, &job)?, job.workdir.as_ref(), false)?;
+                    shell.eval(&job.command, job.shell.as_ref(), self.job_env(&job)?, job.workdir.as_ref(), false)?;
                 } else {
                     // running on host. run command in container `image` with docker
                     shell.eval_on_container(
-                        image, &job.command, job.shell.as_ref(), self.job_env(name, &job)?, job.workdir.as_ref(), false
+                        image, &job.command, job.shell.as_ref(), self.job_env(&job)?, job.workdir.as_ref(), false
                     )?;
                 }
             }
