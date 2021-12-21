@@ -27,7 +27,7 @@ pub trait Args : Sized {
                 for value in v {
                     let mut parts = value.splitn(2, '=');
                     let key = parts.next().unwrap();
-                    let value = parts.next().unwrap();
+                    let value = parts.next().unwrap_or("true");
                     map.insert(key.to_string(), str_to_json(value));
                 }
             },

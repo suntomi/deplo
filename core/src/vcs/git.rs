@@ -258,6 +258,6 @@ impl<S: shell::Shell> GitHubFeatures for Git<S> {
             &format!("curl -s -H \"Authorization: token ${token}\" ${api_url}", token = token, api_url = api_url), 
             shell::default(), shell::no_env(), shell::no_cwd(), false
         )?;
-        Ok(jsonpath!(&output, &format!("$${}", json_path)).unwrap_or("".to_string()))
+        Ok(jsonpath(&output, &format!("${}", json_path))?.unwrap_or("".to_string()))
     }
 }

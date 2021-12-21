@@ -332,15 +332,24 @@ pub fn str_to_json(s: &str) -> serde_json::Value {
         }
     }    
 }
-#[macro_export]
-macro_rules! macro_jsonpath {
-    ( $src:expr, $path:expr ) => {
-        jsonpath_lib::select_as_str($src, $path)
+// #[macro_export]
+// macro_rules! macro_jsonpath {
+//     ( $src:expr, $path:expr ) => {
+//         jsonpath_lib::select_as_str($src, $path)
+//     }
+// }
+// pub use macro_jsonpath as jsonpath;
+
+pub fn jsonpath(src: &str, expr: &str) -> Result<Option<String>, Box<dyn Error>> {
+    let filtered = jsonpath_lib::select_as_str(src, expr)?;
+    let json = str_to_json(&filtered);
+    if json.is_array() && json.as_array().unwrap().len() > 0 {
+        Ok(Some(filtered))
+    } else {
+        Ok(None)
     }
 }
-pub use macro_jsonpath as jsonpath;
 
- 
 
 #[cfg(test)]
 mod tests {
@@ -404,5 +413,65 @@ mod tests {
         let s = r#"null"#;
         let v = str_to_json(s);
         assert!(v.is_null());
+    }
+
+    #[test]
+    fn json_path_test() {
+        let json_obj = serde_json::json!({
+            "store": {
+                "book": [
+                    {
+                        "category": "reference",
+                        "author": "Nigel Rees",
+                        "title": "Sayings of the Century",
+                        "price": 8.95
+                    },
+                    {
+                        "category": "fiction",
+                        "author": "Evelyn Waugh",
+                        "title": "Sword of Honour",
+                        "price": 12.99
+                    },
+                    {
+                        "category": "fiction",
+                        "author": "Herman Melville",
+                        "title": "Moby Dick",
+                        "isbn": "0-553-21311-3",
+                        "price": 8.99
+                    },
+                    {
+                        "category": "fiction",
+                        "author": "J. R. R. Tolkien",
+                        "title": "The Lord of the Rings",
+                        "isbn": "0-395-19395-8",
+                        "price": 22.99
+                    }
+                ],
+                "bicycle": {
+                    "color": "red",
+                    "price": 19.95
+                }
+            },
+            "expensive": 10
+        });
+        let s = serde_json::to_string(&json_obj).unwrap();
+        assert_eq!(str_to_json(&jsonpath(&s, "$.store.book[*].author").unwrap().unwrap()),
+            serde_json::json!([
+                "Nigel Rees", "Evelyn Waugh", "Herman Melville", "J. R. R. Tolkien"
+            ])
+        );
+        assert_eq!(jsonpath(&s, "$.store.book[*].neither").unwrap(),
+            None
+        );
+        assert_eq!(str_to_json(&jsonpath(&s, "$.store.book[?(@.price < 10)]").unwrap().unwrap()),
+            serde_json::json!([
+                &serde_json::json!({"category" : "reference","author" : "Nigel Rees","title" : "Sayings of the Century","price" : 8.95}),
+                &serde_json::json!({"category" : "fiction","author" : "Herman Melville","title" : "Moby Dick","isbn" : "0-553-21311-3","price" : 8.99})
+            ])
+        );
+        assert_eq!(jsonpath(&s, "$.store.book[?(@.price > 100)]").unwrap(),
+            None
+        );
+        
     }
 }

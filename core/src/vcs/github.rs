@@ -103,7 +103,17 @@ impl<GIT: (git::GitFeatures) + (git::GitHubFeatures), S: shell::Shell> Github<GI
         return Ok(response);
     }
     fn get_value_from_json_object(&self, json_object: &str, key: &str) -> Result<String, Box<dyn Error>> {
-        let object: JsonValue = serde_json::from_str(json_object)?;
+        let mut object: JsonValue = str_to_json(json_object);
+        // TODO_JSON: jsonpath does not work intuitively, consider replace it with jq_rs
+        if object.is_object() {
+        } else if object.is_array() && object.as_array().unwrap().len() > 0 {
+            object = object.as_array().unwrap().get(0).unwrap().clone();
+        } else {
+            return escalate!(Box::new(vcs::VCSError {
+                cause: format!("json object is not object or array: {}", json_object)
+            }));
+        }
+        // log::debug!("inspect object: {}", serde_json::to_string(&object)?);
         let value = object[key].as_str().ok_or(make_escalation!(Box::new(vcs::VCSError {
             cause: format!("key [{}] not found in object: {}", key, object)
         })))?;
@@ -215,11 +225,11 @@ impl<GIT: (git::GitFeatures) + (git::GitHubFeatures), S: shell::Shell> vcs::VCS 
             &format!(r#"
                 curl {} \
                 -H "Authorization: token {}"
-            "#, upload_url, token),
+            "#, upload_url_base.replace("uploads.github.com", "api.github.com"), token),
             shell::default(), shell::no_env(), shell::no_cwd()
         )?;
-        match jsonpath!(&response, &format!("$$.[@.name==${}]", asset_name)) {
-            Ok(v) => match opts.get("replace") {
+        match jsonpath(&response, &format!("$.[?(@.name=='{}')]", asset_name))? {
+            Some(v) => match opts.get("replace") {
                 Some(_) => {
                     // delete old asset
                     let delete_url = self.get_value_from_json_object(&v, "url")?;
@@ -231,11 +241,10 @@ impl<GIT: (git::GitFeatures) + (git::GitHubFeatures), S: shell::Shell> vcs::VCS 
                         shell::default(), shell::no_env(), shell::no_cwd()
                     )?;
                 },
-                // nothing to do
+                // nothing to do, return browser_download_url
                 None => return self.get_value_from_json_object(&v, "browser_download_url")
             },
-            // seems no asset with this name, proceed to upload
-            Err(_) => ()
+            None => log::debug!("no asset with name {}, proceed to upload", asset_name),
         };
         let response = self.shell.eval_output_of(
             &format!(r#"
