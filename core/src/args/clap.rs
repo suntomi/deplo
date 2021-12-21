@@ -116,6 +116,48 @@ lazy_static! {
                     .about("cleanup CI/CD process after all related job finished")
                 )
         )
+        .subcommand(
+            App::new("vcs")
+                .about("control VCS resources")
+                .subcommand(
+                    App::new("release")
+                    .about("create release")
+                    .arg(Arg::new("tag_name")
+                        .about("tag name to use for release")
+                        .index(1)
+                        .required(true))
+                    .arg(Arg::new("option")
+                        .about("option for release creation.\n\
+                                -o $key=$value\n\
+                                for github, body options of https://docs.github.com/en/rest/reference/releases#create-a-release can be specified.\n\
+                                TODO: for gitlab")
+                        .short('o')
+                        .takes_value(true)
+                        .multiple_values(true)
+                        .multiple_occurrences(true))
+                )
+                .subcommand(
+                    App::new("release-assets")
+                    .about("upload release assets")
+                    .arg(Arg::new("tag_name")
+                        .about("tag name to use for release")
+                        .index(1)
+                        .required(true))
+                    .arg(Arg::new("asset_file_path")
+                        .about("file path for upload file")
+                        .index(2)
+                        .required(true))
+                    .arg(Arg::new("option")
+                        .about("option for release creation.\n\
+                                -o name=$release_asset_name\n\
+                                -o content-type=$content_type_of_asset\n\
+                                TODO: implement more options")
+                        .short('o')
+                        .takes_value(true)
+                        .multiple_values(true)
+                        .multiple_occurrences(true))
+                )
+        )        
         .get_matches();
 }
 

@@ -117,9 +117,15 @@ impl Job {
     pub fn job_env<'a>(&'a self, config: &'a Config) -> HashMap<&'a str, String> {
         let ci = config.ci_service_by_job(&self).unwrap();
         let env = ci.job_env();
-        let common_envs = hashmap!{
+        let mut common_envs = hashmap!{
             "DEPLO_CLI_GIT_HASH" => DEPLO_GIT_HASH.to_string(),
             "DEPLO_CLI_VERSION" => DEPLO_VERSION.to_string(),
+        };
+        match config.runtime.release_target {
+            Some(ref v) => {
+                common_envs.insert("DEPLO_CI_RELEASE_TARGET", v.to_string());
+            },
+            None => {}
         };
         let mut h = env.clone();
         return match &self.env {

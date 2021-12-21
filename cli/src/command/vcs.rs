@@ -1,7 +1,5 @@
 use std::error::Error;
 
-use log;
-
 use core::config;
 use core::shell;
 
@@ -16,11 +14,22 @@ pub struct VCS<S: shell::Shell = shell::Default> {
 impl<S: shell::Shell> VCS<S> {
     fn release<A: args::Args>(&self, args: &A) -> Result<(), Box<dyn Error>> {
         let config = self.config.borrow();
-        return Ok(())
+        let vcs = config.vcs_service()?;
+        vcs.release(
+            (args.value_of("tag_name").unwrap(), false),
+            &args.json_value_of("option")?
+        )?;
+        Ok(())
     }
     fn release_assets<A: args::Args>(&self, args: &A) -> Result<(), Box<dyn Error>> {
         let config = self.config.borrow();
-        return Ok(())
+        let vcs = config.vcs_service()?;
+        vcs.release_assets(
+            (args.value_of("tag_name").unwrap(), false),
+            args.value_of("asset_file_path").unwrap(),
+            &args.json_value_of("option")?
+        )?;
+        Ok(())
     }
 }
 

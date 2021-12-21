@@ -3,7 +3,8 @@
 project_name = "deplo"
 
 [common.release_targets]
-dev = { type = "Branch", path = "main" }
+nightly = { type = "Branch", path = "main" }
+lab = { type = "Branch", path = "lab" }
 prod = { type = "Tag", path = "[0-9]*" }
 
 
@@ -68,43 +69,45 @@ docker push ghcr.io/suntomi/deplo:builder
 """
 
 [ci.workflow.deploy.product]
-depends = ["mac", "win", "builder"]
+depends = ["builder"]
 patterns = [".*/src/.*", "Cargo.*"]
 runner = { type = "Machine", os = "Linux", local_fallback = { image = "docker:20.10", shell = "sh" } }
 command = """
 set -e
 mkdir -p tools/docker/bin
-export DEPLO_RELEASE_VERSION=${DEPLO_CI_TAG_NAME:-nightly}
-docker run --rm -v $(pwd):/workdir -w /workdir -e DEPLO_BUILT_VERSION=${DEPLO_RELEASE_VERSION} \
+source tools/scripts/setup_release_env.sh
+docker run --rm -v $(pwd):/workdir -w /workdir -e DEPLO_RELEASE_VERSION=${DEPLO_RELEASE_VERSION} \
     ghcr.io/suntomi/deplo:builder \
     bash -c "cargo build --release --target=x86_64-unknown-linux-musl && \
         cp /tmp/target/x86_64-unknown-linux-musl/release/cli /workdir/tools/docker/bin"
 docker build -t ghcr.io/suntomi/deplo:${DEPLO_RELEASE_VERSION} -f tools/docker/Dockerfile tools/docker
 echo ${SUNTOMI_VCS_ACCOUNT_KEY} | docker login ghcr.io -u ${SUNTOMI_VCS_ACCOUNT} --password-stdin
 docker push ghcr.io/suntomi/deplo:${DEPLO_RELEASE_VERSION}
-deplo vcs release v${DEPLO_RELEASE_VERSION} ${DEPLO_RELEASE_VERSION}
-deplo vcs release-assets v${DEPLO_RELEASE_VERSION} target/release/cli deplo-Linux
+deplo vcs release ${DEPLO_RELEASE_TAG} -o name=${DEPLO_RELEASE_NAME}
+deplo vcs release-assets ${DEPLO_RELEASE_TAG} /workdir/tools/docker/bin/cli --replace -o name=deplo-Linux
 """
 
 [ci.workflow.deploy.mac]
+depends = ["product"]
 patterns = [".*/src/.*", "Cargo.*"]
 runner = { type = "Machine", os = "MacOS" }
 command = """
-export DEPLO_RELEASE_VERSION=${DEPLO_CI_TAG_NAME:-nightly}
+source tools/scripts/setup_release_env.sh
 cargo build --release
-deplo vcs release-assets v${DEPLO_RELEASE_VERSION} target/release/cli deplo-Darwin
+deplo vcs release-assets ${DEPLO_RELEASE_TAG} target/release/cli --replace -o name=deplo-Darwin
 """
 [ci.workflow.deploy.mac.caches.cargo]
 keys = ["deploy-build-${{ runner.os }}-v1-${{ github.sha }}", "deploy-build-${{ runner.os }}-v1-"]
 paths = ["target", "~/.cargo"]
 
 [ci.workflow.deploy.win]
+depends = ["product"]
 patterns = [".*/src/.*", "Cargo.*"]
 runner = { type = "Machine", os = "Windows" }
 command = """
-export DEPLO_RELEASE_VERSION=${DEPLO_CI_TAG_NAME:-nightly}
-cargo build --release
-deplo vcs release-assets v${DEPLO_RELEASE_VERSION} target/release/cli deplo-Windows.exe
+echo "source tools/scripts/setup_release_env.sh"
+echo "cargo build --release"
+echo "deplo vcs release-assets ${DEPLO_RELEASE_TAG} target/release/cli --replace -o name=deplo-Windows.exe"
 """
 [ci.workflow.deploy.win.caches.cargo]
 keys = ["deploy-build-${{ runner.os }}-v1-${{ github.sha }}", "deploy-build-${{ runner.os }}-v1-"]

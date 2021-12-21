@@ -59,6 +59,17 @@ impl Error for EscalateError {
 }
 
 #[macro_export]
+macro_rules! macro_make_escalation {
+    ( $err:expr ) => {
+        Box::new(crate::util::EscalateError {
+            at: (crate::util::func!(), file!(), line!()),
+            source: $err
+        })
+    }
+}
+pub use macro_make_escalation as make_escalation;
+
+#[macro_export]
 macro_rules! macro_escalate {
     ( $err:expr ) => {
         Err(Box::new(crate::util::EscalateError {
@@ -304,6 +315,23 @@ pub fn sorted_key_iter<K: std::cmp::Ord,V>(h: &HashMap<K, V>) -> impl Iterator<I
 }
 
 // json
+// same as serde_json::from_str, but support the case that s represents single number/boolean/null.
+// serde_json::from_str does not seem to support them.
+pub fn str_to_json(s: &str) -> serde_json::Value {
+    match serde_json::from_str(s) {
+        Ok(v) => v,
+        Err(_) => {
+            match serde_json::from_str::<serde_json::Value>(&format!("{{\"v\":\"{}\"}}", s)) {
+                // if s is null/true/false/number, from_str should be success.
+                Ok(v) => v.as_object().unwrap().get("v").unwrap().clone(),
+                Err(_) => {
+                    // otherwise it should be string
+                    serde_json::Value::String(s.to_string())
+                }
+            }
+        }
+    }    
+}
 #[macro_export]
 macro_rules! macro_jsonpath {
     ( $src:expr, $path:expr ) => {
@@ -319,7 +347,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn seal() {
+    fn seal_test() {
         let pk: [u8; 32] = [
             251, 131, 196, 215, 71, 235, 222, 20, 23, 114, 62, 99, 207, 12, 107, 139,
             240, 115, 104, 188, 0, 166, 113, 163, 146, 192, 226, 36, 237, 60, 205, 33
@@ -358,5 +386,23 @@ mod tests {
         let expect = "dJFfN541HHc/GKjnVmaqNUylHXt89WT7GaSQ3A057iW40mR0MOenhwM21mgQ3aL/kzlCvXvKLDBFzoiXAA==";
         println!("result:{},expect:{}", result, expect);
         assert!(result == expect);
+    }
+
+    #[test]
+    fn str_to_json_test() {
+        let s = r#"{"a":1,"b":2}"#;
+        let v = str_to_json(s);
+        // println!("{}", v);
+        assert!(v.as_object().unwrap().get("a").unwrap().as_i64().unwrap() == 1);
+        assert!(v.as_object().unwrap().get("b").unwrap().as_i64().unwrap() == 2);
+        let s = r#"1"#;
+        let v = str_to_json(s);
+        assert!(v.as_i64().unwrap() == 1);
+        let s = r#"true"#;
+        let v = str_to_json(s);
+        assert!(v.as_bool().unwrap() == true);
+        let s = r#"null"#;
+        let v = str_to_json(s);
+        assert!(v.is_null());
     }
 }

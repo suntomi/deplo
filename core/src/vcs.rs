@@ -3,6 +3,7 @@ use std::collections::HashMap;
 use std::fmt;
 
 use regex::Regex;
+use serde_json::{Value as JsonValue};
 
 use super::config;
 use crate::module;
@@ -21,6 +22,12 @@ pub trait VCS : module::Module {
         &self, title: &str, head_branch: &str, base_branch: &str, option: &HashMap<&str, &str>
     ) -> Result<(), Box<dyn Error>>;
     fn user_and_repo(&self) -> Result<(String, String), Box<dyn Error>>;
+    fn release(
+        &self, target_ref: (&str, bool), opts: &JsonValue
+    ) -> Result<String, Box<dyn Error>>;
+    fn release_assets(
+        &self, target_ref: (&str, bool), asset_file_path: &str, opts: &JsonValue
+    ) -> Result<String, Box<dyn Error>>;
     fn diff<'b>(&'b self) -> &'b Vec<String>;
     fn changed<'b>(&'b self, patterns: &Vec<&str>) -> bool {
         let difflines = self.diff();
