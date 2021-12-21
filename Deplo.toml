@@ -76,15 +76,12 @@ command = """
 set -e
 mkdir -p tools/docker/bin
 source tools/scripts/setup_release_env.sh
-docker run --rm -v $(pwd):/workdir -w /workdir -e DEPLO_RELEASE_VERSION=${DEPLO_RELEASE_VERSION} \
-    ghcr.io/suntomi/deplo:builder \
-    bash -c "cargo build --release --target=x86_64-unknown-linux-musl && \
-        cp /tmp/target/x86_64-unknown-linux-musl/release/cli /workdir/tools/docker/bin"
+bash tools/scripts/build_linux.sh
 docker build -t ghcr.io/suntomi/deplo:${DEPLO_RELEASE_VERSION} -f tools/docker/Dockerfile tools/docker
 echo ${SUNTOMI_VCS_ACCOUNT_KEY} | docker login ghcr.io -u ${SUNTOMI_VCS_ACCOUNT} --password-stdin
 docker push ghcr.io/suntomi/deplo:${DEPLO_RELEASE_VERSION}
 deplo vcs release ${DEPLO_RELEASE_TAG} -o name=${DEPLO_RELEASE_NAME}
-deplo vcs release-assets ${DEPLO_RELEASE_TAG} /workdir/tools/docker/bin/cli --replace -o name=deplo-Linux
+deplo vcs release-assets ${DEPLO_RELEASE_TAG} tools/docker/bin/cli --replace -o name=deplo-Linux
 """
 
 [ci.workflow.deploy.mac]
