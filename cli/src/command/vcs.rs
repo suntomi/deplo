@@ -24,10 +24,14 @@ impl<S: shell::Shell> VCS<S> {
     fn release_assets<A: args::Args>(&self, args: &A) -> Result<(), Box<dyn Error>> {
         let config = self.config.borrow();
         let vcs = config.vcs_service()?;
+        let mut options = args.json_value_of("option")?;
+        if args.occurence_of("replace") > 0 {
+            options.as_object_mut().unwrap().insert("replace".to_string(), serde_json::json!(true));
+        }
         vcs.release_assets(
             (args.value_of("tag_name").unwrap(), false),
             args.value_of("asset_file_path").unwrap(),
-            &args.json_value_of("option")?
+            &options
         )?;
         Ok(())
     }

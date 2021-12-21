@@ -147,6 +147,9 @@ lazy_static! {
                         .about("file path for upload file")
                         .index(2)
                         .required(true))
+                    .arg(Arg::new("replace")
+                        .about("replace existing asset or not")
+                        .long("replace"))
                     .arg(Arg::new("option")
                         .about("option for release creation.\n\
                                 -o name=$release_asset_name\n\
