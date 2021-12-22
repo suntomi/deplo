@@ -2,10 +2,10 @@ name: Deplo CI/CD
 
 on: 
   push:
-    branches: [main]
-    tags: [v*]
+    branches: [lab,main]
+    tags: [[0-9]*]
   pull_request:
-    branches: [main]
+    branches: [lab,main]
   workflow_dispatch:
     inputs:
       deplo_job_name:
@@ -21,7 +21,7 @@ jobs:
   deplo-main:
     name: Start CI
     runs-on: ubuntu-latest
-    container: ghcr.io/suntomi/deplo:0.1.0
+    container: ghcr.io/suntomi/deplo:nightly
     outputs:
       DEPLO_OUTPUT_CLI_VERSION: ${{ steps.deplo-ci-kick.outputs.DEPLO_OUTPUT_CLI_VERSION }}
       deploy-base: ${{ steps.deplo-ci-kick.outputs.deploy-base }}
@@ -70,7 +70,7 @@ jobs:
     if: ${{ !failure() }}
     needs: ["deplo-main","deploy-base","deploy-builder","deploy-mac","deploy-product","deploy-win","integrate-base","integrate-builder","integrate-src"]
     runs-on: ubuntu-latest
-    container: ghcr.io/suntomi/deplo:0.1.0
+    container: ghcr.io/suntomi/deplo:nightly
     steps:
       - name: Fetch repository cache
         id: fetch-repository-cache
@@ -179,7 +179,7 @@ jobs:
         with:
           sudo: true
   deploy-mac:
-    needs: [deplo-main]
+    needs: ["deploy-product","deplo-main"]
     if: ${{ needs.deplo-main.outputs.deploy-mac && !failure() }}
     name: Running job deploy-mac
     runs-on: macos-latest
@@ -219,7 +219,9 @@ jobs:
         run: echo "DEPLO_CACHE_CARGO_HIT=true" >> $GITHUB_ENV
       - name: deploy mac
         run: |
-          echo "TODO: build for mac"
+          source tools/scripts/setup_release_env.sh
+          cargo build --release
+          deplo vcs release-assets ${DEPLO_RELEASE_TAG} target/release/cli --replace -o name=deplo-Darwin
           
       - name: Setup ssh session to debug
         if: ${{ failure() }}
@@ -227,7 +229,7 @@ jobs:
         with:
           sudo: true
   deploy-product:
-    needs: ["deploy-mac","deploy-win","deploy-builder","deplo-main"]
+    needs: ["deploy-builder","deplo-main"]
     if: ${{ needs.deplo-main.outputs.deploy-product && !failure() }}
     name: Running job deploy-product
     runs-on: ubuntu-latest
@@ -267,7 +269,7 @@ jobs:
         with:
           sudo: true
   deploy-win:
-    needs: [deplo-main]
+    needs: ["deploy-product","deplo-main"]
     if: ${{ needs.deplo-main.outputs.deploy-win && !failure() }}
     name: Running job deploy-win
     runs-on: windows-latest
@@ -307,7 +309,9 @@ jobs:
         run: echo "DEPLO_CACHE_CARGO_HIT=true" >> $GITHUB_ENV
       - name: deploy win
         run: |
-          echo "TODO: build for windows"
+          echo "source tools/scripts/setup_release_env.sh"
+          echo "cargo build --release"
+          echo "deplo vcs release-assets ${DEPLO_RELEASE_TAG} target/release/cli --replace -o name=deplo-Windows.exe"
           
       - name: Setup ssh session to debug
         if: ${{ failure() }}
