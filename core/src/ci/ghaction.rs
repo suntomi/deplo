@@ -107,17 +107,21 @@ impl<S: shell::Shell> GhAction<S> {
         }
     }
     fn generate_fetchcli_steps<'a>(&self, runner: &'a config::Runner) ->Vec<String> {
-        match runner {
+        let uname = match runner {
             config::Runner::Machine{ref os, ..} => match os {
-                config::RunnerOS::Linux => (),
+                config::RunnerOS::Linux => "Linux",
                 config::RunnerOS::Windows => return vec![],
-                config::RunnerOS::MacOS => return vec![],
+                config::RunnerOS::MacOS => "Darwin",
             },
-            config::Runner::Container{image:_} => (),
+            config::Runner::Container{image:_} => "Linux",
         };
-        format!("{}", include_str!("../../res/ci/ghaction/fetchcli.yml.tmpl"))
-            .split("\n").map(|s| s.to_string())
-            .collect::<Vec<String>>()
+        format!(include_str!("../../res/ci/ghaction/fetchcli.yml.tmpl"),
+            deplo_cli_path = "/usr/local/bin/deplo",
+            download_url = format!(
+                "https://github.com/suntomi/deplo/releases/download/{}/deplo-{}",
+                config::DEPLO_VERSION, uname
+            )
+        ).split("\n").map(|s| s.to_string()).collect::<Vec<String>>()
     }
     fn generate_checkout_steps<'a>(&self, _: &'a str, options: &'a Option<HashMap<String, String>>) -> Vec<String> {
         let checkout_opts = options.as_ref().map_or_else(

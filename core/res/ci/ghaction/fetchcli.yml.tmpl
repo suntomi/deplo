@@ -1,7 +1,4 @@
 - name: Fetch deplo cli
-  uses: actions/download-artifact@v2
-  with:
-    name: deplo-cli-v1-${{ needs.deplo-main.outputs.DEPLO_OUTPUT_CLI_VERSION }}
-    path: /usr/local/bin
+  run: curl -L {download_url} -o {deplo_cli_path}
 - name: Change cli permission
-  run: chmod +x /usr/local/bin/deplo
+  run: chmod +x {deplo_cli_path}
