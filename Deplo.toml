@@ -102,9 +102,9 @@ depends = ["product"]
 patterns = [".*/src/.*", "Cargo.*"]
 runner = { type = "Machine", os = "Windows" }
 command = """
-echo "source tools/scripts/setup_release_env.sh"
-echo "cargo build --release"
-echo "deplo vcs release-assets ${DEPLO_RELEASE_TAG} target/release/cli --replace -o name=deplo-Windows.exe"
+source tools/scripts/setup_release_env.sh
+cargo build --release
+deplo vcs release-assets ${DEPLO_RELEASE_TAG} target/release/cli --replace -o name=deplo-Windows.exe
 """
 [ci.workflow.deploy.win.caches.cargo]
 keys = ["deploy-build-${{ runner.os }}-v1-${{ github.sha }}", "deploy-build-${{ runner.os }}-v1-"]

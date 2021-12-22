@@ -297,9 +297,9 @@ jobs:
         run: echo "DEPLO_CACHE_CARGO_HIT=true" >> $GITHUB_ENV
       - name: deploy win
         run: |
-          echo "source tools/scripts/setup_release_env.sh"
-          echo "cargo build --release"
-          echo "deplo vcs release-assets ${DEPLO_RELEASE_TAG} target/release/cli --replace -o name=deplo-Windows.exe"
+          source tools/scripts/setup_release_env.sh
+          cargo build --release
+          deplo vcs release-assets ${DEPLO_RELEASE_TAG} target/release/cli --replace -o name=deplo-Windows.exe
           
       - name: Setup ssh session to debug
         if: ${{ failure() }}
