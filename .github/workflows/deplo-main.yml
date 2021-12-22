@@ -2,10 +2,10 @@ name: Deplo CI/CD
 
 on: 
   push:
-    branches: [lab,main]
-    tags: [[0-9]*]
+    branches: ["lab","main"]
+    tags: ["[0-9]*"]
   pull_request:
-    branches: [lab,main]
+    branches: ["lab","main"]
   workflow_dispatch:
     inputs:
       deplo_job_name:

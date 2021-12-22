@@ -36,8 +36,8 @@ impl<S: shell::Shell> GhAction<S> {
             .filter(|v| v.1.is_tag())
             .map(|(_,v)| v.path())
             .collect::<Vec<&str>>();
-        let branches = if target_branches.len() > 0 { vec![format!("branches: [{}]", target_branches.join(","))] } else { vec![] };
-        let tags = if target_tags.len() > 0 { vec![format!("tags: [{}]", target_tags.join(","))] } else { vec![] };
+        let branches = if target_branches.len() > 0 { vec![format!("branches: [\"{}\"]", target_branches.join("\",\""))] } else { vec![] };
+        let tags = if target_tags.len() > 0 { vec![format!("tags: [\"{}\"]", target_tags.join("\",\""))] } else { vec![] };
         format!(
             include_str!("../../res/ci/ghaction/entrypoint.yml.tmpl"), 
             branches = MultilineFormatString{
