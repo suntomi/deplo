@@ -457,7 +457,7 @@ impl Config {
         };
         Ok(path)
     }
-    pub fn deplo_cli_download_path(&self, os: RunnerOS) -> Result<String, Box<dyn Error>> {
+    pub fn deplo_cli_download(&self, os: RunnerOS, shell: &impl shell::Shell) -> Result<String, Box<dyn Error>> {
         let mut base = self.deplo_data_path()?;
         base.push("cli");
         base.push(DEPLO_VERSION);
@@ -476,7 +476,8 @@ impl Config {
             Err(_) => {}
         };
         fs::create_dir_all(&base)?;
-        Ok(file_path.to_string_lossy().to_string())
+        shell.download(&cli_download_url(os, DEPLO_VERSION), &file_path.to_str().unwrap(), true)?;
+        return Ok(file_path.to_string_lossy().to_string());
     }
     pub fn parse_dotenv<F>(&self, mut cb: F) -> Result<(), Box<dyn Error>>
     where F: FnMut (&str, &str) -> Result<(), Box<dyn Error>> {
@@ -691,8 +692,7 @@ impl Config {
                     log::debug!("runner os is different from current os {} {}", os, current_os);
                     match local_fallback {
                         Some(f) => {
-                            let path = &self.deplo_cli_download_path(os)?;
-                            shell.download_deplo_cli(os, DEPLO_VERSION, &path)?;
+                            let path = &self.deplo_cli_download(os, shell)?;
                             // running on host. run command in container `image` with docker
                             shell.eval_on_container(
                                 &f.image, &job.command, &f.shell, self.job_env(&job)?, &job.workdir, 
@@ -716,8 +716,7 @@ impl Config {
                     shell.eval(&job.command, &job.shell, self.job_env(&job)?, &job.workdir, false)?;
                 } else {
                     let os = RunnerOS::Linux;
-                    let path = &self.deplo_cli_download_path(os)?;
-                    shell.download_deplo_cli(os, DEPLO_VERSION, &path)?;
+                    let path = &self.deplo_cli_download(os, shell)?;
                     // running on host. run command in container `image` with docker
                     shell.eval_on_container(
                         image, &job.command, &job.shell, self.job_env(&job)?, &job.workdir, &hashmap!{

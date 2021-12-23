@@ -31,7 +31,7 @@ pub trait Shell {
     }
     fn eval_on_container<I, K, V, P>(
         &self, image: &str, code: &str, shell: &Option<String>, envs: I, cwd: &Option<P>, 
-        _: &HashMap<&str, &str>, capture: bool
+        mounts: &HashMap<&str, &str>, capture: bool
     ) -> Result<String, Box<dyn Error>>
     where I: IntoIterator<Item = (K, V)> + Clone, K: AsRef<OsStr>, V: AsRef<OsStr>, P: AsRef<Path> {
         let config = self.config().borrow();
@@ -39,6 +39,9 @@ pub trait Shell {
             let key = k.as_ref().to_string_lossy();
             let val = v.as_ref().to_string_lossy();
             return vec!["-e".to_string(), format!("{k}={v}", k = key, v = val)]
+        }).collect::<Vec<Vec<String>>>().concat();
+        let mounts_vec: Vec<String> = mounts.iter().map(|(k,v)| {
+            return vec!["-v".to_string(), format!("{k}:{v}", k = k, v = v)]
         }).collect::<Vec<Vec<String>>>().concat();
         let repository_mount_path = config.vcs_service()?.repository_root()?;
         let workdir = match cwd {
@@ -49,6 +52,7 @@ pub trait Shell {
             vec!["docker", "run", "--rm"],
             vec!["--workdir", &workdir],
             envs_vec.iter().map(|s| s.as_ref()).collect::<Vec<&str>>(),
+            mounts_vec.iter().map(|s| s.as_ref()).collect::<Vec<&str>>(),
             // TODO_PATH: use Path to generate path of /var/run/docker.sock (left(host) side)
             vec!["-v", "/var/run/docker.sock:/var/run/docker.sock"],
             vec!["-v", &format!("{}:{}", &repository_mount_path, &repository_mount_path)],
@@ -81,10 +85,15 @@ pub trait Shell {
             Err(err) => Err(Box::new(err))
         }
     }
-    fn download_deplo_cli(&self, os: config::RunnerOS, version: &str, output_path: &str) -> Result<(), Box<dyn Error>> {
+    fn download(&self, url: &str, output_path: &str, executable: bool) -> Result<(), Box<dyn Error>> {
         self.exec(&vec![
-            "curl", "-L", &config::cli_download_url(os, version), "-o", output_path
+            "curl", "-L", url, "-o", output_path
         ], no_env(), no_cwd(), false)?;
+        if executable {
+            self.exec(&vec![
+                "chmod", "+x", output_path
+            ], no_env(), no_cwd(), false)?;
+        }
         Ok(())
     }
 }

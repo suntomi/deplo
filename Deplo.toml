@@ -80,8 +80,8 @@ sh tools/scripts/build_linux.sh
 docker build -t ghcr.io/suntomi/deplo:${DEPLO_RELEASE_VERSION} -f tools/docker/Dockerfile tools/docker
 echo ${SUNTOMI_VCS_ACCOUNT_KEY} | docker login ghcr.io -u ${SUNTOMI_VCS_ACCOUNT} --password-stdin
 docker push ghcr.io/suntomi/deplo:${DEPLO_RELEASE_VERSION}
-deplo vcs release ${DEPLO_RELEASE_TAG} -o name=${DEPLO_RELEASE_NAME}
-deplo vcs release-assets ${DEPLO_RELEASE_TAG} tools/docker/bin/cli --replace -o name=deplo-Linux
+deplo -v=3 vcs release ${DEPLO_RELEASE_TAG} -o name=${DEPLO_RELEASE_NAME}
+deplo -v=3 vcs release-assets ${DEPLO_RELEASE_TAG} tools/docker/bin/cli --replace -o name=deplo-Linux
 """
 
 [ci.workflow.deploy.mac]
