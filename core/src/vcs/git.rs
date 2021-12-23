@@ -1,6 +1,7 @@
 use std::error::Error;
 use std::collections::HashMap;
 
+use git2::{Repository,RepositoryOpenFlags};
 use maplit::hashmap;
 
 use crate::config;
@@ -28,6 +29,7 @@ pub struct Git<S: shell::Shell = shell::Default> {
     username: String,
     email: String,
     shell: S,
+    repo: Repository,
 }
 
 pub trait GitFeatures {
@@ -83,11 +85,20 @@ impl<S: shell::Shell> Git<S> {
 
 impl<S: shell::Shell> GitFeatures for Git<S> {
     fn new(username: &str, email: &str, config: &config::Container) -> Git<S> {
+        let cwd = std::env::current_dir().unwrap();
         return Git::<S> {
             config: config.clone(),
             username: username.to_string(),
             email: email.to_string(),
-            shell: S::new(config)
+            shell: S::new(config),
+            repo: Repository::open_ext(
+                match config.borrow().runtime.workdir {
+                    Some(ref v) => std::path::Path::new(v),
+                    None => cwd.as_path()
+                },
+                RepositoryOpenFlags::empty(), 
+                &[std::env::var("HOME").unwrap()]
+            ).unwrap(),
         }
     }
     fn current_branch(&self) -> Result<(String, bool), Box<dyn Error>> {
@@ -111,9 +122,8 @@ impl<S: shell::Shell> GitFeatures for Git<S> {
         ), shell::no_env(), shell::no_cwd())?)
     }
     fn remote_origin(&self) -> Result<String, Box<dyn Error>> {
-        Ok(self.shell.output_of(&vec!(
-            "git", "config", "--get", "remote.origin.url"
-        ), shell::no_env(), shell::no_cwd())?)
+        let origin = self.repo.find_remote("origin")?;
+        Ok(origin.url().unwrap().to_string())
     }
     fn repository_root(&self) -> Result<String, Box<dyn Error>> {
         Ok(self.shell.output_of(&vec!(
