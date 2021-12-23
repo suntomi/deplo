@@ -283,6 +283,7 @@ pub struct Config {
     pub vcs_cache: Vec<Box<dyn vcs::VCS>>,
 }
 pub type Ref<'a>= std::cell::Ref<'a, Config>;
+pub type RefMut<'a> = std::cell::RefMut<'a, Config>;
 #[derive(Clone)]
 pub struct Container {
     ptr: Rc<RefCell<Config>>
@@ -290,6 +291,9 @@ pub struct Container {
 impl Container { 
     pub fn borrow(&self) -> Ref<'_> {
         self.ptr.borrow()
+    }
+    pub fn borrow_mut(&self) -> RefMut<'_> {
+        self.ptr.borrow_mut()
     }
 }
 
@@ -403,16 +407,19 @@ impl Config {
             // because vcs_service create object which have reference of `c` ,
             // scope of `vcs` should be narrower than this function,
             // to prevent `assignment of borrowed value` error below.
-            let release_target = {
-                let immc = c.ptr.borrow();
-                let vcs = immc.vcs_service()?;
-                vcs.release_target()
+            let release_target = match args.value_of("release-target") {
+                Some(v) => Some(v.to_string()),
+                None => match std::env::var("DEPLO_CI_RELEASE_TARGET") {
+                    Ok(v) => Some(v),
+                    Err(_) => {
+                        let immc = c.ptr.borrow();
+                        let vcs = immc.vcs_service()?;
+                        vcs.release_target()    
+                    }
+                }
             };
             let mut mutc = c.ptr.borrow_mut();
-            mutc.runtime.release_target = match release_target {
-                Some(v) => Some(v),
-                None => args.value_of("release-target").map_or_else(|| None, |v| Some(v.to_string()))
-            }
+            mutc.runtime.release_target = release_target;
         }
         return Ok(c);
     }
@@ -633,6 +640,15 @@ impl Config {
     pub fn vcs_service<'a>(&'a self) -> Result<&'a Box<dyn vcs::VCS>, Box<dyn Error>> {
         return if self.vcs_cache.len() > 0 {
             Ok(&self.vcs_cache[0])
+        } else {
+            escalate!(Box::new(ConfigError{ 
+                cause: format!("no vcs service") 
+            }))
+        }
+    }
+    pub fn vcs_service_mut<'a>(&'a mut self) -> Result<&'a mut Box<dyn vcs::VCS>, Box<dyn Error>> {
+        return if self.vcs_cache.len() > 0 {
+            Ok(&mut self.vcs_cache[0])
         } else {
             escalate!(Box::new(ConfigError{ 
                 cause: format!("no vcs service") 

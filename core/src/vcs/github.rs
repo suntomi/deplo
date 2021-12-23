@@ -134,14 +134,12 @@ impl<GIT: (git::GitFeatures) + (git::GitHubFeatures), S: shell::Shell> module::M
 impl<GIT: (git::GitFeatures) + (git::GitHubFeatures), S: shell::Shell> vcs::VCS for Github<GIT, S> {
     fn new(config: &config::Container) -> Result<Github<GIT,S>, Box<dyn Error>> {
         if let config::VCSConfig::Github{ account, key:_, email } = &config.borrow().vcs {
-            let mut gh = Github {
+            return Ok(Github {
                 config: config.clone(),
                 diff: vec!(),
                 shell: S::new(config),
                 git: GIT::new(&account, &email, config)
-            };
-            gh.diff = gh.make_diff()?.split('\n').map(|e| e.to_string()).collect();
-            return Ok(gh)
+            });
         } 
         return Err(Box::new(vcs::VCSError {
             cause: format!("should have github config but {}", config.borrow().vcs)
@@ -292,6 +290,10 @@ impl<GIT: (git::GitFeatures) + (git::GitHubFeatures), S: shell::Shell> vcs::VCS 
             }))
         };
         Ok(user_and_repo)
+    }
+    fn init_diff(&mut self) -> Result<(), Box<dyn Error>> {
+        self.diff = self.make_diff()?.split('\n').map(|e| e.to_string()).collect();
+        Ok(())
     }
     fn diff<'b>(&'b self) -> &'b Vec<String> {
         &self.diff
