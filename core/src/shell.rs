@@ -12,25 +12,26 @@ pub mod native;
 
 pub trait Shell {
     fn new(config: &config::Container) -> Self;
-    fn set_cwd<P: AsRef<Path>>(&mut self, dir: Option<&P>) -> Result<(), Box<dyn Error>>;
+    fn set_cwd<P: AsRef<Path>>(&mut self, dir: &Option<P>) -> Result<(), Box<dyn Error>>;
     fn set_env(&mut self, key: &str, val: String) -> Result<(), Box<dyn Error>>;
     fn config(&self) -> &config::Container;
     fn output_of<I, K, V, P>(
-        &self, args: &Vec<&str>, envs: I, cwd: Option<&P>
+        &self, args: &Vec<&str>, envs: I, cwd: &Option<P>
     ) -> Result<String, ShellError>
     where I: IntoIterator<Item = (K, V)>, K: AsRef<OsStr>, V: AsRef<OsStr>, P: AsRef<Path>;
     fn exec<I, K, V, P>(
-        &self, args: &Vec<&str>, envs: I, cwd: Option<&P>, capture: bool
+        &self, args: &Vec<&str>, envs: I, cwd: &Option<P>, capture: bool
     ) -> Result<String, ShellError>
     where I: IntoIterator<Item = (K, V)>, K: AsRef<OsStr>, V: AsRef<OsStr>, P: AsRef<Path>;
     fn eval<I, K, V, P>(
-        &self, code: &str, shell: Option<&String>, envs: I, cwd: Option<&P>, capture: bool
+        &self, code: &str, shell: &Option<String>, envs: I, cwd: &Option<P>, capture: bool
     ) -> Result<String, ShellError> 
     where I: IntoIterator<Item = (K, V)>, K: AsRef<OsStr>, V: AsRef<OsStr>, P: AsRef<Path> {
-        return self.exec(&vec!(shell.map_or_else(|| "bash", |v| v.as_str()), "-c", code), envs, cwd, capture);
+        return self.exec(&vec!(shell.as_ref().map_or_else(|| "bash", |v| v.as_str()), "-c", code), envs, cwd, capture);
     }
     fn eval_on_container<I, K, V, P>(
-        &self, image: &str, code: &str, shell: Option<&String>, envs: I, cwd: Option<&P>, capture: bool
+        &self, image: &str, code: &str, shell: &Option<String>, envs: I, cwd: &Option<P>, 
+        _: &HashMap<&str, &str>, capture: bool
     ) -> Result<String, Box<dyn Error>>
     where I: IntoIterator<Item = (K, V)> + Clone, K: AsRef<OsStr>, V: AsRef<OsStr>, P: AsRef<Path> {
         let config = self.config().borrow();
@@ -51,15 +52,15 @@ pub trait Shell {
             // TODO_PATH: use Path to generate path of /var/run/docker.sock (left(host) side)
             vec!["-v", "/var/run/docker.sock:/var/run/docker.sock"],
             vec!["-v", &format!("{}:{}", &repository_mount_path, &repository_mount_path)],
-            vec![image, shell.map_or_else(|| "bash", |v| v.as_str()), "-c", code]
+            vec![image, shell.as_ref().map_or_else(|| "bash", |v| v.as_str()), "-c", code]
         ].concat(), envs, cwd, capture)?;
         return Ok(result);
     }
     fn eval_output_of<I, K, V, P>(
-        &self, code: &str, shell: Option<&String>, envs: I, cwd: Option<&P>
+        &self, code: &str, shell: &Option<String>, envs: I, cwd: &Option<P>
     ) -> Result<String, ShellError>
     where I: IntoIterator<Item = (K, V)>, K: AsRef<OsStr>, V: AsRef<OsStr>, P: AsRef<Path> {
-        return self.output_of(&vec!(shell.map_or_else(|| "bash", |v| v.as_str()), "-c", code), envs, cwd);
+        return self.output_of(&vec!(shell.as_ref().map_or_else(|| "bash", |v| v.as_str()), "-c", code), envs, cwd);
     }
     fn detect_os(&self) -> Result<config::RunnerOS, Box<dyn Error>> {
         match self.eval_output_of("uname", default(), no_env(), no_cwd()) {
@@ -128,12 +129,11 @@ pub use macro_ignore_exit_code as ignore_exit_code;
 pub fn no_env() -> HashMap<String, String> {
     return HashMap::new()
 }
-pub fn no_cwd() -> Option<&'static Box<Path>> {
-    let none: Option<&Box<Path>> = None;
-    return none;
+pub fn no_cwd<'a>() -> &'a Option<Box<Path>> {
+    return &None;
 }
-pub fn default<'a>() -> Option<&'a String> {
-    return None;
+pub fn default<'a>() -> &'a Option<String> {
+    return &None;
 }
 pub fn inherit_env() -> HashMap<String, String> {
     return std::env::vars().collect();

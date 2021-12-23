@@ -24,7 +24,7 @@ impl<'a> shell::Shell for Native {
             envs: hashmap!{}
         }
     }
-    fn set_cwd<P: AsRef<Path>>(&mut self, dir: Option<&P>) -> Result<(), Box<dyn Error>> {
+    fn set_cwd<P: AsRef<Path>>(&mut self, dir: &Option<P>) -> Result<(), Box<dyn Error>> {
         self.cwd = match dir {
             Some(d) => Some(d.as_ref().to_str().unwrap().to_string()),
             None => None
@@ -40,14 +40,14 @@ impl<'a> shell::Shell for Native {
         return &self.config;
     }
     fn output_of<I, K, V, P>(
-        &self, args: &Vec<&str>, envs: I, cwd: Option<&P>
+        &self, args: &Vec<&str>, envs: I, cwd: &Option<P>
     ) -> Result<String, shell::ShellError> 
     where I: IntoIterator<Item = (K, V)>, K: AsRef<OsStr>, V: AsRef<OsStr>, P: AsRef<Path> {
         let mut cmd = self.create_command(args, envs, cwd, true);
         return Native::get_output(&mut cmd);
     }
     fn exec<I, K, V, P>(
-        &self, args: &Vec<&str>, envs: I, cwd: Option<&P>, capture: bool
+        &self, args: &Vec<&str>, envs: I, cwd: &Option<P>, capture: bool
     ) -> Result<String, shell::ShellError> 
     where I: IntoIterator<Item = (K, V)>, K: AsRef<OsStr>, V: AsRef<OsStr>, P: AsRef<Path> {
         let config = self.config.borrow();
@@ -67,7 +67,7 @@ impl<'a> shell::Shell for Native {
 }
 impl Native {
     fn create_command<I, K, V, P>(
-        &self, args: &Vec<&str>, envs: I, cwd: Option<&P>, capture: bool
+        &self, args: &Vec<&str>, envs: I, cwd: &Option<P>, capture: bool
     ) -> Command 
     where I: IntoIterator<Item = (K, V)>, K: AsRef<OsStr>, V: AsRef<OsStr>, P: AsRef<Path> {
         let mut c = Command::new(args[0]);

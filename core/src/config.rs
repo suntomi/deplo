@@ -645,15 +645,17 @@ impl Config {
                 let current_os = shell.detect_os()?;
                 if *os == current_os {
                     // run command directly here
-                    shell.eval(&job.command, job.shell.as_ref(), self.job_env(&job)?, job.workdir.as_ref(), false)?;
+                    shell.eval(&job.command, &job.shell, self.job_env(&job)?, &job.workdir, false)?;
                 } else {
                     log::debug!("runner os is different from current os {} {}", os, current_os);
                     match local_fallback {
                         Some(f) => {
                             // running on host. run command in container `image` with docker
                             shell.eval_on_container(
-                                &f.image, &job.command, f.shell.as_ref(), 
-                                self.job_env(&job)?, job.workdir.as_ref(), false
+                                &f.image, &job.command, &f.shell, self.job_env(&job)?, &job.workdir, 
+                                &hashmap!{
+                                    "./.deplo/deplo" => "/usr/local/bin/deplo"
+                                }, false
                             )?;
                             return Ok(());
                         },
@@ -668,11 +670,13 @@ impl Config {
             Runner::Container{ ref image } => {
                 if Self::is_running_on_ci() {
                     // already run inside container `image`, run command directly here
-                    shell.eval(&job.command, job.shell.as_ref(), self.job_env(&job)?, job.workdir.as_ref(), false)?;
+                    shell.eval(&job.command, &job.shell, self.job_env(&job)?, &job.workdir, false)?;
                 } else {
                     // running on host. run command in container `image` with docker
                     shell.eval_on_container(
-                        image, &job.command, job.shell.as_ref(), self.job_env(&job)?, job.workdir.as_ref(), false
+                        image, &job.command, &job.shell, self.job_env(&job)?, &job.workdir, &hashmap!{
+                            "./.deplo/deplo" => "/usr/local/bin/deplo"
+                        }, false
                     )?;
                 }
             }

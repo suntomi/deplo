@@ -21,7 +21,6 @@ jobs:
   deplo-main:
     name: Start CI
     runs-on: ubuntu-latest
-    container: ghcr.io/suntomi/deplo:nightly
     outputs:
       DEPLO_OUTPUT_CLI_VERSION: ${{ steps.deplo-ci-kick.outputs.DEPLO_OUTPUT_CLI_VERSION }}
       deploy-base: ${{ steps.deplo-ci-kick.outputs.deploy-base }}
@@ -33,6 +32,10 @@ jobs:
       integrate-builder: ${{ steps.deplo-ci-kick.outputs.integrate-builder }}
       integrate-src: ${{ steps.deplo-ci-kick.outputs.integrate-src }}
     steps:
+      - name: Fetch deplo cli
+        run: |
+          curl -L https://github.com/suntomi/deplo/releases/download/nightly/deplo-Linux -o /usr/local/bin/deplo
+          chmod +x /usr/local/bin/deplo
       - name: Fetch repository cache
         id: fetch-repository-cache
         uses: actions/cache@v2
@@ -64,8 +67,11 @@ jobs:
     if: ${{ !failure() }}
     needs: ["deplo-main","deploy-base","deploy-builder","deploy-mac","deploy-product","deploy-win","integrate-base","integrate-builder","integrate-src"]
     runs-on: ubuntu-latest
-    container: ghcr.io/suntomi/deplo:nightly
     steps:
+      - name: Fetch deplo cli
+        run: |
+          curl -L https://github.com/suntomi/deplo/releases/download/nightly/deplo-Linux -o /usr/local/bin/deplo
+          chmod +x /usr/local/bin/deplo
       - name: Fetch repository cache
         id: fetch-repository-cache
         uses: actions/cache@v2
@@ -100,9 +106,9 @@ jobs:
   
     steps:
       - name: Fetch deplo cli
-        run: curl -L https://github.com/suntomi/deplo/releases/download/nightly/deplo-Linux -o /usr/local/bin/deplo
-      - name: Change cli permission
-        run: chmod +x /usr/local/bin/deplo
+        run: |
+          curl -L https://github.com/suntomi/deplo/releases/download/nightly/deplo-Linux -o /usr/local/bin/deplo
+          chmod +x /usr/local/bin/deplo
       - name: Fetch repository cache
         id: fetch-repository-cache
         uses: actions/cache@v2
@@ -137,9 +143,9 @@ jobs:
   
     steps:
       - name: Fetch deplo cli
-        run: curl -L https://github.com/suntomi/deplo/releases/download/nightly/deplo-Linux -o /usr/local/bin/deplo
-      - name: Change cli permission
-        run: chmod +x /usr/local/bin/deplo
+        run: |
+          curl -L https://github.com/suntomi/deplo/releases/download/nightly/deplo-Linux -o /usr/local/bin/deplo
+          chmod +x /usr/local/bin/deplo
       - name: Fetch repository cache
         id: fetch-repository-cache
         uses: actions/cache@v2
@@ -174,9 +180,9 @@ jobs:
   
     steps:
       - name: Fetch deplo cli
-        run: curl -L https://github.com/suntomi/deplo/releases/download/nightly/deplo-Darwin -o /usr/local/bin/deplo
-      - name: Change cli permission
-        run: chmod +x /usr/local/bin/deplo
+        run: |
+          curl -L https://github.com/suntomi/deplo/releases/download/nightly/deplo-Darwin -o /usr/local/bin/deplo
+          chmod +x /usr/local/bin/deplo
       - name: Fetch repository cache
         id: fetch-repository-cache
         uses: actions/cache@v2
@@ -227,9 +233,9 @@ jobs:
   
     steps:
       - name: Fetch deplo cli
-        run: curl -L https://github.com/suntomi/deplo/releases/download/nightly/deplo-Linux -o /usr/local/bin/deplo
-      - name: Change cli permission
-        run: chmod +x /usr/local/bin/deplo
+        run: |
+          curl -L https://github.com/suntomi/deplo/releases/download/nightly/deplo-Linux -o /usr/local/bin/deplo
+          chmod +x /usr/local/bin/deplo
       - name: Fetch repository cache
         id: fetch-repository-cache
         uses: actions/cache@v2
@@ -314,9 +320,9 @@ jobs:
   
     steps:
       - name: Fetch deplo cli
-        run: curl -L https://github.com/suntomi/deplo/releases/download/nightly/deplo-Linux -o /usr/local/bin/deplo
-      - name: Change cli permission
-        run: chmod +x /usr/local/bin/deplo
+        run: |
+          curl -L https://github.com/suntomi/deplo/releases/download/nightly/deplo-Linux -o /usr/local/bin/deplo
+          chmod +x /usr/local/bin/deplo
       - name: Fetch repository cache
         id: fetch-repository-cache
         uses: actions/cache@v2
@@ -351,9 +357,9 @@ jobs:
   
     steps:
       - name: Fetch deplo cli
-        run: curl -L https://github.com/suntomi/deplo/releases/download/nightly/deplo-Linux -o /usr/local/bin/deplo
-      - name: Change cli permission
-        run: chmod +x /usr/local/bin/deplo
+        run: |
+          curl -L https://github.com/suntomi/deplo/releases/download/nightly/deplo-Linux -o /usr/local/bin/deplo
+          chmod +x /usr/local/bin/deplo
       - name: Fetch repository cache
         id: fetch-repository-cache
         uses: actions/cache@v2
@@ -388,9 +394,9 @@ jobs:
   
     steps:
       - name: Fetch deplo cli
-        run: curl -L https://github.com/suntomi/deplo/releases/download/nightly/deplo-Linux -o /usr/local/bin/deplo
-      - name: Change cli permission
-        run: chmod +x /usr/local/bin/deplo
+        run: |
+          curl -L https://github.com/suntomi/deplo/releases/download/nightly/deplo-Linux -o /usr/local/bin/deplo
+          chmod +x /usr/local/bin/deplo
       - name: Fetch repository cache
         id: fetch-repository-cache
         uses: actions/cache@v2

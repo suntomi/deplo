@@ -1,4 +1,4 @@
 - name: Fetch deplo cli
-  run: curl -L {download_url} -o {deplo_cli_path}
-- name: Change cli permission
-  run: chmod +x {deplo_cli_path}
+  run: |
+    curl -L {download_url} -o {deplo_cli_path}
+    chmod +x {deplo_cli_path}

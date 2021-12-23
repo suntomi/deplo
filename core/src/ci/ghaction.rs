@@ -226,7 +226,12 @@ impl<'a, S: shell::Shell> module::Module for GhAction<S> {
                     strings: &self.generate_outputs(&jobs),
                     postfix: None
                 },
-                image = config.deplo_image(), tag = config::DEPLO_VERSION,
+                fetchcli = MultilineFormatString{
+                    strings: &self.generate_fetchcli_steps(&config::Runner::Machine{
+                        os: config::RunnerOS::Linux, image: None, class: None, local_fallback: None }
+                    ),
+                    postfix: None
+                },
                 checkout = MultilineFormatString{
                     strings: &self.generate_checkout_steps("main", &None),
                     postfix: None
