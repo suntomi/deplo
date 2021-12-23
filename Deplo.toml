@@ -76,7 +76,7 @@ command = """
 set -e
 mkdir -p tools/docker/bin
 source tools/scripts/setup_release_env.sh
-bash tools/scripts/build_linux.sh
+sh tools/scripts/build_linux.sh
 docker build -t ghcr.io/suntomi/deplo:${DEPLO_RELEASE_VERSION} -f tools/docker/Dockerfile tools/docker
 echo ${SUNTOMI_VCS_ACCOUNT_KEY} | docker login ghcr.io -u ${SUNTOMI_VCS_ACCOUNT} --password-stdin
 docker push ghcr.io/suntomi/deplo:${DEPLO_RELEASE_VERSION}

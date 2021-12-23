@@ -283,16 +283,16 @@ where F: Fn () -> Result<String, Box<dyn Error>> {
         }
     }
 }
-pub fn make_absolute(rel_or_abs: impl AsRef<OsStr>, root_directory: impl AsRef<OsStr>) -> String {
+pub fn make_absolute(rel_or_abs: impl AsRef<OsStr>, root_directory: impl AsRef<OsStr>) -> PathBuf {
     {
         let path = Path::new(&rel_or_abs);
         if path.is_absolute() {
-            return rel_or_abs.as_ref().to_string_lossy().to_string();
+            return rel_or_abs.as_ref().to_owned().into();
         }
     }
     let mut pathbuf = PathBuf::from(root_directory.as_ref());
     pathbuf.push(rel_or_abs.as_ref());
-    return pathbuf.to_string_lossy().to_string();
+    return pathbuf;
 }
 
 use crc::{Crc, CRC_64_ECMA_182};

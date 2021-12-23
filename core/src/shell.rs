@@ -42,7 +42,7 @@ pub trait Shell {
         }).collect::<Vec<Vec<String>>>().concat();
         let repository_mount_path = config.vcs_service()?.repository_root()?;
         let workdir = match cwd {
-            Some(dir) => make_absolute(dir.as_ref(), &repository_mount_path.clone()),
+            Some(dir) => make_absolute(dir.as_ref(), &repository_mount_path.clone()).to_string_lossy().to_string(),
             None => repository_mount_path.clone()
         };
         let result = self.exec(&vec![
@@ -80,6 +80,12 @@ pub trait Shell {
             },
             Err(err) => Err(Box::new(err))
         }
+    }
+    fn download_deplo_cli(&self, os: config::RunnerOS, version: &str, output_path: &str) -> Result<(), Box<dyn Error>> {
+        self.exec(&vec![
+            "curl", "-L", &config::cli_download_url(os, version), "-o", output_path
+        ], no_env(), no_cwd(), false)?;
+        Ok(())
     }
 }
 pub type Default = native::Native;

@@ -1,6 +1,6 @@
 use std::fs;
 use std::fmt;
-use std::path;
+use std::path::{self, PathBuf};
 use std::error::Error;
 use std::rc::Rc;
 use std::cell::{RefCell};
@@ -18,10 +18,15 @@ use crate::args;
 use crate::vcs;
 use crate::ci;
 use crate::shell;
-use crate::util::{escalate,envsubst};
+use crate::util::{escalate,envsubst,make_absolute};
 
 pub const DEPLO_GIT_HASH: &'static str = env!("GIT_HASH");
 pub const DEPLO_VERSION: &'static str = env!("DEPLO_RELEASE_VERSION");
+pub const DEPLO_RELEASE_URL_BASE: &'static str = "https://github.com/suntomi/deplo/releases/download";
+
+pub fn cli_download_url(os: RunnerOS, version: &str) -> String {
+    return format!("{}/{}/deplo-{}", DEPLO_RELEASE_URL_BASE, version, os.uname());
+}
 
 #[derive(Debug)]
 pub struct ConfigError {
@@ -51,6 +56,13 @@ impl RunnerOS {
             "windows" => Ok(Self::Windows),
             "macos" => Ok(Self::MacOS),
             _ => Err("unknown OS"),
+        }
+    }
+    pub fn uname(&self) -> &'static str {
+        match self {
+            Self::Linux => "Linux",
+            Self::Windows => "Windows",
+            Self::MacOS => "Darwin",
         }
     }
 }
@@ -240,7 +252,6 @@ impl ReleaseTarget {
 #[derive(Serialize, Deserialize)]
 pub struct CommonConfig {
     pub project_name: String,
-    pub deplo_image: Option<String>,
     pub data_dir: Option<String>,
     pub release_targets: HashMap<String, ReleaseTarget>,
 }
@@ -416,12 +427,6 @@ impl Config {
     pub fn project_name(&self) -> &str {
         &self.common.project_name
     }
-    pub fn deplo_image(&self) -> &str {
-        match &self.common.deplo_image {
-            Some(v) => v,
-            None => "ghcr.io/suntomi/deplo"
-        }
-    }
     pub fn release_target(&self) -> Option<&str> {
         match &self.runtime.release_target {
             Some(s) => Some(&s),
@@ -436,6 +441,41 @@ impl Config {
         return format!("{}", 
             if wdref.is_none() { "".to_string() } else { format!("-w {}", wdref.unwrap()) }
         );
+    }
+    pub fn deplo_data_path(&self) -> Result<PathBuf, Box<dyn Error>> {
+        let base = self.common.data_dir.as_ref().map_or_else(|| ".deplo", |v| v.as_str());
+        let path = make_absolute(base, self.vcs_service()?.repository_root()?);
+        match fs::metadata(&path) {
+            Ok(mata) => {
+                if !mata.is_dir() {
+                    return escalate!(Box::new(ConfigError{ 
+                        cause: format!("{} exists but not directory", path.to_string_lossy().to_string())
+                    }))
+                }
+            },
+            Err(_) => {
+                fs::create_dir_all(&path)?;
+            }
+        };
+        Ok(path)
+    }
+    pub fn deplo_cli_download_path(&self, os: RunnerOS) -> Result<String, Box<dyn Error>> {
+        let mut base = self.deplo_data_path()?;
+        base.push(DEPLO_VERSION);
+        match fs::metadata(&base) {
+            Ok(mata) => {
+                if !mata.is_dir() {
+                    return escalate!(Box::new(ConfigError{ 
+                        cause: format!("{} exists but not directory", base.to_string_lossy().to_string())
+                    }))
+                }
+            },
+            Err(_) => {
+                fs::create_dir_all(&base)?;
+            }
+        };
+        base.push(&format!("deplo-{}", os.uname()));
+        Ok(base.to_string_lossy().to_string())
     }
     pub fn parse_dotenv<F>(&self, mut cb: F) -> Result<(), Box<dyn Error>>
     where F: FnMut (&str, &str) -> Result<(), Box<dyn Error>> {
@@ -641,20 +681,22 @@ impl Config {
     }
     pub fn run_job(&self, shell: &impl shell::Shell, name: &str, job: &Job) -> Result<(), Box<dyn Error>> {
         match job.runner {
-            Runner::Machine{image:_, ref os, ref local_fallback, class:_} => {
+            Runner::Machine{image:_, os, ref local_fallback, class:_} => {
                 let current_os = shell.detect_os()?;
-                if *os == current_os {
+                if os == current_os {
                     // run command directly here
                     shell.eval(&job.command, &job.shell, self.job_env(&job)?, &job.workdir, false)?;
                 } else {
                     log::debug!("runner os is different from current os {} {}", os, current_os);
                     match local_fallback {
                         Some(f) => {
+                            let path = &self.deplo_cli_download_path(os)?;
+                            shell.download_deplo_cli(os, DEPLO_VERSION, &path)?;
                             // running on host. run command in container `image` with docker
                             shell.eval_on_container(
                                 &f.image, &job.command, &f.shell, self.job_env(&job)?, &job.workdir, 
                                 &hashmap!{
-                                    "./.deplo/deplo" => "/usr/local/bin/deplo"
+                                    path.as_str() => "/usr/local/bin/deplo"
                                 }, false
                             )?;
                             return Ok(());
@@ -672,10 +714,13 @@ impl Config {
                     // already run inside container `image`, run command directly here
                     shell.eval(&job.command, &job.shell, self.job_env(&job)?, &job.workdir, false)?;
                 } else {
+                    let os = RunnerOS::Linux;
+                    let path = &self.deplo_cli_download_path(os)?;
+                    shell.download_deplo_cli(os, DEPLO_VERSION, &path)?;
                     // running on host. run command in container `image` with docker
                     shell.eval_on_container(
                         image, &job.command, &job.shell, self.job_env(&job)?, &job.workdir, &hashmap!{
-                            "./.deplo/deplo" => "/usr/local/bin/deplo"
+                            path.as_str() => "/usr/local/bin/deplo"
                         }, false
                     )?;
                 }
