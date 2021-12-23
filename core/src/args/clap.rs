@@ -22,16 +22,20 @@ lazy_static! {
             .value_name("FILE")
             .about("Sets a custom config file")
             .takes_value(true))
+        .arg(Arg::new("release-target")
+            .about("force set release target")
+            .short('r')
+            .long("release-target")
+            .takes_value(true))
         .arg(Arg::new("debug")
             .short('d')
             .long("debug")
             .value_name("KEY(=VALUE),...")
             .about("Activate debug feature\n\
-                possible settings(concat with comma when specify multiple values): \n\
-                \tskip_set_secret=$flag\n\
-                \tforce_set_release_target_to=$(one of your release target)\n\
-            ")
-            .takes_value(true))
+                    TODO: add some debug flags")
+            .takes_value(true)
+            .multiple_values(true)
+            .multiple_occurrences(true))
         .arg(Arg::new("dotenv")
             .short('e')
             .long("dotenv")

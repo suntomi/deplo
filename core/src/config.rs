@@ -394,7 +394,7 @@ impl Config {
         }
         return Ok(c);
     }
-    pub fn setup<'a, A: args::Args>(c: &'a mut Container, _: &A) -> Result<&'a Container, Box<dyn Error>> {
+    pub fn setup<'a, A: args::Args>(c: &'a mut Container, args: &A) -> Result<&'a Container, Box<dyn Error>> {
         // setup module cache
         Self::setup_ci(&c)?;
         Self::setup_vcs(&c)?;
@@ -411,9 +411,7 @@ impl Config {
             let mut mutc = c.ptr.borrow_mut();
             mutc.runtime.release_target = match release_target {
                 Some(v) => Some(v),
-                None => mutc.get_debug_option("force_set_release_target_to").map_or(
-                    None, |v| Some(v.clone())
-                )
+                None => args.value_of("release-target").map_or_else(|| None, |v| Some(v.to_string()))
             }
         }
         return Ok(c);
@@ -461,21 +459,24 @@ impl Config {
     }
     pub fn deplo_cli_download_path(&self, os: RunnerOS) -> Result<String, Box<dyn Error>> {
         let mut base = self.deplo_data_path()?;
+        base.push("cli");
         base.push(DEPLO_VERSION);
-        match fs::metadata(&base) {
+        let mut file_path = base.clone();
+        file_path.push(&format!("deplo-{}", os.uname()));
+        match fs::metadata(&file_path) {
             Ok(mata) => {
-                if !mata.is_dir() {
+                if mata.is_dir() {
                     return escalate!(Box::new(ConfigError{ 
-                        cause: format!("{} exists but not directory", base.to_string_lossy().to_string())
+                        cause: format!("{} exists but not file", file_path.to_string_lossy().to_string())
                     }))
+                } else {
+                    return Ok(file_path.to_string_lossy().to_string());
                 }
             },
-            Err(_) => {
-                fs::create_dir_all(&base)?;
-            }
+            Err(_) => {}
         };
-        base.push(&format!("deplo-{}", os.uname()));
-        Ok(base.to_string_lossy().to_string())
+        fs::create_dir_all(&base)?;
+        Ok(file_path.to_string_lossy().to_string())
     }
     pub fn parse_dotenv<F>(&self, mut cb: F) -> Result<(), Box<dyn Error>>
     where F: FnMut (&str, &str) -> Result<(), Box<dyn Error>> {
