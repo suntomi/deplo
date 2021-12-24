@@ -11,7 +11,13 @@ use crate::config;
 use crate::ci;
 use crate::shell;
 use crate::module;
-use crate::util::{escalate,seal,MultilineFormatString,rm,maphash,sorted_key_iter};
+use crate::util::{
+    escalate,seal,
+    MultilineFormatString,rm,
+    maphash,
+    sorted_key_iter,
+    merge_hashmap
+};
 
 #[derive(Serialize, Deserialize)]
 struct RepositoryPublicKeyResponse {
@@ -159,29 +165,42 @@ impl<S: shell::Shell> GhAction<S> {
             }
         ).split("\n").map(|s| s.to_string()).collect()
     }
-    fn generate_checkout_steps<'a>(&self, _: &'a str, options: &'a Option<HashMap<String, String>>) -> Vec<String> {
-        let checkout_opts = options.as_ref().map_or_else(
-            || vec![], 
-            |v| v.iter().map(|(k,v)| {
-                return if vec!["fetch-depth", "lfs"].contains(&k.as_str()) {
-                    format!("{}: {}", k, v)
-                } else {
-                    format!("# warning: deplo only support lfs options for github action checkout but {}({}) is specified", k, v)
-                }
-            }).collect::<Vec<String>>()
+    fn generate_checkout_steps<'a>(
+        &self, _: &'a str, options: &'a Option<HashMap<String, String>>, defaults: &Option<HashMap<String, String>>
+    ) -> Vec<String> {
+        let merged_opts = options.as_ref().map_or_else(
+            || defaults.clone().unwrap_or(HashMap::new()),
+            |v| merge_hashmap(&defaults.clone().unwrap_or(HashMap::new()), v)
         );
+        let checkout_opts = merged_opts.iter().map(|(k,v)| {
+            return if vec!["fetch-depth", "lfs"].contains(&k.as_str()) {
+                format!("{}: {}", k, v)
+            } else {
+                format!("# warning: deplo only support lfs options for github action checkout but {}({}) is specified", k, v)
+            }
+        }).collect::<Vec<String>>();
         // hash value for separating repository cache according to checkout options
         let opts_hash = options.as_ref().map_or_else(
             || "".to_string(), 
             |v| { format!("-{}", maphash(v)) }
         );
-        format!(
-            include_str!("../../res/ci/ghaction/checkout.yml.tmpl"), 
-            checkout_opts = MultilineFormatString{
-                strings: &self.generate_checkout_opts(&checkout_opts),
-                postfix: None
-            }, opts_hash = opts_hash
-        ).split("\n").map(|s| s.to_string()).collect()
+        if merged_opts.get("fetch-depth").map_or_else(|| false, |v| v.parse::<i32>().unwrap_or(-1) == 0) {
+            format!(
+                include_str!("../../res/ci/ghaction/cached_checkout.yml.tmpl"),
+                checkout_opts = MultilineFormatString{
+                    strings: &self.generate_checkout_opts(&checkout_opts),
+                    postfix: None
+                }, opts_hash = opts_hash
+            ).split("\n").map(|s| s.to_string()).collect()
+        } else {
+            format!(
+                include_str!("../../res/ci/ghaction/checkout.yml.tmpl"),
+                checkout_opts = MultilineFormatString{
+                    strings: &self.generate_checkout_opts(&checkout_opts),
+                    postfix: None
+                }
+            ).split("\n").map(|s| s.to_string()).collect()
+        }
     }
 }
 
@@ -242,7 +261,7 @@ impl<'a, S: shell::Shell> module::Module for GhAction<S> {
                     postfix: None
                 },
                 checkout = MultilineFormatString{
-                    strings: &self.generate_checkout_steps(&name, &job.checkout),
+                    strings: &self.generate_checkout_steps(&name, &job.checkout, &None),
                     postfix: None
                 },
                 debugger = MultilineFormatString{
@@ -271,7 +290,9 @@ impl<'a, S: shell::Shell> module::Module for GhAction<S> {
                     postfix: None
                 },
                 checkout = MultilineFormatString{
-                    strings: &self.generate_checkout_steps("main", &None),
+                    strings: &self.generate_checkout_steps("main", &None, &Some(hashmap!{
+                        "fetch-depth".to_string() => "2".to_string()
+                    })),
                     postfix: None
                 },
                 jobs = MultilineFormatString{

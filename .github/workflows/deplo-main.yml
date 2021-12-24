@@ -37,24 +37,11 @@ jobs:
         run: |
           curl -L https://github.com/suntomi/deplo/releases/download/nightly/deplo-Linux -o /usr/local/bin/deplo
           chmod +x /usr/local/bin/deplo
-      - name: Fetch repository cache
-        id: fetch-repository-cache
-        uses: actions/cache@v2
-        with:
-          path: .git
-          key: deplo-git-v1-${{ github.sha }}
-          restore-keys:
-            deplo-git-v1-
       - name: Checkout
         if: steps.fetch-repository-cache.outputs.cache-hit != 'true'
         uses: actions/checkout@v2
         with:
-          # deplo needs to refer previous commit of current HEAD to determine diff
           fetch-depth: 2
-      
-      - name: Restore repository from cache
-        if: steps.fetch-repository-cache.outputs.cache-hit == 'true'
-        run: git reset --hard HEAD
       - name: Start deplo
         id: deplo-ci-kick
         run: deplo ci kick
@@ -73,24 +60,11 @@ jobs:
         run: |
           curl -L https://github.com/suntomi/deplo/releases/download/nightly/deplo-Linux -o /usr/local/bin/deplo
           chmod +x /usr/local/bin/deplo
-      - name: Fetch repository cache
-        id: fetch-repository-cache
-        uses: actions/cache@v2
-        with:
-          path: .git
-          key: deplo-git-v1-${{ github.sha }}
-          restore-keys:
-            deplo-git-v1-
       - name: Checkout
         if: steps.fetch-repository-cache.outputs.cache-hit != 'true'
         uses: actions/checkout@v2
         with:
-          # deplo needs to refer previous commit of current HEAD to determine diff
           fetch-depth: 2
-      
-      - name: Restore repository from cache
-        if: steps.fetch-repository-cache.outputs.cache-hit == 'true'
-        run: git reset --hard HEAD
       - name: Cleanup deplo
         id: deplo-ci-fin
         run: deplo ci fin
@@ -110,24 +84,10 @@ jobs:
         run: |
           curl -L https://github.com/suntomi/deplo/releases/download/nightly/deplo-Linux -o /usr/local/bin/deplo
           chmod +x /usr/local/bin/deplo
-      - name: Fetch repository cache
-        id: fetch-repository-cache
-        uses: actions/cache@v2
-        with:
-          path: .git
-          key: deplo-git-v1-${{ github.sha }}
-          restore-keys:
-            deplo-git-v1-
       - name: Checkout
         if: steps.fetch-repository-cache.outputs.cache-hit != 'true'
         uses: actions/checkout@v2
-        with:
-          # deplo needs to refer previous commit of current HEAD to determine diff
-          fetch-depth: 2
       
-      - name: Restore repository from cache
-        if: steps.fetch-repository-cache.outputs.cache-hit == 'true'
-        run: git reset --hard HEAD
   
       - name: deploy base
         run: deplo ci deploy base
@@ -147,24 +107,10 @@ jobs:
         run: |
           curl -L https://github.com/suntomi/deplo/releases/download/nightly/deplo-Linux -o /usr/local/bin/deplo
           chmod +x /usr/local/bin/deplo
-      - name: Fetch repository cache
-        id: fetch-repository-cache
-        uses: actions/cache@v2
-        with:
-          path: .git
-          key: deplo-git-v1-${{ github.sha }}
-          restore-keys:
-            deplo-git-v1-
       - name: Checkout
         if: steps.fetch-repository-cache.outputs.cache-hit != 'true'
         uses: actions/checkout@v2
-        with:
-          # deplo needs to refer previous commit of current HEAD to determine diff
-          fetch-depth: 2
       
-      - name: Restore repository from cache
-        if: steps.fetch-repository-cache.outputs.cache-hit == 'true'
-        run: git reset --hard HEAD
   
       - name: deploy builder
         run: deplo ci deploy builder
@@ -184,24 +130,10 @@ jobs:
         run: |
           curl -L https://github.com/suntomi/deplo/releases/download/nightly/deplo-Darwin -o /usr/local/bin/deplo
           chmod +x /usr/local/bin/deplo
-      - name: Fetch repository cache
-        id: fetch-repository-cache
-        uses: actions/cache@v2
-        with:
-          path: .git
-          key: deplo-git-v1-${{ github.sha }}
-          restore-keys:
-            deplo-git-v1-
       - name: Checkout
         if: steps.fetch-repository-cache.outputs.cache-hit != 'true'
         uses: actions/checkout@v2
-        with:
-          # deplo needs to refer previous commit of current HEAD to determine diff
-          fetch-depth: 2
       
-      - name: Restore repository from cache
-        if: steps.fetch-repository-cache.outputs.cache-hit == 'true'
-        run: git reset --hard HEAD
       - name: Cache cargo
         id: deplo-cache-cargo
         uses: actions/cache@v2
@@ -237,24 +169,10 @@ jobs:
         run: |
           curl -L https://github.com/suntomi/deplo/releases/download/nightly/deplo-Linux -o /usr/local/bin/deplo
           chmod +x /usr/local/bin/deplo
-      - name: Fetch repository cache
-        id: fetch-repository-cache
-        uses: actions/cache@v2
-        with:
-          path: .git
-          key: deplo-git-v1-${{ github.sha }}
-          restore-keys:
-            deplo-git-v1-
       - name: Checkout
         if: steps.fetch-repository-cache.outputs.cache-hit != 'true'
         uses: actions/checkout@v2
-        with:
-          # deplo needs to refer previous commit of current HEAD to determine diff
-          fetch-depth: 2
       
-      - name: Restore repository from cache
-        if: steps.fetch-repository-cache.outputs.cache-hit == 'true'
-        run: git reset --hard HEAD
   
       - name: deploy product
         run: deplo ci deploy product
@@ -274,24 +192,10 @@ jobs:
         run: |
           curl -L https://github.com/suntomi/deplo/releases/download/nightly/deplo-Linux -o /usr/local/bin/deplo
           chmod +x /usr/local/bin/deplo
-      - name: Fetch repository cache
-        id: fetch-repository-cache
-        uses: actions/cache@v2
-        with:
-          path: .git
-          key: deplo-git-v1-${{ github.sha }}
-          restore-keys:
-            deplo-git-v1-
       - name: Checkout
         if: steps.fetch-repository-cache.outputs.cache-hit != 'true'
         uses: actions/checkout@v2
-        with:
-          # deplo needs to refer previous commit of current HEAD to determine diff
-          fetch-depth: 2
       
-      - name: Restore repository from cache
-        if: steps.fetch-repository-cache.outputs.cache-hit == 'true'
-        run: git reset --hard HEAD
   
       - name: deploy vmfb
         run: deplo ci deploy vmfb
@@ -308,24 +212,10 @@ jobs:
   
     steps:
   
-      - name: Fetch repository cache
-        id: fetch-repository-cache
-        uses: actions/cache@v2
-        with:
-          path: .git
-          key: deplo-git-v1-${{ github.sha }}
-          restore-keys:
-            deplo-git-v1-
       - name: Checkout
         if: steps.fetch-repository-cache.outputs.cache-hit != 'true'
         uses: actions/checkout@v2
-        with:
-          # deplo needs to refer previous commit of current HEAD to determine diff
-          fetch-depth: 2
       
-      - name: Restore repository from cache
-        if: steps.fetch-repository-cache.outputs.cache-hit == 'true'
-        run: git reset --hard HEAD
       - name: Cache cargo
         id: deplo-cache-cargo
         uses: actions/cache@v2
@@ -361,24 +251,10 @@ jobs:
         run: |
           curl -L https://github.com/suntomi/deplo/releases/download/nightly/deplo-Linux -o /usr/local/bin/deplo
           chmod +x /usr/local/bin/deplo
-      - name: Fetch repository cache
-        id: fetch-repository-cache
-        uses: actions/cache@v2
-        with:
-          path: .git
-          key: deplo-git-v1-${{ github.sha }}
-          restore-keys:
-            deplo-git-v1-
       - name: Checkout
         if: steps.fetch-repository-cache.outputs.cache-hit != 'true'
         uses: actions/checkout@v2
-        with:
-          # deplo needs to refer previous commit of current HEAD to determine diff
-          fetch-depth: 2
       
-      - name: Restore repository from cache
-        if: steps.fetch-repository-cache.outputs.cache-hit == 'true'
-        run: git reset --hard HEAD
   
       - name: integrate base
         run: deplo ci integrate base
@@ -398,24 +274,10 @@ jobs:
         run: |
           curl -L https://github.com/suntomi/deplo/releases/download/nightly/deplo-Linux -o /usr/local/bin/deplo
           chmod +x /usr/local/bin/deplo
-      - name: Fetch repository cache
-        id: fetch-repository-cache
-        uses: actions/cache@v2
-        with:
-          path: .git
-          key: deplo-git-v1-${{ github.sha }}
-          restore-keys:
-            deplo-git-v1-
       - name: Checkout
         if: steps.fetch-repository-cache.outputs.cache-hit != 'true'
         uses: actions/checkout@v2
-        with:
-          # deplo needs to refer previous commit of current HEAD to determine diff
-          fetch-depth: 2
       
-      - name: Restore repository from cache
-        if: steps.fetch-repository-cache.outputs.cache-hit == 'true'
-        run: git reset --hard HEAD
   
       - name: integrate builder
         run: deplo ci integrate builder
@@ -435,24 +297,10 @@ jobs:
         run: |
           curl -L https://github.com/suntomi/deplo/releases/download/nightly/deplo-Linux -o /usr/local/bin/deplo
           chmod +x /usr/local/bin/deplo
-      - name: Fetch repository cache
-        id: fetch-repository-cache
-        uses: actions/cache@v2
-        with:
-          path: .git
-          key: deplo-git-v1-${{ github.sha }}
-          restore-keys:
-            deplo-git-v1-
       - name: Checkout
         if: steps.fetch-repository-cache.outputs.cache-hit != 'true'
         uses: actions/checkout@v2
-        with:
-          # deplo needs to refer previous commit of current HEAD to determine diff
-          fetch-depth: 2
       
-      - name: Restore repository from cache
-        if: steps.fetch-repository-cache.outputs.cache-hit == 'true'
-        run: git reset --hard HEAD
       - name: Cache cargo
         id: deplo-cache-cargo
         uses: actions/cache@v2

@@ -314,6 +314,17 @@ pub fn sorted_key_iter<K: std::cmp::Ord,V>(h: &HashMap<K, V>) -> impl Iterator<I
     v.into_iter()
 }
 
+pub fn merge_hashmap<K: std::cmp::Eq + std::hash::Hash + Clone, V: Clone>(h1: &HashMap<K, V>, h2: &HashMap<K, V>) -> HashMap<K, V> {
+    let mut ret = HashMap::new();
+    for (k, v) in h1.into_iter() {
+        ret.entry(k.clone()).or_insert(v.clone());
+    }
+    for (k, v) in h2.into_iter() {
+        ret.entry(k.clone()).or_insert(v.clone());
+    }
+    return ret;
+}
+
 // json
 // same as serde_json::from_str, but support the case that s represents single number/boolean/null.
 // serde_json::from_str does not seem to support them.

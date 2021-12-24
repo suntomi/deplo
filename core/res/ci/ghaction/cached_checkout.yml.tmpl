@@ -1,0 +1,15 @@
+- name: Fetch repository cache
+  id: fetch-repository-cache
+  uses: actions/cache@v2
+  with:
+    path: .git
+    key: deplo-git-v1{opts_hash}-${{{{ github.sha }}}}
+    restore-keys:
+      deplo-git-v1{opts_hash}-
+- name: Checkout
+  if: steps.fetch-repository-cache.outputs.cache-hit != 'true'
+  uses: actions/checkout@v2
+{checkout_opts:>2}
+- name: Restore repository from cache
+  if: steps.fetch-repository-cache.outputs.cache-hit == 'true'
+  run: git reset --hard HEAD
