@@ -27,6 +27,7 @@ jobs:
       deploy-builder: ${{ steps.deplo-ci-kick.outputs.deploy-builder }}
       deploy-mac: ${{ steps.deplo-ci-kick.outputs.deploy-mac }}
       deploy-product: ${{ steps.deplo-ci-kick.outputs.deploy-product }}
+      deploy-vmfb: ${{ steps.deplo-ci-kick.outputs.deploy-vmfb }}
       deploy-win: ${{ steps.deplo-ci-kick.outputs.deploy-win }}
       integrate-base: ${{ steps.deplo-ci-kick.outputs.integrate-base }}
       integrate-builder: ${{ steps.deplo-ci-kick.outputs.integrate-builder }}
@@ -61,11 +62,11 @@ jobs:
         if: ${{ failure() }}
         uses: umegaya/action-tmate@a3d459813f3429bd95fc48bcd980b2fb40f10ad0
         with:
-          sudo: false
+          sudo: true
   deplo-finish:
     name: Cleanup CI
     if: ${{ !failure() }}
-    needs: ["deplo-main","deploy-base","deploy-builder","deploy-mac","deploy-product","deploy-win","integrate-base","integrate-builder","integrate-src"]
+    needs: ["deplo-main","deploy-base","deploy-builder","deploy-mac","deploy-product","deploy-vmfb","deploy-win","integrate-base","integrate-builder","integrate-src"]
     runs-on: ubuntu-latest
     steps:
       - name: Fetch deplo cli
@@ -97,7 +98,7 @@ jobs:
         if: ${{ failure() }}
         uses: umegaya/action-tmate@a3d459813f3429bd95fc48bcd980b2fb40f10ad0
         with:
-          sudo: false
+          sudo: true
   deploy-base:
     needs: [deplo-main]
     if: ${{ needs.deplo-main.outputs.deploy-base && !failure() }}
@@ -257,6 +258,43 @@ jobs:
   
       - name: deploy product
         run: deplo ci deploy product
+      - name: Setup ssh session to debug
+        if: ${{ failure() }}
+        uses: umegaya/action-tmate@a3d459813f3429bd95fc48bcd980b2fb40f10ad0
+        with:
+          sudo: true
+  deploy-vmfb:
+    needs: [deplo-main]
+    if: ${{ needs.deplo-main.outputs.deploy-vmfb && !failure() }}
+    name: Running job deploy-vmfb
+    runs-on: ubuntu-latest
+  
+    steps:
+      - name: Fetch deplo cli
+        run: |
+          curl -L https://github.com/suntomi/deplo/releases/download/nightly/deplo-Linux -o /usr/local/bin/deplo
+          chmod +x /usr/local/bin/deplo
+      - name: Fetch repository cache
+        id: fetch-repository-cache
+        uses: actions/cache@v2
+        with:
+          path: .git
+          key: deplo-git-v1-${{ github.sha }}
+          restore-keys:
+            deplo-git-v1-
+      - name: Checkout
+        if: steps.fetch-repository-cache.outputs.cache-hit != 'true'
+        uses: actions/checkout@v2
+        with:
+          # deplo needs to refer previous commit of current HEAD to determine diff
+          fetch-depth: 2
+      
+      - name: Restore repository from cache
+        if: steps.fetch-repository-cache.outputs.cache-hit == 'true'
+        run: git reset --hard HEAD
+  
+      - name: deploy vmfb
+        run: deplo ci deploy vmfb
       - name: Setup ssh session to debug
         if: ${{ failure() }}
         uses: umegaya/action-tmate@a3d459813f3429bd95fc48bcd980b2fb40f10ad0

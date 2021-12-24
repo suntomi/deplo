@@ -1,6 +1,7 @@
 # common settings
 [common]
 project_name = "deplo"
+debug = { ghaction_deplo_debugger = "on", ghaction_job_debugger = "on" }
 
 [common.release_targets]
 nightly = { type = "Branch", path = "main" }

@@ -253,6 +253,7 @@ impl ReleaseTarget {
 pub struct CommonConfig {
     pub project_name: String,
     pub data_dir: Option<String>,
+    pub debug: Option<HashMap<String, String>>,
     pub release_targets: HashMap<String, ReleaseTarget>,
 }
 #[derive(Default)]

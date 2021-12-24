@@ -26,5 +26,5 @@ ENV PKG_CONFIG_ALLOW_CROSS=1
 ENV OPENSSL_STATIC=true
 ENV OPENSSL_DIR=/usr/local
 # remove build result cache to force rebuild with actual project
-RUN cargo build --release --target x86_64-unknown-linux-musl --color never && \
+RUN cargo build --release --target x86_64-unknown-linux-musl --color never --features single-binary && \
     rm -r /tmp/target/x86_64-unknown-linux-musl/release/.fingerprint/cli-*

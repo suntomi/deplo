@@ -1,13 +1,37 @@
 use std::error::Error;
 use std::collections::HashMap;
 
+#[cfg(feature="git2")]
 use git2::{Repository,RepositoryOpenFlags};
+// I love rust in many way, but I want #if~#else~#endif feature to avoid such useless code.
+// TODO: more concise separation for feature flag git2's on/off.
+// impl GitFeature itself should be separated like CrateRepositoryInspector and ShellRepositoryInspector
+// and use pub type RepositoryInspector = CrateRepositoryInspector|ShellRepositoryInspector according to the flag on/off.
+#[cfg(not(feature="git2"))]
+pub struct StubRepository {}
+#[cfg(not(feature="git2"))]
+impl StubRepository {
+    fn find_remote(&self, _: &str) -> Result<StubRemote, Box<dyn Error>> {
+        Ok(StubRemote{})
+    }
+}
+#[cfg(not(feature="git2"))]
+pub struct StubRemote {}
+#[cfg(not(feature="git2"))]
+impl StubRemote {
+    fn url(&self) -> Option<&str> {
+        Some("")
+    }
+}
+
 use maplit::hashmap;
 
 use crate::config;
 use crate::shell;
 use crate::util::{defer, escalate, jsonpath};
 use crate::vcs;
+
+
 
 // because defer uses Drop trait behaviour, this cannot be de-duped as function
 macro_rules! setup_remote {
@@ -29,7 +53,10 @@ pub struct Git<S: shell::Shell = shell::Default> {
     username: String,
     email: String,
     shell: S,
+    #[cfg(feature="git2")]
     repo: Repository,
+    #[cfg(not(feature="git2"))]
+    repo: StubRepository,
 }
 
 pub trait GitFeatures {
@@ -85,12 +112,14 @@ impl<S: shell::Shell> Git<S> {
 
 impl<S: shell::Shell> GitFeatures for Git<S> {
     fn new(username: &str, email: &str, config: &config::Container) -> Git<S> {
+        #[cfg(feature="git2")]
         let cwd = std::env::current_dir().unwrap();
         return Git::<S> {
             config: config.clone(),
             username: username.to_string(),
             email: email.to_string(),
             shell: S::new(config),
+            #[cfg(feature="git2")]
             repo: Repository::open_ext(
                 match config.borrow().runtime.workdir {
                     Some(ref v) => std::path::Path::new(v),
@@ -99,6 +128,8 @@ impl<S: shell::Shell> GitFeatures for Git<S> {
                 RepositoryOpenFlags::empty(), 
                 &[std::env::var("HOME").unwrap()]
             ).unwrap(),
+            #[cfg(not(feature="git2"))]
+            repo: StubRepository {},
         }
     }
     fn current_branch(&self) -> Result<(String, bool), Box<dyn Error>> {
@@ -122,8 +153,14 @@ impl<S: shell::Shell> GitFeatures for Git<S> {
         ), shell::no_env(), shell::no_cwd())?)
     }
     fn remote_origin(&self) -> Result<String, Box<dyn Error>> {
-        let origin = self.repo.find_remote("origin")?;
-        Ok(origin.url().unwrap().to_string())
+        if cfg!(feature="git2") {
+            let origin = self.repo.find_remote("origin")?;
+            Ok(origin.url().unwrap().to_string())
+        } else {
+            Ok(self.shell.output_of(&vec!(
+                "git", "config", "--get", "remote.origin.url"
+            ), shell::no_env(), shell::no_cwd())?)
+        }
     }
     fn repository_root(&self) -> Result<String, Box<dyn Error>> {
         Ok(self.shell.output_of(&vec!(
@@ -158,7 +195,7 @@ impl<S: shell::Shell> GitFeatures for Git<S> {
             // otherwise if lfs tracked file is written, codes below seems to treat these write as git diff.
             // even if actually no change.
             // TODO_PATH: use Path to generate path of /dev/null
-		    self.shell.eval("git --no-pager diff > /dev/null", shell::default(), shell::no_env(), shell::no_cwd(), false)?;
+		    self.shell.exec(&vec!["git", "--no-pager", "diff"], shell::no_env(), shell::no_cwd(), false)?;
         }
 		let mut changed = false;
 
@@ -176,10 +213,8 @@ impl<S: shell::Shell> GitFeatures for Git<S> {
 			return Ok(false)
         } else {
 			if use_lfs {
-                // TODO_PATH: use Path to generate path of /tmp/lfs_error
-				self.shell.eval(
-                    "git lfs fetch --all > /tmp/lfs_error 2>&1", 
-                    shell::default(), shell::no_env(), shell::no_cwd(), false
+				self.shell.exec(
+                    &vec!["git", "lfs", "fetch", "--all"], shell::no_env(), shell::no_cwd(), false
                 )?;
             }
 			self.shell.exec(&vec!("git", "commit", "-m", msg), shell::no_env(), shell::no_cwd(), false)?;

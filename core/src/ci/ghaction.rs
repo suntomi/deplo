@@ -55,6 +55,32 @@ impl<S: shell::Shell> GhAction<S> {
             format!("{kind}-{name}: ${{{{ steps.deplo-ci-kick.outputs.{kind}-{name} }}}}", kind = v.0, name = v.1)
         }).collect()
     }
+    fn generate_debugger(&self, job: Option<&config::Job>, config: &config::Config) -> Vec<String> {
+        let sudo = match job {
+            Some(ref j) => {
+                if !config.common.debug.as_ref().map_or_else(|| false, |v| v.get("ghaction_job_debugger").is_some()) &&
+                    !j.options.as_ref().map_or_else(|| false, |v| v.get("debugger").is_some()) {
+                    return vec![];
+                }
+                // if in container, sudo does not required to install debug instrument
+                match j.runner {
+                    config::Runner::Machine{..} => true,
+                    config::Runner::Container{..} => false,        
+                }
+            },
+            None => {
+                // deplo kick/finish
+                if !config.common.debug.as_ref().map_or_else(|| false, |v| v.get("ghaction_deplo_debugger").is_some()) {
+                    return vec![]
+                }
+                true
+            }
+        };
+        format!(
+            include_str!("../../res/ci/ghaction/debugger.yml.tmpl"), 
+            sudo = sudo
+        ).split("\n").map(|s| s.to_string()).collect()        
+    }
     fn generate_caches(&self, job: &config::Job) -> Vec<String> {
         match job.caches {
             Some(ref c) => sorted_key_iter(c).map(|(name,cache)| {
@@ -208,8 +234,10 @@ impl<'a, S: shell::Shell> module::Module for GhAction<S> {
                     strings: &self.generate_checkout_steps(&name, &job.checkout),
                     postfix: None
                 },
-                //if in container, sudo does not required to install debug instrument
-                sudo = job.runs_on_machine()
+                debugger = MultilineFormatString{
+                    strings: &self.generate_debugger(Some(&job), &config),
+                    postfix: None
+                }
             ).split("\n").map(|s| s.to_string()).collect::<Vec<String>>();
             job_descs = job_descs.into_iter().chain(lines.into_iter()).collect();
         }
@@ -237,6 +265,10 @@ impl<'a, S: shell::Shell> module::Module for GhAction<S> {
                 },
                 jobs = MultilineFormatString{
                     strings: &job_descs,
+                    postfix: None
+                },
+                debugger = MultilineFormatString{
+                    strings: &self.generate_debugger(None, &config),
                     postfix: None
                 },
                 needs = format!("\"{}\"", all_job_names.join("\",\""))

@@ -13,7 +13,7 @@ crc = "2.1.0"
 dotenv = { git = "https://github.com/umegaya/dotenv/" }
 jsonpath_lib = "0.3.0"
 fs_extra = "1.2.0"
-git2 = "0.13.25"
+git2 = { version = "0.13.25", optional = true }
 glob = "0.3.0"
 lazy_static = "1.4.0"
 log = "0.4.8"
@@ -25,3 +25,9 @@ serde_json = "1.0"
 simple_logger = "1.6.0"
 toml = "0.5.6"
 sodalite = { git = "https://github.com/suntomi/sodalite" }
+
+[features]
+default = []
+single-binary = ["use-git2", "use-hyper"]
+use-git2 = ["git2"]
+use-hyper = []
