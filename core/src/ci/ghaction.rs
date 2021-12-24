@@ -261,7 +261,14 @@ impl<'a, S: shell::Shell> module::Module for GhAction<S> {
                     postfix: None
                 },
                 checkout = MultilineFormatString{
-                    strings: &self.generate_checkout_steps(&name, &job.checkout, &None),
+                    strings: &self.generate_checkout_steps(&name, &job.checkout, &job.checkout.as_ref().map_or_else(
+                        || None,
+                        |v| if v.get("lfs").is_some() {
+                            Some(hashmap! { "fetch-depth".to_string() => "0".to_string() })
+                        } else {
+                            None
+                        }
+                    )),
                     postfix: None
                 },
                 debugger = MultilineFormatString{
