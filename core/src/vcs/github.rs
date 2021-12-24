@@ -93,13 +93,12 @@ impl<GIT: (git::GitFeatures) + (git::GitHubFeatures), S: shell::Shell> Github<GI
             _ => panic!("vcs account is not for github ${:?}", &config.vcs)
         };
         let user_and_repo = (self as &dyn vcs::VCS).user_and_repo()?;
-        let response = self.shell.eval_output_of(
-            &format!(r#"
-                curl --fail https://api.github.com/repos/{}/{}/releases/tags/{} \
-                -H "Authorization: token {}"
-            "#, user_and_repo.0, user_and_repo.1, target_ref.0, token),
-            shell::default(), shell::no_env(), shell::no_cwd()
-        )?;
+        let response = self.shell.exec(&vec![
+            "curl", "--fail", &format!(
+                "https://api.github.com/repos/{}/{}/releases/tags/{}",
+                user_and_repo.0, user_and_repo.1, target_ref.0
+            ), "-H", &format!("Authorization: token {}", token)
+        ], shell::no_env(), shell::no_cwd(), true)?;
         return Ok(response);
     }
     fn get_value_from_json_object(&self, json_object: &str, key: &str) -> Result<String, Box<dyn Error>> {
@@ -182,14 +181,14 @@ impl<GIT: (git::GitFeatures) + (git::GitHubFeatures), S: shell::Shell> vcs::VCS 
                     }))
                 };
                 options.insert("tag_name".to_string(), str_to_json(target_ref.0));
-                self.shell.eval_output_of(
-                    &format!(r#"
-                        curl https://api.github.com/repos/{}/{}/releases \
-                        -H "Authorization: token {}" \
-                        -d '{}'
-                    "#, user_and_repo.0, user_and_repo.1, token, serde_json::to_string(&options)?),
-                    shell::default(), shell::no_env(), shell::no_cwd()
-                )?             
+                self.shell.exec(&vec![
+                    "curl", &format!(
+                        "https://api.github.com/repos/{}/{}/releases", 
+                        user_and_repo.0, user_and_repo.1
+                    ), 
+                    "-H", &format!("Authorization: token {}", token), 
+                    "-d", &serde_json::to_string(&options)?
+                ], shell::no_env(), shell::no_cwd(), false)?             
             }
         };
         let upload_url = self.get_upload_url_from_release(&response)?;
@@ -219,40 +218,29 @@ impl<GIT: (git::GitFeatures) + (git::GitHubFeatures), S: shell::Shell> vcs::VCS 
             Some(v) => v.as_str().unwrap_or("application/octet-stream").to_string(),
             None => "application/octet-stream".to_string()
         };
-        let response = self.shell.eval_output_of(
-            &format!(r#"
-                curl {} \
-                -H "Authorization: token {}"
-            "#, upload_url_base.replace("uploads.github.com", "api.github.com"), token),
-            shell::default(), shell::no_env(), shell::no_cwd()
-        )?;
+        let response = self.shell.exec(&vec![
+            "curl", &upload_url_base.replace("uploads.github.com", "api.github.com"),
+            "-H", &format!("Authorization: token {}", token),
+        ], shell::no_env(), shell::no_cwd(), true)?;
         match jsonpath(&response, &format!("$.[?(@.name=='{}')]", asset_name))? {
             Some(v) => match opts.get("replace") {
                 Some(_) => {
                     // delete old asset
                     let delete_url = self.get_value_from_json_object(&v, "url")?;
-                    self.shell.eval_output_of(
-                        &format!(r#"
-                            curl {} -X DELETE \
-                            -H "Authorization: token {}"
-                        "#, delete_url, token),
-                        shell::default(), shell::no_env(), shell::no_cwd()
-                    )?;
+                    self.shell.exec(&vec![
+                        "curl", &delete_url, "-X", "DELETE", "-H", &format!("Authorization: token {}", token)
+                    ], shell::no_env(), shell::no_cwd(), false)?;
                 },
                 // nothing to do, return browser_download_url
                 None => return self.get_value_from_json_object(&v, "browser_download_url")
             },
             None => log::debug!("no asset with name {}, proceed to upload", asset_name),
         };
-        let response = self.shell.eval_output_of(
-            &format!(r#"
-                curl {} \
-                -H "Authorization: token {}" \
-                -H "Content-Type: {}" \
-                --data-binary "@{}"
-            "#, upload_url, token, content_type, asset_file_path),
-            shell::default(), shell::no_env(), shell::no_cwd()
-        )?;  
+        let response = self.shell.exec(&vec![
+            "curl", &upload_url, "-H", &format!("Authorization: token {}", token),
+            "-H", &format!("Content-Type: {}", content_type),
+            "--data-binary", &format!("@{}", asset_file_path),
+        ], shell::no_env(), shell::no_cwd(), true)?;  
         self.get_value_from_json_object(&response, "browser_download_url")
     }
     fn rebase_with_remote_counterpart(&self, branch: &str) -> Result<(), Box<dyn Error>> {

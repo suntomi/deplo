@@ -335,10 +335,10 @@ impl<S: shell::Shell> ci::CI for GhAction<S> {
         };
         let user_and_repo = config.vcs_service()?.user_and_repo()?;
         let public_key_info = match serde_json::from_str::<RepositoryPublicKeyResponse>(
-            &self.shell.eval_output_of(&format!(r#"
-                curl https://api.github.com/repos/{}/{}/actions/secrets/public-key \
-                -H "Authorization: token {}"
-            "#, user_and_repo.0, user_and_repo.1, token), shell::default(), shell::no_env(), shell::no_cwd()
+            &self.shell.exec(&vec![
+                "curl", &format!("https://api.github.com/repos/{}/{}/actions/secrets/public-key", user_and_repo.0, user_and_repo.1),
+                "-H", &format!("Authorization: token {}", token)
+            ], shell::no_env(), shell::no_cwd(), true
         )?) {
             Ok(v) => v,
             Err(e) => return escalate!(Box::new(e))

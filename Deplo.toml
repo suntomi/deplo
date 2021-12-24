@@ -68,10 +68,19 @@ echo ${SUNTOMI_VCS_ACCOUNT_KEY} | docker login ghcr.io -u ${SUNTOMI_VCS_ACCOUNT}
 docker push ghcr.io/suntomi/deplo:builder
 """
 
+[ci.workflow.deploy.vmfb]
+patterns = ["tools/docker/Dockerfile.vmfb"]
+runner = { type = "Machine", os = "Linux", local_fallback = { image = "docker:20.10", shell = "sh" } }
+command = """
+docker build -t ghcr.io/suntomi/deplo:vmfb -f tools/docker/Dockerfile.vmfb tools/docker
+echo ${SUNTOMI_VCS_ACCOUNT_KEY} | docker login ghcr.io -u ${SUNTOMI_VCS_ACCOUNT} --password-stdin
+docker push ghcr.io/suntomi/deplo:vmfb
+"""
+
 [ci.workflow.deploy.product]
 depends = ["builder"]
 patterns = [".*/src/.*", "Cargo.*"]
-runner = { type = "Machine", os = "Linux", local_fallback = { image = "docker:20.10", shell = "sh" } }
+runner = { type = "Machine", os = "Linux", local_fallback = { image = "ghcr.io/suntomi/deplo:vmfb", shell = "sh"  } }
 command = """
 set -e
 mkdir -p tools/docker/bin
@@ -80,8 +89,8 @@ sh tools/scripts/build_linux.sh
 docker build -t ghcr.io/suntomi/deplo:${DEPLO_RELEASE_VERSION} -f tools/docker/Dockerfile tools/docker
 echo ${SUNTOMI_VCS_ACCOUNT_KEY} | docker login ghcr.io -u ${SUNTOMI_VCS_ACCOUNT} --password-stdin
 docker push ghcr.io/suntomi/deplo:${DEPLO_RELEASE_VERSION}
-deplo -v=3 vcs release ${DEPLO_RELEASE_TAG} -o name=${DEPLO_RELEASE_NAME}
-deplo -v=3 vcs release-assets ${DEPLO_RELEASE_TAG} tools/docker/bin/cli --replace -o name=deplo-Linux
+deplo vcs release ${DEPLO_RELEASE_TAG} -o name=${DEPLO_RELEASE_NAME}
+deplo vcs release-assets ${DEPLO_RELEASE_TAG} tools/docker/bin/cli --replace -o name=deplo-Linux
 """
 
 [ci.workflow.deploy.mac]

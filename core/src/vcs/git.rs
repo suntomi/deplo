@@ -264,10 +264,10 @@ impl<S: shell::Shell> GitHubFeatures for Git<S> {
         &self, pr_url: &str, _: &str, token: &str, json_path: &str
     ) -> Result<String, Box<dyn Error>> {
         let api_url = format!("https://api.github.com/repos/${pr_part}", pr_part = &pr_url[19..]);
-        let output = self.shell.eval(
-            &format!("curl -s -H \"Authorization: token ${token}\" ${api_url}", token = token, api_url = api_url), 
-            shell::default(), shell::no_env(), shell::no_cwd(), false
-        )?;
+        let output = self.shell.exec(&vec![
+            "curl", "-s", "-H", &format!("Authorization: token {}", token), 
+            "-H", "Accept: application/vnd.github.v3+json", &api_url
+        ], shell::no_env(), shell::no_cwd(), true)?;
         Ok(jsonpath(&output, &format!("${}", json_path))?.unwrap_or("".to_string()))
     }
 }
