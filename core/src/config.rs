@@ -415,7 +415,7 @@ impl Config {
                     Err(_) => {
                         let immc = c.ptr.borrow();
                         let vcs = immc.vcs_service()?;
-                        vcs.release_target()    
+                        vcs.release_target()
                     }
                 }
             };
