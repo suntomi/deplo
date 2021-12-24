@@ -148,11 +148,22 @@ impl<S: shell::Shell> GhAction<S> {
             )
         ).split("\n").map(|s| s.to_string()).collect::<Vec<String>>()
     }
+    fn generate_checkout_opts(&self, option_lines: &Vec<String>) -> Vec<String> {
+        if option_lines.len() == 0 {
+            return vec![];
+        }
+        format!(include_str!("../../res/ci/ghaction/with.yml.tmpl"),
+            options = MultilineFormatString{
+                strings: option_lines,
+                postfix: None
+            }
+        ).split("\n").map(|s| s.to_string()).collect()
+    }
     fn generate_checkout_steps<'a>(&self, _: &'a str, options: &'a Option<HashMap<String, String>>) -> Vec<String> {
         let checkout_opts = options.as_ref().map_or_else(
             || vec![], 
             |v| v.iter().map(|(k,v)| {
-                return if k == "lfs" {
+                return if vec!["fetch-depth", "lfs"].contains(&k.as_str()) {
                     format!("{}: {}", k, v)
                 } else {
                     format!("# warning: deplo only support lfs options for github action checkout but {}({}) is specified", k, v)
@@ -167,7 +178,7 @@ impl<S: shell::Shell> GhAction<S> {
         format!(
             include_str!("../../res/ci/ghaction/checkout.yml.tmpl"), 
             checkout_opts = MultilineFormatString{
-                strings: &checkout_opts,
+                strings: &self.generate_checkout_opts(&checkout_opts),
                 postfix: None
             }, opts_hash = opts_hash
         ).split("\n").map(|s| s.to_string()).collect()

@@ -9,10 +9,7 @@
 - name: Checkout
   if: steps.fetch-repository-cache.outputs.cache-hit != 'true'
   uses: actions/checkout@v2
-  with:
-    # deplo needs to refer previous commit of current HEAD to determine diff
-    fetch-depth: 2
-{checkout_opts:>4}
+{checkout_opts:>2}
 - name: Restore repository from cache
   if: steps.fetch-repository-cache.outputs.cache-hit == 'true'
   run: git reset --hard HEAD
