@@ -35,48 +35,32 @@ impl<GIT: (git::GitFeatures) + (git::GitHubFeatures), S: shell::Shell> Github<GI
         }
     }
     fn make_diff(&self) -> Result<String, Box<dyn Error>> {
-        let config = self.config.borrow();
-        let (account_name, _) = config.ci_config_by_env();
-        let ci_service = config.ci_service(account_name)?;
-        let (ref_name, is_branch) = self.git.current_branch()?;
-        let mut old_base: Option<String> = None;
-        if is_branch && config.ci.rebase_before_diff.unwrap_or(false) {
-            // get current base commit hash (that is, HEAD^1). 
-            // because below we do rebase, which may change HEAD.
-            // but we want to know the diff between "current" HEAD^1 and "rebased" HEAD with ... 
-            // to invoke all possible deployment that need to run
-            let commit = self.git.commit_hash(None)?;
-            old_base = Some(self.git.commit_hash(Some(&format!("{}^", commit)))?);
-            self.git.rebase_with_remote_counterpart(&self.push_url()?, &ref_name)?;
-        }
-
-        let diff = if !is_branch {
-            let tags = self.git.tags()?;
-            let index = tags.iter().position(|tag| tag.as_str() == ref_name.as_str()).ok_or(Box::new(vcs::VCSError {
-                cause: format!("tag {} does not found for list {:?}", ref_name, tags)
-            }))?;
-            if index == 0 {
-                "*".to_string()
-            } else {
-                self.git.diff_paths(&format!("{}..{}", &tags[index - 1], &tags[index]))?
-            }
-        } else {
-            match ci_service.pull_request_url()? {
-                Some(url) => {
-                    if let config::VCSConfig::Github{ email:_, account, key } = &config.vcs {
-                        let base = self.git.pr_data(&url, account, key, ".base.ref")?;
-                        if base.is_empty() {
-                            panic!("fail to get base branch from ${url}", url = url);
-                        }
-                        self.git.diff_paths(&format!("origin/{}...HEAD", base))?
-                    } else {
-                        panic!("vcs account is not for github ${:?}", &config.vcs);
-                    }
-                },
-                None => match old_base {
-                    Some(v) => self.git.diff_paths(&format!("{}..HEAD", v))?,
-                    None => self.git.diff_paths("HEAD^")?
+        let diff = match self.git.current_ref()? {
+            (vcs::RefType::Branch, _) => {
+                self.git.diff_paths("HEAD^")?
+            },
+            (vcs::RefType::Pull, _) => {
+                self.git.diff_paths("HEAD^")?
+            },
+            (vcs::RefType::Tag, ref_name) => {
+                let tags = self.git.tags()?;
+                let index = tags.iter().position(|tag| tag.as_str() == ref_name.as_str()).ok_or(
+                    make_escalation!(Box::new(vcs::VCSError {
+                        cause: format!("tag {} does not found for list {:?}", ref_name, tags)
+                    }))
+                )?;
+                if index == 0 {
+                    // this is first tag, so treat as it changes everyhing
+                    "*".to_string()
+                } else {
+                    // diffing with previous tag
+                    self.git.diff_paths(&format!("{}..{}", &tags[index - 1], &tags[index]))?
                 }
+            },
+            (vcs::RefType::Commit, ref_name) => {
+                return escalate!(Box::new(vcs::VCSError {
+                    cause: format!("current head does not branch or tag {}", ref_name)
+                }))
             }
         };
         Ok(diff)
@@ -146,8 +130,14 @@ impl<GIT: (git::GitFeatures) + (git::GitHubFeatures), S: shell::Shell> vcs::VCS 
     }
     fn release_target(&self) -> Option<String> {        
         let config = self.config.borrow();
-        let (b, _) = self.git.current_branch().unwrap();
+        let (b, is_branch) = self.git.current_branch().unwrap();
         for (k,v) in &config.common.release_targets {
+            if is_branch && !v.is_branch() {
+                continue;
+            }
+            if !is_branch && !v.is_tag() {
+                continue;
+            }
             let re = Pattern::new(v.path()).unwrap();
             match re.matches(&b) {
                 true => return Some(k.to_string()),
@@ -245,6 +235,9 @@ impl<GIT: (git::GitFeatures) + (git::GitHubFeatures), S: shell::Shell> vcs::VCS 
     }
     fn rebase_with_remote_counterpart(&self, branch: &str) -> Result<(), Box<dyn Error>> {
         self.git.rebase_with_remote_counterpart(&self.push_url()?, branch)
+    }
+    fn current_ref(&self) -> Result<(vcs::RefType, String), Box<dyn Error>> {
+        self.git.current_ref()
     }
     fn current_branch(&self) -> Result<(String, bool), Box<dyn Error>> {
         self.git.current_branch()

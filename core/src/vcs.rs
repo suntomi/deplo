@@ -8,9 +8,18 @@ use serde_json::{Value as JsonValue};
 use super::config;
 use crate::module;
 
+#[derive(Eq, PartialEq)]
+pub enum RefType {
+    Branch,
+    Tag,
+    Pull,
+    Commit,
+}
+
 pub trait VCS : module::Module {
     fn new(config: &config::Container) -> Result<Self, Box<dyn Error>> where Self : Sized;
     fn release_target(&self) -> Option<String>;
+    fn current_ref(&self) -> Result<(RefType, String), Box<dyn Error>>;
     fn current_branch(&self) -> Result<(String, bool), Box<dyn Error>>;
     fn commit_hash(&self, expr: Option<&str>) -> Result<String, Box<dyn Error>>;
     fn repository_root(&self) -> Result<String, Box<dyn Error>>;

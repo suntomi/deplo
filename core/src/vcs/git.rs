@@ -61,6 +61,7 @@ pub struct Git<S: shell::Shell = shell::Default> {
 
 pub trait GitFeatures {
     fn new(username: &str, email: &str, config: &config::Container) -> Self;
+    fn current_ref(&self) -> Result<(vcs::RefType, String), Box<dyn Error>>;
     fn current_branch(&self) -> Result<(String, bool), Box<dyn Error>>;
     fn commit_hash(&self, expr: Option<&str>) -> Result<String, Box<dyn Error>>;
     fn remote_origin(&self) -> Result<String, Box<dyn Error>>;
@@ -132,20 +133,54 @@ impl<S: shell::Shell> GitFeatures for Git<S> {
             repo: StubRepository {},
         }
     }
+    fn current_ref(&self) -> Result<(vcs::RefType, String), Box<dyn Error>> {
+        match self.shell.output_of(&vec!(
+            "git", "describe" , "--all"
+        ), shell::no_env(), shell::no_cwd()) {
+            Ok(ref_path) => {
+                if ref_path.starts_with("remotes/") {
+                    // remote branch that does not have local counterpart
+                    if ref_path[0..8].starts_with("pull") {
+                        return Ok((vcs::RefType::Pull, ref_path[8..].to_string()));
+                    } else {
+                        return Ok((vcs::RefType::Branch, ref_path[8..].to_string()));
+                    }
+                } else if ref_path.starts_with("tags/") {
+                    // tags
+                    return Ok((vcs::RefType::Tag, ref_path[5..].to_string()));
+                } else if ref_path.starts_with("heads/") {
+                    // local branch
+                    return Ok((vcs::RefType::Branch, ref_path[6..].to_string()));
+                } else {
+                    return Ok((vcs::RefType::Commit, self.commit_hash(None)?))
+                }
+            },
+            Err(_) => {
+                return Ok((vcs::RefType::Commit, self.commit_hash(None)?))
+            }
+        }
+    }
     fn current_branch(&self) -> Result<(String, bool), Box<dyn Error>> {
-        let branch = self.shell.output_of(&vec!(
-            "git", "symbolic-ref" , "--short", "HEAD"
-        ), shell::no_env(), shell::no_cwd())?;
-        if !branch.is_empty() {
-            return Ok((branch, true));
+        let (ref_type, ref_path) = self.current_ref()?;
+        match ref_type {
+            vcs::RefType::Pull => {
+                // pull ref has actual head of branch exactly before merge commit
+                Ok((self.shell.output_of(&vec!(
+                    "git", "symbolic-ref" , "--short", "HEAD^"
+                ), shell::no_env(), shell::no_cwd())?, true))
+            },
+            vcs::RefType::Tag => {
+                Ok((ref_path, false))
+            },
+            vcs::RefType::Branch => {
+                Ok((ref_path, true))
+            },
+            vcs::RefType::Commit => {
+                escalate!(Box::new(vcs::VCSError {
+                    cause: format!("not on a branch or tag, got: {}", ref_path)
+                }))
+            }
         }
-        let tag = self.shell.output_of(&vec!(
-            "git", "describe" , "--tags", "--exact-match"
-        ), shell::no_env(), shell::no_cwd())?;
-        if !tag.is_empty() {
-            return Ok((tag, false));
-        }
-        return escalate!(Box::new(vcs::VCSError{cause: "no current branch or tag".to_string()}));
     }
     fn commit_hash(&self, expr: Option<&str>) -> Result<String, Box<dyn Error>> {
         Ok(self.shell.output_of(&vec!(
