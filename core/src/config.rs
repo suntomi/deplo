@@ -136,9 +136,12 @@ impl Job {
         };
         match config.runtime.release_target {
             Some(ref v) => {
+                log::info!("job_env: release target: {}", v);
                 common_envs.insert("DEPLO_CI_RELEASE_TARGET", v.to_string());
             },
-            None => {}
+            None => {
+                log::info!("job_env: no release target: {}", config.vcs_service().unwrap().current_branch().unwrap().0);
+            }
         };
         match paths {
             Some(ref paths) => {
