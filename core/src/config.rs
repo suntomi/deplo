@@ -101,7 +101,7 @@ pub enum Runner {
 #[derive(Serialize, Deserialize)]
 pub struct Job {
     pub account: Option<String>,
-    pub release_target: Option<String>,
+    pub for_targets: Option<Vec<String>>,
     pub patterns: Vec<String>,
     pub runner: Runner,
     pub shell: Option<String>,
@@ -168,6 +168,28 @@ impl Job {
                 h
             }
         };
+    }
+    pub fn matches_current_release_target(&self, target: &Option<String>) -> bool {
+        let t = match target {
+            Some(ref v) => v,
+            // if no target, always ok if for_targets is empty, otherwise not ok
+            None => return self.for_targets.is_none()
+        };
+        match &self.for_targets {
+            Some(ref v) => {
+                // here, both target and for_targets exists, compare matches
+                for target in v {
+                    if target == t {
+                        return true;
+                    }
+                }
+                return false;
+            },
+            None => {
+                // target exists, but for_targets is empty, always ok
+                return true;
+            }
+        }
     }
 }
 #[derive(Serialize, Deserialize)]
