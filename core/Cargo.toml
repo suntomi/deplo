@@ -25,6 +25,7 @@ serde_json = "1.0"
 simple_logger = "1.6.0"
 toml = "0.5.6"
 sodalite = { git = "https://github.com/suntomi/sodalite" }
+tempfile = "3.2.0"
 
 [features]
 default = []
