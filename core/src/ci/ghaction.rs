@@ -128,9 +128,9 @@ impl<S: shell::Shell> GhAction<S> {
             config::Runner::Machine{ref os, ..} => match os {
                 config::RunnerOS::Linux => return vec![format!("run: deplo ci {} {}", names.0, names.1)],
                 config::RunnerOS::Windows => (),
-                config::RunnerOS::MacOS => (),
+                config::RunnerOS::MacOS => return vec![format!("run: deplo ci {} {}", names.0, names.1)],
             },
-            config::Runner::Container{image:_} => return vec![format!("run: deplo ci {} {}", names.0, names.1)],
+            config::Runner::Container{image:_} => (),
         };
         format!(include_str!("../../res/ci/ghaction/rawexec.yml.tmpl"),
             scripts = MultilineFormatString{
