@@ -38,7 +38,6 @@ jobs:
           curl -L https://github.com/suntomi/deplo/releases/download/nightly/deplo-Linux -o /usr/local/bin/deplo
           chmod +x /usr/local/bin/deplo
       - name: Checkout
-        if: steps.fetch-repository-cache.outputs.cache-hit != 'true'
         uses: actions/checkout@v2
         with:
           fetch-depth: 2
@@ -61,7 +60,6 @@ jobs:
           curl -L https://github.com/suntomi/deplo/releases/download/nightly/deplo-Linux -o /usr/local/bin/deplo
           chmod +x /usr/local/bin/deplo
       - name: Checkout
-        if: steps.fetch-repository-cache.outputs.cache-hit != 'true'
         uses: actions/checkout@v2
         with:
           fetch-depth: 2
@@ -87,12 +85,11 @@ jobs:
           curl -L https://github.com/suntomi/deplo/releases/download/nightly/deplo-Linux -o /usr/local/bin/deplo
           chmod +x /usr/local/bin/deplo
       - name: Checkout
-        if: steps.fetch-repository-cache.outputs.cache-hit != 'true'
         uses: actions/checkout@v2
       
   
-      - id: deplo-deploy-base
       - name: deploy base
+        id: deplo-deploy-base
         run: deplo ci deploy base
       - name: Setup ssh session to debug
         if: ${{ failure() }}
@@ -113,12 +110,11 @@ jobs:
           curl -L https://github.com/suntomi/deplo/releases/download/nightly/deplo-Linux -o /usr/local/bin/deplo
           chmod +x /usr/local/bin/deplo
       - name: Checkout
-        if: steps.fetch-repository-cache.outputs.cache-hit != 'true'
         uses: actions/checkout@v2
       
   
-      - id: deplo-deploy-builder
       - name: deploy builder
+        id: deplo-deploy-builder
         run: deplo ci deploy builder
       - name: Setup ssh session to debug
         if: ${{ failure() }}
@@ -139,7 +135,6 @@ jobs:
           curl -L https://github.com/suntomi/deplo/releases/download/nightly/deplo-Darwin -o /usr/local/bin/deplo
           chmod +x /usr/local/bin/deplo
       - name: Checkout
-        if: steps.fetch-repository-cache.outputs.cache-hit != 'true'
         uses: actions/checkout@v2
       
       - name: Cache cargo
@@ -155,10 +150,10 @@ jobs:
       - name: Mark cache result
         if: steps.deplo-cache-cargo.outputs.cache-hit == 'true'
         run: echo "DEPLO_CACHE_CARGO_HIT=true" >> $GITHUB_ENV
-      - id: deplo-deploy-mac
       - name: deploy mac
+        id: deplo-deploy-mac
         run: |
-          source tools/scripts/setup_release_env.sh
+          . tools/scripts/setup_release_env.sh
           cargo build --release
           deplo vcs release-assets ${DEPLO_RELEASE_TAG} target/release/cli --replace -o name=deplo-Darwin
           
@@ -181,12 +176,11 @@ jobs:
           curl -L https://github.com/suntomi/deplo/releases/download/nightly/deplo-Linux -o /usr/local/bin/deplo
           chmod +x /usr/local/bin/deplo
       - name: Checkout
-        if: steps.fetch-repository-cache.outputs.cache-hit != 'true'
         uses: actions/checkout@v2
       
   
-      - id: deplo-deploy-product
       - name: deploy product
+        id: deplo-deploy-product
         run: deplo ci deploy product
       - name: Setup ssh session to debug
         if: ${{ failure() }}
@@ -207,12 +201,11 @@ jobs:
           curl -L https://github.com/suntomi/deplo/releases/download/nightly/deplo-Linux -o /usr/local/bin/deplo
           chmod +x /usr/local/bin/deplo
       - name: Checkout
-        if: steps.fetch-repository-cache.outputs.cache-hit != 'true'
         uses: actions/checkout@v2
       
   
-      - id: deplo-deploy-vmfb
       - name: deploy vmfb
+        id: deplo-deploy-vmfb
         run: deplo ci deploy vmfb
       - name: Setup ssh session to debug
         if: ${{ failure() }}
@@ -230,7 +223,6 @@ jobs:
     steps:
   
       - name: Checkout
-        if: steps.fetch-repository-cache.outputs.cache-hit != 'true'
         uses: actions/checkout@v2
       
       - name: Cache cargo
@@ -246,10 +238,10 @@ jobs:
       - name: Mark cache result
         if: steps.deplo-cache-cargo.outputs.cache-hit == 'true'
         run: echo "DEPLO_CACHE_CARGO_HIT=true" >> $GITHUB_ENV
-      - id: deplo-deploy-win
       - name: deploy win
+        id: deplo-deploy-win
         run: |
-          source tools/scripts/setup_release_env.sh
+          . tools/scripts/setup_release_env.sh
           cargo build --release
           deplo vcs release-assets ${DEPLO_RELEASE_TAG} target/release/cli --replace -o name=deplo-Windows
           
@@ -272,12 +264,11 @@ jobs:
           curl -L https://github.com/suntomi/deplo/releases/download/nightly/deplo-Linux -o /usr/local/bin/deplo
           chmod +x /usr/local/bin/deplo
       - name: Checkout
-        if: steps.fetch-repository-cache.outputs.cache-hit != 'true'
         uses: actions/checkout@v2
       
   
-      - id: deplo-integrate-base
       - name: integrate base
+        id: deplo-integrate-base
         run: deplo ci integrate base
       - name: Setup ssh session to debug
         if: ${{ failure() }}
@@ -298,12 +289,11 @@ jobs:
           curl -L https://github.com/suntomi/deplo/releases/download/nightly/deplo-Linux -o /usr/local/bin/deplo
           chmod +x /usr/local/bin/deplo
       - name: Checkout
-        if: steps.fetch-repository-cache.outputs.cache-hit != 'true'
         uses: actions/checkout@v2
       
   
-      - id: deplo-integrate-builder
       - name: integrate builder
+        id: deplo-integrate-builder
         run: deplo ci integrate builder
       - name: Setup ssh session to debug
         if: ${{ failure() }}
@@ -324,7 +314,6 @@ jobs:
           curl -L https://github.com/suntomi/deplo/releases/download/nightly/deplo-Linux -o /usr/local/bin/deplo
           chmod +x /usr/local/bin/deplo
       - name: Checkout
-        if: steps.fetch-repository-cache.outputs.cache-hit != 'true'
         uses: actions/checkout@v2
       
       - name: Cache cargo
@@ -340,8 +329,8 @@ jobs:
       - name: Mark cache result
         if: steps.deplo-cache-cargo.outputs.cache-hit == 'true'
         run: echo "DEPLO_CACHE_CARGO_HIT=true" >> $GITHUB_ENV
-      - id: deplo-integrate-src
       - name: integrate src
+        id: deplo-integrate-src
         run: deplo ci integrate src
       - name: Setup ssh session to debug
         if: ${{ failure() }}
