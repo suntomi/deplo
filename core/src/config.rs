@@ -101,6 +101,7 @@ pub enum Runner {
 #[derive(Serialize, Deserialize)]
 pub struct Job {
     pub account: Option<String>,
+    pub release_target: Option<String>,
     pub patterns: Vec<String>,
     pub runner: Runner,
     pub shell: Option<String>,
