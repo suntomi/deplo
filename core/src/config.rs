@@ -127,7 +127,7 @@ impl Job {
             Runner::Container{ image: _ } => false
         }
     }
-    pub fn job_env<'a>(&'a self, config: &'a Config) -> HashMap<&'a str, String> {
+    pub fn job_env<'a>(&'a self, config: &'a Config, paths: Option<Vec<&str>>) -> HashMap<&'a str, String> {
         let ci = config.ci_service_by_job(&self).unwrap();
         let env = ci.job_env();
         let mut common_envs = hashmap!{
@@ -137,6 +137,22 @@ impl Job {
         match config.runtime.release_target {
             Some(ref v) => {
                 common_envs.insert("DEPLO_CI_RELEASE_TARGET", v.to_string());
+            },
+            None => {}
+        };
+        match paths {
+            Some(ref paths) => {
+                // modify path
+                let mut paths = paths.clone();
+                let path = std::env::var("PATH");
+                match path {
+                    Ok(ref v) => {
+                        paths.push(v);
+                    },
+                    Err(_) => {}
+                };
+                common_envs.insert("PATH", paths.join(":"));
+                log::debug!("modified path: {}", paths.join(":"));
             },
             None => {}
         };
@@ -466,12 +482,13 @@ impl Config {
         };
         Ok(path)
     }
-    pub fn deplo_cli_download(&self, os: RunnerOS, shell: &impl shell::Shell) -> Result<String, Box<dyn Error>> {
+    pub fn deplo_cli_download(&self, os: RunnerOS, shell: &impl shell::Shell) -> Result<PathBuf, Box<dyn Error>> {
         let mut base = self.deplo_data_path()?;
         base.push("cli");
         base.push(DEPLO_VERSION);
+        base.push(os.uname());
         let mut file_path = base.clone();
-        file_path.push(&format!("deplo-{}", os.uname()));
+        file_path.push("deplo");
         match fs::metadata(&file_path) {
             Ok(mata) => {
                 if mata.is_dir() {
@@ -479,14 +496,14 @@ impl Config {
                         cause: format!("{} exists but not file", file_path.to_string_lossy().to_string())
                     }))
                 } else {
-                    return Ok(file_path.to_string_lossy().to_string());
+                    return Ok(file_path);
                 }
             },
             Err(_) => {}
         };
         fs::create_dir_all(&base)?;
         shell.download(&cli_download_url(os, DEPLO_VERSION), &file_path.to_str().unwrap(), true)?;
-        return Ok(file_path.to_string_lossy().to_string());
+        return Ok(file_path);
     }
     pub fn parse_dotenv<F>(&self, mut cb: F) -> Result<(), Box<dyn Error>>
     where F: FnMut (&str, &str) -> Result<(), Box<dyn Error>> {
@@ -582,7 +599,7 @@ impl Config {
     pub fn ci_workflow<'a>(&'a self) -> &'a WorkflowConfig {
         return &self.ci.workflow
     }
-    pub fn job_env(&self, job: &Job) -> Result<HashMap<String, String>, Box<dyn Error>> {
+    pub fn job_env(&self, job: &Job, paths: Option<Vec<&str>>) -> Result<HashMap<String, String>, Box<dyn Error>> {
         let mut inherits: HashMap<String, String> = if Self::is_running_on_ci() {
             shell::inherit_env()
         } else {
@@ -593,7 +610,7 @@ impl Config {
             })?;
             inherits_from_dotenv
         };
-        for (k, v) in job.job_env(self) {
+        for (k, v) in job.job_env(self, paths) {
             inherits.insert(k.to_string(), v.to_string());
         }
         return Ok(inherits);
@@ -704,16 +721,17 @@ impl Config {
             Runner::Machine{image:_, os, ref local_fallback, class:_} => {
                 let current_os = shell.detect_os()?;
                 if os == current_os {
-                    // run command directly here
-                    shell.eval(&job.command, &job.shell, self.job_env(&job)?, &job.workdir, false)?;
+                    let cli_parent_dir = &self.deplo_cli_download(os, shell)?.parent().unwrap().to_string_lossy().to_string();
+                    // run command directly here, add path to locally downloaded cli.
+                    shell.eval(&job.command, &job.shell, self.job_env(&job, Some(vec![cli_parent_dir.as_str()]))?, &job.workdir, false)?;
                 } else {
                     log::debug!("runner os is different from current os {} {}", os, current_os);
                     match local_fallback {
                         Some(f) => {
-                            let path = &self.deplo_cli_download(os, shell)?;
+                            let path = &self.deplo_cli_download(os, shell)?.to_string_lossy().to_string();
                             // running on host. run command in container `image` with docker
                             shell.eval_on_container(
-                                &f.image, &job.command, &f.shell, self.job_env(&job)?, &job.workdir, 
+                                &f.image, &job.command, &f.shell, self.job_env(&job, None)?, &job.workdir, 
                                 &hashmap!{
                                     path.as_str() => "/usr/local/bin/deplo"
                                 }, false
@@ -731,13 +749,13 @@ impl Config {
             Runner::Container{ ref image } => {
                 if Self::is_running_on_ci() {
                     // already run inside container `image`, run command directly here
-                    shell.eval(&job.command, &job.shell, self.job_env(&job)?, &job.workdir, false)?;
+                    shell.eval(&job.command, &job.shell, self.job_env(&job, None)?, &job.workdir, false)?;
                 } else {
                     let os = RunnerOS::Linux;
-                    let path = &self.deplo_cli_download(os, shell)?;
+                    let path = &self.deplo_cli_download(os, shell)?.to_string_lossy().to_string();
                     // running on host. run command in container `image` with docker
                     shell.eval_on_container(
-                        image, &job.command, &job.shell, self.job_env(&job)?, &job.workdir, &hashmap!{
+                        image, &job.command, &job.shell, self.job_env(&job, None)?, &job.workdir, &hashmap!{
                             path.as_str() => "/usr/local/bin/deplo"
                         }, false
                     )?;
