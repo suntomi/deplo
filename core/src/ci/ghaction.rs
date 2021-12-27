@@ -11,7 +11,13 @@ use crate::config;
 use crate::ci;
 use crate::shell;
 use crate::module;
-use crate::util::{escalate,seal,MultilineFormatString,rm,maphash,sorted_key_iter};
+use crate::util::{
+    escalate,seal,
+    MultilineFormatString,rm,
+    maphash,
+    sorted_key_iter,
+    merge_hashmap
+};
 
 #[derive(Serialize, Deserialize)]
 struct RepositoryPublicKeyResponse {
@@ -29,17 +35,57 @@ impl<S: shell::Shell> GhAction<S> {
     fn generate_entrypoint<'a>(&self, config: &'a config::Config) -> Vec<String> {
         // get target branch
         let target_branches = sorted_key_iter(&config.common.release_targets)
-            .map(|(_,v)| &**v)
-            .collect::<Vec<&str>>().join(",");
+            .filter(|v| v.1.is_branch())
+            .map(|(_,v)| v.path())
+            .collect::<Vec<&str>>();
+        let target_tags = sorted_key_iter(&config.common.release_targets)
+            .filter(|v| v.1.is_tag())
+            .map(|(_,v)| v.path())
+            .collect::<Vec<&str>>();
+        let branches = if target_branches.len() > 0 { vec![format!("branches: [\"{}\"]", target_branches.join("\",\""))] } else { vec![] };
+        let tags = if target_tags.len() > 0 { vec![format!("tags: [\"{}\"]", target_tags.join("\",\""))] } else { vec![] };
         format!(
             include_str!("../../res/ci/ghaction/entrypoint.yml.tmpl"), 
-            targets = target_branches
+            branches = MultilineFormatString{
+                strings: &branches,
+                postfix: None
+            },
+            tags = MultilineFormatString{
+                strings: &tags,
+                postfix: None
+            },
         ).split("\n").map(|s| s.to_string()).collect()
     }
     fn generate_outputs<'a>(&self, jobs: &HashMap<(&'a str, &'a str), &'a config::Job>) -> Vec<String> {
         sorted_key_iter(jobs).map(|(v,_)| {
             format!("{kind}-{name}: ${{{{ steps.deplo-ci-kick.outputs.{kind}-{name} }}}}", kind = v.0, name = v.1)
         }).collect()
+    }
+    fn generate_debugger(&self, job: Option<&config::Job>, config: &config::Config) -> Vec<String> {
+        let sudo = match job {
+            Some(ref j) => {
+                if !config.common.debug.as_ref().map_or_else(|| false, |v| v.get("ghaction_job_debugger").is_some()) &&
+                    !j.options.as_ref().map_or_else(|| false, |v| v.get("debugger").is_some()) {
+                    return vec![];
+                }
+                // if in container, sudo does not required to install debug instrument
+                match j.runner {
+                    config::Runner::Machine{..} => true,
+                    config::Runner::Container{..} => false,        
+                }
+            },
+            None => {
+                // deplo kick/finish
+                if !config.common.debug.as_ref().map_or_else(|| false, |v| v.get("ghaction_deplo_debugger").is_some()) {
+                    return vec![]
+                }
+                true
+            }
+        };
+        format!(
+            include_str!("../../res/ci/ghaction/debugger.yml.tmpl"), 
+            sudo = sudo
+        ).split("\n").map(|s| s.to_string()).collect()        
     }
     fn generate_caches(&self, job: &config::Job) -> Vec<String> {
         match job.caches {
@@ -93,41 +139,68 @@ impl<S: shell::Shell> GhAction<S> {
         }
     }
     fn generate_fetchcli_steps<'a>(&self, runner: &'a config::Runner) ->Vec<String> {
-        match runner {
+        let uname = match runner {
             config::Runner::Machine{ref os, ..} => match os {
-                config::RunnerOS::Linux => (),
                 config::RunnerOS::Windows => return vec![],
-                config::RunnerOS::MacOS => return vec![],
+                v => v.uname()
             },
-            config::Runner::Container{image:_} => (),
+            config::Runner::Container{image:_} => "Linux",
         };
-        format!("{}", include_str!("../../res/ci/ghaction/fetchcli.yml.tmpl"))
-            .split("\n").map(|s| s.to_string())
-            .collect::<Vec<String>>()
+        format!(include_str!("../../res/ci/ghaction/fetchcli.yml.tmpl"),
+            deplo_cli_path = "/usr/local/bin/deplo",
+            download_url = format!(
+                "{}/{}/deplo-{}",
+                config::DEPLO_RELEASE_URL_BASE, config::DEPLO_VERSION, uname
+            )
+        ).split("\n").map(|s| s.to_string()).collect::<Vec<String>>()
     }
-    fn generate_checkout_steps<'a>(&self, _: &'a str, options: &'a Option<HashMap<String, String>>) -> Vec<String> {
-        let checkout_opts = options.as_ref().map_or_else(
-            || vec![], 
-            |v| v.iter().map(|(k,v)| {
-                return if k == "lfs" {
-                    format!("{}: {}", k, v)
-                } else {
-                    format!("# warning: deplo only support lfs options for github action checkout but {}({}) is specified", k, v)
-                }
-            }).collect::<Vec<String>>()
+    fn generate_checkout_opts(&self, option_lines: &Vec<String>) -> Vec<String> {
+        if option_lines.len() == 0 {
+            return vec![];
+        }
+        format!(include_str!("../../res/ci/ghaction/with.yml.tmpl"),
+            options = MultilineFormatString{
+                strings: option_lines,
+                postfix: None
+            }
+        ).split("\n").map(|s| s.to_string()).collect()
+    }
+    fn generate_checkout_steps<'a>(
+        &self, _: &'a str, options: &'a Option<HashMap<String, String>>, defaults: &Option<HashMap<String, String>>
+    ) -> Vec<String> {
+        let merged_opts = options.as_ref().map_or_else(
+            || defaults.clone().unwrap_or(HashMap::new()),
+            |v| merge_hashmap(&defaults.clone().unwrap_or(HashMap::new()), v)
         );
+        let checkout_opts = merged_opts.iter().map(|(k,v)| {
+            return if vec!["fetch-depth", "lfs"].contains(&k.as_str()) {
+                format!("{}: {}", k, v)
+            } else {
+                format!("# warning: deplo only support lfs options for github action checkout but {}({}) is specified", k, v)
+            }
+        }).collect::<Vec<String>>();
         // hash value for separating repository cache according to checkout options
         let opts_hash = options.as_ref().map_or_else(
             || "".to_string(), 
             |v| { format!("-{}", maphash(v)) }
         );
-        format!(
-            include_str!("../../res/ci/ghaction/checkout.yml.tmpl"), 
-            checkout_opts = MultilineFormatString{
-                strings: &checkout_opts,
-                postfix: None
-            }, opts_hash = opts_hash
-        ).split("\n").map(|s| s.to_string()).collect()
+        if merged_opts.get("fetch-depth").map_or_else(|| false, |v| v.parse::<i32>().unwrap_or(-1) == 0) {
+            format!(
+                include_str!("../../res/ci/ghaction/cached_checkout.yml.tmpl"),
+                checkout_opts = MultilineFormatString{
+                    strings: &self.generate_checkout_opts(&checkout_opts),
+                    postfix: None
+                }, opts_hash = opts_hash
+            ).split("\n").map(|s| s.to_string()).collect()
+        } else {
+            format!(
+                include_str!("../../res/ci/ghaction/checkout.yml.tmpl"),
+                checkout_opts = MultilineFormatString{
+                    strings: &self.generate_checkout_opts(&checkout_opts),
+                    postfix: None
+                }
+            ).split("\n").map(|s| s.to_string()).collect()
+        }
     }
 }
 
@@ -188,11 +261,20 @@ impl<'a, S: shell::Shell> module::Module for GhAction<S> {
                     postfix: None
                 },
                 checkout = MultilineFormatString{
-                    strings: &self.generate_checkout_steps(&name, &job.checkout),
+                    strings: &self.generate_checkout_steps(&name, &job.checkout, &job.checkout.as_ref().map_or_else(
+                        || None,
+                        |v| if v.get("lfs").is_some() {
+                            Some(hashmap! { "fetch-depth".to_string() => "0".to_string() })
+                        } else {
+                            None
+                        }
+                    )),
                     postfix: None
                 },
-                //if in container, sudo does not required to install debug instrument
-                sudo = job.runs_on_machine()
+                debugger = MultilineFormatString{
+                    strings: &self.generate_debugger(Some(&job), &config),
+                    postfix: None
+                }
             ).split("\n").map(|s| s.to_string()).collect::<Vec<String>>();
             job_descs = job_descs.into_iter().chain(lines.into_iter()).collect();
         }
@@ -208,13 +290,24 @@ impl<'a, S: shell::Shell> module::Module for GhAction<S> {
                     strings: &self.generate_outputs(&jobs),
                     postfix: None
                 },
-                image = config.deplo_image(), tag = config::DEPLO_GIT_HASH,
+                fetchcli = MultilineFormatString{
+                    strings: &self.generate_fetchcli_steps(&config::Runner::Machine{
+                        os: config::RunnerOS::Linux, image: None, class: None, local_fallback: None }
+                    ),
+                    postfix: None
+                },
                 checkout = MultilineFormatString{
-                    strings: &self.generate_checkout_steps("main", &None),
+                    strings: &self.generate_checkout_steps("main", &None, &Some(hashmap!{
+                        "fetch-depth".to_string() => "2".to_string()
+                    })),
                     postfix: None
                 },
                 jobs = MultilineFormatString{
                     strings: &job_descs,
+                    postfix: None
+                },
+                debugger = MultilineFormatString{
+                    strings: &self.generate_debugger(None, &config),
                     postfix: None
                 },
                 needs = format!("\"{}\"", all_job_names.join("\",\""))
@@ -233,7 +326,7 @@ impl<S: shell::Shell> ci::CI for GhAction<S> {
         });
     }
     fn kick(&self) -> Result<(), Box<dyn Error>> {
-        println!("::set-output name=DEPLO_OUTPUT_CLI_GIT_HASH::{}", config::DEPLO_GIT_HASH);
+        println!("::set-output name=DEPLO_OUTPUT_CLI_VERSION::{}", config::DEPLO_VERSION);
         Ok(())
     }
     fn pull_request_url(&self) -> Result<Option<String>, Box<dyn Error>> {
@@ -283,7 +376,7 @@ impl<S: shell::Shell> ci::CI for GhAction<S> {
                     Ok(ref_name) => {
                         match ref_type.as_str() {
                             "branch" => envs.insert("DEPLO_CI_BRANCH_NAME", ref_name),
-                            "tag" => envs.insert("DEPLO_CI_TAG", ref_name),
+                            "tag" => envs.insert("DEPLO_CI_TAG_NAME", ref_name),
                             v => panic!("invalid ref_type {}", v),
                         };
                     },
@@ -295,7 +388,7 @@ impl<S: shell::Shell> ci::CI for GhAction<S> {
                 if is_branch {
                     envs.insert("DEPLO_CI_BRANCH_NAME", name);
                 } else {
-                    envs.insert("DEPLO_CI_TAG", name);
+                    envs.insert("DEPLO_CI_TAG_NAME", name);
                 };
             }
         };
@@ -313,10 +406,10 @@ impl<S: shell::Shell> ci::CI for GhAction<S> {
         };
         let user_and_repo = config.vcs_service()?.user_and_repo()?;
         let public_key_info = match serde_json::from_str::<RepositoryPublicKeyResponse>(
-            &self.shell.eval_output_of(&format!(r#"
-                curl https://api.github.com/repos/{}/{}/actions/secrets/public-key \
-                -H "Authorization: token {}"
-            "#, user_and_repo.0, user_and_repo.1, token), shell::default(), shell::no_env(), shell::no_cwd()
+            &self.shell.exec(&vec![
+                "curl", &format!("https://api.github.com/repos/{}/{}/actions/secrets/public-key", user_and_repo.0, user_and_repo.1),
+                "-H", &format!("Authorization: token {}", token)
+            ], shell::no_env(), shell::no_cwd(), true
         )?) {
             Ok(v) => v,
             Err(e) => return escalate!(Box::new(e))

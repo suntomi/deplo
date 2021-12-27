@@ -22,16 +22,20 @@ lazy_static! {
             .value_name("FILE")
             .about("Sets a custom config file")
             .takes_value(true))
+        .arg(Arg::new("release-target")
+            .about("force set release target")
+            .short('r')
+            .long("release-target")
+            .takes_value(true))
         .arg(Arg::new("debug")
             .short('d')
             .long("debug")
             .value_name("KEY(=VALUE),...")
             .about("Activate debug feature\n\
-                possible settings(concat with comma when specify multiple values): \n\
-                \tskip_set_secret=$flag\n\
-                \tforce_set_release_target_to=$(one of your release target)\n\
-            ")
-            .takes_value(true))
+                    TODO: add some debug flags")
+            .takes_value(true)
+            .multiple_values(true)
+            .multiple_occurrences(true))
         .arg(Arg::new("dotenv")
             .short('e')
             .long("dotenv")
@@ -116,6 +120,51 @@ lazy_static! {
                     .about("cleanup CI/CD process after all related job finished")
                 )
         )
+        .subcommand(
+            App::new("vcs")
+                .about("control VCS resources")
+                .subcommand(
+                    App::new("release")
+                    .about("create release")
+                    .arg(Arg::new("tag_name")
+                        .about("tag name to use for release")
+                        .index(1)
+                        .required(true))
+                    .arg(Arg::new("option")
+                        .about("option for release creation.\n\
+                                -o $key=$value\n\
+                                for github, body options of https://docs.github.com/en/rest/reference/releases#create-a-release can be specified.\n\
+                                TODO: for gitlab")
+                        .short('o')
+                        .takes_value(true)
+                        .multiple_values(true)
+                        .multiple_occurrences(true))
+                )
+                .subcommand(
+                    App::new("release-assets")
+                    .about("upload release assets")
+                    .arg(Arg::new("tag_name")
+                        .about("tag name to use for release")
+                        .index(1)
+                        .required(true))
+                    .arg(Arg::new("asset_file_path")
+                        .about("file path for upload file")
+                        .index(2)
+                        .required(true))
+                    .arg(Arg::new("replace")
+                        .about("replace existing asset or not")
+                        .long("replace"))
+                    .arg(Arg::new("option")
+                        .about("option for release creation.\n\
+                                -o name=$release_asset_name\n\
+                                -o content-type=$content_type_of_asset\n\
+                                TODO: implement more options")
+                        .short('o')
+                        .takes_value(true)
+                        .multiple_values(true)
+                        .multiple_occurrences(true))
+                )
+        )        
         .get_matches();
 }
 

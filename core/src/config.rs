@@ -1,6 +1,6 @@
 use std::fs;
 use std::fmt;
-use std::path;
+use std::path::{self, PathBuf};
 use std::error::Error;
 use std::rc::Rc;
 use std::cell::{RefCell};
@@ -18,10 +18,15 @@ use crate::args;
 use crate::vcs;
 use crate::ci;
 use crate::shell;
-use crate::util::{escalate,envsubst};
+use crate::util::{escalate,envsubst,make_absolute};
 
 pub const DEPLO_GIT_HASH: &'static str = env!("GIT_HASH");
-pub const DEPLO_VERSION: &'static str = "0.1.0";
+pub const DEPLO_VERSION: &'static str = env!("DEPLO_RELEASE_VERSION");
+pub const DEPLO_RELEASE_URL_BASE: &'static str = "https://github.com/suntomi/deplo/releases/download";
+
+pub fn cli_download_url(os: RunnerOS, version: &str) -> String {
+    return format!("{}/{}/deplo-{}", DEPLO_RELEASE_URL_BASE, version, os.uname());
+}
 
 #[derive(Debug)]
 pub struct ConfigError {
@@ -51,6 +56,13 @@ impl RunnerOS {
             "windows" => Ok(Self::Windows),
             "macos" => Ok(Self::MacOS),
             _ => Err("unknown OS"),
+        }
+    }
+    pub fn uname(&self) -> &'static str {
+        match self {
+            Self::Linux => "Linux",
+            Self::Windows => "Windows",
+            Self::MacOS => "Darwin",
         }
     }
 }
@@ -114,13 +126,18 @@ impl Job {
             Runner::Container{ image: _ } => false
         }
     }
-    pub fn job_env<'a>(&'a self, name: &str, config: &'a Config) -> HashMap<&'a str, String> {
+    pub fn job_env<'a>(&'a self, config: &'a Config) -> HashMap<&'a str, String> {
         let ci = config.ci_service_by_job(&self).unwrap();
         let env = ci.job_env();
-        let common_envs = hashmap!{
-            "DEPLO_CI_RUN_JOB_NAME" => name.to_string(),
+        let mut common_envs = hashmap!{
             "DEPLO_CLI_GIT_HASH" => DEPLO_GIT_HASH.to_string(),
             "DEPLO_CLI_VERSION" => DEPLO_VERSION.to_string(),
+        };
+        match config.runtime.release_target {
+            Some(ref v) => {
+                common_envs.insert("DEPLO_CI_RELEASE_TARGET", v.to_string());
+            },
+            None => {}
         };
         let mut h = env.clone();
         return match &self.env {
@@ -207,11 +224,37 @@ impl fmt::Display for VCSConfig {
     }    
 }
 #[derive(Serialize, Deserialize)]
+#[serde(tag = "type", content = "path")]
+pub enum ReleaseTarget {
+    Branch(String),
+    Tag(String),
+}
+impl ReleaseTarget {
+    pub fn path<'a>(&'a self) -> &'a str {
+        match self {
+            Self::Branch(v) => v.as_ref(),
+            Self::Tag(v) => v.as_ref(),
+        }
+    }
+    pub fn is_branch(&self) -> bool {
+        match self {
+            Self::Branch(_) => true,
+            _ => false,
+        }
+    }
+    pub fn is_tag(&self) -> bool {
+        match self {
+            Self::Tag(_) => true,
+            _ => false,
+        }
+    }
+}
+#[derive(Serialize, Deserialize)]
 pub struct CommonConfig {
     pub project_name: String,
-    pub deplo_image: Option<String>,
     pub data_dir: Option<String>,
-    pub release_targets: HashMap<String, String>,
+    pub debug: Option<HashMap<String, String>>,
+    pub release_targets: HashMap<String, ReleaseTarget>,
 }
 #[derive(Default)]
 pub struct RuntimeConfig {
@@ -241,6 +284,7 @@ pub struct Config {
     pub vcs_cache: Vec<Box<dyn vcs::VCS>>,
 }
 pub type Ref<'a>= std::cell::Ref<'a, Config>;
+pub type RefMut<'a> = std::cell::RefMut<'a, Config>;
 #[derive(Clone)]
 pub struct Container {
     ptr: Rc<RefCell<Config>>
@@ -248,6 +292,9 @@ pub struct Container {
 impl Container { 
     pub fn borrow(&self) -> Ref<'_> {
         self.ptr.borrow()
+    }
+    pub fn borrow_mut(&self) -> RefMut<'_> {
+        self.ptr.borrow_mut()
     }
 }
 
@@ -352,7 +399,7 @@ impl Config {
         }
         return Ok(c);
     }
-    pub fn setup<'a, A: args::Args>(c: &'a mut Container, _: &A) -> Result<&'a Container, Box<dyn Error>> {
+    pub fn setup<'a, A: args::Args>(c: &'a mut Container, args: &A) -> Result<&'a Container, Box<dyn Error>> {
         // setup module cache
         Self::setup_ci(&c)?;
         Self::setup_vcs(&c)?;
@@ -361,18 +408,19 @@ impl Config {
             // because vcs_service create object which have reference of `c` ,
             // scope of `vcs` should be narrower than this function,
             // to prevent `assignment of borrowed value` error below.
-            let release_target = {
-                let immc = c.ptr.borrow();
-                let vcs = immc.vcs_service()?;
-                vcs.release_target()
+            let release_target = match args.value_of("release-target") {
+                Some(v) => Some(v.to_string()),
+                None => match std::env::var("DEPLO_CI_RELEASE_TARGET") {
+                    Ok(v) => Some(v),
+                    Err(_) => {
+                        let immc = c.ptr.borrow();
+                        let vcs = immc.vcs_service()?;
+                        vcs.release_target()
+                    }
+                }
             };
             let mut mutc = c.ptr.borrow_mut();
-            mutc.runtime.release_target = match release_target {
-                Some(v) => Some(v),
-                None => mutc.get_debug_option("force_set_release_target_to").map_or(
-                    None, |v| Some(v.clone())
-                )
-            }
+            mutc.runtime.release_target = release_target;
         }
         return Ok(c);
     }
@@ -384,12 +432,6 @@ impl Config {
     }
     pub fn project_name(&self) -> &str {
         &self.common.project_name
-    }
-    pub fn deplo_image(&self) -> &str {
-        match &self.common.deplo_image {
-            Some(v) => v,
-            None => "ghcr.io/suntomi/deplo"
-        }
     }
     pub fn release_target(&self) -> Option<&str> {
         match &self.runtime.release_target {
@@ -405,6 +447,45 @@ impl Config {
         return format!("{}", 
             if wdref.is_none() { "".to_string() } else { format!("-w {}", wdref.unwrap()) }
         );
+    }
+    pub fn deplo_data_path(&self) -> Result<PathBuf, Box<dyn Error>> {
+        let base = self.common.data_dir.as_ref().map_or_else(|| ".deplo", |v| v.as_str());
+        let path = make_absolute(base, self.vcs_service()?.repository_root()?);
+        match fs::metadata(&path) {
+            Ok(mata) => {
+                if !mata.is_dir() {
+                    return escalate!(Box::new(ConfigError{ 
+                        cause: format!("{} exists but not directory", path.to_string_lossy().to_string())
+                    }))
+                }
+            },
+            Err(_) => {
+                fs::create_dir_all(&path)?;
+            }
+        };
+        Ok(path)
+    }
+    pub fn deplo_cli_download(&self, os: RunnerOS, shell: &impl shell::Shell) -> Result<String, Box<dyn Error>> {
+        let mut base = self.deplo_data_path()?;
+        base.push("cli");
+        base.push(DEPLO_VERSION);
+        let mut file_path = base.clone();
+        file_path.push(&format!("deplo-{}", os.uname()));
+        match fs::metadata(&file_path) {
+            Ok(mata) => {
+                if mata.is_dir() {
+                    return escalate!(Box::new(ConfigError{ 
+                        cause: format!("{} exists but not file", file_path.to_string_lossy().to_string())
+                    }))
+                } else {
+                    return Ok(file_path.to_string_lossy().to_string());
+                }
+            },
+            Err(_) => {}
+        };
+        fs::create_dir_all(&base)?;
+        shell.download(&cli_download_url(os, DEPLO_VERSION), &file_path.to_str().unwrap(), true)?;
+        return Ok(file_path.to_string_lossy().to_string());
     }
     pub fn parse_dotenv<F>(&self, mut cb: F) -> Result<(), Box<dyn Error>>
     where F: FnMut (&str, &str) -> Result<(), Box<dyn Error>> {
@@ -500,7 +581,7 @@ impl Config {
     pub fn ci_workflow<'a>(&'a self) -> &'a WorkflowConfig {
         return &self.ci.workflow
     }
-    pub fn job_env(&self, name: &str, job: &Job) -> Result<HashMap<String, String>, Box<dyn Error>> {
+    pub fn job_env(&self, job: &Job) -> Result<HashMap<String, String>, Box<dyn Error>> {
         let mut inherits: HashMap<String, String> = if Self::is_running_on_ci() {
             shell::inherit_env()
         } else {
@@ -511,7 +592,7 @@ impl Config {
             })?;
             inherits_from_dotenv
         };
-        for (k, v) in job.job_env(name, self) {
+        for (k, v) in job.job_env(self) {
             inherits.insert(k.to_string(), v.to_string());
         }
         return Ok(inherits);
@@ -566,6 +647,15 @@ impl Config {
             }))
         }
     }
+    pub fn vcs_service_mut<'a>(&'a mut self) -> Result<&'a mut Box<dyn vcs::VCS>, Box<dyn Error>> {
+        return if self.vcs_cache.len() > 0 {
+            Ok(&mut self.vcs_cache[0])
+        } else {
+            escalate!(Box::new(ConfigError{ 
+                cause: format!("no vcs service") 
+            }))
+        }
+    }
     pub fn has_debug_option(&self, name: &str) -> bool {
         self.runtime.debug.get(name) != None
     }
@@ -610,19 +700,22 @@ impl Config {
     }
     pub fn run_job(&self, shell: &impl shell::Shell, name: &str, job: &Job) -> Result<(), Box<dyn Error>> {
         match job.runner {
-            Runner::Machine{image:_, ref os, ref local_fallback, class:_} => {
+            Runner::Machine{image:_, os, ref local_fallback, class:_} => {
                 let current_os = shell.detect_os()?;
-                if *os == current_os {
+                if os == current_os {
                     // run command directly here
-                    shell.eval(&job.command, job.shell.as_ref(), self.job_env(name, &job)?, job.workdir.as_ref(), false)?;
+                    shell.eval(&job.command, &job.shell, self.job_env(&job)?, &job.workdir, false)?;
                 } else {
                     log::debug!("runner os is different from current os {} {}", os, current_os);
                     match local_fallback {
                         Some(f) => {
+                            let path = &self.deplo_cli_download(os, shell)?;
                             // running on host. run command in container `image` with docker
                             shell.eval_on_container(
-                                &f.image, &job.command, f.shell.as_ref(), 
-                                self.job_env(name, &job)?, job.workdir.as_ref(), false
+                                &f.image, &job.command, &f.shell, self.job_env(&job)?, &job.workdir, 
+                                &hashmap!{
+                                    path.as_str() => "/usr/local/bin/deplo"
+                                }, false
                             )?;
                             return Ok(());
                         },
@@ -637,11 +730,15 @@ impl Config {
             Runner::Container{ ref image } => {
                 if Self::is_running_on_ci() {
                     // already run inside container `image`, run command directly here
-                    shell.eval(&job.command, job.shell.as_ref(), self.job_env(name, &job)?, job.workdir.as_ref(), false)?;
+                    shell.eval(&job.command, &job.shell, self.job_env(&job)?, &job.workdir, false)?;
                 } else {
+                    let os = RunnerOS::Linux;
+                    let path = &self.deplo_cli_download(os, shell)?;
                     // running on host. run command in container `image` with docker
                     shell.eval_on_container(
-                        image, &job.command, job.shell.as_ref(), self.job_env(name, &job)?, job.workdir.as_ref(), false
+                        image, &job.command, &job.shell, self.job_env(&job)?, &job.workdir, &hashmap!{
+                            path.as_str() => "/usr/local/bin/deplo"
+                        }, false
                     )?;
                 }
             }

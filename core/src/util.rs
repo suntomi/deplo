@@ -59,6 +59,17 @@ impl Error for EscalateError {
 }
 
 #[macro_export]
+macro_rules! macro_make_escalation {
+    ( $err:expr ) => {
+        Box::new(crate::util::EscalateError {
+            at: (crate::util::func!(), file!(), line!()),
+            source: $err
+        })
+    }
+}
+pub use macro_make_escalation as make_escalation;
+
+#[macro_export]
 macro_rules! macro_escalate {
     ( $err:expr ) => {
         Err(Box::new(crate::util::EscalateError {
@@ -272,16 +283,16 @@ where F: Fn () -> Result<String, Box<dyn Error>> {
         }
     }
 }
-pub fn make_absolute(rel_or_abs: impl AsRef<OsStr>, root_directory: impl AsRef<OsStr>) -> String {
+pub fn make_absolute(rel_or_abs: impl AsRef<OsStr>, root_directory: impl AsRef<OsStr>) -> PathBuf {
     {
         let path = Path::new(&rel_or_abs);
         if path.is_absolute() {
-            return rel_or_abs.as_ref().to_string_lossy().to_string();
+            return rel_or_abs.as_ref().to_owned().into();
         }
     }
     let mut pathbuf = PathBuf::from(root_directory.as_ref());
     pathbuf.push(rel_or_abs.as_ref());
-    return pathbuf.to_string_lossy().to_string();
+    return pathbuf;
 }
 
 use crc::{Crc, CRC_64_ECMA_182};
@@ -303,23 +314,60 @@ pub fn sorted_key_iter<K: std::cmp::Ord,V>(h: &HashMap<K, V>) -> impl Iterator<I
     v.into_iter()
 }
 
+pub fn merge_hashmap<K: std::cmp::Eq + std::hash::Hash + Clone, V: Clone>(h1: &HashMap<K, V>, h2: &HashMap<K, V>) -> HashMap<K, V> {
+    let mut ret = HashMap::new();
+    for (k, v) in h1.into_iter() {
+        ret.entry(k.clone()).or_insert(v.clone());
+    }
+    for (k, v) in h2.into_iter() {
+        ret.entry(k.clone()).or_insert(v.clone());
+    }
+    return ret;
+}
+
 // json
-#[macro_export]
-macro_rules! macro_jsonpath {
-    ( $src:expr, $path:expr ) => {
-        jsonpath_lib::select_as_str($src, $path)
+// same as serde_json::from_str, but support the case that s represents single number/boolean/null.
+// serde_json::from_str does not seem to support them.
+pub fn str_to_json(s: &str) -> serde_json::Value {
+    match serde_json::from_str(s) {
+        Ok(v) => v,
+        Err(_) => {
+            match serde_json::from_str::<serde_json::Value>(&format!("{{\"v\":\"{}\"}}", s)) {
+                // if s is null/true/false/number, from_str should be success.
+                Ok(v) => v.as_object().unwrap().get("v").unwrap().clone(),
+                Err(_) => {
+                    // otherwise it should be string
+                    serde_json::Value::String(s.to_string())
+                }
+            }
+        }
+    }    
+}
+// #[macro_export]
+// macro_rules! macro_jsonpath {
+//     ( $src:expr, $path:expr ) => {
+//         jsonpath_lib::select_as_str($src, $path)
+//     }
+// }
+// pub use macro_jsonpath as jsonpath;
+
+pub fn jsonpath(src: &str, expr: &str) -> Result<Option<String>, Box<dyn Error>> {
+    let filtered = jsonpath_lib::select_as_str(src, expr)?;
+    let json = str_to_json(&filtered);
+    if json.is_array() && json.as_array().unwrap().len() > 0 {
+        Ok(Some(filtered))
+    } else {
+        Ok(None)
     }
 }
-pub use macro_jsonpath as jsonpath;
 
- 
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
     #[test]
-    fn seal() {
+    fn seal_test() {
         let pk: [u8; 32] = [
             251, 131, 196, 215, 71, 235, 222, 20, 23, 114, 62, 99, 207, 12, 107, 139,
             240, 115, 104, 188, 0, 166, 113, 163, 146, 192, 226, 36, 237, 60, 205, 33
@@ -358,5 +406,83 @@ mod tests {
         let expect = "dJFfN541HHc/GKjnVmaqNUylHXt89WT7GaSQ3A057iW40mR0MOenhwM21mgQ3aL/kzlCvXvKLDBFzoiXAA==";
         println!("result:{},expect:{}", result, expect);
         assert!(result == expect);
+    }
+
+    #[test]
+    fn str_to_json_test() {
+        let s = r#"{"a":1,"b":2}"#;
+        let v = str_to_json(s);
+        // println!("{}", v);
+        assert!(v.as_object().unwrap().get("a").unwrap().as_i64().unwrap() == 1);
+        assert!(v.as_object().unwrap().get("b").unwrap().as_i64().unwrap() == 2);
+        let s = r#"1"#;
+        let v = str_to_json(s);
+        assert!(v.as_i64().unwrap() == 1);
+        let s = r#"true"#;
+        let v = str_to_json(s);
+        assert!(v.as_bool().unwrap() == true);
+        let s = r#"null"#;
+        let v = str_to_json(s);
+        assert!(v.is_null());
+    }
+
+    #[test]
+    fn json_path_test() {
+        let json_obj = serde_json::json!({
+            "store": {
+                "book": [
+                    {
+                        "category": "reference",
+                        "author": "Nigel Rees",
+                        "title": "Sayings of the Century",
+                        "price": 8.95
+                    },
+                    {
+                        "category": "fiction",
+                        "author": "Evelyn Waugh",
+                        "title": "Sword of Honour",
+                        "price": 12.99
+                    },
+                    {
+                        "category": "fiction",
+                        "author": "Herman Melville",
+                        "title": "Moby Dick",
+                        "isbn": "0-553-21311-3",
+                        "price": 8.99
+                    },
+                    {
+                        "category": "fiction",
+                        "author": "J. R. R. Tolkien",
+                        "title": "The Lord of the Rings",
+                        "isbn": "0-395-19395-8",
+                        "price": 22.99
+                    }
+                ],
+                "bicycle": {
+                    "color": "red",
+                    "price": 19.95
+                }
+            },
+            "expensive": 10
+        });
+        let s = serde_json::to_string(&json_obj).unwrap();
+        assert_eq!(str_to_json(&jsonpath(&s, "$.store.book[*].author").unwrap().unwrap()),
+            serde_json::json!([
+                "Nigel Rees", "Evelyn Waugh", "Herman Melville", "J. R. R. Tolkien"
+            ])
+        );
+        assert_eq!(jsonpath(&s, "$.store.book[*].neither").unwrap(),
+            None
+        );
+        assert_eq!(str_to_json(&jsonpath(&s, "$.store.book[?(@.price < 10)]").unwrap().unwrap()),
+            serde_json::json!([
+                &serde_json::json!({"category" : "reference","author" : "Nigel Rees","title" : "Sayings of the Century","price" : 8.95}),
+                &serde_json::json!({"category" : "fiction","author" : "Herman Melville","title" : "Moby Dick","isbn" : "0-553-21311-3","price" : 8.99})
+            ])
+        );
+        assert_eq!(jsonpath(&s, "$.store.book[?(@.price > 100)]").unwrap(),
+            None
+        );
+        
     }
 }

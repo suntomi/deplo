@@ -16,6 +16,12 @@ pub struct CI<S: shell::Shell = shell::Default> {
 impl<S: shell::Shell> CI<S> {    
     fn kick<A: args::Args>(&self, _: &A) -> Result<(), Box<dyn Error>> {
         log::debug!("kick command invoked");
+        {
+            // init diff data on the fly
+            let mut config_mut = self.config.borrow_mut();
+            let vcs_mut = config_mut.vcs_service_mut()?;
+            vcs_mut.init_diff()?;
+        }
         let config = self.config.borrow();
         let (account_name, _) = config.ci_config_by_env();
         let ci = config.ci_service(account_name)?;
@@ -23,7 +29,7 @@ impl<S: shell::Shell> CI<S> {
         let vcs = config.vcs_service()?;
         let jobs_and_kind = match ci.pull_request_url()? {
             Some(_) => (&config.ci_workflow().integrate, "integrate"),
-            None => match vcs.release_target() {
+            None => match config.runtime.release_target {
                 Some(_) => (&config.ci_workflow().deploy, "deploy"),
                 None => if config.ci.invoke_for_all_branches.unwrap_or(false) {
                     (&config.ci_workflow().integrate, "integrate")

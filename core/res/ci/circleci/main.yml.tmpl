@@ -2,9 +2,9 @@ version: 2.1
 
 executors:
   deplo:
+    machine:
+      image: ubuntu-2004:202111-01
     working_directory: /workdir
-    docker:
-      - image: {image}:{tag}
 
 commands:
   fetch_repo:
@@ -53,6 +53,11 @@ jobs:
     executor: deplo
     steps:
       - setup_repo
+      - run:
+          name: Fetch deplo cli
+          command: |
+            curl -L https://github.com/suntomi/deplo/releases/download/nightly/deplo-Linux -o /usr/local/bin/deplo
+            chmod +x /usr/local/bin/deplo
       - run:
           name: 'Start Deplo'
           command: deplo ci kick

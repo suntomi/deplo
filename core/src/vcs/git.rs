@@ -1,12 +1,37 @@
 use std::error::Error;
 use std::collections::HashMap;
 
+#[cfg(feature="git2")]
+use git2::{Repository,RepositoryOpenFlags};
+// I love rust in many way, but I want #if~#else~#endif feature to avoid such useless code.
+// TODO: more concise separation for feature flag git2's on/off.
+// impl GitFeature itself should be separated like CrateRepositoryInspector and ShellRepositoryInspector
+// and use pub type RepositoryInspector = CrateRepositoryInspector|ShellRepositoryInspector according to the flag on/off.
+#[cfg(not(feature="git2"))]
+pub struct StubRepository {}
+#[cfg(not(feature="git2"))]
+impl StubRepository {
+    fn find_remote(&self, _: &str) -> Result<StubRemote, Box<dyn Error>> {
+        Ok(StubRemote{})
+    }
+}
+#[cfg(not(feature="git2"))]
+pub struct StubRemote {}
+#[cfg(not(feature="git2"))]
+impl StubRemote {
+    fn url(&self) -> Option<&str> {
+        Some("")
+    }
+}
+
 use maplit::hashmap;
 
 use crate::config;
 use crate::shell;
 use crate::util::{defer, escalate, jsonpath};
 use crate::vcs;
+
+
 
 // because defer uses Drop trait behaviour, this cannot be de-duped as function
 macro_rules! setup_remote {
@@ -28,10 +53,15 @@ pub struct Git<S: shell::Shell = shell::Default> {
     username: String,
     email: String,
     shell: S,
+    #[cfg(feature="git2")]
+    repo: Repository,
+    #[cfg(not(feature="git2"))]
+    repo: StubRepository,
 }
 
 pub trait GitFeatures {
     fn new(username: &str, email: &str, config: &config::Container) -> Self;
+    fn current_ref(&self) -> Result<(vcs::RefType, String), Box<dyn Error>>;
     fn current_branch(&self) -> Result<(String, bool), Box<dyn Error>>;
     fn commit_hash(&self, expr: Option<&str>) -> Result<String, Box<dyn Error>>;
     fn remote_origin(&self) -> Result<String, Box<dyn Error>>;
@@ -83,27 +113,74 @@ impl<S: shell::Shell> Git<S> {
 
 impl<S: shell::Shell> GitFeatures for Git<S> {
     fn new(username: &str, email: &str, config: &config::Container) -> Git<S> {
+        #[cfg(feature="git2")]
+        let cwd = std::env::current_dir().unwrap();
         return Git::<S> {
             config: config.clone(),
             username: username.to_string(),
             email: email.to_string(),
-            shell: S::new(config)
+            shell: S::new(config),
+            #[cfg(feature="git2")]
+            repo: Repository::open_ext(
+                match config.borrow().runtime.workdir {
+                    Some(ref v) => std::path::Path::new(v),
+                    None => cwd.as_path()
+                },
+                RepositoryOpenFlags::empty(), 
+                &[std::env::var("HOME").unwrap()]
+            ).unwrap(),
+            #[cfg(not(feature="git2"))]
+            repo: StubRepository {},
+        }
+    }
+    fn current_ref(&self) -> Result<(vcs::RefType, String), Box<dyn Error>> {
+        match self.shell.output_of(&vec!(
+            "git", "describe" , "--all"
+        ), shell::no_env(), shell::no_cwd()) {
+            Ok(ref_path) => {
+                if ref_path.starts_with("remotes/") {
+                    // remote branch that does not have local counterpart
+                    if ref_path[0..8].starts_with("pull") {
+                        return Ok((vcs::RefType::Pull, ref_path[8..].to_string()));
+                    } else {
+                        return Ok((vcs::RefType::Branch, ref_path[8..].to_string()));
+                    }
+                } else if ref_path.starts_with("tags/") {
+                    // tags
+                    return Ok((vcs::RefType::Tag, ref_path[5..].to_string()));
+                } else if ref_path.starts_with("heads/") {
+                    // local branch
+                    return Ok((vcs::RefType::Branch, ref_path[6..].to_string()));
+                } else {
+                    return Ok((vcs::RefType::Commit, self.commit_hash(None)?))
+                }
+            },
+            Err(_) => {
+                return Ok((vcs::RefType::Commit, self.commit_hash(None)?))
+            }
         }
     }
     fn current_branch(&self) -> Result<(String, bool), Box<dyn Error>> {
-        let branch = self.shell.output_of(&vec!(
-            "git", "symbolic-ref" , "--short", "HEAD"
-        ), shell::no_env(), shell::no_cwd())?;
-        if !branch.is_empty() {
-            return Ok((branch, true));
+        let (ref_type, ref_path) = self.current_ref()?;
+        match ref_type {
+            vcs::RefType::Pull => {
+                // pull ref has actual head of branch exactly before merge commit
+                Ok((self.shell.output_of(&vec!(
+                    "git", "symbolic-ref" , "--short", "HEAD^"
+                ), shell::no_env(), shell::no_cwd())?, true))
+            },
+            vcs::RefType::Tag => {
+                Ok((ref_path, false))
+            },
+            vcs::RefType::Branch => {
+                Ok((ref_path, true))
+            },
+            vcs::RefType::Commit => {
+                escalate!(Box::new(vcs::VCSError {
+                    cause: format!("not on a branch or tag, got: {}", ref_path)
+                }))
+            }
         }
-        let tag = self.shell.output_of(&vec!(
-            "git", "describe" , "--tags", "--exact-match"
-        ), shell::no_env(), shell::no_cwd())?;
-        if !tag.is_empty() {
-            return Ok((tag, false));
-        }
-        return escalate!(Box::new(vcs::VCSError{cause: "no current branch or tag".to_string()}));
     }
     fn commit_hash(&self, expr: Option<&str>) -> Result<String, Box<dyn Error>> {
         Ok(self.shell.output_of(&vec!(
@@ -111,9 +188,14 @@ impl<S: shell::Shell> GitFeatures for Git<S> {
         ), shell::no_env(), shell::no_cwd())?)
     }
     fn remote_origin(&self) -> Result<String, Box<dyn Error>> {
-        Ok(self.shell.output_of(&vec!(
-            "git", "config", "--get", "remote.origin.url"
-        ), shell::no_env(), shell::no_cwd())?)
+        if cfg!(feature="git2") {
+            let origin = self.repo.find_remote("origin")?;
+            Ok(origin.url().unwrap().to_string())
+        } else {
+            Ok(self.shell.output_of(&vec!(
+                "git", "config", "--get", "remote.origin.url"
+            ), shell::no_env(), shell::no_cwd())?)
+        }
     }
     fn repository_root(&self) -> Result<String, Box<dyn Error>> {
         Ok(self.shell.output_of(&vec!(
@@ -148,7 +230,7 @@ impl<S: shell::Shell> GitFeatures for Git<S> {
             // otherwise if lfs tracked file is written, codes below seems to treat these write as git diff.
             // even if actually no change.
             // TODO_PATH: use Path to generate path of /dev/null
-		    self.shell.eval("git --no-pager diff > /dev/null", shell::default(), shell::no_env(), shell::no_cwd(), false)?;
+		    self.shell.exec(&vec!["git", "--no-pager", "diff"], shell::no_env(), shell::no_cwd(), false)?;
         }
 		let mut changed = false;
 
@@ -166,10 +248,8 @@ impl<S: shell::Shell> GitFeatures for Git<S> {
 			return Ok(false)
         } else {
 			if use_lfs {
-                // TODO_PATH: use Path to generate path of /tmp/lfs_error
-				self.shell.eval(
-                    "git lfs fetch --all > /tmp/lfs_error 2>&1", 
-                    shell::default(), shell::no_env(), shell::no_cwd(), false
+				self.shell.exec(
+                    &vec!["git", "lfs", "fetch", "--all"], shell::no_env(), shell::no_cwd(), false
                 )?;
             }
 			self.shell.exec(&vec!("git", "commit", "-m", msg), shell::no_env(), shell::no_cwd(), false)?;
@@ -254,10 +334,10 @@ impl<S: shell::Shell> GitHubFeatures for Git<S> {
         &self, pr_url: &str, _: &str, token: &str, json_path: &str
     ) -> Result<String, Box<dyn Error>> {
         let api_url = format!("https://api.github.com/repos/${pr_part}", pr_part = &pr_url[19..]);
-        let output = self.shell.eval(
-            &format!("curl -s -H \"Authorization: token ${token}\" ${api_url}", token = token, api_url = api_url), 
-            shell::default(), shell::no_env(), shell::no_cwd(), false
-        )?;
-        Ok(jsonpath!(&output, &format!("$${}", json_path)).unwrap_or("".to_string()))
+        let output = self.shell.exec(&vec![
+            "curl", "-s", "-H", &format!("Authorization: token {}", token), 
+            "-H", "Accept: application/vnd.github.v3+json", &api_url
+        ], shell::no_env(), shell::no_cwd(), true)?;
+        Ok(jsonpath(&output, &format!("${}", json_path))?.unwrap_or("".to_string()))
     }
 }

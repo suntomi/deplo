@@ -1,14 +1,31 @@
 {
     "version": "0.2.0",
     "configurations": [{
+        "name": "ReleaseAssets",
+        "type": "lldb",
+        "request": "launch",
+        "program": "${workspaceFolder}/target/debug/cli",
+        "args": [
+            "-v=3", "vcs", "release-assets", "nightly", "tools/docker/bin/cli", "-o", "name=deplo-Linux"
+        ]
+    },
+    {
+        "name": "Release",
+        "type": "lldb",
+        "request": "launch",
+        "program": "${workspaceFolder}/target/debug/cli",
+        "args": [
+            "-v=3", "vcs", "release", "nightly", "-o", "name=nightly"
+        ]
+    },
+    {
         "name": "Kick",
         "type": "lldb",
         "request": "launch",
         "program": "${workspaceFolder}/target/debug/cli",
         "args": [
             "-v=3", "ci", "kick"
-        ],
-        "preLaunchTask": "git reset --hard"
+        ]
     },
     {
         "name": "Deploy",
@@ -17,8 +34,7 @@
         "program": "${workspaceFolder}/target/debug/cli",
         "args": [
             "ci", "deploy", "product"
-        ],
-        "preLaunchTask": "git reset --hard"
+        ]
     },
     {
         "name": "Init",
@@ -27,7 +43,6 @@
         "program": "${workspaceFolder}/target/debug/cli",
         "args": [
             "init"
-        ],
-        "preLaunchTask": "git reset --hard"
+        ]
     }]
 }
