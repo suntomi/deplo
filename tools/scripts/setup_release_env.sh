@@ -6,6 +6,7 @@ if [ "${DEPLO_CI_RELEASE_TARGET}" = "prod" ]; then
     export DEPLO_RELEASE_VERSION=${DEPLO_CI_TAG_NAME}
 else
     if [ -z "${DEPLO_CI_RELEASE_TARGET}" ]; then
+        env | grep DEPLO
         echo "DEPLO_CI_RELEASE_TARGET should exists, please use -r option if you want to release product from your local branch."
         exit 1
     fi

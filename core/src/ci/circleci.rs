@@ -149,6 +149,15 @@ impl<'a, S: shell::Shell> ci::CI for CircleCI<S> {
         }
         Ok(())
     }
+    fn mark_need_cleanup(&self, job_name: &str) -> Result<(), Box<dyn Error>> {
+        if config::Config::is_running_on_ci() {
+            fs::create_dir_all("/tmp/deplo/need_cleanup_jobs")?;
+            fs::write(format!("/tmp/deplo/need_cleanup_jobs/{}", job_name), "")?;
+        } else {
+            log::debug!("mark_need_cleanup: {}", job_name);
+        }
+        Ok(())
+    }
     fn run_job(&self, _: &str) -> Result<String, Box<dyn Error>> {
         log::warn!("TODO: implement run_job for circleci");
         Ok("".to_string())

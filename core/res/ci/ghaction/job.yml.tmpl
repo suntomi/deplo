@@ -4,10 +4,13 @@
   name: Running job {full_name}
   runs-on: {machine}
 {container:>2}
+  outputs:
+    need-cleanup: ${{{{ steps.deplo-{kind}-{name}.outputs.need-cleanup }}}}
   steps:
 {fetchcli:>4}
 {checkout:>4}
 {caches:>4}
     - name: {kind} {name}
+      id: deplo-{kind}-{name}
 {command:>6}
 {debugger:>4}

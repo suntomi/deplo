@@ -45,8 +45,8 @@ patterns = [".*/src/.*", "Cargo.*"]
 runner = { type = "Machine", os = "Linux", local_fallback = { image = "ghcr.io/suntomi/deplo:builder" } }
 command = "cargo build"
 [ci.workflow.integrate.src.caches.cargo]
-keys = ["integrate-build-${{ runner.os }}-v1-${{ github.sha }}", "integrate-build-${{ runner.os }}-v1-"]
-paths = ["target", "~/.cargo"]
+keys = ["integrate-build-${{ runner.os }}-v1-${{ hashFiles('**/Cargo.lock') }}"]
+paths = ["target", "~/.cargo/bin", "~/.cargo/registry/cache", "~/.cargo/registry/index", "~./cargo/git/db"]
 
 
 # workflow settings (CD)
@@ -85,7 +85,7 @@ runner = { type = "Machine", os = "Linux", local_fallback = { image = "ghcr.io/s
 command = """
 set -e
 mkdir -p tools/docker/bin
-source tools/scripts/setup_release_env.sh
+. tools/scripts/setup_release_env.sh
 sh tools/scripts/build_linux.sh
 docker build -t ghcr.io/suntomi/deplo:${DEPLO_RELEASE_VERSION} -f tools/docker/Dockerfile tools/docker
 echo ${SUNTOMI_VCS_ACCOUNT_KEY} | docker login ghcr.io -u ${SUNTOMI_VCS_ACCOUNT} --password-stdin
@@ -99,23 +99,23 @@ depends = ["product"]
 patterns = [".*/src/.*", "Cargo.*"]
 runner = { type = "Machine", os = "MacOS" }
 command = """
-source tools/scripts/setup_release_env.sh
+. tools/scripts/setup_release_env.sh
 cargo build --release
 deplo vcs release-assets ${DEPLO_RELEASE_TAG} target/release/cli --replace -o name=deplo-Darwin
 """
 [ci.workflow.deploy.mac.caches.cargo]
-keys = ["deploy-build-${{ runner.os }}-v1-${{ github.sha }}", "deploy-build-${{ runner.os }}-v1-"]
-paths = ["target", "~/.cargo"]
+keys = ["integrate-build-${{ runner.os }}-v1-${{ hashFiles('**/Cargo.lock') }}"]
+paths = ["target", "~/.cargo/bin", "~/.cargo/registry/cache", "~/.cargo/registry/index", "~./cargo/git/db"]
 
 [ci.workflow.deploy.win]
 depends = ["product"]
 patterns = [".*/src/.*", "Cargo.*"]
 runner = { type = "Machine", os = "Windows" }
 command = """
-source tools/scripts/setup_release_env.sh
+. tools/scripts/setup_release_env.sh
 cargo build --release
 deplo vcs release-assets ${DEPLO_RELEASE_TAG} target/release/cli --replace -o name=deplo-Windows
 """
 [ci.workflow.deploy.win.caches.cargo]
-keys = ["deploy-build-${{ runner.os }}-v1-${{ github.sha }}", "deploy-build-${{ runner.os }}-v1-"]
-paths = ["target", "~/.cargo"]
+keys = ["integrate-build-${{ runner.os }}-v1-${{ hashFiles('**/Cargo.lock') }}"]
+paths = ["target", "~/.cargo/bin", "~/.cargo/registry/cache", "~/.cargo/registry/index", "~./cargo/git/db"]

@@ -61,6 +61,11 @@ impl<S: shell::Shell> GhAction<S> {
             format!("{kind}-{name}: ${{{{ steps.deplo-ci-kick.outputs.{kind}-{name} }}}}", kind = v.0, name = v.1)
         }).collect()
     }
+    fn generate_need_cleanups<'a>(&self, jobs: &HashMap<(&'a str, &'a str), &'a config::Job>) -> String {
+        sorted_key_iter(jobs).map(|(v,_)| {
+            format!("needs.{kind}-{name}.outputs.need-cleanup", kind = v.0, name = v.1)
+        }).collect::<Vec<String>>().join(" || ")
+    }
     fn generate_debugger(&self, job: Option<&config::Job>, config: &config::Config) -> Vec<String> {
         let sudo = match job {
             Some(ref j) => {
@@ -87,6 +92,18 @@ impl<S: shell::Shell> GhAction<S> {
             sudo = sudo
         ).split("\n").map(|s| s.to_string()).collect()        
     }
+    fn generate_restore_keys(&self, cache: &config::Cache) -> Vec<String> {
+        if cache.keys.len() > 1 {
+            format!(
+                include_str!("../../res/ci/ghaction/restore_keys.yml.tmpl"),
+                keys = MultilineFormatString{ 
+                    strings: &cache.keys[1..].to_vec(), postfix: None
+                }
+            ).split("\n").map(|s| s.to_string()).collect::<Vec<String>>()
+        } else {
+            vec![]
+        }
+    }
     fn generate_caches(&self, job: &config::Job) -> Vec<String> {
         match job.caches {
             Some(ref c) => sorted_key_iter(c).map(|(name,cache)| {
@@ -94,7 +111,8 @@ impl<S: shell::Shell> GhAction<S> {
                     include_str!("../../res/ci/ghaction/cache.yml.tmpl"), 
                     name = name, key = cache.keys[0], 
                     restore_keys = MultilineFormatString{
-                        strings: &cache.keys[1..].to_vec(), postfix: None
+                        strings: &self.generate_restore_keys(&cache),
+                        postfix: None
                     },
                     paths = MultilineFormatString{
                         strings: &cache.paths, postfix: None
@@ -310,6 +328,7 @@ impl<'a, S: shell::Shell> module::Module for GhAction<S> {
                     strings: &self.generate_debugger(None, &config),
                     postfix: None
                 },
+                need_cleanups = &self.generate_need_cleanups(&jobs),
                 needs = format!("\"{}\"", all_job_names.join("\",\""))
             )
         )?;
@@ -345,6 +364,14 @@ impl<S: shell::Shell> ci::CI for GhAction<S> {
             println!("::set-output name={}::true", job_name);
         } else {
             self.config.borrow().run_job_by_name(&self.shell, job_name)?;
+        }
+        Ok(())
+    }
+    fn mark_need_cleanup(&self, job_name: &str) -> Result<(), Box<dyn Error>> {
+        if config::Config::is_running_on_ci() {
+            println!("::set-output name=need-cleanup::true");
+        } else {
+            log::debug!("mark_need_cleanup: {}", job_name);
         }
         Ok(())
     }

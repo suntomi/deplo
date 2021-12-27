@@ -127,7 +127,7 @@ impl Job {
             Runner::Container{ image: _ } => false
         }
     }
-    pub fn job_env<'a>(&'a self, config: &'a Config, paths: Option<Vec<&str>>) -> HashMap<&'a str, String> {
+    pub fn job_env<'a>(&'a self, config: &'a Config, paths: &Option<Vec<String>>) -> HashMap<&'a str, String> {
         let ci = config.ci_service_by_job(&self).unwrap();
         let env = ci.job_env();
         let mut common_envs = hashmap!{
@@ -136,9 +136,12 @@ impl Job {
         };
         match config.runtime.release_target {
             Some(ref v) => {
+                log::info!("job_env: release target: {}", v);
                 common_envs.insert("DEPLO_CI_RELEASE_TARGET", v.to_string());
             },
-            None => {}
+            None => {
+                log::info!("job_env: no release target: {}", config.vcs_service().unwrap().current_branch().unwrap().0);
+            }
         };
         match paths {
             Some(ref paths) => {
@@ -146,7 +149,7 @@ impl Job {
                 let mut paths = paths.clone();
                 let path = std::env::var("PATH");
                 match path {
-                    Ok(ref v) => {
+                    Ok(v) => {
                         paths.push(v);
                     },
                     Err(_) => {}
@@ -621,7 +624,7 @@ impl Config {
     pub fn ci_workflow<'a>(&'a self) -> &'a WorkflowConfig {
         return &self.ci.workflow
     }
-    pub fn job_env(&self, job: &Job, paths: Option<Vec<&str>>) -> Result<HashMap<String, String>, Box<dyn Error>> {
+    pub fn job_env(&self, job: &Job, paths: &Option<Vec<String>>) -> Result<HashMap<String, String>, Box<dyn Error>> {
         let mut inherits: HashMap<String, String> = if Self::is_running_on_ci() {
             shell::inherit_env()
         } else {
@@ -743,9 +746,14 @@ impl Config {
             Runner::Machine{image:_, os, ref local_fallback, class:_} => {
                 let current_os = shell.detect_os()?;
                 if os == current_os {
-                    let cli_parent_dir = &self.deplo_cli_download(os, shell)?.parent().unwrap().to_string_lossy().to_string();
+                    let paths = if !Self::is_running_on_ci() {
+                        let cli_parent_dir = self.deplo_cli_download(os, shell)?.parent().unwrap().to_string_lossy().to_string();
+                        Some(vec![cli_parent_dir.to_owned()])
+                    } else {
+                        None
+                    };
                     // run command directly here, add path to locally downloaded cli.
-                    shell.eval(&job.command, &job.shell, self.job_env(&job, Some(vec![cli_parent_dir.as_str()]))?, &job.workdir, false)?;
+                    shell.eval(&job.command, &job.shell, self.job_env(&job, &paths)?, &job.workdir, false)?;
                 } else {
                     log::debug!("runner os is different from current os {} {}", os, current_os);
                     match local_fallback {
@@ -753,7 +761,7 @@ impl Config {
                             let path = &self.deplo_cli_download(os, shell)?.to_string_lossy().to_string();
                             // running on host. run command in container `image` with docker
                             shell.eval_on_container(
-                                &f.image, &job.command, &f.shell, self.job_env(&job, None)?, &job.workdir, 
+                                &f.image, &job.command, &f.shell, self.job_env(&job, &None)?, &job.workdir, 
                                 &hashmap!{
                                     path.as_str() => "/usr/local/bin/deplo"
                                 }, false
@@ -771,13 +779,13 @@ impl Config {
             Runner::Container{ ref image } => {
                 if Self::is_running_on_ci() {
                     // already run inside container `image`, run command directly here
-                    shell.eval(&job.command, &job.shell, self.job_env(&job, None)?, &job.workdir, false)?;
+                    shell.eval(&job.command, &job.shell, self.job_env(&job, &None)?, &job.workdir, false)?;
                 } else {
                     let os = RunnerOS::Linux;
                     let path = &self.deplo_cli_download(os, shell)?.to_string_lossy().to_string();
                     // running on host. run command in container `image` with docker
                     shell.eval_on_container(
-                        image, &job.command, &job.shell, self.job_env(&job, None)?, &job.workdir, &hashmap!{
+                        image, &job.command, &job.shell, self.job_env(&job, &None)?, &job.workdir, &hashmap!{
                             path.as_str() => "/usr/local/bin/deplo"
                         }, false
                     )?;

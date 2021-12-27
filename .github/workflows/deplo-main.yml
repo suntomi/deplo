@@ -38,7 +38,6 @@ jobs:
           curl -L https://github.com/suntomi/deplo/releases/download/nightly/deplo-Linux -o /usr/local/bin/deplo
           chmod +x /usr/local/bin/deplo
       - name: Checkout
-        if: steps.fetch-repository-cache.outputs.cache-hit != 'true'
         uses: actions/checkout@v2
         with:
           fetch-depth: 2
@@ -52,7 +51,7 @@ jobs:
           sudo: true
   deplo-finish:
     name: Cleanup CI
-    if: ${{ !failure() }}
+    if: ${{ !failure() && (needs.deploy-base.outputs.need-cleanup || needs.deploy-builder.outputs.need-cleanup || needs.deploy-mac.outputs.need-cleanup || needs.deploy-product.outputs.need-cleanup || needs.deploy-vmfb.outputs.need-cleanup || needs.deploy-win.outputs.need-cleanup || needs.integrate-base.outputs.need-cleanup || needs.integrate-builder.outputs.need-cleanup || needs.integrate-src.outputs.need-cleanup) }}
     needs: ["deplo-main","deploy-base","deploy-builder","deploy-mac","deploy-product","deploy-vmfb","deploy-win","integrate-base","integrate-builder","integrate-src"]
     runs-on: ubuntu-latest
     steps:
@@ -61,7 +60,6 @@ jobs:
           curl -L https://github.com/suntomi/deplo/releases/download/nightly/deplo-Linux -o /usr/local/bin/deplo
           chmod +x /usr/local/bin/deplo
       - name: Checkout
-        if: steps.fetch-repository-cache.outputs.cache-hit != 'true'
         uses: actions/checkout@v2
         with:
           fetch-depth: 2
@@ -79,17 +77,19 @@ jobs:
     name: Running job deploy-base
     runs-on: ubuntu-latest
   
+    outputs:
+      need-cleanup: ${{ steps.deplo-deploy-base.outputs.need-cleanup }}
     steps:
       - name: Fetch deplo cli
         run: |
           curl -L https://github.com/suntomi/deplo/releases/download/nightly/deplo-Linux -o /usr/local/bin/deplo
           chmod +x /usr/local/bin/deplo
       - name: Checkout
-        if: steps.fetch-repository-cache.outputs.cache-hit != 'true'
         uses: actions/checkout@v2
       
   
       - name: deploy base
+        id: deplo-deploy-base
         run: deplo ci deploy base
       - name: Setup ssh session to debug
         if: ${{ failure() }}
@@ -102,17 +102,19 @@ jobs:
     name: Running job deploy-builder
     runs-on: ubuntu-latest
   
+    outputs:
+      need-cleanup: ${{ steps.deplo-deploy-builder.outputs.need-cleanup }}
     steps:
       - name: Fetch deplo cli
         run: |
           curl -L https://github.com/suntomi/deplo/releases/download/nightly/deplo-Linux -o /usr/local/bin/deplo
           chmod +x /usr/local/bin/deplo
       - name: Checkout
-        if: steps.fetch-repository-cache.outputs.cache-hit != 'true'
         uses: actions/checkout@v2
       
   
       - name: deploy builder
+        id: deplo-deploy-builder
         run: deplo ci deploy builder
       - name: Setup ssh session to debug
         if: ${{ failure() }}
@@ -125,13 +127,14 @@ jobs:
     name: Running job deploy-mac
     runs-on: macos-latest
   
+    outputs:
+      need-cleanup: ${{ steps.deplo-deploy-mac.outputs.need-cleanup }}
     steps:
       - name: Fetch deplo cli
         run: |
           curl -L https://github.com/suntomi/deplo/releases/download/nightly/deplo-Darwin -o /usr/local/bin/deplo
           chmod +x /usr/local/bin/deplo
       - name: Checkout
-        if: steps.fetch-repository-cache.outputs.cache-hit != 'true'
         uses: actions/checkout@v2
       
       - name: Cache cargo
@@ -140,16 +143,19 @@ jobs:
         with:
           path: |
             target
-            ~/.cargo
-          key: deploy-build-${{ runner.os }}-v1-${{ github.sha }}
-          restore-keys:
-            deploy-build-${{ runner.os }}-v1-
+            ~/.cargo/bin
+            ~/.cargo/registry/cache
+            ~/.cargo/registry/index
+            ~./cargo/git/db
+          key: integrate-build-${{ runner.os }}-v1-${{ hashFiles('**/Cargo.lock') }}
+      
       - name: Mark cache result
         if: steps.deplo-cache-cargo.outputs.cache-hit == 'true'
         run: echo "DEPLO_CACHE_CARGO_HIT=true" >> $GITHUB_ENV
       - name: deploy mac
+        id: deplo-deploy-mac
         run: |
-          source tools/scripts/setup_release_env.sh
+          . tools/scripts/setup_release_env.sh
           cargo build --release
           deplo vcs release-assets ${DEPLO_RELEASE_TAG} target/release/cli --replace -o name=deplo-Darwin
           
@@ -164,17 +170,19 @@ jobs:
     name: Running job deploy-product
     runs-on: ubuntu-latest
   
+    outputs:
+      need-cleanup: ${{ steps.deplo-deploy-product.outputs.need-cleanup }}
     steps:
       - name: Fetch deplo cli
         run: |
           curl -L https://github.com/suntomi/deplo/releases/download/nightly/deplo-Linux -o /usr/local/bin/deplo
           chmod +x /usr/local/bin/deplo
       - name: Checkout
-        if: steps.fetch-repository-cache.outputs.cache-hit != 'true'
         uses: actions/checkout@v2
       
   
       - name: deploy product
+        id: deplo-deploy-product
         run: deplo ci deploy product
       - name: Setup ssh session to debug
         if: ${{ failure() }}
@@ -187,17 +195,19 @@ jobs:
     name: Running job deploy-vmfb
     runs-on: ubuntu-latest
   
+    outputs:
+      need-cleanup: ${{ steps.deplo-deploy-vmfb.outputs.need-cleanup }}
     steps:
       - name: Fetch deplo cli
         run: |
           curl -L https://github.com/suntomi/deplo/releases/download/nightly/deplo-Linux -o /usr/local/bin/deplo
           chmod +x /usr/local/bin/deplo
       - name: Checkout
-        if: steps.fetch-repository-cache.outputs.cache-hit != 'true'
         uses: actions/checkout@v2
       
   
       - name: deploy vmfb
+        id: deplo-deploy-vmfb
         run: deplo ci deploy vmfb
       - name: Setup ssh session to debug
         if: ${{ failure() }}
@@ -210,10 +220,11 @@ jobs:
     name: Running job deploy-win
     runs-on: windows-latest
   
+    outputs:
+      need-cleanup: ${{ steps.deplo-deploy-win.outputs.need-cleanup }}
     steps:
   
       - name: Checkout
-        if: steps.fetch-repository-cache.outputs.cache-hit != 'true'
         uses: actions/checkout@v2
       
       - name: Cache cargo
@@ -222,18 +233,21 @@ jobs:
         with:
           path: |
             target
-            ~/.cargo
-          key: deploy-build-${{ runner.os }}-v1-${{ github.sha }}
-          restore-keys:
-            deploy-build-${{ runner.os }}-v1-
+            ~/.cargo/bin
+            ~/.cargo/registry/cache
+            ~/.cargo/registry/index
+            ~./cargo/git/db
+          key: integrate-build-${{ runner.os }}-v1-${{ hashFiles('**/Cargo.lock') }}
+      
       - name: Mark cache result
         if: steps.deplo-cache-cargo.outputs.cache-hit == 'true'
         run: echo "DEPLO_CACHE_CARGO_HIT=true" >> $GITHUB_ENV
       - name: deploy win
+        id: deplo-deploy-win
         run: |
-          source tools/scripts/setup_release_env.sh
+          . tools/scripts/setup_release_env.sh
           cargo build --release
-          deplo vcs release-assets ${DEPLO_RELEASE_TAG} target/release/cli --replace -o name=deplo-Windows.exe
+          deplo vcs release-assets ${DEPLO_RELEASE_TAG} target/release/cli --replace -o name=deplo-Windows
           
       - name: Setup ssh session to debug
         if: ${{ failure() }}
@@ -246,17 +260,19 @@ jobs:
     name: Running job integrate-base
     runs-on: ubuntu-latest
   
+    outputs:
+      need-cleanup: ${{ steps.deplo-integrate-base.outputs.need-cleanup }}
     steps:
       - name: Fetch deplo cli
         run: |
           curl -L https://github.com/suntomi/deplo/releases/download/nightly/deplo-Linux -o /usr/local/bin/deplo
           chmod +x /usr/local/bin/deplo
       - name: Checkout
-        if: steps.fetch-repository-cache.outputs.cache-hit != 'true'
         uses: actions/checkout@v2
       
   
       - name: integrate base
+        id: deplo-integrate-base
         run: deplo ci integrate base
       - name: Setup ssh session to debug
         if: ${{ failure() }}
@@ -269,17 +285,19 @@ jobs:
     name: Running job integrate-builder
     runs-on: ubuntu-latest
   
+    outputs:
+      need-cleanup: ${{ steps.deplo-integrate-builder.outputs.need-cleanup }}
     steps:
       - name: Fetch deplo cli
         run: |
           curl -L https://github.com/suntomi/deplo/releases/download/nightly/deplo-Linux -o /usr/local/bin/deplo
           chmod +x /usr/local/bin/deplo
       - name: Checkout
-        if: steps.fetch-repository-cache.outputs.cache-hit != 'true'
         uses: actions/checkout@v2
       
   
       - name: integrate builder
+        id: deplo-integrate-builder
         run: deplo ci integrate builder
       - name: Setup ssh session to debug
         if: ${{ failure() }}
@@ -292,13 +310,14 @@ jobs:
     name: Running job integrate-src
     runs-on: ubuntu-latest
   
+    outputs:
+      need-cleanup: ${{ steps.deplo-integrate-src.outputs.need-cleanup }}
     steps:
       - name: Fetch deplo cli
         run: |
           curl -L https://github.com/suntomi/deplo/releases/download/nightly/deplo-Linux -o /usr/local/bin/deplo
           chmod +x /usr/local/bin/deplo
       - name: Checkout
-        if: steps.fetch-repository-cache.outputs.cache-hit != 'true'
         uses: actions/checkout@v2
       
       - name: Cache cargo
@@ -307,14 +326,17 @@ jobs:
         with:
           path: |
             target
-            ~/.cargo
-          key: integrate-build-${{ runner.os }}-v1-${{ github.sha }}
-          restore-keys:
-            integrate-build-${{ runner.os }}-v1-
+            ~/.cargo/bin
+            ~/.cargo/registry/cache
+            ~/.cargo/registry/index
+            ~./cargo/git/db
+          key: integrate-build-${{ runner.os }}-v1-${{ hashFiles('**/Cargo.lock') }}
+      
       - name: Mark cache result
         if: steps.deplo-cache-cargo.outputs.cache-hit == 'true'
         run: echo "DEPLO_CACHE_CARGO_HIT=true" >> $GITHUB_ENV
       - name: integrate src
+        id: deplo-integrate-src
         run: deplo ci integrate src
       - name: Setup ssh session to debug
         if: ${{ failure() }}
