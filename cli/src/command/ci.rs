@@ -41,7 +41,8 @@ impl<S: shell::Shell> CI<S> {
         };
         for (name, job) in jobs_and_kind.0 {
             let full_name = &format!("{}-{}", jobs_and_kind.1, name);
-            if vcs.changed(&job.patterns.iter().map(|p| p.as_ref()).collect()) {
+            if vcs.changed(&job.patterns.iter().map(|p| p.as_ref()).collect()) &&
+                job.matches_current_release_target(&config.runtime.release_target) {
                 log::debug!("========== invoking {}, pattern [{}] ==========", full_name, job.patterns.join(", "));
                 ci.mark_job_executed(&full_name)?;
             } else {

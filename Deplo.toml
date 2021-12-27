@@ -114,7 +114,7 @@ runner = { type = "Machine", os = "Windows" }
 command = """
 source tools/scripts/setup_release_env.sh
 cargo build --release
-deplo vcs release-assets ${DEPLO_RELEASE_TAG} target/release/cli --replace -o name=deplo-Windows.exe
+deplo vcs release-assets ${DEPLO_RELEASE_TAG} target/release/cli --replace -o name=deplo-Windows
 """
 [ci.workflow.deploy.win.caches.cargo]
 keys = ["deploy-build-${{ runner.os }}-v1-${{ github.sha }}", "deploy-build-${{ runner.os }}-v1-"]
