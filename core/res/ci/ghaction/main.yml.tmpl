@@ -31,7 +31,7 @@ jobs:
           sudo: true
   deplo-finish:
     name: Cleanup CI
-    if: ${{{{ !failure() }}}}
+    if: ${{{{ !failure() && ({need_cleanups}) }}}}
     needs: [{needs}]
     runs-on: ubuntu-latest
     steps:

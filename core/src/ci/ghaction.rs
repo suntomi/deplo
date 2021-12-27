@@ -61,6 +61,11 @@ impl<S: shell::Shell> GhAction<S> {
             format!("{kind}-{name}: ${{{{ steps.deplo-ci-kick.outputs.{kind}-{name} }}}}", kind = v.0, name = v.1)
         }).collect()
     }
+    fn generate_need_cleanups<'a>(&self, jobs: &HashMap<(&'a str, &'a str), &'a config::Job>) -> String {
+        sorted_key_iter(jobs).map(|(v,_)| {
+            format!("needs.{kind}-{name}.outputs.need-cleanup", kind = v.0, name = v.1)
+        }).collect::<Vec<String>>().join(" || ")
+    }
     fn generate_debugger(&self, job: Option<&config::Job>, config: &config::Config) -> Vec<String> {
         let sudo = match job {
             Some(ref j) => {
@@ -310,6 +315,7 @@ impl<'a, S: shell::Shell> module::Module for GhAction<S> {
                     strings: &self.generate_debugger(None, &config),
                     postfix: None
                 },
+                need_cleanups = &self.generate_need_cleanups(&jobs),
                 needs = format!("\"{}\"", all_job_names.join("\",\""))
             )
         )?;
@@ -345,6 +351,14 @@ impl<S: shell::Shell> ci::CI for GhAction<S> {
             println!("::set-output name={}::true", job_name);
         } else {
             self.config.borrow().run_job_by_name(&self.shell, job_name)?;
+        }
+        Ok(())
+    }
+    fn mark_need_cleanup(&self, job_name: &str) -> Result<(), Box<dyn Error>> {
+        if config::Config::is_running_on_ci() {
+            println!("::set-output name=need-cleanup::true");
+        } else {
+            log::debug!("mark_need_cleanup: {}", job_name);
         }
         Ok(())
     }
