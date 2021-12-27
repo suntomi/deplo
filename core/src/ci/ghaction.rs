@@ -92,6 +92,18 @@ impl<S: shell::Shell> GhAction<S> {
             sudo = sudo
         ).split("\n").map(|s| s.to_string()).collect()        
     }
+    fn generate_restore_keys(&self, cache: &config::Cache) -> Vec<String> {
+        if cache.keys.len() > 1 {
+            format!(
+                include_str!("../../res/ci/ghaction/restore_keys.yml.tmpl"),
+                keys = MultilineFormatString{ 
+                    strings: &cache.keys[1..].to_vec(), postfix: None
+                }
+            ).split("\n").map(|s| s.to_string()).collect::<Vec<String>>()
+        } else {
+            vec![]
+        }
+    }
     fn generate_caches(&self, job: &config::Job) -> Vec<String> {
         match job.caches {
             Some(ref c) => sorted_key_iter(c).map(|(name,cache)| {
@@ -99,7 +111,8 @@ impl<S: shell::Shell> GhAction<S> {
                     include_str!("../../res/ci/ghaction/cache.yml.tmpl"), 
                     name = name, key = cache.keys[0], 
                     restore_keys = MultilineFormatString{
-                        strings: &cache.keys[1..].to_vec(), postfix: None
+                        strings: &self.generate_restore_keys(&cache),
+                        postfix: None
                     },
                     paths = MultilineFormatString{
                         strings: &cache.paths, postfix: None
