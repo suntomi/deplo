@@ -219,7 +219,10 @@ jobs:
     outputs:
       need-cleanup: ${{ steps.deplo-deploy-win.outputs.need-cleanup }}
     steps:
-  
+      - name: Fetch deplo cli
+        run: |
+          curl -L https://github.com/suntomi/deplo/releases/download/nightly/deplo-Windows.exe -o /usr/bin/deplo
+          chmod +x /usr/bin/deplo
       - name: Checkout
         uses: actions/checkout@v2
       
@@ -240,11 +243,7 @@ jobs:
         run: echo "DEPLO_CACHE_CARGO_HIT=true" >> $GITHUB_ENV
       - name: deploy win
         id: deplo-deploy-win
-        run: |
-          . tools/scripts/setup_release_env.sh
-          cargo build --release
-          deplo vcs release-assets ${DEPLO_RELEASE_TAG} target/release/cli --replace -o name=deplo-Windows
-          
+        run: deplo ci deploy win
       - name: Setup ssh session to debug
         if: ${{ failure() }}
         uses: umegaya/action-tmate@a3d459813f3429bd95fc48bcd980b2fb40f10ad0
