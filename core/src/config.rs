@@ -343,7 +343,10 @@ impl Container {
 impl Config {
     // static factory methods 
     pub fn load(path: &str) -> Result<Config, Box<dyn Error>> {
-        let src = fs::read_to_string(path).unwrap();
+        let src = match fs::read_to_string(path) {
+            Ok(v) => v,
+            Err(e) => panic!("cannot read config at {}, err: {:?}", path, e)
+        };
         let content = envsubst(&src);
         match toml::from_str(&content) {
             Ok(c) => Ok(c),
