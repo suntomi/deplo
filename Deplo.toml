@@ -114,7 +114,8 @@ runner = { type = "Machine", os = "Windows" }
 command = """
 . tools/scripts/setup_release_env.sh
 cargo build --release
-deplo vcs release-assets ${DEPLO_RELEASE_TAG} target/release/cli --replace -o name=deplo-Windows
+deplo vcs release-assets ${DEPLO_RELEASE_TAG} target/release/cli --replace -o name=deplo-Windows.exe
+deplo vcs release-assets ${DEPLO_RELEASE_TAG} target/release/cli.pdb --replace -o name=deplo-Windows.pdb
 """
 [ci.workflow.deploy.win.caches.cargo]
 keys = ["integrate-build-${{ runner.os }}-v1-${{ hashFiles('**/Cargo.lock') }}"]
