@@ -78,7 +78,7 @@ impl<GIT: (git::GitFeatures) + (git::GitHubFeatures), S: shell::Shell> Github<GI
         };
         let user_and_repo = (self as &dyn vcs::VCS).user_and_repo()?;
         let response = self.shell.exec(&vec![
-            "curl", "--fail", &format!(
+            "curl", "--fail", "-sS", &format!(
                 "https://api.github.com/repos/{}/{}/releases/tags/{}",
                 user_and_repo.0, user_and_repo.1, target_ref.0
             ), "-H", &format!("Authorization: token {}", token)
@@ -172,7 +172,7 @@ impl<GIT: (git::GitFeatures) + (git::GitHubFeatures), S: shell::Shell> vcs::VCS 
                 };
                 options.insert("tag_name".to_string(), str_to_json(target_ref.0));
                 self.shell.exec(&vec![
-                    "curl", &format!(
+                    "curl", "-sS", &format!(
                         "https://api.github.com/repos/{}/{}/releases", 
                         user_and_repo.0, user_and_repo.1
                     ), 
@@ -209,7 +209,7 @@ impl<GIT: (git::GitFeatures) + (git::GitHubFeatures), S: shell::Shell> vcs::VCS 
             None => "application/octet-stream".to_string()
         };
         let response = self.shell.exec(&vec![
-            "curl", &upload_url_base.replace("uploads.github.com", "api.github.com"),
+            "curl", "-sS", &upload_url_base.replace("uploads.github.com", "api.github.com"),
             "-H", &format!("Authorization: token {}", token),
         ], shell::no_env(), shell::no_cwd(), true)?;
         match jsonpath(&response, &format!("$.[?(@.name=='{}')]", asset_name))? {
@@ -227,7 +227,7 @@ impl<GIT: (git::GitFeatures) + (git::GitHubFeatures), S: shell::Shell> vcs::VCS 
             None => log::debug!("no asset with name {}, proceed to upload", asset_name),
         };
         let response = self.shell.exec(&vec![
-            "curl", &upload_url, "-H", &format!("Authorization: token {}", token),
+            "curl", "-sS", &upload_url, "-H", &format!("Authorization: token {}", token),
             "-H", &format!("Content-Type: {}", content_type),
             "--data-binary", &format!("@{}", asset_file_path),
         ], shell::no_env(), shell::no_cwd(), true)?;  
