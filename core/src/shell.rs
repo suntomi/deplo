@@ -73,7 +73,10 @@ pub trait Shell {
                     Ok(config::RunnerOS::MacOS)
                 } else if output.contains("Linux") {
                     Ok(config::RunnerOS::Linux)
-                } else if output.contains("Windows") {
+                } else if output.contains("Windows") || 
+                    output.starts_with("MINGW") || 
+                    output.starts_with("MSYS") || 
+                    output.starts_with("CYGWIN") {
                     Ok(config::RunnerOS::Windows)
                 } else {
                     escalate!(Box::new(ShellError::OtherFailure{ 
