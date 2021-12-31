@@ -6,6 +6,7 @@ use log;
 use core::args;
 use core::config;
 use core::shell;
+use core::util::rm;
 
 use crate::command;
 
@@ -23,16 +24,17 @@ impl<S: shell::Shell, A: args::Args> command::Command<A> for Init<S> {
     }
     fn run(&self, args: &A) -> Result<(), Box<dyn Error>> {
         log::debug!("init command invoked");
-        {
-            // use block to release ownership of config before prepare_XXX call
-            let config = self.config.borrow();
-            fs::create_dir_all(&config.root_path())?;
-        }
         // do preparation
         let reinit = args.value_of("reinit").unwrap_or("none");
         config::Config::prepare_ci(&self.config, reinit == "all" || reinit == "ci")?;
         config::Config::prepare_vcs(&self.config, reinit == "all" || reinit == "vcs")?;
-
+        let config = self.config.borrow();
+        let mut data_path = config.deplo_data_path()?;
+        data_path.push("..");
+        data_path.push("deplow");
+        rm(&data_path);
+        fs::write(&data_path, config.generate_wrapper_script())?;
+        self.shell.exec(&vec!["chmod", "+x", data_path.to_str().unwrap()], shell::no_env(), shell::no_cwd(), false)?;
         return Ok(())
     }
 }

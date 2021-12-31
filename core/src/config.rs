@@ -1,6 +1,6 @@
 use std::fs;
 use std::fmt;
-use std::path::{self, PathBuf};
+use std::path::PathBuf;
 use std::error::Error;
 use std::rc::Rc;
 use std::cell::{RefCell};
@@ -469,11 +469,11 @@ impl Config {
         }
         return Ok(c);
     }
-    pub fn root_path(&self) -> &path::Path {
-        return path::Path::new(match self.common.data_dir {
+    pub fn data_dir<'a>(&'a self) -> &'a str {
+        return match self.common.data_dir {
             Some(ref v) => v.as_str(),
-            None => "."
-        });
+            None => ".deplo"
+        };
     }
     pub fn project_name(&self) -> &str {
         &self.common.project_name
@@ -493,8 +493,15 @@ impl Config {
             if wdref.is_none() { "".to_string() } else { format!("-w {}", wdref.unwrap()) }
         );
     }
+    pub fn generate_wrapper_script(&self) -> String {
+        format!(
+            include_str!("../res/cli/deplow.sh.tmpl"), 
+            version = DEPLO_VERSION,
+            data_dir = self.data_dir()
+        )
+    }
     pub fn deplo_data_path(&self) -> Result<PathBuf, Box<dyn Error>> {
-        let base = self.common.data_dir.as_ref().map_or_else(|| ".deplo", |v| v.as_str());
+        let base = self.data_dir();
         let path = make_absolute(base, self.vcs_service()?.repository_root()?);
         match fs::metadata(&path) {
             Ok(mata) => {
