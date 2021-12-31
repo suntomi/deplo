@@ -124,6 +124,7 @@ impl<S: shell::Shell> GhAction<S> {
         }.concat()
     }
     fn generate_command<'a>(&self, names: &(&str, &str), job: &'a config::Job) -> Vec<String> {
+        //TODO: add shell fof windows vm
         match job.runner {
             config::Runner::Machine{..} => return vec![format!("run: deplo ci {} {}", names.0, names.1)],
             config::Runner::Container{image:_} => (),
