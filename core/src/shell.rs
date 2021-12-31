@@ -67,7 +67,7 @@ pub trait Shell {
         return self.output_of(&vec!(shell.as_ref().map_or_else(|| "bash", |v| v.as_str()), "-c", code), envs, cwd);
     }
     fn detect_os(&self) -> Result<config::RunnerOS, Box<dyn Error>> {
-        match self.eval_output_of("uname", default(), no_env(), no_cwd()) {
+        match self.output_of(&vec!["uname"], no_env(), no_cwd()) {
             Ok(output) => {
                 if output.contains("Darwin") {
                     Ok(config::RunnerOS::MacOS)
