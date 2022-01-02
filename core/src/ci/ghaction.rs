@@ -125,7 +125,13 @@ impl<S: shell::Shell> GhAction<S> {
     }
     fn generate_command<'a>(&self, names: &(&str, &str), job: &'a config::Job) -> Vec<String> {
         match job.runner {
-            config::Runner::Machine{..} => return vec![format!("run: deplo ci {} {}", names.0, names.1)],
+            config::Runner::Machine{os, ..} => {
+                let cmd = format!("run: deplo ci {} {}", names.0, names.1);
+                match os {
+                    config::RunnerOS::Windows => return vec![cmd, "shell: bash".to_string()],
+                    _ => return vec![cmd],
+                }
+            },
             config::Runner::Container{image:_} => (),
         };
         format!(include_str!("../../res/ci/ghaction/rawexec.yml.tmpl"),
@@ -153,20 +159,24 @@ impl<S: shell::Shell> GhAction<S> {
         }
     }
     fn generate_fetchcli_steps<'a>(&self, runner: &'a config::Runner) ->Vec<String> {
-        let (path, uname, ext) = match runner {
+        let (path, uname, ext, shell) = match runner {
             config::Runner::Machine{ref os, ..} => match os {
-                config::RunnerOS::Windows => ("/usr/bin/deplo", "Windows", ".exe"),
-                v => ("/usr/local/bin/deplo", v.uname(), "")
+                config::RunnerOS::Windows => ("/usr/bin/deplo", "Windows", ".exe", "shell: bash"),
+                v => ("/usr/local/bin/deplo", v.uname(), "", "")
             },
-            config::Runner::Container{image:_} => ("/usr/local/bin/deplo", "Linux", "")
+            config::Runner::Container{image:_} => ("/usr/local/bin/deplo", "Linux", "", "")
         };
-        format!(include_str!("../../res/ci/ghaction/fetchcli.yml.tmpl"),
+        let mut lines = format!(include_str!("../../res/ci/ghaction/fetchcli.yml.tmpl"),
             deplo_cli_path = path,
             download_url = format!(
                 "{}/{}/deplo-{}{}",
                 config::DEPLO_RELEASE_URL_BASE, config::DEPLO_VERSION, uname, ext
             )
-        ).split("\n").map(|s| s.to_string()).collect::<Vec<String>>()
+        ).split("\n").map(|s| s.to_string()).collect::<Vec<String>>();
+        if !shell.is_empty() {
+            lines.push(format!("  {}", shell));
+        }
+        lines
     }
     fn generate_checkout_opts(&self, option_lines: &Vec<String>) -> Vec<String> {
         if option_lines.len() == 0 {

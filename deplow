@@ -1,0 +1,21 @@
+#!/bin/bash
+CWD=$(cd $(dirname ${BASH_SOURCE[0]}) && pwd)
+OS=$(uname -s)
+if [[ "${OS}" =~ ^MINGW.*|^MSYS.*|^CYGWIN.* ]]; then
+    DEPLO_BIN_PATH_POSTFIX="Windows.exe"
+else
+    DEPLO_BIN_PATH_POSTFIX="${OS}"
+fi
+DEPLO_VERSION=nightly
+DEPLO_CLI_DIR="${CWD}/.deplo/cli/${DEPLO_VERSION}/${OS}"
+DEPLO_CLI_BIN="${DEPLO_CLI_DIR}/deplo"
+
+if [ ! -d "${DEPLO_CLI_DIR}" ]; then
+    mkdir -p ${DEPLO_CLI_DIR}
+fi
+if [ ! -f "${DEPLO_CLI_BIN}" ]; then
+    curl -L https://github.com/suntomi/deplo/releases/download/${DEPLO_VERSION}/deplo-${DEPLO_BIN_PATH_POSTFIX} -o ${DEPLO_CLI_BIN}
+    chmod +x ${DEPLO_CLI_BIN}
+fi
+
+${DEPLO_CLI_BIN} "$@"
