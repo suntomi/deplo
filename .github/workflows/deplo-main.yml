@@ -223,6 +223,7 @@ jobs:
         run: |
           curl -L https://github.com/suntomi/deplo/releases/download/nightly/deplo-Windows.exe -o /usr/bin/deplo
           chmod +x /usr/bin/deplo
+        shell: bash
       - name: Checkout
         uses: actions/checkout@v2
       
@@ -244,6 +245,7 @@ jobs:
       - name: deploy win
         id: deplo-deploy-win
         run: deplo ci deploy win
+        shell: bash
       - name: Setup ssh session to debug
         if: ${{ failure() }}
         uses: umegaya/action-tmate@a3d459813f3429bd95fc48bcd980b2fb40f10ad0
