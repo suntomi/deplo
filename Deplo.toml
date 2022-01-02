@@ -1,13 +1,22 @@
+# ---------------
 # common settings
+# ---------------
+
 [common]
 project_name = "deplo"
 debug = { ghaction_deplo_debugger = "on", ghaction_job_debugger = "on" }
 
+# release target branch settings
 [common.release_targets]
+# main branch will be released as nightly
 nightly = { type = "Branch", path = "main" }
 lab = { type = "Branch", path = "lab" }
+# tag which name is started with numerals treated as release (eg. 0.1.10)
 prod = { type = "Tag", path = "[0-9]*" }
 
+# ------------
+# vcs settings
+# ------------
 
 # version control system account settings
 [vcs]
@@ -17,6 +26,10 @@ account = "${SUNTOMI_VCS_ACCOUNT}"
 key = "${SUNTOMI_VCS_ACCOUNT_KEY}"
 
 
+# ------------
+# ci settings
+# ------------
+
 # ci account setting, default should always be set
 [ci.accounts.default]
 type = "GhAction"
@@ -24,9 +37,18 @@ account = "${SUNTOMI_VCS_ACCOUNT}"
 key = "${SUNTOMI_VCS_ACCOUNT_KEY}"
 
 
-# workflow settings (CI)
+# ------------
+# job settings
+# ------------
+
+# workflow settings (CI), which runs when branch that has related pull request to release targets created/updated.
+# declare job name `$job_name` like ci.workflow.integrate.$job_name, as table element of toml
 [ci.workflow.integrate.base]
+# git's changeset pattern to invoke the job. that is, integrate.base only invoked when tools/docker/Dockerfile.base is
+# changed by commit.
 patterns = ["tools/docker/Dockerfile.base"]
+# you can set local_fallback container image. if its set, command will be executed on container of `local_fallback.image`,
+# with using shell `local_fallback.shell`, if local machine's OS does not matched runner.os.
 runner = { type = "Machine", os = "Linux", local_fallback = { image = "docker:20.10", shell = "sh" } }
 command = """
 docker build -t ghcr.io/suntomi/deplo:base -f tools/docker/Dockerfile.base tools/docker
@@ -44,12 +66,18 @@ docker build -t ghcr.io/suntomi/deplo:builder -f tools/docker/Dockerfile.builder
 patterns = [".*/src/.*", "Cargo.*"]
 runner = { type = "Machine", os = "Linux", local_fallback = { image = "ghcr.io/suntomi/deplo:builder" } }
 command = "cargo build"
+# cache settings. file paths that is listed in paths will be preserved with tha key `keys[0]`.
+# if you specify multiple keys, `keys[1..]` are used as fallback keys to search similar caches 
+# that is craeted by other branches.
 [ci.workflow.integrate.src.caches.cargo]
+# way to use variable like ${{ runner.os }} in the keys, is CI service specific. please consult each CI service's
+# document for detail.
 keys = ["integrate-build-${{ runner.os }}-v1-${{ hashFiles('**/Cargo.lock') }}"]
 paths = ["target", "~/.cargo/bin", "~/.cargo/registry/cache", "~/.cargo/registry/index", "~./cargo/git/db"]
 
 
-# workflow settings (CD)
+# workflow settings (CD), which runs when release target branches are created/updated
+# declare job name `$job_name` like ci.workflow.deploy.$job_name, as table element of toml
 [ci.workflow.deploy.base]
 patterns = ["tools/docker/Dockerfile.base"]
 runner = { type = "Machine", os = "Linux", local_fallback = { image = "docker:20.10", shell = "sh" } }
@@ -79,6 +107,7 @@ docker push ghcr.io/suntomi/deplo:vmfb
 """
 
 [ci.workflow.deploy.product]
+# job dependencies. deploy.product only starts to run after deploy.builder finished.
 depends = ["builder"]
 patterns = [".*/src/.*", "Cargo.*"]
 runner = { type = "Machine", os = "Linux", local_fallback = { image = "ghcr.io/suntomi/deplo:vmfb", shell = "sh"  } }
