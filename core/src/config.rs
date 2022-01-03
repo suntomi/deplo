@@ -310,9 +310,6 @@ pub struct RuntimeConfig {
     pub verbosity: u64,
     pub dryrun: bool,
     pub debug: HashMap<String, String>,
-    pub distributions: Vec<String>,
-    pub latest_endpoint_versions: HashMap<String, u32>,
-    pub endpoint_service_map: HashMap<String, String>,
     pub release_target: Option<String>,
     pub workdir: Option<String>,
     pub dotenv_path: Option<String>
@@ -423,9 +420,6 @@ impl Config {
             let mut mutc = c.ptr.borrow_mut();
             mutc.runtime = RuntimeConfig {
                 verbosity,
-                distributions: vec!(),
-                latest_endpoint_versions: hashmap!{},
-                endpoint_service_map: hashmap!{},
                 dotenv_path: match args.value_of("dotenv") {
                     Some(v) => Some(v.to_string()),
                     None => None
