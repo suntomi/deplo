@@ -354,7 +354,7 @@ impl<S: shell::Shell> ci::CI for GhAction<S> {
         println!("::set-output name=DEPLO_OUTPUT_CLI_VERSION::{}", config::DEPLO_VERSION);
         Ok(())
     }
-    fn pull_request_url(&self) -> Result<Option<String>, Box<dyn Error>> {
+    fn pr_url_from_env(&self) -> Result<Option<String>, Box<dyn Error>> {
         match std::env::var("DEPLO_CI_PULL_REQUEST_URL") {
             Ok(v) => if v.is_empty() { Ok(None) } else { Ok(Some(v)) },
             Err(e) => {

@@ -245,6 +245,14 @@ impl<GIT: (git::GitFeatures) + (git::GitHubFeatures), S: shell::Shell> vcs::VCS 
     ) -> Result<(), Box<dyn Error>> {
         self.git.pr(title, head_branch, base_branch, options)
     }
+    fn pr_url_from_current_ref(&self) -> Result<Option<String>, Box<dyn Error>> {
+        match self.git.current_ref()? {
+            (vcs::RefType::Branch, _) => Ok(None),
+            (vcs::RefType::Pull, ref_name) => Ok(Some(self.url_from_pull_ref(&ref_name))),
+            (vcs::RefType::Tag, _) => Ok(None),
+            (vcs::RefType::Commit, _) => Ok(None)
+        }
+    }
     fn user_and_repo(&self) -> Result<(String, String), Box<dyn Error>> {
         let remote_origin = self.git.remote_origin()?;
         let re = regex::Regex::new(r"[^:]+[:/]([^/\.]+)/([^/\.]+)").unwrap();

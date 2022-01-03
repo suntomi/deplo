@@ -30,6 +30,7 @@ pub trait VCS : module::Module {
     fn pr(
         &self, title: &str, head_branch: &str, base_branch: &str, option: &HashMap<&str, &str>
     ) -> Result<(), Box<dyn Error>>;
+    fn pr_url_from_current_ref(&self) -> Result<Option<String>, Box<dyn Error>>;
     fn user_and_repo(&self) -> Result<(String, String), Box<dyn Error>>;
     fn release(
         &self, target_ref: (&str, bool), opts: &JsonValue

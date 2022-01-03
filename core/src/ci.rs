@@ -10,7 +10,7 @@ pub trait CI : module::Module {
         config: &config::Container, account_name: &str
     ) -> Result<Self, Box<dyn Error>> where Self : Sized;
     fn kick(&self) -> Result<(), Box<dyn Error>>;
-    fn pull_request_url(&self) -> Result<Option<String>, Box<dyn Error>>;
+    fn pr_url_from_env(&self) -> Result<Option<String>, Box<dyn Error>>;
     fn mark_job_executed(&self, job_name: &str) -> Result<(), Box<dyn Error>>;
     fn mark_need_cleanup(&self, job_name: &str) -> Result<(), Box<dyn Error>>;
     fn run_job(&self, job_name: &str) -> Result<String, Box<dyn Error>>;

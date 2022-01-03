@@ -202,6 +202,26 @@ impl Job {
         }
     }
 }
+#[derive(Serialize, Deserialize, Clone, Copy, Eq, PartialEq)]
+pub enum WorkflowType {
+    Deploy,
+    Integrate,
+}
+impl WorkflowType {
+    pub fn from_str(s: &str) -> Self {
+        match s {
+            "deploy" => Self::Deploy,
+            "integrate" => Self::Integrate,
+            _ => panic!("unknown workflow type: {}", s),
+        }
+    }
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::Deploy => "deploy",
+            Self::Integrate => "integrate",
+        }
+    }
+}
 #[derive(Serialize, Deserialize)]
 pub struct WorkflowConfig {
     // we call workflow as combination of jobs
@@ -311,6 +331,7 @@ pub struct RuntimeConfig {
     pub dryrun: bool,
     pub debug: HashMap<String, String>,
     pub release_target: Option<String>,
+    pub workflow_type: Option<WorkflowType>,
     pub workdir: Option<String>,
     pub dotenv_path: Option<String>
 }
@@ -440,6 +461,7 @@ impl Config {
                     None => hashmap!{}
                 },
                 release_target: None, // set after
+                workflow_type: None, // set after
                 workdir: may_workdir.map(String::from),
             };
         }
@@ -465,8 +487,25 @@ impl Config {
                     }
                 }
             };
+            let workflow_type = match args.value_of("workflow-type") {
+                Some(v) => Some(WorkflowType::from_str(v)),
+                None => {
+                    let immc = c.ptr.borrow();
+                    let vcs = immc.vcs_service()?;
+                    let (account_name, _) = immc.ci_config_by_env();
+                    let ci = immc.ci_service(account_name)?;
+                    match ci.pr_url_from_env()? {
+                        Some(_) => Some(WorkflowType::Integrate),
+                        None => match vcs.pr_url_from_current_ref()? {
+                            Some(_) => Some(WorkflowType::Integrate),
+                            None => None
+                        }
+                    }
+                }
+            };
             let mut mutc = c.ptr.borrow_mut();
             mutc.runtime.release_target = release_target;
+            mutc.runtime.workflow_type = workflow_type;
         }
         return Ok(c);
     }

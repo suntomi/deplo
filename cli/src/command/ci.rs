@@ -32,20 +32,22 @@ impl<S: shell::Shell> CI<S> {
         let ci = config.ci_service(account_name)?;
         ci.kick()?;
         let vcs = config.vcs_service()?;
-        let jobs_and_kind = match ci.pull_request_url()? {
-            Some(_) => (&config.ci_workflow().integrate, "integrate"),
-            None => match config.runtime.release_target {
-                Some(_) => (&config.ci_workflow().deploy, "deploy"),
-                None => if config.ci.invoke_for_all_branches.unwrap_or(false) {
-                    (&config.ci_workflow().integrate, "integrate")
-                } else {
-                    log::info!("deplo is configured as ignoring non-release-target, non-pull-requested branches");
-                    return Ok(());
-                },
+        let jobs_and_kind = match config.runtime.workflow_type {
+            Some(v) => match v {
+                config::WorkflowType::Integrate => (&config.ci_workflow().integrate, v),
+                config::WorkflowType::Deploy => (&config.ci_workflow().deploy, v)
+            }
+            None => if config.ci.invoke_for_all_branches.unwrap_or(false) {
+                (&config.ci_workflow().integrate, config::WorkflowType::Integrate)
+            } else if let Some(v) = ci.pr_url_from_env()? {
+                panic!("PR url is set by env {}, but workflow type is not set", v)
+            } else {
+                log::info!("deplo is configured as ignoring non-release-target, non-pull-requested branches");
+                return Ok(());
             }
         };
         for (name, job) in jobs_and_kind.0 {
-            let full_name = &format!("{}-{}", jobs_and_kind.1, name);
+            let full_name = &format!("{}-{}", jobs_and_kind.1.as_str(), name);
             if vcs.changed(&job.patterns.iter().map(|p| p.as_ref()).collect()) &&
                 job.matches_current_release_target(&config.runtime.release_target) {
                 log::debug!("========== invoking {}, pattern [{}] ==========", full_name, job.patterns.join(", "));
