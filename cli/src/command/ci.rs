@@ -16,11 +16,16 @@ pub struct CI<S: shell::Shell = shell::Default> {
 impl<S: shell::Shell> CI<S> {    
     fn kick<A: args::Args>(&self, _: &A) -> Result<(), Box<dyn Error>> {
         log::debug!("kick command invoked");
+        // init diff data on the fly
+        let diff = {
+            let config = self.config.borrow();
+            let vcs = config.vcs_service()?;
+            vcs.make_diff()?
+        };
         {
-            // init diff data on the fly
             let mut config_mut = self.config.borrow_mut();
             let vcs_mut = config_mut.vcs_service_mut()?;
-            vcs_mut.init_diff()?;
+            vcs_mut.init_diff(diff)?;
         }
         let config = self.config.borrow();
         let (account_name, _) = config.ci_config_by_env();
