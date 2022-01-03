@@ -37,7 +37,8 @@ pub trait VCS : module::Module {
     fn release_assets(
         &self, target_ref: (&str, bool), asset_file_path: &str, opts: &JsonValue
     ) -> Result<String, Box<dyn Error>>;
-    fn init_diff(&mut self) -> Result<(), Box<dyn Error>>; 
+    fn make_diff(&self) -> Result<String, Box<dyn Error>>;
+    fn init_diff(&mut self, diff: String) -> Result<(), Box<dyn Error>>; 
     fn diff<'b>(&'b self) -> &'b Vec<String>;
     fn changed<'b>(&'b self, patterns: &Vec<&str>) -> bool {
         let difflines = self.diff();

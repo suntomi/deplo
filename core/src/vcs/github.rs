@@ -34,37 +34,6 @@ impl<GIT: (git::GitFeatures) + (git::GitHubFeatures), S: shell::Shell> Github<GI
             }))
         }
     }
-    fn make_diff(&self) -> Result<String, Box<dyn Error>> {
-        let diff = match self.git.current_ref()? {
-            (vcs::RefType::Branch, _) => {
-                self.git.diff_paths("HEAD^")?
-            },
-            (vcs::RefType::Pull, _) => {
-                self.git.diff_paths("HEAD^")?
-            },
-            (vcs::RefType::Tag, ref_name) => {
-                let tags = self.git.tags()?;
-                let index = tags.iter().position(|tag| tag.as_str() == ref_name.as_str()).ok_or(
-                    make_escalation!(Box::new(vcs::VCSError {
-                        cause: format!("tag {} does not found for list {:?}", ref_name, tags)
-                    }))
-                )?;
-                if index == 0 {
-                    // this is first tag, so treat as it changes everyhing
-                    "*".to_string()
-                } else {
-                    // diffing with previous tag
-                    self.git.diff_paths(&format!("{}..{}", &tags[index - 1], &tags[index]))?
-                }
-            },
-            (vcs::RefType::Commit, ref_name) => {
-                return escalate!(Box::new(vcs::VCSError {
-                    cause: format!("current head does not branch or tag {}", ref_name)
-                }))
-            }
-        };
-        Ok(diff)
-    }
     fn get_release(&self, target_ref: (&str, bool)) -> Result<String, Box<dyn Error>> {
         if target_ref.1 {
             return escalate!(Box::new(vcs::VCSError {
@@ -272,8 +241,39 @@ impl<GIT: (git::GitFeatures) + (git::GitHubFeatures), S: shell::Shell> vcs::VCS 
         };
         Ok(user_and_repo)
     }
-    fn init_diff(&mut self) -> Result<(), Box<dyn Error>> {
-        self.diff = self.make_diff()?.split('\n').map(|e| e.to_string()).collect();
+    fn make_diff(&self) -> Result<String, Box<dyn Error>> {
+        let diff = match self.git.current_ref()? {
+            (vcs::RefType::Branch, _) => {
+                self.git.diff_paths("HEAD^")?
+            },
+            (vcs::RefType::Pull, _) => {
+                self.git.diff_paths("HEAD^")?
+            },
+            (vcs::RefType::Tag, ref_name) => {
+                let tags = self.git.tags()?;
+                let index = tags.iter().position(|tag| tag.as_str() == ref_name.as_str()).ok_or(
+                    make_escalation!(Box::new(vcs::VCSError {
+                        cause: format!("tag {} does not found for list {:?}", ref_name, tags)
+                    }))
+                )?;
+                if index == 0 {
+                    // this is first tag, so treat as it changes everyhing
+                    "*".to_string()
+                } else {
+                    // diffing with previous tag
+                    self.git.diff_paths(&format!("{}..{}", &tags[index - 1], &tags[index]))?
+                }
+            },
+            (vcs::RefType::Commit, ref_name) => {
+                return escalate!(Box::new(vcs::VCSError {
+                    cause: format!("current head does not branch or tag {}", ref_name)
+                }))
+            }
+        };
+        Ok(diff)
+    }    
+    fn init_diff(&mut self, diff: String) -> Result<(), Box<dyn Error>> {
+        self.diff = diff.split('\n').map(|e| e.to_string()).collect();
         Ok(())
     }
     fn diff<'b>(&'b self) -> &'b Vec<String> {
