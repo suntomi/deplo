@@ -117,12 +117,24 @@ mkdir -p tools/docker/bin
 . tools/scripts/setup_release_env.sh
 sh tools/scripts/build_linux.sh
 docker build -t ghcr.io/suntomi/deplo:${DEPLO_RELEASE_VERSION} -f tools/docker/Dockerfile tools/docker
-docker tag ghcr.io/suntomi/deplo:${DEPLO_RELEASE_VERSION} ghcr.io/suntomi/deplo:latest
 echo ${SUNTOMI_VCS_ACCOUNT_KEY} | docker login ghcr.io -u ${SUNTOMI_VCS_ACCOUNT} --password-stdin
 docker push ghcr.io/suntomi/deplo:${DEPLO_RELEASE_VERSION}
-docker push ghcr.io/suntomi/deplo:latest
 deplo vcs release ${DEPLO_RELEASE_TAG} -o name=${DEPLO_RELEASE_NAME}
 deplo vcs release-assets ${DEPLO_RELEASE_TAG} tools/docker/bin/cli --replace -o name=deplo-Linux
+"""
+
+[ci.workflow.deploy.latest]
+depends = ["product"]
+# latest tag of docker image is only updated when production release is created.
+for_targets = ["prod"]
+patterns = [".*/src/.*", "Cargo.*"]
+runner = { type = "Machine", os = "Linux", local_fallback = { image = "docker:20.10", shell = "sh" } }
+command = """
+. tools/scripts/setup_release_env.sh
+echo ${SUNTOMI_VCS_ACCOUNT_KEY} | docker login ghcr.io -u ${SUNTOMI_VCS_ACCOUNT} --password-stdin
+docker pull ghcr.io/suntomi/deplo:${DEPLO_RELEASE_VERSION}
+docker tag ghcr.io/suntomi/deplo:${DEPLO_RELEASE_VERSION} ghcr.io/suntomi/deplo:latest
+docker push ghcr.io/suntomi/deplo:latest
 """
 
 [ci.workflow.deploy.mac]
