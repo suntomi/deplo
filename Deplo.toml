@@ -117,8 +117,10 @@ mkdir -p tools/docker/bin
 . tools/scripts/setup_release_env.sh
 sh tools/scripts/build_linux.sh
 docker build -t ghcr.io/suntomi/deplo:${DEPLO_RELEASE_VERSION} -f tools/docker/Dockerfile tools/docker
+docker tag ghcr.io/suntomi/deplo:${DEPLO_RELEASE_VERSION} ghcr.io/suntomi/deplo:latest
 echo ${SUNTOMI_VCS_ACCOUNT_KEY} | docker login ghcr.io -u ${SUNTOMI_VCS_ACCOUNT} --password-stdin
 docker push ghcr.io/suntomi/deplo:${DEPLO_RELEASE_VERSION}
+docker push ghcr.io/suntomi/deplo:latest
 deplo vcs release ${DEPLO_RELEASE_TAG} -o name=${DEPLO_RELEASE_NAME}
 deplo vcs release-assets ${DEPLO_RELEASE_TAG} tools/docker/bin/cli --replace -o name=deplo-Linux
 """
