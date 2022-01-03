@@ -25,7 +25,7 @@ pub const DEPLO_VERSION: &'static str = env!("DEPLO_RELEASE_VERSION");
 pub const DEPLO_RELEASE_URL_BASE: &'static str = "https://github.com/suntomi/deplo/releases/download";
 
 pub fn cli_download_url(os: RunnerOS, version: &str) -> String {
-    return format!("{}/{}/deplo-{}", DEPLO_RELEASE_URL_BASE, version, os.uname());
+    return format!("{}/{}/deplo-{}", DEPLO_RELEASE_URL_BASE, version, os.cli_download_postfix());
 }
 
 #[derive(Debug)]
@@ -62,6 +62,13 @@ impl RunnerOS {
         match self {
             Self::Linux => "Linux",
             Self::Windows => "Windows",
+            Self::MacOS => "Darwin",
+        }
+    }
+    pub fn cli_download_postfix(&self) -> &'static str {
+        match self {
+            Self::Linux => "Linux",
+            Self::Windows => "Windows.exe",
             Self::MacOS => "Darwin",
         }
     }

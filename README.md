@@ -1,144 +1,85 @@
 ## Deplo
-deplo is set of command line tool that standardized CI/CD process. 
+deplo is set of command line tool that aims to standardize CI/CD process. 
 we aim to provide environment of "write once, run anywhere" for CI/CD. 
-that is, if you build your CI/CD pipeline with deplo, you can run the pipeline not only in any major CI/CD service also on localhost.
+that is, if you build your CI/CD workflow with deplo, you can run it not only in any major CI/CD service also on localhost.
 you can use multiple CI/CD at the same time too. also you have the ability to run workflow with more fine-grained control.
 for instance, you can run specific workflow only when some part of your repository changed. 
 this is extremely useful for running workflows on monorepo (and we love modular monolith approach for building service with microservice architecture :D)
 
 
-### Init project for deplo
-
-``` bash
-deplo init # will create Deplo.toml, .circleci configuration, .github/workflows configuration.
-```
-
-
 ### Glossary
 - release environment
-A name given to a group of infrastructures that are prepared to run different revisions of the software you are developing. eg. dev/staging/production
+A name given to a group of resources (server infrastructures, binary download paths, etc) that are prepared to provide different revisions of the software that you are developing. eg. dev/staging/production
 
 - release target
-branch name which is related with some CD target. for example, if your project always update release environment `dev` when branch `main` is updated, we call `main` is `release target branch` for environment `dev`.
+a branch or tag which is related with some `release environment`. for example, if your project updates `release environment` called `dev` when branch `main` is updated, we call `main` is `release target` for `release environment` `dev`.
 
 - development branch
-branches that each developper add actual commits as the output of their daily development.
+branches that each developper add actual commits as the output of their daily development. it should merge into one of the `release target` by creating pull request for it.
 
 - changeset
-actual changes for the repository that development branch made. deplo uses file names of changeset as filtering which pipelines need to run.
+actual changes for the repository that `release target` or `development branch` made. deplo detect paths of changeset for filtering which `jobs` need to run for this change. see below `jobs` section for example.
 
-- deploy
-set of pipelines which runs when `release target branch` is updated. usually we understand these pipelines as `CD(Continuous Delivery) pipeline`.
+- jobs
+shell scripts that runs when `release target` or `development branch` is created or updated. jobs are grouped into `deploy jobs` and `integrate jobs` according to whether they are invoked when a `release target` or a `development branch` is updated, and filtered with changeset contents. for example, in this repository, `deploy.builder` job will run only when `tools/docker/Dockerfile.builder` is updated for one of the `release target`.
 
-- integrate
-set of pipelines which runs when `development branch` is created or updated. usually we understand these pipelines as `CI(Continuous Integration) pipeline`.
+- deploy workflow
+set of jobs which runs when `release target` is updated. usually we also call the workflow as `CD(Continuous Delivery)`.
 
-
-### Edit Deplo.toml
-- example
-
-``` toml
-[common]
-project_name = "deplo"
-data_dir = "deplo"
-
-[common.release_targets]
-# key value pair of `release environment` = `release target branch`
-dev = "main"
-prod = "release"
-
-[vcs]
-# account information of version control system
-type = "Github"
-email = "${DEPLO_VCS_ACCESS_EMAIL}"
-account = "suntomi-bot"
-key = "${DEPLO_VCS_ACCESS_KEY}"
-
-# you can use multiple ci service with [ci.$account_name]
-[ci.account.default]
-type = "GhAction"
-account = "suntomi-bot"
-key = "${DEPLO_VCS_ACCESS_KEY}"
-
-# non-default CI setting example
-[ci.account.circleci]
-type = "CircleCI"
-key = "${DEPLO_CI_ACCESS_KEY}"
-
-# ====== continuous integration ======
-# `integrate` contains key value pair of `job name` = `{account, patterns, machine, container, command, cache, workdir, depends_on}`
-# changeset is detected as following rule
-# if the branch has related pull/merge request, git diff ${base branch}...${head branch} is used.
-# if the branch does not have any pull/merge request, deplo try to find nearest ancestor branch with the same manner as
-# https://stackoverflow.com/a/17843908/1982282, and use it as base branch.
-[ci.workflow.integrate.data]
-# account to be used to run job, if omitted, default account will be used
-account = circleci
-
-# regexp of file name pattern appeared in changeset. any of regexp matched then this pipeline will be invoked
-patterns = ["data/.*"]
-
-# machine type. linux/macos/windows can be used
-machine = "linux"
-
-# workdir. if omitted, deplo will use container/machine default
-workdir = "/tmp/workdir"
-
-# invoking command for CI
-command = """
-bash ./tools/data/build.sh
-""" 
-
-# dependent job
-depends_on = ["integrate-client"]
-
-# cache setting. multiple cache can be set. execution order is: 
-# restore: array appearing order
-# save: reverse array appearing order
-[[ci.workflow.integrate.data.cache]]
-# keys for using find cache entry. some directive like {{ .Branch }} can be used but because it is CI service specific,
-# consulting each CI service document for detail. 
-# (I hope each CI service provider offers cache feature with cli, then this can be more standardized)
-restore_keys = ["source-v1-{{ .Branch }}-{{ .Revision }}", "source-v1-{{ .Branch }}-", "source-v1-"]
-save_key = "source-v1-{{ .Branch }}-{{ .Revision }}"
-path = "data/built"
+- integrate workflow
+set of jobs which runs when `development branch` is created or updated. same as deploy workflow, usually we also call the workflow as `CI(Continuous Integration)`.
 
 
-# ====== continuous deployment ======
-# deploy is also key value pair of `job name` = `Job(same object as for integrate config)`
-# for deploy, changeset is detected by git diff HEAD^
-[ci.workflow.deploy.data]
-patterns = ["data/.*"]
-container = "suntomi/aws-cli"
-command = """
-bash ./tools/data/upload.sh
-"""
-[[ci.workflow.deploy.data.cache]]
-restore_keys = ["source-v1-{{ .Branch }}-{{ .Revision }}", "source-v1-{{ .Branch }}-", "source-v1-"]
-# omitting save_key or path refrains from saving cache
+### Install deplo
 
-[ci.workflow.integrate.client]
-patterns = ["client/.*"]
-command = """
-bash ./tools/client/run-test.sh
-"""
-
-[ci.workflow.deploy.client]
-patterns = ["client/.*"]
-command = """
-bash ./tools/client/build-and-upload.sh
-"""
+``` bash
+# macos/linux
+curl -L https://github.com/suntomi/deplo/releases/download/${version_to_install}/deplo-$(uname -s) -o /usr/local/bin/deplo
+chmod +x /usr/local/bin/deplo
+# windows (on bash.exe)
+curl -L https://github.com/suntomi/deplo/releases/download/${version_to_install}/deplo-Windows.exe -o /usr/bin/deplo
+chmod +x /usr/bin/deplo
 ```
 
 
-### Secrets
-deplo supports .env file to inject sensitive values as environment variable. when run on localhost, .env is present in repository
-and deplo automatically load and use values. you can upload .env contents as CI service's secret by using `deplo ci setenv`.
+### setup
+1. Create Deplo.toml
+2. Create .env
+3. Run deplo init
+
+#### Create Deplo.toml
+- example https://github.com/suntomi/deplo/blob/main/Deplo.toml
+
+#### Create .env
+deplo supports .env file to inject sensitive values as environment variable. we strongly recommend to use it, instead of writing secrets directly in Deplo.toml. when runs on localhost, deplo automatically search .env (or use `-e` option to specify path) and use it for injecting secret. for running on CI service, deplo uploads .env contents as each CI service's secrets when `deplo init` or `deplo ci setenv` is invoked.
+
+#### Run deplo init
+- if you install deplo, its really simple:
+  ``` bash
+  deplo init
+  # this will create Deplo.toml, .circleci configuration, .github/workflows configuration, and ./deplow
+  ```
+
+- if you don't get deplo installed on your machine, use docker image for first run.
+  ``` bash
+  docker run --rm -ti -v $(pwd):/workdir -w /workdir ghcr.io/suntomi/deplo:latest init
+  ```
+- then script called `deplow` will be created on root of repository, you can use `deplow` to invoke deplo
+without being deplo global installed.
+  ``` bash
+  ./deplow info version
+  # should prints its version number
+  ```
 
 
 ### Running deplo
 
 ``` bash
-deplo ci kick # run pipeline according to current branch HEAD status. uses Deplo.toml of current directory
-deplo ci kick "data/.*" # run workflow that related with specific changeset
+deplo ci kick # run workflow according to current branch HEAD status. with using Deplo.toml of current directory
+deplo ci deploy job1 # run deploy job which name is `job1` in Deplo.toml
+deplo ci integrate job2 # run integrate job which name is `job2` in Deplo.toml
 ```
+
+
+### Roadmap
+[see here](https://github.com/suntomi/deplo/issues/12)
