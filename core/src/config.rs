@@ -479,7 +479,7 @@ impl Config {
     pub fn project_name(&self) -> &str {
         &self.common.project_name
     }
-    pub fn release_target(&self) -> Option<&str> {
+    pub fn runtime_release_target(&self) -> Option<&str> {
         match &self.runtime.release_target {
             Some(s) => Some(&s),
             None => None

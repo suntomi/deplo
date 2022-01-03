@@ -74,7 +74,28 @@ impl<GIT: (git::GitFeatures) + (git::GitHubFeatures), S: shell::Shell> Github<GI
     fn get_upload_url_from_release(&self, release: &str) -> Result<String, Box<dyn Error>> {
         let upload_url = self.get_value_from_json_object(release, "upload_url")?;
         Ok(regex::Regex::new(r#"\{.*\}$"#).unwrap().replace(&upload_url, "").to_string())
-   }
+    }
+    fn determine_release_target(&self, ref_name: &str, is_branch: bool) -> Option<String> {
+        let config = self.config.borrow();
+        for (k,v) in &config.common.release_targets {
+            if is_branch && !v.is_branch() {
+                continue;
+            }
+            if !is_branch && !v.is_tag() {
+                continue;
+            }
+            let re = Pattern::new(v.path()).unwrap();
+            match re.matches(&ref_name) {
+                true => return Some(k.to_string()),
+                false => {}, 
+            }
+        }
+        None
+    }
+    fn url_from_pull_ref(&self, ref_name: &str) -> String {
+        let user_and_repo = (self as &dyn vcs::VCS).user_and_repo().unwrap();
+        format!("https://github.com/{}/{}/{}", user_and_repo.0, user_and_repo.1, ref_name)
+    }
 }
 
 impl<GIT: (git::GitFeatures) + (git::GitHubFeatures), S: shell::Shell> module::Module for Github<GIT, S> {
@@ -98,22 +119,19 @@ impl<GIT: (git::GitFeatures) + (git::GitHubFeatures), S: shell::Shell> vcs::VCS 
         }))
     }
     fn release_target(&self) -> Option<String> {        
-        let config = self.config.borrow();
-        let (b, is_branch) = self.git.current_branch().unwrap();
-        for (k,v) in &config.common.release_targets {
-            if is_branch && !v.is_branch() {
-                continue;
-            }
-            if !is_branch && !v.is_tag() {
-                continue;
-            }
-            let re = Pattern::new(v.path()).unwrap();
-            match re.matches(&b) {
-                true => return Some(k.to_string()),
-                false => {}, 
-            }
+        match self.git.current_ref().unwrap() {
+            (vcs::RefType::Pull, ref_name) => {
+                if let config::VCSConfig::Github{ key, account, .. } = &self.config.borrow().vcs {
+                    let base = self.git.pr_data(&self.url_from_pull_ref(&ref_name), account, key, "$.base.").unwrap();
+                    self.determine_release_target(&base, true)
+                } else {
+                    panic!("vcs account is not for github ${:?}", &self.config.borrow().vcs)
+                }
+            },
+            (vcs::RefType::Tag, ref_name) => self.determine_release_target(&ref_name, false),
+            (vcs::RefType::Branch, ref_name) => self.determine_release_target(&ref_name, true),
+            (vcs::RefType::Commit, _) => None
         }
-        None
     }
     fn release(
         &self, target_ref: (&str, bool), opts: &JsonValue

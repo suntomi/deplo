@@ -82,7 +82,7 @@ pub trait GitHubFeatures {
         &self, title: &str, head_branch: &str, base_branch: &str, options: &HashMap<&str, &str>
     ) -> Result<(), Box<dyn Error>>;  
     fn pr_data(
-        &self, pr_url: &str, accont: &str, token: &str, json_path: &str
+        &self, pr_url: &str, account: &str, token: &str, json_path: &str
     ) -> Result<String, Box<dyn Error>>;
 }
 
@@ -141,7 +141,8 @@ impl<S: shell::Shell> GitFeatures for Git<S> {
                 if ref_path.starts_with("remotes/") {
                     // remote branch that does not have local counterpart
                     if ref_path[0..8].starts_with("pull") {
-                        return Ok((vcs::RefType::Pull, ref_path[8..].to_string()));
+                        let pos = ref_path.rfind('/').expect(format!("invalid ref path: {}", ref_path).as_str());
+                        return Ok((vcs::RefType::Pull, ref_path[8..(pos - 1)].to_string()));
                     } else {
                         return Ok((vcs::RefType::Branch, ref_path[8..].to_string()));
                     }
@@ -254,7 +255,7 @@ impl<S: shell::Shell> GitFeatures for Git<S> {
             }
 			self.shell.exec(&vec!("git", "commit", "-m", msg), shell::no_env(), shell::no_cwd(), false)?;
 			log::debug!("commit done: [{}]", msg);
-			match config.release_target() {
+			match config.runtime_release_target() {
                 Some(_) => {
                     setup_remote!(self, url);
                     let (b, is_branch) = self.current_branch()?;
@@ -331,13 +332,13 @@ impl<S: shell::Shell> GitHubFeatures for Git<S> {
         Ok(())
     }
     fn pr_data(
-        &self, pr_url: &str, _: &str, token: &str, json_path: &str
+        &self, pr_url: &str, _account: &str, token: &str, json_path: &str
     ) -> Result<String, Box<dyn Error>> {
         let api_url = format!("https://api.github.com/repos/${pr_part}", pr_part = &pr_url[19..]);
         let output = self.shell.exec(&vec![
             "curl", "-s", "-H", &format!("Authorization: token {}", token), 
             "-H", "Accept: application/vnd.github.v3+json", &api_url
         ], shell::no_env(), shell::no_cwd(), true)?;
-        Ok(jsonpath(&output, &format!("${}", json_path))?.unwrap_or("".to_string()))
+        Ok(jsonpath(&output, json_path)?.unwrap_or("".to_string()))
     }
 }
