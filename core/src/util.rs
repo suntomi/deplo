@@ -354,8 +354,20 @@ pub fn str_to_json(s: &str) -> serde_json::Value {
 pub fn jsonpath(src: &str, expr: &str) -> Result<Option<String>, Box<dyn Error>> {
     let filtered = jsonpath_lib::select_as_str(src, expr)?;
     let json = str_to_json(&filtered);
-    if json.is_array() && json.as_array().unwrap().len() > 0 {
-        Ok(Some(filtered))
+    if json.is_array() {
+        let len = json.as_array().unwrap().len();
+        if len == 0 {
+            return Ok(None);
+        } else if len == 1 {
+            let obj = &json.as_array().unwrap()[0];
+            if obj.is_string() {
+                return Ok(Some(obj.as_str().unwrap().to_string()));
+            } else {
+                return Ok(Some(obj.to_string()));
+            }
+        } else {
+            return Ok(Some(filtered))
+        }
     } else {
         Ok(None)
     }
@@ -484,5 +496,28 @@ mod tests {
             None
         );
         
+        let json_obj2 = serde_json::json!({
+            "head": {
+                "ref": "hoge",
+                "title": "hogehoge",
+                "number": 1,
+                "boolean": false
+            },
+            "base": {
+                "ref": "fuga",
+                "title": "fugafuga",
+                "obj": {
+                    "key": "value"
+                },
+                "array": [1,2,3]
+            },
+        });
+        let s2 = serde_json::to_string(&json_obj2).unwrap();
+        assert_eq!(&jsonpath(&s2, "$.head.title").unwrap().unwrap(), "hogehoge");
+        assert_eq!(&jsonpath(&s2, "$.head.number").unwrap().unwrap(), "1");
+        assert_eq!(&jsonpath(&s2, "$.head.boolean").unwrap().unwrap(), "false");
+        assert_eq!(&jsonpath(&s2, "$.base.ref").unwrap().unwrap(), "fuga");
+        assert_eq!(&jsonpath(&s2, "$.base.obj").unwrap().unwrap(), r#"{"key":"value"}"#);
+        assert_eq!(&jsonpath(&s2, "$.base.array").unwrap().unwrap(), "[1,2,3]");
     }
 }

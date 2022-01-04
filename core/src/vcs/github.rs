@@ -121,8 +121,10 @@ impl<GIT: (git::GitFeatures) + (git::GitHubFeatures), S: shell::Shell> vcs::VCS 
     fn release_target(&self) -> Option<String> {        
         match self.git.current_ref().unwrap() {
             (vcs::RefType::Pull, ref_name) => {
+                log::info!("relese_target: pull {}", ref_name);
                 if let config::VCSConfig::Github{ key, account, .. } = &self.config.borrow().vcs {
-                    let base = self.git.pr_data(&self.url_from_pull_ref(&ref_name), account, key, "$.base.").unwrap();
+                    let base = self.git.pr_data(&self.url_from_pull_ref(&ref_name), account, key, "$.base.ref").unwrap();
+                    log::info!("relese_target: pull {} => base {}", ref_name, base);
                     self.determine_release_target(&base, true)
                 } else {
                     panic!("vcs account is not for github ${:?}", &self.config.borrow().vcs)
