@@ -408,8 +408,8 @@ impl<S: shell::Shell> ci::CI for GhAction<S> {
                 match std::env::var("GITHUB_REF") {
                     Ok(ref_name) => {
                         match ref_type.as_str() {
-                            "branch" => envs.insert("DEPLO_CI_BRANCH_NAME", ref_name),
-                            "tag" => envs.insert("DEPLO_CI_TAG_NAME", ref_name),
+                            "branch" => envs.insert("DEPLO_CI_BRANCH_NAME", ref_name.replace("refs/heads/", "")),
+                            "tag" => envs.insert("DEPLO_CI_TAG_NAME", ref_name.replace("refs/tags/", "")),
                             v => panic!("invalid ref_type {}", v),
                         };
                     },
