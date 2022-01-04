@@ -169,9 +169,13 @@ impl<S: shell::Shell> GitFeatures for Git<S> {
         match ref_type {
             vcs::RefType::Pull => {
                 // pull ref has actual head of branch exactly before merge commit
-                Ok((self.shell.output_of(&vec!(
+                let ref_path = match self.shell.output_of(&vec!(
                     "git", "symbolic-ref" , "--short", "HEAD^"
-                ), shell::no_env(), shell::no_cwd())?, true))
+                ), shell::no_env(), shell::no_cwd()) {
+                    Ok(ref_path) => ref_path,
+                    Err(_) => return Ok((ref_path, false))
+                };
+                Ok((ref_path, true))
             },
             vcs::RefType::Tag => {
                 Ok((ref_path, false))

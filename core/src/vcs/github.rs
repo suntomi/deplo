@@ -96,6 +96,13 @@ impl<GIT: (git::GitFeatures) + (git::GitHubFeatures), S: shell::Shell> Github<GI
         let user_and_repo = (self as &dyn vcs::VCS).user_and_repo().unwrap();
         format!("https://github.com/{}/{}/{}", user_and_repo.0, user_and_repo.1, ref_name)
     }
+    fn pr_data_from_ref_path(&self, ref_path: &str, json_path: &str) ->Result<String, Box<dyn Error>> {
+        if let config::VCSConfig::Github{ key, account, .. } = &self.config.borrow().vcs {
+            self.git.pr_data(&self.url_from_pull_ref(&ref_path), account, key, json_path)
+        } else {
+            panic!("vcs account is not for github ${:?}", &self.config.borrow().vcs)
+        }        
+    }
 }
 
 impl<GIT: (git::GitFeatures) + (git::GitHubFeatures), S: shell::Shell> module::Module for Github<GIT, S> {
@@ -121,14 +128,8 @@ impl<GIT: (git::GitFeatures) + (git::GitHubFeatures), S: shell::Shell> vcs::VCS 
     fn release_target(&self) -> Option<String> {        
         match self.git.current_ref().unwrap() {
             (vcs::RefType::Pull, ref_name) => {
-                log::info!("relese_target: pull {}", ref_name);
-                if let config::VCSConfig::Github{ key, account, .. } = &self.config.borrow().vcs {
-                    let base = self.git.pr_data(&self.url_from_pull_ref(&ref_name), account, key, "$.base.ref").unwrap();
-                    log::info!("relese_target: pull {} => base {}", ref_name, base);
-                    self.determine_release_target(&base, true)
-                } else {
-                    panic!("vcs account is not for github ${:?}", &self.config.borrow().vcs)
-                }
+                let base = self.pr_data_from_ref_path(&ref_name, "$.base.ref").unwrap();
+                self.determine_release_target(&base, true)
             },
             (vcs::RefType::Tag, ref_name) => self.determine_release_target(&ref_name, false),
             (vcs::RefType::Branch|vcs::RefType::Remote, ref_name) => self.determine_release_target(&ref_name, true),
@@ -229,7 +230,32 @@ impl<GIT: (git::GitFeatures) + (git::GitHubFeatures), S: shell::Shell> vcs::VCS 
         self.git.current_ref()
     }
     fn current_branch(&self) -> Result<(String, bool), Box<dyn Error>> {
-        self.git.current_branch()
+        let (ref_type, ref_path) = self.git.current_ref()?;
+        match ref_type {
+            vcs::RefType::Pull => {
+                // pull ref has actual head of branch exactly before merge commit
+                let ref_path = match self.shell.output_of(&vec!(
+                    "git", "symbolic-ref" , "--short", "HEAD^"
+                ), shell::no_env(), shell::no_cwd()) {
+                    Ok(ref_path) => ref_path,
+                    // some CI environment like gh action only retrieve head commit,
+                    // if so we fallback to get it from pulls API
+                    Err(_) => self.pr_data_from_ref_path(&ref_path, "$.head.ref")?
+                };
+                Ok((ref_path, true))
+            },
+            vcs::RefType::Tag => {
+                Ok((ref_path, false))
+            },
+            vcs::RefType::Branch|vcs::RefType::Remote => {
+                Ok((ref_path, true))
+            },
+            vcs::RefType::Commit => {
+                escalate!(Box::new(vcs::VCSError {
+                    cause: format!("not on a branch or tag, got: {}", ref_path)
+                }))
+            }
+        }
     }
     fn commit_hash(&self, expr: Option<&str>) -> Result<String, Box<dyn Error>> {
         self.git.commit_hash(expr)
