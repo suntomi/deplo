@@ -116,7 +116,7 @@ impl<S: shell::Shell> Git<S> {
                 let pos = ref_path.rfind('/').expect(format!("invalid ref path: {}", ref_path).as_str());
                 return Ok((vcs::RefType::Pull, ref_path[8..pos].to_string()));
             } else {
-                return Ok((vcs::RefType::Branch, ref_path[8..].to_string()));
+                return Ok((vcs::RefType::Remote, ref_path[8..].to_string()));
             }
         } else if ref_path.starts_with("tags/") {
             // tags
@@ -176,7 +176,7 @@ impl<S: shell::Shell> GitFeatures for Git<S> {
             vcs::RefType::Tag => {
                 Ok((ref_path, false))
             },
-            vcs::RefType::Branch => {
+            vcs::RefType::Branch|vcs::RefType::Remote => {
                 Ok((ref_path, true))
             },
             vcs::RefType::Commit => {
@@ -360,7 +360,7 @@ mod tests {
 
         let path = "remotes/origin/umegaya/deplow";
         let (ref_type, ref_name) = git.parse_ref_path(path).unwrap();
-        assert_eq!(ref_type, vcs::RefType::Branch);
+        assert_eq!(ref_type, vcs::RefType::Remote);
         assert_eq!(ref_name, "origin/umegaya/deplow");
 
         let path = "remotes/pull/123/merge";

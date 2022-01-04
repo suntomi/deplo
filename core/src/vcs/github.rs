@@ -129,7 +129,7 @@ impl<GIT: (git::GitFeatures) + (git::GitHubFeatures), S: shell::Shell> vcs::VCS 
                 }
             },
             (vcs::RefType::Tag, ref_name) => self.determine_release_target(&ref_name, false),
-            (vcs::RefType::Branch, ref_name) => self.determine_release_target(&ref_name, true),
+            (vcs::RefType::Branch|vcs::RefType::Remote, ref_name) => self.determine_release_target(&ref_name, true),
             (vcs::RefType::Commit, _) => None
         }
     }
@@ -247,7 +247,7 @@ impl<GIT: (git::GitFeatures) + (git::GitHubFeatures), S: shell::Shell> vcs::VCS 
     }
     fn pr_url_from_current_ref(&self) -> Result<Option<String>, Box<dyn Error>> {
         match self.git.current_ref()? {
-            (vcs::RefType::Branch, _) => Ok(None),
+            (vcs::RefType::Branch|vcs::RefType::Remote, _) => Ok(None),
             (vcs::RefType::Pull, ref_name) => Ok(Some(self.url_from_pull_ref(&ref_name))),
             (vcs::RefType::Tag, _) => Ok(None),
             (vcs::RefType::Commit, _) => Ok(None)
@@ -269,10 +269,7 @@ impl<GIT: (git::GitFeatures) + (git::GitHubFeatures), S: shell::Shell> vcs::VCS 
     }
     fn make_diff(&self) -> Result<String, Box<dyn Error>> {
         let diff = match self.git.current_ref()? {
-            (vcs::RefType::Branch, _) => {
-                self.git.diff_paths("HEAD^")?
-            },
-            (vcs::RefType::Pull, _) => {
+            (vcs::RefType::Branch|vcs::RefType::Remote|vcs::RefType::Pull, _) => {
                 self.git.diff_paths("HEAD^")?
             },
             (vcs::RefType::Tag, ref_name) => {

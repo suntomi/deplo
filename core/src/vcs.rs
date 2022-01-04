@@ -11,6 +11,7 @@ use crate::module;
 #[derive(Eq, PartialEq, Debug)]
 pub enum RefType {
     Branch,
+    Remote,
     Tag,
     Pull,
     Commit,
