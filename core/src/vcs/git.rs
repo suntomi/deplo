@@ -109,6 +109,25 @@ impl<S: shell::Shell> Git<S> {
             }))
         }
     }
+    fn parse_ref_path(&self, ref_path: &str) -> Result<(vcs::RefType, String), Box<dyn Error>> {
+        if ref_path.starts_with("remotes/") {
+            // remote branch that does not have local counterpart
+            if ref_path[8..].starts_with("pull") {
+                let pos = ref_path.rfind('/').expect(format!("invalid ref path: {}", ref_path).as_str());
+                return Ok((vcs::RefType::Pull, ref_path[8..pos].to_string()));
+            } else {
+                return Ok((vcs::RefType::Branch, ref_path[8..].to_string()));
+            }
+        } else if ref_path.starts_with("tags/") {
+            // tags
+            return Ok((vcs::RefType::Tag, ref_path[5..].to_string()));
+        } else if ref_path.starts_with("heads/") {
+            // local branch
+            return Ok((vcs::RefType::Branch, ref_path[6..].to_string()));
+        } else {
+            return Ok((vcs::RefType::Commit, self.commit_hash(None)?))
+        }
+    }
 }
 
 impl<S: shell::Shell> GitFeatures for Git<S> {
@@ -138,23 +157,7 @@ impl<S: shell::Shell> GitFeatures for Git<S> {
             "git", "describe" , "--all"
         ), shell::no_env(), shell::no_cwd()) {
             Ok(ref_path) => {
-                if ref_path.starts_with("remotes/") {
-                    // remote branch that does not have local counterpart
-                    if ref_path[0..8].starts_with("pull") {
-                        let pos = ref_path.rfind('/').expect(format!("invalid ref path: {}", ref_path).as_str());
-                        return Ok((vcs::RefType::Pull, ref_path[8..(pos - 1)].to_string()));
-                    } else {
-                        return Ok((vcs::RefType::Branch, ref_path[8..].to_string()));
-                    }
-                } else if ref_path.starts_with("tags/") {
-                    // tags
-                    return Ok((vcs::RefType::Tag, ref_path[5..].to_string()));
-                } else if ref_path.starts_with("heads/") {
-                    // local branch
-                    return Ok((vcs::RefType::Branch, ref_path[6..].to_string()));
-                } else {
-                    return Ok((vcs::RefType::Commit, self.commit_hash(None)?))
-                }
+                return self.parse_ref_path(&ref_path)
             },
             Err(_) => {
                 return Ok((vcs::RefType::Commit, self.commit_hash(None)?))
@@ -340,5 +343,34 @@ impl<S: shell::Shell> GitHubFeatures for Git<S> {
             "-H", "Accept: application/vnd.github.v3+json", &api_url
         ], shell::no_env(), shell::no_cwd(), true)?;
         Ok(jsonpath(&output, json_path)?.unwrap_or("".to_string()))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parse_ref_path_test() {
+        let git = Git::<shell::Default>::new("umegaya", "mail@address.com", &config::Config::dummy(None).unwrap());
+        let path = "heads/main";
+        let (ref_type, ref_name) = git.parse_ref_path(path).unwrap();
+        assert_eq!(ref_type, vcs::RefType::Branch);
+        assert_eq!(ref_name, "main");
+
+        let path = "remotes/origin/umegaya/deplow";
+        let (ref_type, ref_name) = git.parse_ref_path(path).unwrap();
+        assert_eq!(ref_type, vcs::RefType::Branch);
+        assert_eq!(ref_name, "origin/umegaya/deplow");
+
+        let path = "remotes/pull/123/merge";
+        let (ref_type, ref_name) = git.parse_ref_path(path).unwrap();
+        assert_eq!(ref_type, vcs::RefType::Pull);
+        assert_eq!(ref_name, "pull/123");
+
+        let path = "tags/0.1.1";
+        let (ref_type, ref_name) = git.parse_ref_path(path).unwrap();
+        assert_eq!(ref_type, vcs::RefType::Tag);
+        assert_eq!(ref_name, "0.1.1");
     }
 }
