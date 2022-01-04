@@ -50,6 +50,10 @@ impl<S: shell::Shell> CI<S> {
             let full_name = &format!("{}-{}", jobs_and_kind.1.as_str(), name);
             if vcs.changed(&job.patterns.iter().map(|p| p.as_ref()).collect()) &&
                 job.matches_current_release_target(&config.runtime.release_target) {
+                if config.runtime.dryrun {
+                    log::info!("dryrun mode, skip running job {}", full_name);
+                    continue;
+                }
                 log::debug!("========== invoking {}, pattern [{}] ==========", full_name, job.patterns.join(", "));
                 ci.mark_job_executed(&full_name)?;
             } else {
