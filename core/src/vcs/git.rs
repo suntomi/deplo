@@ -341,7 +341,10 @@ impl<S: shell::Shell> GitHubFeatures for Git<S> {
     fn pr_data(
         &self, pr_url: &str, _account: &str, token: &str, json_path: &str
     ) -> Result<String, Box<dyn Error>> {
-        let api_url = format!("https://api.github.com/repos/${pr_part}", pr_part = &pr_url[19..]);
+        let api_url = format!(
+            "https://api.github.com/repos/{pr_part}",
+            pr_part = &pr_url[19..].replace("/pull/", "/pulls/")
+        );
         let output = self.shell.exec(&vec![
             "curl", "-s", "-H", &format!("Authorization: token {}", token), 
             "-H", "Accept: application/vnd.github.v3+json", &api_url
