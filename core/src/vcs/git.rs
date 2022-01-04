@@ -219,7 +219,7 @@ impl<S: shell::Shell> GitFeatures for Git<S> {
     fn tags(&self) -> Result<Vec<String>, Box<dyn Error>> {
         self.shell.exec(&vec!(
             "git", "fetch", "--tags"
-        ), shell::no_env(), shell::no_cwd(), false)?;
+        ), shell::no_env(), shell::no_cwd(), true)?;
         Ok(self.shell.output_of(&vec!(
             "git", "tag"
         ), shell::no_env(), shell::no_cwd())?.split('\n').map(|s| s.to_string()).collect())
