@@ -56,7 +56,8 @@ pub trait Shell {
             // TODO_PATH: use Path to generate path of /var/run/docker.sock (left(host) side)
             vec!["-v", "/var/run/docker.sock:/var/run/docker.sock"],
             vec!["-v", &format!("{}:{}", &repository_mount_path, &repository_mount_path)],
-            vec![image, shell.as_ref().map_or_else(|| "bash", |v| v.as_str()), "-c", code]
+            vec!["--entrypoint", shell.as_ref().map_or_else(|| "bash", |v| v.as_str())],
+            vec![image, "-c", code]
         ].concat(), envs, cwd, capture)?;
         return Ok(result);
     }
