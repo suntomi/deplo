@@ -25,6 +25,7 @@ jobs:
       DEPLO_OUTPUT_CLI_VERSION: ${{ steps.deplo-ci-kick.outputs.DEPLO_OUTPUT_CLI_VERSION }}
       deploy-base: ${{ steps.deplo-ci-kick.outputs.deploy-base }}
       deploy-builder: ${{ steps.deplo-ci-kick.outputs.deploy-builder }}
+      deploy-latest: ${{ steps.deplo-ci-kick.outputs.deploy-latest }}
       deploy-mac: ${{ steps.deplo-ci-kick.outputs.deploy-mac }}
       deploy-product: ${{ steps.deplo-ci-kick.outputs.deploy-product }}
       deploy-vmfb: ${{ steps.deplo-ci-kick.outputs.deploy-vmfb }}
@@ -51,8 +52,8 @@ jobs:
           sudo: true
   deplo-finish:
     name: Cleanup CI
-    if: ${{ !failure() && (needs.deploy-base.outputs.need-cleanup || needs.deploy-builder.outputs.need-cleanup || needs.deploy-mac.outputs.need-cleanup || needs.deploy-product.outputs.need-cleanup || needs.deploy-vmfb.outputs.need-cleanup || needs.deploy-win.outputs.need-cleanup || needs.integrate-base.outputs.need-cleanup || needs.integrate-builder.outputs.need-cleanup || needs.integrate-src.outputs.need-cleanup) }}
-    needs: ["deplo-main","deploy-base","deploy-builder","deploy-mac","deploy-product","deploy-vmfb","deploy-win","integrate-base","integrate-builder","integrate-src"]
+    if: ${{ !failure() && (needs.deploy-base.outputs.need-cleanup || needs.deploy-builder.outputs.need-cleanup || needs.deploy-latest.outputs.need-cleanup || needs.deploy-mac.outputs.need-cleanup || needs.deploy-product.outputs.need-cleanup || needs.deploy-vmfb.outputs.need-cleanup || needs.deploy-win.outputs.need-cleanup || needs.integrate-base.outputs.need-cleanup || needs.integrate-builder.outputs.need-cleanup || needs.integrate-src.outputs.need-cleanup) }}
+    needs: ["deplo-main","deploy-base","deploy-builder","deploy-latest","deploy-mac","deploy-product","deploy-vmfb","deploy-win","integrate-base","integrate-builder","integrate-src"]
     runs-on: ubuntu-latest
     steps:
       - name: Fetch deplo cli
@@ -116,6 +117,31 @@ jobs:
       - name: deploy builder
         id: deplo-deploy-builder
         run: deplo ci deploy builder
+      - name: Setup ssh session to debug
+        if: ${{ failure() }}
+        uses: umegaya/action-tmate@a3d459813f3429bd95fc48bcd980b2fb40f10ad0
+        with:
+          sudo: true
+  deploy-latest:
+    needs: ["deploy-product","deplo-main"]
+    if: ${{ needs.deplo-main.outputs.deploy-latest && !failure() }}
+    name: Running job deploy-latest
+    runs-on: ubuntu-latest
+  
+    outputs:
+      need-cleanup: ${{ steps.deplo-deploy-latest.outputs.need-cleanup }}
+    steps:
+      - name: Fetch deplo cli
+        run: |
+          curl -L https://github.com/suntomi/deplo/releases/download/nightly/deplo-Linux -o /usr/local/bin/deplo
+          chmod +x /usr/local/bin/deplo
+      - name: Checkout
+        uses: actions/checkout@v2
+      
+  
+      - name: deploy latest
+        id: deplo-deploy-latest
+        run: deplo ci deploy latest
       - name: Setup ssh session to debug
         if: ${{ failure() }}
         uses: umegaya/action-tmate@a3d459813f3429bd95fc48bcd980b2fb40f10ad0
