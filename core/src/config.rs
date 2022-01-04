@@ -393,7 +393,10 @@ impl RuntimeConfig {
                     Some(_) => Some(WorkflowType::Integrate),
                     None => match vcs.pr_url_from_current_ref()? {
                         Some(_) => Some(WorkflowType::Integrate),
-                        None => None
+                        None => match vcs.release_target() {
+                            Some(_) => Some(WorkflowType::Deploy),
+                            None => None
+                        }
                     }
                 }
             }
