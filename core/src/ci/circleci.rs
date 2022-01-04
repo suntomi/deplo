@@ -129,7 +129,7 @@ impl<'a, S: shell::Shell> ci::CI for CircleCI<S> {
     fn kick(&self) -> Result<(), Box<dyn Error>> {
         Ok(())
     }
-    fn pull_request_url(&self) -> Result<Option<String>, Box<dyn Error>> {
+    fn pr_url_from_env(&self) -> Result<Option<String>, Box<dyn Error>> {
         match std::env::var("CIRCLE_PULL_REQUEST") {
             Ok(v) => if v.is_empty() { Ok(None) } else { Ok(Some(v)) },
             Err(e) => {

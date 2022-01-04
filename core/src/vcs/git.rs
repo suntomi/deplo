@@ -82,7 +82,7 @@ pub trait GitHubFeatures {
         &self, title: &str, head_branch: &str, base_branch: &str, options: &HashMap<&str, &str>
     ) -> Result<(), Box<dyn Error>>;  
     fn pr_data(
-        &self, pr_url: &str, accont: &str, token: &str, json_path: &str
+        &self, pr_url: &str, account: &str, token: &str, json_path: &str
     ) -> Result<String, Box<dyn Error>>;
 }
 
@@ -107,6 +107,25 @@ impl<S: shell::Shell> Git<S> {
             Err(Box::new(config::ConfigError {
                 cause: format!("should have github config, got: {}", config.vcs)
             }))
+        }
+    }
+    fn parse_ref_path(&self, ref_path: &str) -> Result<(vcs::RefType, String), Box<dyn Error>> {
+        if ref_path.starts_with("remotes/") {
+            // remote branch that does not have local counterpart
+            if ref_path[8..].starts_with("pull") {
+                let pos = ref_path.rfind('/').expect(format!("invalid ref path: {}", ref_path).as_str());
+                return Ok((vcs::RefType::Pull, ref_path[8..pos].to_string()));
+            } else {
+                return Ok((vcs::RefType::Remote, ref_path[8..].to_string()));
+            }
+        } else if ref_path.starts_with("tags/") {
+            // tags
+            return Ok((vcs::RefType::Tag, ref_path[5..].to_string()));
+        } else if ref_path.starts_with("heads/") {
+            // local branch
+            return Ok((vcs::RefType::Branch, ref_path[6..].to_string()));
+        } else {
+            return Ok((vcs::RefType::Commit, self.commit_hash(None)?))
         }
     }
 }
@@ -138,22 +157,7 @@ impl<S: shell::Shell> GitFeatures for Git<S> {
             "git", "describe" , "--all"
         ), shell::no_env(), shell::no_cwd()) {
             Ok(ref_path) => {
-                if ref_path.starts_with("remotes/") {
-                    // remote branch that does not have local counterpart
-                    if ref_path[0..8].starts_with("pull") {
-                        return Ok((vcs::RefType::Pull, ref_path[8..].to_string()));
-                    } else {
-                        return Ok((vcs::RefType::Branch, ref_path[8..].to_string()));
-                    }
-                } else if ref_path.starts_with("tags/") {
-                    // tags
-                    return Ok((vcs::RefType::Tag, ref_path[5..].to_string()));
-                } else if ref_path.starts_with("heads/") {
-                    // local branch
-                    return Ok((vcs::RefType::Branch, ref_path[6..].to_string()));
-                } else {
-                    return Ok((vcs::RefType::Commit, self.commit_hash(None)?))
-                }
+                return self.parse_ref_path(&ref_path)
             },
             Err(_) => {
                 return Ok((vcs::RefType::Commit, self.commit_hash(None)?))
@@ -165,14 +169,18 @@ impl<S: shell::Shell> GitFeatures for Git<S> {
         match ref_type {
             vcs::RefType::Pull => {
                 // pull ref has actual head of branch exactly before merge commit
-                Ok((self.shell.output_of(&vec!(
+                let ref_path = match self.shell.output_of(&vec!(
                     "git", "symbolic-ref" , "--short", "HEAD^"
-                ), shell::no_env(), shell::no_cwd())?, true))
+                ), shell::no_env(), shell::no_cwd()) {
+                    Ok(ref_path) => ref_path,
+                    Err(_) => return Ok((ref_path, false))
+                };
+                Ok((ref_path, true))
             },
             vcs::RefType::Tag => {
                 Ok((ref_path, false))
             },
-            vcs::RefType::Branch => {
+            vcs::RefType::Branch|vcs::RefType::Remote => {
                 Ok((ref_path, true))
             },
             vcs::RefType::Commit => {
@@ -254,7 +262,7 @@ impl<S: shell::Shell> GitFeatures for Git<S> {
             }
 			self.shell.exec(&vec!("git", "commit", "-m", msg), shell::no_env(), shell::no_cwd(), false)?;
 			log::debug!("commit done: [{}]", msg);
-			match config.release_target() {
+			match config.runtime_release_target() {
                 Some(_) => {
                     setup_remote!(self, url);
                     let (b, is_branch) = self.current_branch()?;
@@ -331,13 +339,45 @@ impl<S: shell::Shell> GitHubFeatures for Git<S> {
         Ok(())
     }
     fn pr_data(
-        &self, pr_url: &str, _: &str, token: &str, json_path: &str
+        &self, pr_url: &str, _account: &str, token: &str, json_path: &str
     ) -> Result<String, Box<dyn Error>> {
-        let api_url = format!("https://api.github.com/repos/${pr_part}", pr_part = &pr_url[19..]);
+        let api_url = format!(
+            "https://api.github.com/repos/{pr_part}",
+            pr_part = &pr_url[19..].replace("/pull/", "/pulls/")
+        );
         let output = self.shell.exec(&vec![
             "curl", "-s", "-H", &format!("Authorization: token {}", token), 
             "-H", "Accept: application/vnd.github.v3+json", &api_url
         ], shell::no_env(), shell::no_cwd(), true)?;
-        Ok(jsonpath(&output, &format!("${}", json_path))?.unwrap_or("".to_string()))
+        Ok(jsonpath(&output, json_path)?.unwrap_or("".to_string()))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parse_ref_path_test() {
+        let git = Git::<shell::Default>::new("umegaya", "mail@address.com", &config::Config::dummy(None).unwrap());
+        let path = "heads/main";
+        let (ref_type, ref_name) = git.parse_ref_path(path).unwrap();
+        assert_eq!(ref_type, vcs::RefType::Branch);
+        assert_eq!(ref_name, "main");
+
+        let path = "remotes/origin/umegaya/deplow";
+        let (ref_type, ref_name) = git.parse_ref_path(path).unwrap();
+        assert_eq!(ref_type, vcs::RefType::Remote);
+        assert_eq!(ref_name, "origin/umegaya/deplow");
+
+        let path = "remotes/pull/123/merge";
+        let (ref_type, ref_name) = git.parse_ref_path(path).unwrap();
+        assert_eq!(ref_type, vcs::RefType::Pull);
+        assert_eq!(ref_name, "pull/123");
+
+        let path = "tags/0.1.1";
+        let (ref_type, ref_name) = git.parse_ref_path(path).unwrap();
+        assert_eq!(ref_type, vcs::RefType::Tag);
+        assert_eq!(ref_name, "0.1.1");
     }
 }

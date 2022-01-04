@@ -202,6 +202,26 @@ impl Job {
         }
     }
 }
+#[derive(Serialize, Deserialize, Clone, Copy, Eq, PartialEq)]
+pub enum WorkflowType {
+    Deploy,
+    Integrate,
+}
+impl WorkflowType {
+    pub fn from_str(s: &str) -> Self {
+        match s {
+            "deploy" => Self::Deploy,
+            "integrate" => Self::Integrate,
+            _ => panic!("unknown workflow type: {}", s),
+        }
+    }
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::Deploy => "deploy",
+            Self::Integrate => "integrate",
+        }
+    }
+}
 #[derive(Serialize, Deserialize)]
 pub struct WorkflowConfig {
     // we call workflow as combination of jobs
@@ -310,12 +330,117 @@ pub struct RuntimeConfig {
     pub verbosity: u64,
     pub dryrun: bool,
     pub debug: HashMap<String, String>,
-    pub distributions: Vec<String>,
-    pub latest_endpoint_versions: HashMap<String, u32>,
-    pub endpoint_service_map: HashMap<String, String>,
     pub release_target: Option<String>,
+    pub workflow_type: Option<WorkflowType>,
     pub workdir: Option<String>,
     pub dotenv_path: Option<String>
+}
+impl RuntimeConfig {
+    fn with_args<A: args::Args>(args: &A) -> Self {
+        RuntimeConfig {
+            verbosity: match args.value_of("verbosity") {
+                Some(o) => o.parse().unwrap_or(0),
+                None => 1
+            },
+            dotenv_path: args.value_of("dotenv").map_or_else(|| None, |v| Some(v.to_string())),
+            dryrun: args.occurence_of("dryrun") > 0,
+            debug: match args.value_of("debug") {
+                Some(s) => {
+                    let mut opts = hashmap!{};
+                    for v in s.split(",") {
+                        let sp: Vec<&str> = v.split("=").collect();
+                        opts.insert(
+                            sp[0].to_string(),
+                            (if sp.len() > 1 { sp[1] } else { "true" }).to_string()
+                        );
+                    }
+                    opts
+                }
+                None => hashmap!{}
+            },
+            release_target: None, // set after
+            workflow_type: None, // set after
+            workdir: args.value_of("workdir").map_or_else(|| None, |v| Some(v.to_string())),
+        }
+    }
+    fn post_init<A: args::Args>(
+        config: &mut Container, args: &A
+    ) -> Result<(), Box<dyn Error>> {
+        // set release target
+
+        // because vcs_service create object which have reference of `c` ,
+        // scope of `vcs` should be narrower than this function,
+        // to prevent `assignment of borrowed value` error below.
+        let release_target = match args.value_of("release-target") {
+            Some(v) => Some(v.to_string()),
+            None => match std::env::var("DEPLO_CI_RELEASE_TARGET") {
+                Ok(v) => Some(v),
+                Err(_) => {
+                    let immc = config.borrow();
+                    let vcs = immc.vcs_service()?;
+                    vcs.release_target()
+                }
+            }
+        };
+        let workflow_type = match args.value_of("workflow-type") {
+            Some(v) => Some(WorkflowType::from_str(v)),
+            None => {
+                let immc = config.borrow();
+                let vcs = immc.vcs_service()?;
+                let (account_name, _) = immc.ci_config_by_env();
+                let ci = immc.ci_service(account_name)?;
+                match ci.pr_url_from_env()? {
+                    Some(_) => Some(WorkflowType::Integrate),
+                    None => match vcs.pr_url_from_current_ref()? {
+                        Some(_) => Some(WorkflowType::Integrate),
+                        None => None
+                    }
+                }
+            }
+        };
+        {
+            let mut mutc = config.borrow_mut();
+            mutc.runtime.release_target = release_target;
+            mutc.runtime.workflow_type = workflow_type;
+        }
+        Ok(())
+    }
+    fn apply(&self) -> Result<(), Box<dyn Error>> {
+        match self.workdir {
+            Some(ref wd) => { 
+                std::env::set_current_dir(wd)?; 
+            },
+            None => ()
+        };
+        Config::setup_logger(self.verbosity);
+        // if the cli running on host, need to load dotenv to inject secrets
+        if !Config::is_running_on_ci() {
+            // load dotenv
+            match self.dotenv_path {
+                Some(ref dotenv_path) => match fs::metadata(dotenv_path) {
+                    Ok(_) => { dotenv::from_filename(dotenv_path).unwrap(); },
+                    Err(_) => { dotenv::from_readable(dotenv_path.as_bytes()).unwrap(); },
+                },
+                None => match dotenv() {
+                    Ok(path) => log::debug!("using .env file at {}", path.to_string_lossy()),
+                    Err(err) => if Config::is_running_on_ci() {
+                        log::debug!("run on CI: environment variable is provided by CI system")
+                    } else {
+                        log::warn!("non-ci environment but .env not present or cannot load by error [{:?}], this usually means:\n\
+                            1. command will be run with incorrect parameter or\n\
+                            2. secrets are directly written in deplo.toml\n\
+                            please use $repo/.env to provide secrets, or use -e flag to specify its path", err)
+                    }
+                },
+            };
+        };
+        Ok(())
+    }
+}
+
+pub enum ConfigSource<'a> {
+    File(&'a str),
+    Memory(&'a str),
 }
 #[derive(Serialize, Deserialize)]
 pub struct Config {
@@ -349,10 +474,13 @@ impl Container {
 
 impl Config {
     // static factory methods 
-    pub fn load(path: &str) -> Result<Config, Box<dyn Error>> {
-        let src = match fs::read_to_string(path) {
-            Ok(v) => v,
-            Err(e) => panic!("cannot read config at {}, err: {:?}", path, e)
+    pub fn load(src: ConfigSource) -> Result<Config, Box<dyn Error>> {
+        let src = match src {
+            ConfigSource::File(path) => match fs::read_to_string(path) {
+                Ok(v) => v,
+                Err(e) => panic!("cannot read config at {}, err: {:?}", path, e)
+            },
+            ConfigSource::Memory(v) => v.to_string(),
         };
         let content = envsubst(&src);
         match toml::from_str(&content) {
@@ -379,101 +507,38 @@ impl Config {
             _ => log::Level::Trace
         }).unwrap();
     }
-    pub fn create<A: args::Args>(args: &A) -> Result<Container, Box<dyn Error>> {
-        // apply working directory
-        let may_workdir = args.value_of("workdir");
-        match may_workdir {
-            Some(wd) => { std::env::set_current_dir(&wd)?; },
-            None => {}
-        }
-        // apply verbosity
-        let verbosity = match args.value_of("verbosity") {
-            Some(o) => o.parse().unwrap_or(0),
-            None => 1
-        };
-        Self::setup_logger(verbosity);
-        // if the cli running on host, need to load dotenv to inject secrets
-        if !Self::is_running_on_ci() {
-            // load dotenv
-            match args.value_of("dotenv") {
-                Some(dotenv_path) => match fs::metadata(dotenv_path) {
-                    Ok(_) => { dotenv::from_filename(dotenv_path).unwrap(); },
-                    Err(_) => { dotenv::from_readable(dotenv_path.as_bytes()).unwrap(); },
-                },
-                None => match dotenv() {
-                    Ok(path) => log::debug!("using .env file at {}", path.to_string_lossy()),
-                    Err(err) => if Self::is_running_on_ci() {
-                        log::debug!("run on CI: environment variable is provided by CI system")
-                    } else {
-                        log::warn!("non-ci environment but .env not present or cannot load by error [{:?}], this usually means:\n\
-                            1. command will be run with incorrect parameter or\n\
-                            2. secrets are directly written in deplo.toml\n\
-                            please use $repo/.env to provide secrets, or use -e flag to specify its path", err)
-                    }
-                },
-            };
-        }
+    pub fn with_config(
+        src: ConfigSource,
+        runtime_config: RuntimeConfig        
+    ) -> Result<Container, Box<dyn Error>> {
         let c = Container{
             ptr: Rc::new(RefCell::new(
-                Config::load(args.value_of("config").unwrap_or("Deplo.toml")).unwrap()
+                Config::load(src).unwrap()
             ))
         };
-        // setup runtime configuration (except release_target)
         {
             let mut mutc = c.ptr.borrow_mut();
-            mutc.runtime = RuntimeConfig {
-                verbosity,
-                distributions: vec!(),
-                latest_endpoint_versions: hashmap!{},
-                endpoint_service_map: hashmap!{},
-                dotenv_path: match args.value_of("dotenv") {
-                    Some(v) => Some(v.to_string()),
-                    None => None
-                },
-                dryrun: args.occurence_of("dryrun") > 0,
-                debug: match args.value_of("debug") {
-                    Some(s) => {
-                        let mut opts = hashmap!{};
-                        for v in s.split(",") {
-                            let sp: Vec<&str> = v.split("=").collect();
-                            opts.insert(
-                                sp[0].to_string(),
-                                (if sp.len() > 1 { sp[1] } else { "true" }).to_string()
-                            );
-                        }
-                        opts
-                    }
-                    None => hashmap!{}
-                },
-                release_target: None, // set after
-                workdir: may_workdir.map(String::from),
-            };
+            mutc.runtime = runtime_config;
         }
         return Ok(c);
     }
-    pub fn setup<'a, A: args::Args>(c: &'a mut Container, args: &A) -> Result<&'a Container, Box<dyn Error>> {
+    pub fn dummy(src: Option<&str>) -> Result<Container, Box<dyn Error>> {
+        Self::with_config(
+            ConfigSource::Memory(src.unwrap_or(include_str!("../res/test/dummy-Deplo.toml"))), 
+            RuntimeConfig::default()
+        )
+    }
+    pub fn create<A: args::Args>(args: &A) -> Result<Container, Box<dyn Error>> {
+        let runtime_config = RuntimeConfig::with_args(args);
+        runtime_config.apply()?;
+        let mut c = Self::with_config(
+            ConfigSource::File(args.value_of("config").unwrap_or("Deplo.toml")),
+            runtime_config
+        )?;
         // setup module cache
         Self::setup_ci(&c)?;
         Self::setup_vcs(&c)?;
-        // set release target
-        {
-            // because vcs_service create object which have reference of `c` ,
-            // scope of `vcs` should be narrower than this function,
-            // to prevent `assignment of borrowed value` error below.
-            let release_target = match args.value_of("release-target") {
-                Some(v) => Some(v.to_string()),
-                None => match std::env::var("DEPLO_CI_RELEASE_TARGET") {
-                    Ok(v) => Some(v),
-                    Err(_) => {
-                        let immc = c.ptr.borrow();
-                        let vcs = immc.vcs_service()?;
-                        vcs.release_target()
-                    }
-                }
-            };
-            let mut mutc = c.ptr.borrow_mut();
-            mutc.runtime.release_target = release_target;
-        }
+        RuntimeConfig::post_init(&mut c, args)?;
         return Ok(c);
     }
     pub fn data_dir<'a>(&'a self) -> &'a str {
@@ -485,7 +550,7 @@ impl Config {
     pub fn project_name(&self) -> &str {
         &self.common.project_name
     }
-    pub fn release_target(&self) -> Option<&str> {
+    pub fn runtime_release_target(&self) -> Option<&str> {
         match &self.runtime.release_target {
             Some(s) => Some(&s),
             None => None

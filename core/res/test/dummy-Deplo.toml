@@ -1,0 +1,31 @@
+[common]
+project_name = "test"
+
+[common.release_targets]
+nightly = { type = "Branch", path = "main" }
+prod = { type = "Tag", path = "[0-9]*" }
+
+[vcs]
+type = "Github"
+email = "mail@address.com"
+account = "account"
+key = "key"
+
+[ci.accounts.default]
+type = "GhAction"
+account = "ci_account"
+key = "ci_key"
+
+[ci.workflow.integrate.test]
+patterns = [".*/src/.*", "Cargo.*"]
+runner = { type = "Machine", os = "Linux" }
+command = "cargo test"
+
+[ci.workflow.deploy.src]
+patterns = [".*/src/.*", "Cargo.*"]
+runner = { type = "Machine", os = "Linux" }
+command = """
+docker build -t ghcr.io/org/product:${DEPLO_CI_TAG_NAME} .
+echo ${SUNTOMI_VCS_ACCOUNT_KEY} | docker login ghcr.io -u ${SUNTOMI_VCS_ACCOUNT} --password-stdin
+docker push ghcr.io/org/product:${DEPLO_CI_TAG_NAME}
+"""
