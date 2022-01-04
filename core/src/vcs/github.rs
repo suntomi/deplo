@@ -101,7 +101,7 @@ impl<GIT: (git::GitFeatures) + (git::GitHubFeatures), S: shell::Shell> Github<GI
             self.git.pr_data(&self.url_from_pull_ref(&ref_path), account, key, json_path)
         } else {
             panic!("vcs account is not for github ${:?}", &self.config.borrow().vcs)
-        }        
+        }
     }
 }
 
