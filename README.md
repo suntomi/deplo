@@ -6,6 +6,7 @@ you can use multiple CI/CD at the same time too. also you have the ability to ru
 for instance, you can run specific workflow only when some part of your repository changed. 
 this is extremely useful for running workflows on monorepo (and we love modular monolith approach for building service with microservice architecture :D)
 
+bonus, with Deplo, you can write every CI setting with toml, so no more need to write your settings by error-prune and verbose yaml format, because it is auto genrated by Deplo from its Deplo.toml. compare https://github.com/suntomi/deplo/blob/main/Deplo.toml with https://github.com/suntomi/deplo/blob/main/.github/workflows/deplo-main.yml to see how you feel difference from the viewpoint of conciseness.
 
 ### Glossary
 - release environment
