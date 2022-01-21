@@ -83,7 +83,13 @@ impl<S: shell::Shell> CI<S> {
                 log::info!("running shell for job '{}-{}'", kind, args.value_of("name").unwrap());
                 match subargs.values_of("task") {
                     None => {
-                        log::debug!("running interactive shell")
+                        log::debug!("running interactive shell");
+                        let job = match config.find_job(&job_name) {
+                            Some(job) => job,
+                            None => return escalate!(args.error(&format!("no such job: [{}]", job_name))),
+                        };
+                        let shell = job.shell.as_ref().map_or_else(|| "bash", |v| v.as_str());
+                        config.run_job(&self.shell, &job_name, &job, &shell::interactive(), Some(shell.to_string()))?;
                     },
                     Some(task_args) => if task_args[0].starts_with("@") {
                         log::debug!("running shell task '{}' with args '{}'", task_args[0], task_args[1..].join(" "));
@@ -101,16 +107,16 @@ impl<S: shell::Shell> CI<S> {
                         };
                         let command = Self::make_task_command(&task, task_args[1..].to_vec());
                         log::debug!("running shell task: result command: {}", command);
-                        config.run_job(&self.shell, &job_name, &job, Some(command))?;
+                        config.run_job(&self.shell, &job_name, &job, &shell::no_capture(), Some(command))?;
                     } else {
                         log::debug!("running shell with adhoc command: {}", task_args.join(" "));
-                        config.run_job_by_name(&self.shell, &job_name, Some(task_args.join(" ")))?;
+                        config.run_job_by_name(&self.shell, &job_name, &shell::no_capture(), Some(task_args.join(" ")))?;
                     }
                 }
             },
             Some((name, _)) => return escalate!(args.error(&format!("no such subcommand: [{}]", name))),
             None => {
-                config.run_job_by_name(&self.shell, &job_name, None)?;
+                config.run_job_by_name(&self.shell, &job_name, &shell::no_capture(), None)?;
             }
         }
         return Ok(())

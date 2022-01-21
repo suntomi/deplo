@@ -820,17 +820,19 @@ impl Config {
         }
     }
     pub fn run_job_by_name(
-        &self, shell: &impl shell::Shell, name: &str, command: Option<String>
+        &self, shell: &impl shell::Shell, name: &str, 
+        settings: &shell::Settings, command: Option<String>
     ) -> Result<(), Box<dyn Error>> {
         match self.find_job(name) {
-            Some(job) => self.run_job(shell, name, job, command),
+            Some(job) => self.run_job(shell, name, job, settings, command),
             None => return escalate!(Box::new(
                 ConfigError{ cause: format!("job {} not found", name) }
             )),
         }
     }
     pub fn run_job(
-        &self, shell: &impl shell::Shell, name: &str, job: &Job, command: Option<String>
+        &self, shell: &impl shell::Shell, name: &str, job: &Job, 
+        settings: &shell::Settings, command: Option<String>
     ) -> Result<(), Box<dyn Error>> {
         let cmd = command.as_ref().unwrap_or(&job.command);
         match job.runner {
@@ -844,7 +846,7 @@ impl Config {
                         None
                     };
                     // run command directly here, add path to locally downloaded cli.
-                    shell.eval(cmd, &job.shell, self.job_env(&job, &paths)?, &job.workdir, false)?;
+                    shell.eval(cmd, &job.shell, self.job_env(&job, &paths)?, &job.workdir, settings)?;
                 } else {
                     log::debug!("runner os is different from current os {} {}", os, current_os);
                     match local_fallback {
@@ -855,7 +857,7 @@ impl Config {
                                 &f.image, cmd, &f.shell, self.job_env(&job, &None)?, &job.workdir, 
                                 &hashmap!{
                                     path.as_str() => "/usr/local/bin/deplo"
-                                }, false
+                                }, settings
                             )?;
                             return Ok(());
                         },
@@ -876,7 +878,7 @@ impl Config {
                         panic!("{}: adhoc shell command for remote execution have not supported yet", name);
                     }
                     // already run inside container `image`, run command directly here
-                    shell.eval(cmd, &job.shell, self.job_env(&job, &None)?, &job.workdir, false)?;
+                    shell.eval(cmd, &job.shell, self.job_env(&job, &None)?, &job.workdir, settings)?;
                 } else {
                     let os = RunnerOS::Linux;
                     let path = &self.deplo_cli_download(os, shell)?.to_string_lossy().to_string();
@@ -884,7 +886,7 @@ impl Config {
                     shell.eval_on_container(
                         image, cmd, &job.shell, self.job_env(&job, &None)?, &job.workdir, &hashmap!{
                             path.as_str() => "/usr/local/bin/deplo"
-                        }, false
+                        }, settings
                     )?;
                 }
             }

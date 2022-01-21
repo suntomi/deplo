@@ -145,7 +145,7 @@ impl<'a, S: shell::Shell> ci::CI for CircleCI<S> {
             fs::create_dir_all("/tmp/deplo/marked_jobs")?;
             fs::write(format!("/tmp/deplo/marked_jobs/{}", job_name), "")?;
         } else {
-            self.config.borrow().run_job_by_name(&self.shell, job_name, None)?;
+            self.config.borrow().run_job_by_name(&self.shell, job_name, &shell::no_capture(), None)?;
         }
         Ok(())
     }
@@ -202,7 +202,7 @@ impl<'a, S: shell::Shell> ci::CI for CircleCI<S> {
             "-H", "Content-Type: application/json",
             "-H", "Accept: application/json",
             "-d", &json, "-w", "%{http_code}", "-o", "/dev/null"
-        ), shell::no_env(), shell::no_cwd(), true)?.parse::<u32>()?;
+        ), shell::no_env(), shell::no_cwd(), &shell::capture())?.parse::<u32>()?;
         if status >= 200 && status < 300 {
             Ok(())
         } else {
