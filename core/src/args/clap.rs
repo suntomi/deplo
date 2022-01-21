@@ -1,17 +1,90 @@
+use std::collections::{HashMap};
 use std::error::Error;
 use std::result::Result;
 
 use clap::{App, Arg, ArgMatches};
+use maplit::hashmap;
 
 use crate::args;
 use crate::config;
 
 pub struct Clap<'a> {
     pub hierarchy: Vec<&'a str>,
-    pub matches: &'a ArgMatches
+    pub matches: &'a ArgMatches,
+    pub ailiased_path: Vec<&'a str>,
 }
-    
+
+struct CommandFactory {
+    factory: fn (&'static str) -> App<'static>,
+}
+impl CommandFactory {
+    fn new(f: fn (&'static str) -> App<'static>) -> Self {
+        Self { factory: f }
+    }
+    fn create(&self, name: &'static str) -> App<'static> {
+        (self.factory)(name)
+    }
+}
+struct AliasCommands {
+    map: HashMap<&'static str, (Vec<&'static str>, CommandFactory)>,
+    alias_map: HashMap<&'static str, &'static str>
+}
+impl AliasCommands {
+    fn new(
+        map: HashMap<&'static str, (Vec<&'static str>, CommandFactory)>,
+        alias_map: HashMap<&'static str, &'static str>
+    ) -> Self {
+        Self { map, alias_map }
+    }
+    fn create(&self, name: &'static str) -> App<'static> {
+        match self.alias_map.get(name) {
+            Some(body) => {
+                self.map.get(body).unwrap().1.create(name)
+            },
+            None => match self.map.get(name) {
+                Some(ent) => ent.1.create(ent.0.last().unwrap()),
+                None => panic!("no such aliased command [{}]", name)
+            }
+        }
+    }
+    fn find_path(&self, name: &str) -> Vec<&'static str> {
+        match self.alias_map.get(name) {
+            Some(body) => self.map.get(body).unwrap().0.clone(),
+            None => vec![]
+        }
+    }
+}
+
 lazy_static! {
+    static ref G_ALIASED_COMMANDS: AliasCommands = AliasCommands::new(hashmap!{
+        "ci_deploy" => (
+            vec!["ci", "deploy"], CommandFactory::new(|name| -> App<'static> { 
+                App::new(name)
+                .about("run specific deploy job in Deplo.toml. used for auto generated CI/CD settings")
+                .arg(Arg::new("name")
+                    .about("job name")
+                    .index(1)
+                    .required(true))
+            })
+        ),
+        "ci_integrate" => (
+            vec!["ci", "integrate"], CommandFactory::new(|name| -> App<'static> { 
+                App::new(name)
+                .about("run specific deploy job in Deplo.toml. used for auto generated CI/CD settings")
+                .arg(Arg::new("name")
+                    .about("job name")
+                    .index(1)
+                    .required(true))
+            })
+        ),
+    }, hashmap!{
+        // define aliased path like
+        // "$subcommand/$subcommand_of_subcommand/$subcommand_of_subcommand_of_subcommand/..." => 
+        // ["$other_subcommand", "$subcommand_of_other_subcommand", ...]
+        // you also add matches for both corresponding subcommand path of G_ROOT_MATCH.
+        "d" => "ci_deploy",    // linked to G_ALIASED_COMMANDS.map["ci_deploy"]
+        "i" => "ci_integrate", // linked to G_ALIASED_COMMANDS.map["ci_integrate"]
+    });
     static ref G_ROOT_MATCH: ArgMatches = App::new("deplo")
         .version(config::DEPLO_VERSION)
         .author("umegaya <iyatomi@gmail.com>")
@@ -93,6 +166,12 @@ lazy_static! {
                 .about("destroy deplo project")
         )
         .subcommand(
+            G_ALIASED_COMMANDS.create("d")
+        )
+        .subcommand(
+            G_ALIASED_COMMANDS.create("i")
+        )
+        .subcommand(
             App::new("ci")
                 .about("handling CI input/control CI settings")
                 .subcommand(
@@ -100,20 +179,10 @@ lazy_static! {
                     .about("entry point of CI/CD process")
                 )
                 .subcommand(
-                    App::new("deploy")
-                    .about("run specific deploy job in Deplo.toml. used for auto generated CI/CD settings")
-                    .arg(Arg::new("name")
-                        .about("job name")
-                        .index(1)
-                        .required(true))
+                    G_ALIASED_COMMANDS.create("ci_deploy")
                 )
                 .subcommand(
-                    App::new("integrate")
-                    .about("run specific integrate job in Deplo.toml. used for auto generated CI/CD settings")
-                    .arg(Arg::new("name")
-                        .about("job name")
-                        .index(1)
-                        .required(true))
+                    G_ALIASED_COMMANDS.create("ci_integrate")
                 )
                 .subcommand(
                     App::new("setenv")
@@ -171,27 +240,62 @@ lazy_static! {
         )        
         .get_matches();
 }
+impl<'a> Clap<'a> {
+    fn find_aliased_path(&self, name: &str) -> Vec<&'a str> {
+        let mut h = self.hierarchy.clone();
+        h.push(name);
+        let key = h.join("/");
+        G_ALIASED_COMMANDS.find_path(&key)
+    }
+}
 
 impl<'a> args::Args for Clap<'a> {
     fn create() -> Result<Clap<'a>, Box<dyn Error>> {
         return Ok(Clap::<'a> {
             hierarchy: vec!{},
-            matches: &G_ROOT_MATCH
+            matches: &G_ROOT_MATCH,
+            ailiased_path: vec!{}
         })
     }
     fn subcommand(&self) -> Option<(&str, Self)> {
-        match self.matches.subcommand_name() {
+        let (may_subcommand_name, aliased) = if self.ailiased_path.len() > 0 {
+            (Some(self.ailiased_path[0]), true)
+        } else {
+            (self.matches.subcommand_name(), false)
+        };
+        match may_subcommand_name {
             Some(name) => {
-                match self.matches.subcommand_matches(name) {
-                    Some(m) => {
-                        let mut h = self.hierarchy.clone();
-                        h.push(name);
-                        Some((name, Clap::<'a>{
-                            hierarchy: h,
-                            matches: m
-                        }))
-                    },
-                    None => None
+                if aliased {
+                    let mut h = self.hierarchy.clone();
+                    let mut ap = self.ailiased_path.clone();
+                    h.push(name);
+                    ap.pop();
+                    Some((name, Clap::<'a>{
+                        hierarchy: h,
+                        matches: self.matches,
+                        ailiased_path: ap
+                    }))
+                } else {
+                    match self.matches.subcommand_matches(name) {
+                        Some(m) => {
+                            let mut h = self.hierarchy.clone();
+                            let mut ap = self.find_aliased_path(name).clone();
+                            let may_aliased_name = if ap.len() > 0 {
+                                let aliased = ap.remove(0);
+                                h.push(aliased);
+                                aliased
+                            } else {
+                                h.push(name);
+                                name
+                            };
+                            Some((may_aliased_name, Clap::<'a>{
+                                hierarchy: h,
+                                matches: m,
+                                ailiased_path: ap
+                            }))
+                        },
+                        None => None
+                    }
                 }
             },
             None => None
