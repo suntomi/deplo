@@ -60,21 +60,34 @@ lazy_static! {
         "ci_deploy" => (
             vec!["ci", "deploy"], CommandFactory::new(|name| -> App<'static> { 
                 App::new(name)
-                .about("run specific deploy job in Deplo.toml. used for auto generated CI/CD settings")
+                .override_help("run specific deploy job in Deplo.toml. used for auto generated CI/CD settings")
                 .arg(Arg::new("name")
-                    .about("job name")
+                    .help("job name")
                     .index(1)
                     .required(true))
+                .subcommand(
+                    App::new("sh")
+                        .override_help("running arbiter command for environment of jobs")
+                        .arg(Arg::new("task")
+                            .help("running command that declared in tasks directive")
+                            .multiple_values(true)))
             })
         ),
         "ci_integrate" => (
             vec!["ci", "integrate"], CommandFactory::new(|name| -> App<'static> { 
                 App::new(name)
-                .about("run specific deploy job in Deplo.toml. used for auto generated CI/CD settings")
+                .override_help("run specific deploy job in Deplo.toml. used for auto generated CI/CD settings")
                 .arg(Arg::new("name")
-                    .about("job name")
+                    .help("job name")
                     .index(1)
                     .required(true))
+                .subcommand(
+                    App::new("sh")
+                        .override_help("running arbiter command for environment of jobs")
+                        .arg(Arg::new("task")
+                            .help("running @task_name which task_name declared at tasks directive in job or specify adhoc command")
+                            .index(1)
+                            .multiple_values(true)))
             })
         ),
     }, hashmap!{
@@ -88,15 +101,15 @@ lazy_static! {
     static ref G_ROOT_MATCH: ArgMatches = App::new("deplo")
         .version(config::DEPLO_VERSION)
         .author("umegaya <iyatomi@gmail.com>")
-        .about("write once, run anywhere for CI/CD")
+        .override_help("write once, run anywhere for CI/CD")
         .arg(Arg::new("config")
             .short('c')
             .long("config")
             .value_name("FILE")
-            .about("Sets a custom config file")
+            .help("Sets a custom config file")
             .takes_value(true))
         .arg(Arg::new("release-target")
-            .about("force set release target")
+            .help("force set release target")
             .short('r')
             .long("release-target")
             .takes_value(true))
@@ -104,7 +117,7 @@ lazy_static! {
             .short('d')
             .long("debug")
             .value_name("KEY(=VALUE),...")
-            .about("Activate debug feature\n\
+            .help("Activate debug feature\n\
                     TODO: add some debug flags")
             .takes_value(true)
             .multiple_values(true)
@@ -113,34 +126,34 @@ lazy_static! {
             .short('e')
             .long("dotenv")
             .value_name(".ENV FILE OR TEXT")
-            .about("specify .env file path or .env file content directly")
+            .help("specify .env file path or .env file content directly")
             .takes_value(true))
         .arg(Arg::new("dryrun")
             .long("dryrun")
-            .about("Prints executed commands instead of invoking them")
+            .help("Prints executed commands instead of invoking them")
             .takes_value(false))
         .arg(Arg::new("verbosity")
             .short('v')
             .long("verbose")
-            .about("Sets the level of verbosity")
+            .help("Sets the level of verbosity")
             .takes_value(true))
         .arg(Arg::new("workflow-type")
             .long("workflow")
             .short('w')
-            .about("Sets workflow type of current run")
+            .help("Sets workflow type of current run")
             .takes_value(true))
         .arg(Arg::new("workdir")
             .long("workdir")
-            .about("Sets workflow type of current run")
+            .help("Sets workflow type of current run")
             .takes_value(true))
         .subcommand(
             App::new("info")
-                .about("get information about deplo")
+                .override_help("get information about deplo")
                 .subcommand(
                     App::new("version")
-                        .about("get deplo version")
+                        .override_help("get deplo version")
                         .arg(Arg::new("output")
-                            .about("output format")
+                            .help("output format")
                             .short('o')
                             .long("output")
                             .possible_values(
@@ -151,10 +164,10 @@ lazy_static! {
         )
         .subcommand(
             App::new("init")
-                .about("initialize deplo project. need to configure deplo.json beforehand")
+                .override_help("initialize deplo project. need to configure deplo.json beforehand")
                 .arg(Arg::new("reinit")
                     .long("reinit")
-                    .about("initialize component")
+                    .help("initialize component")
                     .required(false)
                     .takes_value(true)
                     .possible_values(
@@ -163,7 +176,7 @@ lazy_static! {
         )
         .subcommand(
             App::new("destroy")
-                .about("destroy deplo project")
+                .override_help("destroy deplo project")
         )
         .subcommand(
             G_ALIASED_COMMANDS.create("d")
@@ -173,10 +186,10 @@ lazy_static! {
         )
         .subcommand(
             App::new("ci")
-                .about("handling CI input/control CI settings")
+                .override_help("handling CI input/control CI settings")
                 .subcommand(
                     App::new("kick")
-                    .about("entry point of CI/CD process")
+                    .override_help("entry point of CI/CD process")
                 )
                 .subcommand(
                     G_ALIASED_COMMANDS.create("ci_deploy")
@@ -186,25 +199,25 @@ lazy_static! {
                 )
                 .subcommand(
                     App::new("setenv")
-                    .about("upload current .env contents as CI service secrets")
+                    .override_help("upload current .env contents as CI service secrets")
                 )
                 .subcommand(
                     App::new("fin")
-                    .about("cleanup CI/CD process after all related job finished")
+                    .override_help("cleanup CI/CD process after all related job finished")
                 )
         )
         .subcommand(
             App::new("vcs")
-                .about("control VCS resources")
+                .override_help("control VCS resources")
                 .subcommand(
                     App::new("release")
-                    .about("create release")
+                    .override_help("create release")
                     .arg(Arg::new("tag_name")
-                        .about("tag name to use for release")
+                        .help("tag name to use for release")
                         .index(1)
                         .required(true))
                     .arg(Arg::new("option")
-                        .about("option for release creation.\n\
+                        .help("option for release creation.\n\
                                 -o $key=$value\n\
                                 for github, body options of https://docs.github.com/en/rest/reference/releases#create-a-release can be specified.\n\
                                 TODO: for gitlab")
@@ -215,20 +228,20 @@ lazy_static! {
                 )
                 .subcommand(
                     App::new("release-assets")
-                    .about("upload release assets")
+                    .override_help("upload release assets")
                     .arg(Arg::new("tag_name")
-                        .about("tag name to use for release")
+                        .help("tag name to use for release")
                         .index(1)
                         .required(true))
                     .arg(Arg::new("asset_file_path")
-                        .about("file path for upload file")
+                        .help("file path for upload file")
                         .index(2)
                         .required(true))
                     .arg(Arg::new("replace")
-                        .about("replace existing asset or not")
+                        .help("replace existing asset or not")
                         .long("replace"))
                     .arg(Arg::new("option")
-                        .about("option for release creation.\n\
+                        .help("option for release creation.\n\
                                 -o name=$release_asset_name\n\
                                 -o content-type=$content_type_of_asset\n\
                                 TODO: implement more options")
