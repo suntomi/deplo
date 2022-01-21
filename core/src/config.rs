@@ -119,6 +119,7 @@ pub struct Job {
     pub caches: Option<HashMap<String, Cache>>,
     pub depends: Option<Vec<String>>,
     pub options: Option<HashMap<String, String>>,
+    pub tasks: Option<HashMap<String, String>>,
     pub local_fallback: Option<FallbackContainer>,
 }
 impl Job {
@@ -818,15 +819,22 @@ impl Config {
             None => return None
         }
     }
-    pub fn run_job_by_name(&self, shell: &impl shell::Shell, name: &str) -> Result<(), Box<dyn Error>> {
+    pub fn run_job_by_name(
+        &self, shell: &impl shell::Shell, name: &str, 
+        settings: &shell::Settings, command: Option<String>
+    ) -> Result<(), Box<dyn Error>> {
         match self.find_job(name) {
-            Some(job) => self.run_job(shell, name, job),
+            Some(job) => self.run_job(shell, name, job, settings, command),
             None => return escalate!(Box::new(
                 ConfigError{ cause: format!("job {} not found", name) }
             )),
         }
     }
-    pub fn run_job(&self, shell: &impl shell::Shell, name: &str, job: &Job) -> Result<(), Box<dyn Error>> {
+    pub fn run_job(
+        &self, shell: &impl shell::Shell, name: &str, job: &Job, 
+        settings: &shell::Settings, command: Option<String>
+    ) -> Result<(), Box<dyn Error>> {
+        let cmd = command.as_ref().unwrap_or(&job.command);
         match job.runner {
             Runner::Machine{image:_, os, ref local_fallback, class:_} => {
                 let current_os = shell.detect_os()?;
@@ -838,7 +846,7 @@ impl Config {
                         None
                     };
                     // run command directly here, add path to locally downloaded cli.
-                    shell.eval(&job.command, &job.shell, self.job_env(&job, &paths)?, &job.workdir, false)?;
+                    shell.eval(cmd, &job.shell, self.job_env(&job, &paths)?, &job.workdir, settings)?;
                 } else {
                     log::debug!("runner os is different from current os {} {}", os, current_os);
                     match local_fallback {
@@ -846,15 +854,18 @@ impl Config {
                             let path = &self.deplo_cli_download(os, shell)?.to_string_lossy().to_string();
                             // running on host. run command in container `image` with docker
                             shell.eval_on_container(
-                                &f.image, &job.command, &f.shell, self.job_env(&job, &None)?, &job.workdir, 
+                                &f.image, cmd, &f.shell, self.job_env(&job, &None)?, &job.workdir, 
                                 &hashmap!{
                                     path.as_str() => "/usr/local/bin/deplo"
-                                }, false
+                                }, settings
                             )?;
                             return Ok(());
                         },
                         None => ()
                     };
+                    if command.is_some() {
+                        panic!("{}: adhoc shell command for remote execution have not supported yet", name);
+                    }
                     // runner os is not linux and not same as current os, and no fallback container specified.
                     // need to run in CI.
                     let ci = self.ci_service_by_job(job)?;
@@ -863,16 +874,19 @@ impl Config {
             },
             Runner::Container{ ref image } => {
                 if Self::is_running_on_ci() {
+                    if command.is_some() {
+                        panic!("{}: adhoc shell command for remote execution have not supported yet", name);
+                    }
                     // already run inside container `image`, run command directly here
-                    shell.eval(&job.command, &job.shell, self.job_env(&job, &None)?, &job.workdir, false)?;
+                    shell.eval(cmd, &job.shell, self.job_env(&job, &None)?, &job.workdir, settings)?;
                 } else {
                     let os = RunnerOS::Linux;
                     let path = &self.deplo_cli_download(os, shell)?.to_string_lossy().to_string();
                     // running on host. run command in container `image` with docker
                     shell.eval_on_container(
-                        image, &job.command, &job.shell, self.job_env(&job, &None)?, &job.workdir, &hashmap!{
+                        image, cmd, &job.shell, self.job_env(&job, &None)?, &job.workdir, &hashmap!{
                             path.as_str() => "/usr/local/bin/deplo"
-                        }, false
+                        }, settings
                     )?;
                 }
             }

@@ -66,6 +66,7 @@ docker build -t ghcr.io/suntomi/deplo:builder -f tools/docker/Dockerfile.builder
 patterns = [".*/src/.*", "Cargo.*"]
 runner = { type = "Machine", os = "Linux", local_fallback = { image = "ghcr.io/suntomi/deplo:builder" } }
 command = "cargo build"
+tasks = { test = "cargo test", home = "echo ${HOME}" }
 # cache settings. file paths that is listed in paths will be preserved with tha key `keys[0]`.
 # if you specify multiple keys, `keys[1..]` are used as fallback keys to search similar caches 
 # that is craeted by other branches.
@@ -73,7 +74,7 @@ command = "cargo build"
 # way to use variable like ${{ runner.os }} in the keys, is CI service specific. please consult each CI service's
 # document for detail.
 keys = ["integrate-build-${{ runner.os }}-v1-${{ hashFiles('**/Cargo.lock') }}"]
-paths = ["target", "~/.cargo/bin", "~/.cargo/registry/cache", "~/.cargo/registry/index", "~./cargo/git/db"]
+paths = ["target", "~/.cargo/bin", "~/.cargo/registry/cache", "~/.cargo/registry/index", "~/.cargo/git/db"]
 
 
 # workflow settings (CD), which runs when release target branches are created/updated
@@ -148,7 +149,7 @@ deplo vcs release-assets ${DEPLO_RELEASE_TAG} target/release/cli --replace -o na
 """
 [ci.workflow.deploy.mac.caches.cargo]
 keys = ["integrate-build-${{ runner.os }}-v1-${{ hashFiles('**/Cargo.lock') }}"]
-paths = ["target", "~/.cargo/bin", "~/.cargo/registry/cache", "~/.cargo/registry/index", "~./cargo/git/db"]
+paths = ["target", "~/.cargo/bin", "~/.cargo/registry/cache", "~/.cargo/registry/index", "~/.cargo/git/db"]
 
 [ci.workflow.deploy.win]
 depends = ["product"]
@@ -162,4 +163,4 @@ deplo vcs release-assets ${DEPLO_RELEASE_TAG} target/release/cli.pdb --replace -
 """
 [ci.workflow.deploy.win.caches.cargo]
 keys = ["integrate-build-${{ runner.os }}-v1-${{ hashFiles('**/Cargo.lock') }}"]
-paths = ["target", "~/.cargo/bin", "~/.cargo/registry/cache", "~/.cargo/registry/index", "~./cargo/git/db"]
+paths = ["target", "~/.cargo/bin", "~/.cargo/registry/cache", "~/.cargo/registry/index", "~/.cargo/git/db"]

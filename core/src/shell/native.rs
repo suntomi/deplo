@@ -59,11 +59,13 @@ impl<'a> shell::Shell for Native {
         &self, args: &Vec<&str>, envs: I, cwd: &Option<P>
     ) -> Result<String, shell::ShellError> 
     where I: IntoIterator<Item = (K, V)>, K: AsRef<OsStr>, V: AsRef<OsStr>, P: AsRef<Path> {
-        let (mut cmd, mut ct) = self.create_command(args, envs, cwd, true);
+        let (mut cmd, mut ct) = self.create_command(
+            args, envs, cwd, &shell::Settings { capture: true, interactive: false}
+        );
         return Native::get_output(&mut cmd, &mut ct);
     }
     fn exec<I, K, V, P>(
-        &self, args: &Vec<&str>, envs: I, cwd: &Option<P>, capture: bool
+        &self, args: &Vec<&str>, envs: I, cwd: &Option<P>, settings: &shell::Settings
     ) -> Result<String, shell::ShellError> 
     where I: IntoIterator<Item = (K, V)>, K: AsRef<OsStr>, V: AsRef<OsStr>, P: AsRef<Path> {
         let config = self.config.borrow();
@@ -73,17 +75,19 @@ impl<'a> shell::Shell for Native {
             return Ok(cmd);
         } else if config.should_silent_shell_exec() {
             // regardless for the value of `capture`, always capture value
-            let (mut cmd, mut ct) = self.create_command(args, envs, cwd, true);
+            let (mut cmd, mut ct) = self.create_command(
+                args, envs, cwd, &shell::Settings { capture: true, interactive: settings.interactive}
+            );
             return Native::run_as_child(&mut cmd, &mut ct);
         } else {
-            let (mut cmd, mut ct) = self.create_command(args, envs, cwd, capture);
+            let (mut cmd, mut ct) = self.create_command(args, envs, cwd, settings);
             return Native::run_as_child(&mut cmd, &mut ct);
         }
     }
 }
 impl Native {
     fn create_command<I, K, V, P>(
-        &self, args: &Vec<&str>, envs: I, cwd: &Option<P>, capture: bool
+        &self, args: &Vec<&str>, envs: I, cwd: &Option<P>, settings: &shell::Settings
     ) -> (Command, Option<CaptureTarget>)
     where I: IntoIterator<Item = (K, V)>, K: AsRef<OsStr>, V: AsRef<OsStr>, P: AsRef<Path> {
         let mut c = Command::new(args[0]);
@@ -102,7 +106,7 @@ impl Native {
             }
         }
         c.envs(&self.envs);
-        let ct = if capture {
+        let ct = if settings.capture {
             // windows std::process::Command does not work well with huge (>1kb) output piping.
             // see https://github.com/rust-lang/rust/issues/45572 for detail
             if cfg!(windows) {

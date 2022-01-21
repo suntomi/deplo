@@ -10,6 +10,11 @@ use crate::util::{escalate,make_absolute};
 
 pub mod native;
 
+pub struct Settings {
+    capture: bool,
+    interactive: bool,
+}
+
 pub trait Shell {
     fn new(config: &config::Container) -> Self;
     fn set_cwd<P: AsRef<Path>>(&mut self, dir: &Option<P>) -> Result<(), Box<dyn Error>>;
@@ -20,18 +25,18 @@ pub trait Shell {
     ) -> Result<String, ShellError>
     where I: IntoIterator<Item = (K, V)>, K: AsRef<OsStr>, V: AsRef<OsStr>, P: AsRef<Path>;
     fn exec<I, K, V, P>(
-        &self, args: &Vec<&str>, envs: I, cwd: &Option<P>, capture: bool
+        &self, args: &Vec<&str>, envs: I, cwd: &Option<P>, settings: &Settings
     ) -> Result<String, ShellError>
     where I: IntoIterator<Item = (K, V)>, K: AsRef<OsStr>, V: AsRef<OsStr>, P: AsRef<Path>;
     fn eval<I, K, V, P>(
-        &self, code: &str, shell: &Option<String>, envs: I, cwd: &Option<P>, capture: bool
+        &self, code: &str, shell: &Option<String>, envs: I, cwd: &Option<P>, settings: &Settings
     ) -> Result<String, ShellError> 
     where I: IntoIterator<Item = (K, V)>, K: AsRef<OsStr>, V: AsRef<OsStr>, P: AsRef<Path> {
-        return self.exec(&vec!(shell.as_ref().map_or_else(|| "bash", |v| v.as_str()), "-c", code), envs, cwd, capture);
+        return self.exec(&vec!(shell.as_ref().map_or_else(|| "bash", |v| v.as_str()), "-c", code), envs, cwd, settings);
     }
     fn eval_on_container<I, K, V, P>(
         &self, image: &str, code: &str, shell: &Option<String>, envs: I, cwd: &Option<P>, 
-        mounts: &HashMap<&str, &str>, capture: bool
+        mounts: &HashMap<&str, &str>, settings: &Settings
     ) -> Result<String, Box<dyn Error>>
     where I: IntoIterator<Item = (K, V)> + Clone, K: AsRef<OsStr>, V: AsRef<OsStr>, P: AsRef<Path> {
         let config = self.config().borrow();
@@ -50,6 +55,7 @@ pub trait Shell {
         };
         let result = self.exec(&vec![
             vec!["docker", "run", "--rm"],
+            if settings.interactive { vec!["-it"] } else { vec![] },
             vec!["--workdir", &workdir],
             envs_vec.iter().map(|s| s.as_ref()).collect::<Vec<&str>>(),
             mounts_vec.iter().map(|s| s.as_ref()).collect::<Vec<&str>>(),
@@ -58,7 +64,7 @@ pub trait Shell {
             vec!["-v", &format!("{}:{}", &repository_mount_path, &repository_mount_path)],
             vec!["--entrypoint", shell.as_ref().map_or_else(|| "bash", |v| v.as_str())],
             vec![image, "-c", code]
-        ].concat(), envs, cwd, capture)?;
+        ].concat(), envs, cwd, &Settings{ capture: settings.capture, interactive: false })?;
         return Ok(result);
     }
     fn eval_output_of<I, K, V, P>(
@@ -92,11 +98,11 @@ pub trait Shell {
     fn download(&self, url: &str, output_path: &str, executable: bool) -> Result<(), Box<dyn Error>> {
         self.exec(&vec![
             "curl", "-L", url, "-o", output_path
-        ], no_env(), no_cwd(), false)?;
+        ], no_env(), no_cwd(), &no_capture())?;
         if executable {
             self.exec(&vec![
                 "chmod", "+x", output_path
-            ], no_env(), no_cwd(), false)?;
+            ], no_env(), no_cwd(), &no_capture())?;
         }
         Ok(())
     }
@@ -156,4 +162,13 @@ pub fn default<'a>() -> &'a Option<String> {
 }
 pub fn inherit_env() -> HashMap<String, String> {
     return std::env::vars().collect();
+}
+pub fn capture() -> Settings {
+    return Settings{ capture: true, interactive: false };
+}
+pub fn no_capture() -> Settings {
+    return Settings{ capture: false, interactive: false };
+}
+pub fn interactive() -> Settings {
+    return Settings{ capture: false, interactive: true };
 }

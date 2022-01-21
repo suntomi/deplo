@@ -369,7 +369,7 @@ impl<S: shell::Shell> ci::CI for GhAction<S> {
         if config::Config::is_running_on_ci() {
             println!("::set-output name={}::true", job_name);
         } else {
-            self.config.borrow().run_job_by_name(&self.shell, job_name)?;
+            self.config.borrow().run_job_by_name(&self.shell, job_name, &shell::no_capture(), None)?;
         }
         Ok(())
     }
@@ -442,7 +442,7 @@ impl<S: shell::Shell> ci::CI for GhAction<S> {
             &self.shell.exec(&vec![
                 "curl", &format!("https://api.github.com/repos/{}/{}/actions/secrets/public-key", user_and_repo.0, user_and_repo.1),
                 "-H", &format!("Authorization: token {}", token)
-            ], shell::no_env(), shell::no_cwd(), true
+            ], shell::no_env(), shell::no_cwd(), &shell::capture()
         )?) {
             Ok(v) => v,
             Err(e) => return escalate!(Box::new(e))
@@ -463,7 +463,7 @@ impl<S: shell::Shell> ci::CI for GhAction<S> {
             "-H", "Accept: application/json",
             "-H", &format!("Authorization: token {}", token),
             "-d", &json, "-w", "%{http_code}", "-o", "/dev/null"
-        ), shell::no_env(), shell::no_cwd(), true)?.parse::<u32>()?;
+        ), shell::no_env(), shell::no_cwd(), &shell::capture())?.parse::<u32>()?;
         if status >= 200 && status < 300 {
             Ok(())
         } else {

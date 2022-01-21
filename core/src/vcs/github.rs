@@ -51,7 +51,7 @@ impl<GIT: (git::GitFeatures) + (git::GitHubFeatures), S: shell::Shell> Github<GI
                 "https://api.github.com/repos/{}/{}/releases/tags/{}",
                 user_and_repo.0, user_and_repo.1, target_ref.0
             ), "-H", &format!("Authorization: token {}", token)
-        ], shell::no_env(), shell::no_cwd(), true)?;
+        ], shell::no_env(), shell::no_cwd(), &shell::capture())?;
         return Ok(response);
     }
     fn get_value_from_json_object(&self, json_object: &str, key: &str) -> Result<String, Box<dyn Error>> {
@@ -168,7 +168,7 @@ impl<GIT: (git::GitFeatures) + (git::GitHubFeatures), S: shell::Shell> vcs::VCS 
                     ), 
                     "-H", &format!("Authorization: token {}", token), 
                     "-d", &serde_json::to_string(&options)?
-                ], shell::no_env(), shell::no_cwd(), false)?             
+                ], shell::no_env(), shell::no_cwd(), &shell::no_capture())?             
             }
         };
         let upload_url = self.get_upload_url_from_release(&response)?;
@@ -201,7 +201,7 @@ impl<GIT: (git::GitFeatures) + (git::GitHubFeatures), S: shell::Shell> vcs::VCS 
         let response = self.shell.exec(&vec![
             "curl", "-sS", &upload_url_base.replace("uploads.github.com", "api.github.com"),
             "-H", &format!("Authorization: token {}", token),
-        ], shell::no_env(), shell::no_cwd(), true)?;
+        ], shell::no_env(), shell::no_cwd(), &shell::capture())?;
         match jsonpath(&response, &format!("$.[?(@.name=='{}')]", asset_name))? {
             Some(v) => match opts.get("replace") {
                 Some(_) => {
@@ -209,7 +209,7 @@ impl<GIT: (git::GitFeatures) + (git::GitHubFeatures), S: shell::Shell> vcs::VCS 
                     let delete_url = self.get_value_from_json_object(&v, "url")?;
                     self.shell.exec(&vec![
                         "curl", &delete_url, "-X", "DELETE", "-H", &format!("Authorization: token {}", token)
-                    ], shell::no_env(), shell::no_cwd(), false)?;
+                    ], shell::no_env(), shell::no_cwd(), &shell::no_capture())?;
                 },
                 // nothing to do, return browser_download_url
                 None => return self.get_value_from_json_object(&v, "browser_download_url")
@@ -220,7 +220,7 @@ impl<GIT: (git::GitFeatures) + (git::GitHubFeatures), S: shell::Shell> vcs::VCS 
             "curl", "-sS", &upload_url, "-H", &format!("Authorization: token {}", token),
             "-H", &format!("Content-Type: {}", content_type),
             "--data-binary", &format!("@{}", asset_file_path),
-        ], shell::no_env(), shell::no_cwd(), true)?;  
+        ], shell::no_env(), shell::no_cwd(), &shell::capture())?;  
         self.get_value_from_json_object(&response, "browser_download_url")
     }
     fn rebase_with_remote_counterpart(&self, branch: &str) -> Result<(), Box<dyn Error>> {
