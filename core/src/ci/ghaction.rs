@@ -369,7 +369,7 @@ impl<S: shell::Shell> ci::CI for GhAction<S> {
         if config::Config::is_running_on_ci() {
             println!("::set-output name={}::true", job_name);
         } else {
-            self.config.borrow().run_job_by_name(&self.shell, job_name, &shell::no_capture(), None)?;
+            self.config.borrow().run_job_by_name(&self.shell, job_name, &shell::no_capture(), config::Command::Job)?;
         }
         Ok(())
     }

@@ -105,6 +105,21 @@ pub enum Runner {
         image: String,
     }
 }
+#[derive(Eq, PartialEq)]
+pub enum Command {
+    Adhoc(String),
+    Job,
+    Shell
+}
+impl fmt::Display for Command {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Command::Adhoc(s) => write!(f, "Adhoc({})", s),
+            Command::Job => write!(f, "Job"),
+            Command::Shell => write!(f, "Shell"),
+        }
+    }
+}
 #[derive(Serialize, Deserialize)]
 pub struct Job {
     pub account: Option<String>,
@@ -821,7 +836,7 @@ impl Config {
     }
     pub fn run_job_by_name(
         &self, shell: &impl shell::Shell, name: &str, 
-        settings: &shell::Settings, command: Option<String>
+        settings: &shell::Settings, command: Command
     ) -> Result<(), Box<dyn Error>> {
         match self.find_job(name) {
             Some(job) => self.run_job(shell, name, job, settings, command),
@@ -832,9 +847,13 @@ impl Config {
     }
     pub fn run_job(
         &self, shell: &impl shell::Shell, name: &str, job: &Job, 
-        settings: &shell::Settings, command: Option<String>
+        settings: &shell::Settings, command: Command
     ) -> Result<(), Box<dyn Error>> {
-        let cmd = command.as_ref().unwrap_or(&job.command);
+        let mut cmd = match command {
+            Command::Adhoc(ref c) => c,
+            Command::Job => &job.command,
+            Command::Shell => job.shell.as_ref().map_or_else(|| "bash", |v| v.as_str())
+        };        
         match job.runner {
             Runner::Machine{image:_, os, ref local_fallback, class:_} => {
                 let current_os = shell.detect_os()?;
@@ -851,6 +870,9 @@ impl Config {
                     log::debug!("runner os is different from current os {} {}", os, current_os);
                     match local_fallback {
                         Some(f) => {
+                            if command == Command::Shell && f.shell.is_some() {
+                                cmd = f.shell.as_ref().unwrap();
+                            }
                             let path = &self.deplo_cli_download(os, shell)?.to_string_lossy().to_string();
                             // running on host. run command in container `image` with docker
                             shell.eval_on_container(
@@ -863,8 +885,8 @@ impl Config {
                         },
                         None => ()
                     };
-                    if command.is_some() {
-                        panic!("{}: adhoc shell command for remote execution have not supported yet", name);
+                    if command != Command::Job {
+                        panic!("{}: adhoc shell command {} for remote execution have not supported yet", name, command);
                     }
                     // runner os is not linux and not same as current os, and no fallback container specified.
                     // need to run in CI.
@@ -874,8 +896,8 @@ impl Config {
             },
             Runner::Container{ ref image } => {
                 if Self::is_running_on_ci() {
-                    if command.is_some() {
-                        panic!("{}: adhoc shell command for remote execution have not supported yet", name);
+                    if command != Command::Job {
+                        panic!("{}: adhoc shell command {} for remote execution have not supported yet", name, command);
                     }
                     // already run inside container `image`, run command directly here
                     shell.eval(cmd, &job.shell, self.job_env(&job, &None)?, &job.workdir, settings)?;
