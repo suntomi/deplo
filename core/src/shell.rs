@@ -54,7 +54,7 @@ pub trait Shell {
             None => repository_mount_path.clone()
         };
         let result = self.exec(&vec![
-            vec!["docker", "run", "--rm"],
+            vec!["docker", "run", "--init", "--rm"],
             if settings.interactive { vec!["-it"] } else { vec![] },
             vec!["--workdir", &workdir],
             envs_vec.iter().map(|s| s.as_ref()).collect::<Vec<&str>>(),

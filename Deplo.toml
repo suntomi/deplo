@@ -61,6 +61,14 @@ command = """
 sh tools/scripts/copy_manifests.sh
 docker build -t ghcr.io/suntomi/deplo:builder -f tools/docker/Dockerfile.builder tools/docker
 """
+[ci.workflow.integrate.builder.tasks]
+long_running = """
+for i in `seq 1 10`; do
+    echo $i
+    sleep 1
+done
+"""
+
 
 [ci.workflow.integrate.src]
 patterns = [".*/src/.*", "Cargo.*"]

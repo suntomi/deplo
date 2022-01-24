@@ -145,7 +145,7 @@ impl<'a, S: shell::Shell> ci::CI for CircleCI<S> {
             fs::create_dir_all("/tmp/deplo/marked_jobs")?;
             fs::write(format!("/tmp/deplo/marked_jobs/{}", job_name), "")?;
         } else {
-            self.config.borrow().run_job_by_name(&self.shell, job_name, &shell::no_capture(), None)?;
+            self.config.borrow().run_job_by_name(&self.shell, job_name, &shell::no_capture(), config::Command::Job)?;
         }
         Ok(())
     }
