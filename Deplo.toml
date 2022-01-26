@@ -110,7 +110,7 @@ docker push ghcr.io/suntomi/deplo:builder
 # job dependencies. deploy.product only starts to run after deploy.builder finished.
 depends = ["builder"]
 patterns = [".*/src/.*", "Cargo.*"]
-runner = { type = "Machine", os = "Linux", local_fallback = { path = "tools/docker/Dockerfile.vmfb", shell = "sh"  } }
+runner = { type = "Machine", os = "Linux", local_fallback = { image = "ghcr.io/suntomi/deplo:vmfb", shell = "sh"  } }
 command = """
 set -e
 mkdir -p tools/docker/bin
