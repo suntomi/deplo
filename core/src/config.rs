@@ -91,7 +91,7 @@ pub struct Cache {
 #[serde(untagged)]
 pub enum FallbackContainer {
     ImageUrl{ image: String, shell: Option<String> },
-    DockerFile{ path: String, shell: Option<String> },
+    DockerFile{ path: String, repo_name: Option<String>, shell: Option<String> },
 }
 #[derive(Serialize, Deserialize)]
 #[serde(tag = "type")]
@@ -873,9 +873,12 @@ impl Config {
                         Some(f) => {
                             let (image, shell_cmd) = match f {
                                 FallbackContainer::ImageUrl{ image, shell: shell_cmd } => (image.clone(), shell_cmd),
-                                FallbackContainer::DockerFile{ path, shell: shell_cmd } => {
-                                    let local_image = format!("{}-deplo-local-fallback:{}", self.common.project_name, name);
-                                    log::debug!("generate docker image {} from {}", local_image, path);
+                                FallbackContainer::DockerFile{ path, shell: shell_cmd, repo_name } => {
+                                    let local_image = match repo_name.as_ref() {
+                                        Some(n) => format!("{}:{}", n, name),
+                                        None => format!("{}-deplo-local-fallback:{}", self.common.project_name, name)
+                                    };
+                                    log::info!("generate fallback docker image {} from {}", local_image, path);
                                     let p = Path::new(path);
                                     shell.exec(
                                         &vec!["docker", "build", 
