@@ -1,6 +1,6 @@
 use std::fs;
 use std::fmt;
-use std::path::PathBuf;
+use std::path::{Path,PathBuf};
 use std::error::Error;
 use std::rc::Rc;
 use std::cell::{RefCell};
@@ -88,9 +88,10 @@ pub struct Cache {
     pub paths: Vec<String>
 }
 #[derive(Serialize, Deserialize)]
-pub struct FallbackContainer {
-    pub image: String,
-    pub shell: Option<String>,
+#[serde(untagged)]
+pub enum FallbackContainer {
+    ImageUrl{ image: String, shell: Option<String> },
+    DockerFile{ path: String, shell: Option<String> },
 }
 #[derive(Serialize, Deserialize)]
 #[serde(tag = "type")]
@@ -870,13 +871,31 @@ impl Config {
                     log::debug!("runner os is different from current os {} {}", os, current_os);
                     match local_fallback {
                         Some(f) => {
-                            if command == Command::Shell && f.shell.is_some() {
-                                cmd = f.shell.as_ref().unwrap();
+                            let (image, shell_cmd) = match f {
+                                FallbackContainer::ImageUrl{ image, shell: shell_cmd } => (image.clone(), shell_cmd),
+                                FallbackContainer::DockerFile{ path, shell: shell_cmd } => {
+                                    let local_image = format!("deplo-local-fallback:{}", name);
+                                    log::debug!("generate docker image {} from {}", local_image, path);
+                                    let p = Path::new(path);
+                                    shell.exec(
+                                        &vec!["docker", "build", 
+                                            "-t", &local_image, 
+                                            "-f", p.file_name().unwrap().to_str().unwrap(),
+                                            "."
+                                        ], shell::no_env(),
+                                        &Some(p.parent().unwrap().to_string_lossy().to_string()),
+                                        &shell::capture()
+                                    )?;
+                                    (local_image, shell_cmd)
+                                },
+                            };
+                            if command == Command::Shell && shell_cmd.is_some() {
+                                cmd = shell_cmd.as_ref().unwrap();
                             }
                             let path = &self.deplo_cli_download(os, shell)?.to_string_lossy().to_string();
                             // running on host. run command in container `image` with docker
                             shell.eval_on_container(
-                                &f.image, cmd, &f.shell, self.job_env(&job, &None)?, &job.workdir, 
+                                &image, cmd, &shell_cmd, self.job_env(&job, &None)?, &job.workdir, 
                                 &hashmap!{
                                     path.as_str() => "/usr/local/bin/deplo"
                                 }, settings
