@@ -874,7 +874,7 @@ impl Config {
                             let (image, shell_cmd) = match f {
                                 FallbackContainer::ImageUrl{ image, shell: shell_cmd } => (image.clone(), shell_cmd),
                                 FallbackContainer::DockerFile{ path, shell: shell_cmd } => {
-                                    let local_image = format!("deplo-local-fallback:{}", name);
+                                    let local_image = format!("{}-deplo-local-fallback:{}", self.common.project_name, name);
                                     log::debug!("generate docker image {} from {}", local_image, path);
                                     let p = Path::new(path);
                                     shell.exec(
