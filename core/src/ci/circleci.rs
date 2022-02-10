@@ -145,7 +145,11 @@ impl<'a, S: shell::Shell> ci::CI for CircleCI<S> {
             fs::create_dir_all("/tmp/deplo/marked_jobs")?;
             fs::write(format!("/tmp/deplo/marked_jobs/{}", job_name), "")?;
         } else {
-            self.config.borrow().run_job_by_name(&self.shell, job_name, &shell::no_capture(), config::Command::Job)?;
+            self.config.borrow().run_job_by_name(
+                &self.shell, job_name, config::Command::Job, &config::JobRunningOptions {
+                    commit: None, remote: false, shell_settings: shell::no_capture(),
+                }
+            )?;
         }
         Ok(())
     }
@@ -158,7 +162,10 @@ impl<'a, S: shell::Shell> ci::CI for CircleCI<S> {
         }
         Ok(())
     }
-    fn run_job(&self, _: &str) -> Result<String, Box<dyn Error>> {
+    fn dispatched_remote_job_name(&self) -> Result<Option<ci::RemoteJob>, Box<dyn Error>> {
+        Ok(None)
+    }
+    fn run_job(&self, _job: &ci::RemoteJob) -> Result<String, Box<dyn Error>> {
         log::warn!("TODO: implement run_job for circleci");
         Ok("".to_string())
     }

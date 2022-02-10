@@ -3,14 +3,13 @@ name: Deplo CI/CD
 
 on: 
 {entrypoint:>2}
-  workflow_dispatch:
-    inputs:
-      deplo_job_name:
-        description: The name of the job to run
-        requred: true
+  repository_dispatch:
+    types: [{remote_job_dispatch_type}]
+
 env:
   DEPLO_CI_PULL_REQUEST_URL: ${{{{ github.event.pull_request.url }}}}
-  DEPLO_CI_RUN_JOB_NAME: ${{{{ github.event.inputs.deplo_job_name }}}}
+  DEPLO_CI_EVENT_TYPE: ${{{{ github.event.action }}}}
+  DEPLO_CI_EVENT_PAYLOAD: ${{{{ toJSON(github.event.client_payload) }}}}
 {secrets:>2}
 jobs:
   deplo-main:

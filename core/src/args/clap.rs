@@ -55,39 +55,53 @@ impl AliasCommands {
     }
 }
 
+fn job_running_command_options(
+    name: &'static str,
+    help: &'static str
+) -> App<'static> {
+    App::new(name)
+    .override_help(help)
+    .arg(Arg::new("name")
+        .help("job name")
+        .index(1)
+        .required(true))
+    .arg(Arg::new("async")
+        .help("only works with --remote, don't wait for finishing remote job")
+        .long("async")
+        .required(false))
+    .arg(Arg::new("remote")
+        .help("if set, run the job on the correspond remote CI service")
+        .long("remote")
+        .required(false))
+    .arg(Arg::new("ref")
+        .help("git ref to run the job")
+        .long("ref")
+        .takes_value(true)
+        .required(false))
+    .subcommand(
+        App::new("sh")
+            .override_help("running arbiter command for environment of jobs")
+            .arg(Arg::new("task")
+                .help("running command that declared in tasks directive")
+                .multiple_values(true)))    
+}
+
 lazy_static! {
     static ref G_ALIASED_COMMANDS: AliasCommands = AliasCommands::new(hashmap!{
         "ci_deploy" => (
             vec!["ci", "deploy"], CommandFactory::new(|name| -> App<'static> { 
-                App::new(name)
-                .override_help("run specific deploy job in Deplo.toml. used for auto generated CI/CD settings")
-                .arg(Arg::new("name")
-                    .help("job name")
-                    .index(1)
-                    .required(true))
-                .subcommand(
-                    App::new("sh")
-                        .override_help("running arbiter command for environment of jobs")
-                        .arg(Arg::new("task")
-                            .help("running command that declared in tasks directive")
-                            .multiple_values(true)))
+                job_running_command_options(
+                    name, 
+                    "run specific deploy job in Deplo.toml. used for auto generated CI/CD settings"
+                )
             })
         ),
         "ci_integrate" => (
             vec!["ci", "integrate"], CommandFactory::new(|name| -> App<'static> { 
-                App::new(name)
-                .override_help("run specific deploy job in Deplo.toml. used for auto generated CI/CD settings")
-                .arg(Arg::new("name")
-                    .help("job name")
-                    .index(1)
-                    .required(true))
-                .subcommand(
-                    App::new("sh")
-                        .override_help("running arbiter command for environment of jobs")
-                        .arg(Arg::new("task")
-                            .help("running @task_name which task_name declared at tasks directive in job or specify adhoc command")
-                            .index(1)
-                            .multiple_values(true)))
+                job_running_command_options(
+                    name, 
+                    "run specific integrate job in Deplo.toml. used for auto generated CI/CD settings"
+                )
             })
         ),
     }, hashmap!{

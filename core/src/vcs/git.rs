@@ -64,6 +64,7 @@ pub trait GitFeatures {
     fn current_ref(&self) -> Result<(vcs::RefType, String), Box<dyn Error>>;
     fn current_branch(&self) -> Result<(String, bool), Box<dyn Error>>;
     fn commit_hash(&self, expr: Option<&str>) -> Result<String, Box<dyn Error>>;
+    fn checkout(&self, commit: &str) -> Result<(), Box<dyn Error>>;
     fn remote_origin(&self) -> Result<String, Box<dyn Error>>;
     fn repository_root(&self) -> Result<String, Box<dyn Error>>;
     fn diff_paths(&self, expression: &str) -> Result<String, Box<dyn Error>>;
@@ -189,6 +190,12 @@ impl<S: shell::Shell> GitFeatures for Git<S> {
                 }))
             }
         }
+    }
+    fn checkout(&self, commit: &str) -> Result<(), Box<dyn Error>> {
+        self.shell.output_of(&vec!(
+            "git", "reset" , "--hard", commit
+        ), shell::no_env(), shell::no_cwd())?;
+        Ok(())
     }
     fn commit_hash(&self, expr: Option<&str>) -> Result<String, Box<dyn Error>> {
         Ok(self.shell.output_of(&vec!(

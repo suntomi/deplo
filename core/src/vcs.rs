@@ -23,6 +23,7 @@ pub trait VCS : module::Module {
     fn current_ref(&self) -> Result<(RefType, String), Box<dyn Error>>;
     fn current_branch(&self) -> Result<(String, bool), Box<dyn Error>>;
     fn commit_hash(&self, expr: Option<&str>) -> Result<String, Box<dyn Error>>;
+    fn checkout(&self, commit: &str) -> Result<(), Box<dyn Error>>;
     fn repository_root(&self) -> Result<String, Box<dyn Error>>;
     fn rebase_with_remote_counterpart(&self, branch: &str) -> Result<(), Box<dyn Error>>;
     fn push(
