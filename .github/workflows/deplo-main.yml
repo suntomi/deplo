@@ -7,14 +7,13 @@ on:
     tags: ["[0-9]*"]
   pull_request:
     branches: ["lab","main"]
-  workflow_dispatch:
-    inputs:
-      deplo_job_name:
-        description: The name of the job to run
-        requred: true
+  repository_dispatch:
+    types: [deplo-run-remote-job]
+
 env:
   DEPLO_CI_PULL_REQUEST_URL: ${{ github.event.pull_request.url }}
-  DEPLO_CI_RUN_JOB_NAME: ${{ github.event.inputs.deplo_job_name }}
+  DEPLO_CI_EVENT_TYPE: ${{ github.event.action }}
+  DEPLO_CI_EVENT_PAYLOAD: ${{ toJSON(github.event.client_payload) }}
   SUNTOMI_VCS_ACCOUNT: ${{ secrets.SUNTOMI_VCS_ACCOUNT }}
   SUNTOMI_VCS_ACCOUNT_EMAIL: ${{ secrets.SUNTOMI_VCS_ACCOUNT_EMAIL }}
   SUNTOMI_VCS_ACCOUNT_KEY: ${{ secrets.SUNTOMI_VCS_ACCOUNT_KEY }}
@@ -29,7 +28,6 @@ jobs:
       deploy-latest: ${{ steps.deplo-ci-kick.outputs.deploy-latest }}
       deploy-mac: ${{ steps.deplo-ci-kick.outputs.deploy-mac }}
       deploy-product: ${{ steps.deplo-ci-kick.outputs.deploy-product }}
-      deploy-vmfb: ${{ steps.deplo-ci-kick.outputs.deploy-vmfb }}
       deploy-win: ${{ steps.deplo-ci-kick.outputs.deploy-win }}
       integrate-base: ${{ steps.deplo-ci-kick.outputs.integrate-base }}
       integrate-builder: ${{ steps.deplo-ci-kick.outputs.integrate-builder }}
@@ -53,8 +51,8 @@ jobs:
           sudo: true
   deplo-finish:
     name: Cleanup CI
-    if: ${{ !failure() && (needs.deploy-base.outputs.need-cleanup || needs.deploy-builder.outputs.need-cleanup || needs.deploy-latest.outputs.need-cleanup || needs.deploy-mac.outputs.need-cleanup || needs.deploy-product.outputs.need-cleanup || needs.deploy-vmfb.outputs.need-cleanup || needs.deploy-win.outputs.need-cleanup || needs.integrate-base.outputs.need-cleanup || needs.integrate-builder.outputs.need-cleanup || needs.integrate-src.outputs.need-cleanup) }}
-    needs: ["deplo-main","deploy-base","deploy-builder","deploy-latest","deploy-mac","deploy-product","deploy-vmfb","deploy-win","integrate-base","integrate-builder","integrate-src"]
+    if: ${{ !failure() && (needs.deploy-base.outputs.need-cleanup || needs.deploy-builder.outputs.need-cleanup || needs.deploy-latest.outputs.need-cleanup || needs.deploy-mac.outputs.need-cleanup || needs.deploy-product.outputs.need-cleanup || needs.deploy-win.outputs.need-cleanup || needs.integrate-base.outputs.need-cleanup || needs.integrate-builder.outputs.need-cleanup || needs.integrate-src.outputs.need-cleanup) }}
+    needs: ["deplo-main","deploy-base","deploy-builder","deploy-latest","deploy-mac","deploy-product","deploy-win","integrate-base","integrate-builder","integrate-src"]
     runs-on: ubuntu-latest
     steps:
       - name: Fetch deplo cli
@@ -207,31 +205,6 @@ jobs:
       - name: deploy product
         id: deplo-deploy-product
         run: deplo ci deploy product
-      - name: Setup ssh session to debug
-        if: ${{ failure() }}
-        uses: umegaya/action-tmate@a3d459813f3429bd95fc48bcd980b2fb40f10ad0
-        with:
-          sudo: true
-  deploy-vmfb:
-    needs: [deplo-main]
-    if: ${{ needs.deplo-main.outputs.deploy-vmfb && !failure() }}
-    name: Running job deploy-vmfb
-    runs-on: ubuntu-latest
-  
-    outputs:
-      need-cleanup: ${{ steps.deplo-deploy-vmfb.outputs.need-cleanup }}
-    steps:
-      - name: Fetch deplo cli
-        run: |
-          curl -L https://github.com/suntomi/deplo/releases/download/nightly/deplo-Linux -o /usr/local/bin/deplo
-          chmod +x /usr/local/bin/deplo
-      - name: Checkout
-        uses: actions/checkout@v2
-      
-  
-      - name: deploy vmfb
-        id: deplo-deploy-vmfb
-        run: deplo ci deploy vmfb
       - name: Setup ssh session to debug
         if: ${{ failure() }}
         uses: umegaya/action-tmate@a3d459813f3429bd95fc48bcd980b2fb40f10ad0
