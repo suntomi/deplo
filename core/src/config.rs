@@ -878,7 +878,7 @@ impl Config {
             return Ok(Some(ci.run_job(&ci::RemoteJob{
                 name: name.to_string(),
                 command: cmd.to_string(),
-                commit: options.commit.unwrap_or("").to_string(),
+                commit: options.commit.map(|s| s.to_string()),
             })?));
         }
         match job.runner {
@@ -947,7 +947,7 @@ impl Config {
                     return Ok(Some(ci.run_job(&ci::RemoteJob{
                         name: name.to_string(),
                         command: cmd.to_string(),
-                        commit: options.commit.unwrap_or("").to_string(),
+                        commit: options.commit.map(|s| s.to_string()),
                     })?));
                 }
             },

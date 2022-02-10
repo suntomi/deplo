@@ -89,7 +89,8 @@ impl<S: shell::Shell> CI<S> {
         let remote_job = config.ci_service_by_job_name(job_name)?.dispatched_remote_job()?;
         // if reach here by remote execution, adopt the settings, otherwise using cli options if any.
         let (commit, remote) = match remote_job {
-            Some(ref job) => (Some(job.commit.as_str()), false), // because this process already run in remote environment
+            // because this process already run in remote environment, remote is always false.
+            Some(ref job) => (job.commit.as_ref().map(|s| s.as_str()), false),
             None => (args.value_of("ref"), args.occurence_of("remote") > 0)
         };
         let may_remote_job_id = match args.subcommand() {
