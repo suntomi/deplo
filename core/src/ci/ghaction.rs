@@ -397,7 +397,7 @@ impl<S: shell::Shell> ci::CI for GhAction<S> {
         }
         Ok(())
     }
-    fn dispatched_remote_job_name(&self) -> Result<Option<ci::RemoteJob>, Box<dyn Error>> {
+    fn dispatched_remote_job(&self) -> Result<Option<ci::RemoteJob>, Box<dyn Error>> {
         if std::env::var("DEPLO_CI_EVENT_TYPE") == Ok(config::DEPLO_REMOTE_JOB_EVENT_TYPE.to_string()) {
             let payload = std::env::var("DEPLO_CI_EVENT_PAYLOAD").unwrap();
             Ok(Some(serde_json::from_str::<ci::RemoteJob>(&payload)?))

@@ -720,6 +720,14 @@ impl Config {
             }))
         } 
     }
+    pub fn ci_service_by_job_name<'a>(&'a self, job_name: &str) -> Result<&'a Box<dyn ci::CI>, Box<dyn Error>> {
+        return match self.find_job(job_name) {
+            Some(job) => self.ci_service_by_job(job),
+            None => escalate!(Box::new(ConfigError{ 
+                cause: format!("no such job {}", job_name) 
+            }))
+        }
+    }
     pub fn ci_service_by_job<'a, 'b>(&'a self, job: &'b Job) -> Result<&'a Box<dyn ci::CI>, Box<dyn Error>> {
         let account_name = job.account.as_ref().map_or_else(||"default", |v| v.as_str());
         return match self.ci_caches.get(account_name) {

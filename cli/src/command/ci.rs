@@ -31,6 +31,14 @@ impl<S: shell::Shell> CI<S> {
         let (account_name, _) = config.ci_config_by_env();
         let ci = config.ci_service(account_name)?;
         ci.kick()?;
+        match ci.dispatched_remote_job()? {
+            Some(job) => {
+                ci.mark_job_executed(&job.name)?;
+                log::info!("remote job {} dispatched with payload '{}'", job.name, serde_json::to_string(&job)?);
+                return Ok(())
+            }
+            None => {}
+        }
         let vcs = config.vcs_service()?;
         let jobs_and_kind = match config.runtime.workflow_type {
             Some(v) => match v {
@@ -78,8 +86,12 @@ impl<S: shell::Shell> CI<S> {
     fn exec<A: args::Args>(&self, kind: &str, args: &A) -> Result<(), Box<dyn Error>> {
         let config = self.config.borrow();
         let job_name = &format!("{}-{}", kind, args.value_of("name").unwrap());
-        let commit = args.value_of("ref");
-        let remote = args.occurence_of("remote") > 0;
+        let remote_job = config.ci_service_by_job_name(job_name)?.dispatched_remote_job()?;
+        // if reach here by remote execution, adopt the settings, otherwise using cli options if any.
+        let (commit, remote) = match remote_job {
+            Some(ref job) => (Some(job.commit.as_str()), false), // because this process already run in remote environment
+            None => (args.value_of("ref"), args.occurence_of("remote") > 0)
+        };
         let may_remote_job_id = match args.subcommand() {
             Some(("sh", subargs)) => {
                 log::info!("running shell for job '{}-{}' at {}",

@@ -162,7 +162,7 @@ impl<'a, S: shell::Shell> ci::CI for CircleCI<S> {
         }
         Ok(())
     }
-    fn dispatched_remote_job_name(&self) -> Result<Option<ci::RemoteJob>, Box<dyn Error>> {
+    fn dispatched_remote_job(&self) -> Result<Option<ci::RemoteJob>, Box<dyn Error>> {
         Ok(None)
     }
     fn run_job(&self, _job: &ci::RemoteJob) -> Result<String, Box<dyn Error>> {
