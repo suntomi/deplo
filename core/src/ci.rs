@@ -10,7 +10,7 @@ use crate::module;
 #[derive(Serialize, Deserialize)]
 pub struct RemoteJob {
     pub name: String,
-    pub commit: String,
+    pub commit: Option<String>,
     pub command: String,
 }
 
