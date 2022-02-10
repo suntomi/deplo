@@ -65,6 +65,10 @@ lazy_static! {
                     .help("job name")
                     .index(1)
                     .required(true))
+                .arg(Arg::new("ref")
+                    .help("git ref to run the job")
+                    .long("ref")
+                    .required(false))
                 .subcommand(
                     App::new("sh")
                         .override_help("running arbiter command for environment of jobs")
@@ -81,6 +85,10 @@ lazy_static! {
                     .help("job name")
                     .index(1)
                     .required(true))
+                .arg(Arg::new("ref")
+                    .help("git ref to run the job")
+                    .long("ref")
+                    .required(false))
                 .subcommand(
                     App::new("sh")
                         .override_help("running arbiter command for environment of jobs")

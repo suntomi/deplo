@@ -257,6 +257,9 @@ impl<GIT: (git::GitFeatures) + (git::GitHubFeatures), S: shell::Shell> vcs::VCS 
             }
         }
     }
+    fn checkout(&self, commit: &str) -> Result<(), Box<dyn Error>> {
+        self.git.checkout(commit)
+    }
     fn commit_hash(&self, expr: Option<&str>) -> Result<String, Box<dyn Error>> {
         self.git.commit_hash(expr)
     }

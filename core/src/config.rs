@@ -23,6 +23,7 @@ use crate::util::{escalate,envsubst,make_absolute};
 pub const DEPLO_GIT_HASH: &'static str = env!("GIT_HASH");
 pub const DEPLO_VERSION: &'static str = env!("DEPLO_RELEASE_VERSION");
 pub const DEPLO_RELEASE_URL_BASE: &'static str = "https://github.com/suntomi/deplo/releases/download";
+pub const DEPLO_REMOTE_JOB_EVENT_TYPE: &'static str = "deplo-run-remote-job";
 
 pub fn cli_download_url(os: RunnerOS, version: &str) -> String {
     return format!("{}/{}/deplo-{}", DEPLO_RELEASE_URL_BASE, version, os.cli_download_postfix());
@@ -837,10 +838,11 @@ impl Config {
     }
     pub fn run_job_by_name(
         &self, shell: &impl shell::Shell, name: &str, 
-        settings: &shell::Settings, command: Command
+        settings: &shell::Settings, command: Command,
+        commit: Option<&str>
     ) -> Result<(), Box<dyn Error>> {
         match self.find_job(name) {
-            Some(job) => self.run_job(shell, name, job, settings, command),
+            Some(job) => self.run_job(shell, name, job, settings, command, commit),
             None => return escalate!(Box::new(
                 ConfigError{ cause: format!("job {} not found", name) }
             )),
@@ -848,7 +850,8 @@ impl Config {
     }
     pub fn run_job(
         &self, shell: &impl shell::Shell, name: &str, job: &Job, 
-        settings: &shell::Settings, command: Command
+        settings: &shell::Settings, command: Command,
+        commit: Option<&str>
     ) -> Result<(), Box<dyn Error>> {
         let mut cmd = match command {
             Command::Adhoc(ref c) => c,
@@ -865,6 +868,9 @@ impl Config {
                     } else {
                         None
                     };
+                    if let Some(c) = commit {
+                        self.vcs_service()?.checkout(c)?;
+                    }
                     // run command directly here, add path to locally downloaded cli.
                     shell.eval(cmd, &job.shell, self.job_env(&job, &paths)?, &job.workdir, settings)?;
                 } else {
@@ -896,6 +902,9 @@ impl Config {
                                 cmd = shell_cmd.as_ref().unwrap();
                             }
                             let path = &self.deplo_cli_download(os, shell)?.to_string_lossy().to_string();
+                            if let Some(c) = commit {
+                                self.vcs_service()?.checkout(c)?;
+                            }        
                             // running on host. run command in container `image` with docker
                             shell.eval_on_container(
                                 &image, cmd, &shell_cmd, self.job_env(&job, &None)?, &job.workdir, 
@@ -913,14 +922,18 @@ impl Config {
                     // runner os is not linux and not same as current os, and no fallback container specified.
                     // need to run in CI.
                     let ci = self.ci_service_by_job(job)?;
-                    ci.run_job(name)?;
+                    ci.run_job(&ci::RemoteJob{
+                        name: name.to_string(),
+                        command: cmd.to_string(),
+                        commit: commit.unwrap_or("").to_string()
+                    })?;
                 }
             },
             Runner::Container{ ref image } => {
+                if let Some(c) = commit {
+                    self.vcs_service()?.checkout(c)?;
+                }
                 if Self::is_running_on_ci() {
-                    if command != Command::Job {
-                        panic!("{}: adhoc shell command {} for remote execution have not supported yet", name, command);
-                    }
                     // already run inside container `image`, run command directly here
                     shell.eval(cmd, &job.shell, self.job_env(&job, &None)?, &job.workdir, settings)?;
                 } else {

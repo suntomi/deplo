@@ -226,6 +226,17 @@ impl<S: shell::Shell> GhAction<S> {
             ).split("\n").map(|s| s.to_string()).collect()
         }
     }
+    fn get_token(&self) -> Result<String, Box<dyn Error>> {
+        let config = self.config.borrow();
+        Ok(match &config.ci_config(&self.account_name) {
+            config::CIAccount::GhAction { account:_, key } => { key.to_string() },
+            config::CIAccount::CircleCI{..} => { 
+                return escalate!(Box::new(ci::CIError {
+                    cause: "should have ghaction CI config but circleci config provided".to_string()
+                }));
+            }
+        })
+    }
 }
 
 impl<'a, S: shell::Shell> module::Module for GhAction<S> {
@@ -305,6 +316,7 @@ impl<'a, S: shell::Shell> module::Module for GhAction<S> {
         fs::write(&workflow_yml_path,
             format!(
                 include_str!("../../res/ci/ghaction/main.yml.tmpl"), 
+                remote_job_dispatch_type = config::DEPLO_REMOTE_JOB_EVENT_TYPE,
                 entrypoint = MultilineFormatString{ 
                     strings: &(if create_main { self.generate_entrypoint(&config) } else { vec![] }),
                     postfix: None
@@ -369,7 +381,10 @@ impl<S: shell::Shell> ci::CI for GhAction<S> {
         if config::Config::is_running_on_ci() {
             println!("::set-output name={}::true", job_name);
         } else {
-            self.config.borrow().run_job_by_name(&self.shell, job_name, &shell::no_capture(), config::Command::Job)?;
+            self.config.borrow().run_job_by_name(
+                &self.shell, job_name, &shell::no_capture(), 
+                config::Command::Job, None
+            )?;
         }
         Ok(())
     }
@@ -381,8 +396,33 @@ impl<S: shell::Shell> ci::CI for GhAction<S> {
         }
         Ok(())
     }
-    fn run_job(&self, _: &str) -> Result<String, Box<dyn Error>> {
-        Ok("".to_string())
+    fn dispatched_remote_job_name(&self) -> Result<Option<ci::RemoteJob>, Box<dyn Error>> {
+        if std::env::var("DEPLO_CI_EVENT_TYPE") == Ok(config::DEPLO_REMOTE_JOB_EVENT_TYPE.to_string()) {
+            let payload = std::env::var("DEPLO_CI_EVENT_PAYLOAD").unwrap();
+            Ok(Some(serde_json::from_str::<ci::RemoteJob>(&payload)?))
+        } else {
+            Ok(None)
+        }
+    }
+    fn run_job(&self, job: &ci::RemoteJob) -> Result<String, Box<dyn Error>> {
+        let config = self.config.borrow();
+        let token = self.get_token()?;
+        let user_and_repo = config.vcs_service()?.user_and_repo()?;
+        Ok(self.shell.exec(&vec![
+            "curl", "-H", &format!("Authorization: token {}", token), 
+            "-H", "Accept: application/vnd.github.v3+json", 
+            &format!(
+                "https://api.github.com/repos/{}/{}/dispatches", 
+                user_and_repo.0, user_and_repo.1
+            ),
+            "-d", &format!(r#"{{
+                "event_type": "{job_name}",
+                "client_payload": {client_payload}
+            }}"#, 
+                job_name = config::DEPLO_REMOTE_JOB_EVENT_TYPE,
+                client_payload = serde_json::to_string(job)?
+            )
+        ], shell::no_env(), shell::no_cwd(), &shell::capture())?)
     }
     fn wait_job(&self, _: &str) -> Result<(), Box<dyn Error>> {
         log::warn!("TODO: implement wait_job for ghaction");
@@ -428,15 +468,8 @@ impl<S: shell::Shell> ci::CI for GhAction<S> {
         envs
     }
     fn set_secret(&self, key: &str, _: &str) -> Result<(), Box<dyn Error>> {
+        let token = self.get_token()?;
         let config = self.config.borrow();
-        let token = match &config.ci_config(&self.account_name) {
-            config::CIAccount::GhAction { account:_, key } => { key },
-            config::CIAccount::CircleCI{..} => { 
-                return escalate!(Box::new(ci::CIError {
-                    cause: "should have ghaction CI config but circleci config provided".to_string()
-                }));
-            }
-        };
         let user_and_repo = config.vcs_service()?.user_and_repo()?;
         let public_key_info = match serde_json::from_str::<RepositoryPublicKeyResponse>(
             &self.shell.exec(&vec![
