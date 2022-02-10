@@ -68,6 +68,7 @@ lazy_static! {
                 .arg(Arg::new("ref")
                     .help("git ref to run the job")
                     .long("ref")
+                    .takes_value(true)
                     .required(false))
                 .subcommand(
                     App::new("sh")
@@ -88,6 +89,7 @@ lazy_static! {
                 .arg(Arg::new("ref")
                     .help("git ref to run the job")
                     .long("ref")
+                    .takes_value(true)
                     .required(false))
                 .subcommand(
                     App::new("sh")
