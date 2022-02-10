@@ -122,6 +122,11 @@ impl fmt::Display for Command {
         }
     }
 }
+pub struct JobRunningOptions<'a> {
+    pub remote: bool,
+    pub shell_settings: shell::Settings,
+    pub commit: Option<&'a str>,
+}
 #[derive(Serialize, Deserialize)]
 pub struct Job {
     pub account: Option<String>,
@@ -838,11 +843,10 @@ impl Config {
     }
     pub fn run_job_by_name(
         &self, shell: &impl shell::Shell, name: &str, 
-        settings: &shell::Settings, command: Command,
-        commit: Option<&str>
-    ) -> Result<(), Box<dyn Error>> {
+        command: Command, options: &JobRunningOptions
+    ) -> Result<Option<String>, Box<dyn Error>> {
         match self.find_job(name) {
-            Some(job) => self.run_job(shell, name, job, settings, command, commit),
+            Some(job) => self.run_job(shell, name, job, command, options),
             None => return escalate!(Box::new(
                 ConfigError{ cause: format!("job {} not found", name) }
             )),
@@ -850,29 +854,42 @@ impl Config {
     }
     pub fn run_job(
         &self, shell: &impl shell::Shell, name: &str, job: &Job, 
-        settings: &shell::Settings, command: Command,
-        commit: Option<&str>
-    ) -> Result<(), Box<dyn Error>> {
+        command: Command, options: &JobRunningOptions
+    ) -> Result<Option<String>, Box<dyn Error>> {
         let mut cmd = match command {
             Command::Adhoc(ref c) => c,
             Command::Job => &job.command,
             Command::Shell => job.shell.as_ref().map_or_else(|| "bash", |v| v.as_str())
-        };        
+        };
+        if options.remote {
+            log::debug!(
+                "force running job {} on remote with command {} at {}", 
+                name, cmd, options.commit.unwrap_or("")
+            );
+            let ci = self.ci_service_by_job(job)?;
+            return Ok(Some(ci.run_job(&ci::RemoteJob{
+                name: name.to_string(),
+                command: cmd.to_string(),
+                commit: options.commit.unwrap_or("").to_string(),
+            })?));
+        }
         match job.runner {
             Runner::Machine{image:_, os, ref local_fallback, class:_} => {
                 let current_os = shell.detect_os()?;
                 if os == current_os {
                     let paths = if !Self::is_running_on_ci() {
-                        let cli_parent_dir = self.deplo_cli_download(os, shell)?.parent().unwrap().to_string_lossy().to_string();
+                        let cli_parent_dir = self.deplo_cli_download(
+                            os, shell
+                        )?.parent().unwrap().to_string_lossy().to_string();
                         Some(vec![cli_parent_dir.to_owned()])
                     } else {
                         None
                     };
-                    if let Some(c) = commit {
+                    if let Some(c) = options.commit {
                         self.vcs_service()?.checkout(c)?;
                     }
                     // run command directly here, add path to locally downloaded cli.
-                    shell.eval(cmd, &job.shell, self.job_env(&job, &paths)?, &job.workdir, settings)?;
+                    shell.eval(cmd, &job.shell, self.job_env(&job, &paths)?, &job.workdir, &options.shell_settings)?;
                 } else {
                     log::debug!("runner os is different from current os {} {}", os, current_os);
                     match local_fallback {
@@ -902,40 +919,40 @@ impl Config {
                                 cmd = shell_cmd.as_ref().unwrap();
                             }
                             let path = &self.deplo_cli_download(os, shell)?.to_string_lossy().to_string();
-                            if let Some(c) = commit {
+                            if let Some(c) = options.commit {
                                 self.vcs_service()?.checkout(c)?;
-                            }        
+                            }
                             // running on host. run command in container `image` with docker
                             shell.eval_on_container(
                                 &image, cmd, &shell_cmd, self.job_env(&job, &None)?, &job.workdir, 
                                 &hashmap!{
                                     path.as_str() => "/usr/local/bin/deplo"
-                                }, settings
+                                }, &options.shell_settings
                             )?;
-                            return Ok(());
+                            return Ok(None);
                         },
                         None => ()
                     };
-                    if command != Command::Job {
-                        panic!("{}: adhoc shell command {} for remote execution have not supported yet", name, command);
-                    }
                     // runner os is not linux and not same as current os, and no fallback container specified.
                     // need to run in CI.
                     let ci = self.ci_service_by_job(job)?;
-                    ci.run_job(&ci::RemoteJob{
+                    return Ok(Some(ci.run_job(&ci::RemoteJob{
                         name: name.to_string(),
                         command: cmd.to_string(),
-                        commit: commit.unwrap_or("").to_string()
-                    })?;
+                        commit: options.commit.unwrap_or("").to_string(),
+                    })?));
                 }
             },
             Runner::Container{ ref image } => {
-                if let Some(c) = commit {
+                if let Some(c) = options.commit {
                     self.vcs_service()?.checkout(c)?;
                 }
                 if Self::is_running_on_ci() {
                     // already run inside container `image`, run command directly here
-                    shell.eval(cmd, &job.shell, self.job_env(&job, &None)?, &job.workdir, settings)?;
+                    shell.eval(
+                        cmd, &job.shell, self.job_env(&job, &None)?,
+                        &job.workdir, &options.shell_settings
+                    )?;
                 } else {
                     let os = RunnerOS::Linux;
                     let path = &self.deplo_cli_download(os, shell)?.to_string_lossy().to_string();
@@ -943,12 +960,12 @@ impl Config {
                     shell.eval_on_container(
                         image, cmd, &job.shell, self.job_env(&job, &None)?, &job.workdir, &hashmap!{
                             path.as_str() => "/usr/local/bin/deplo"
-                        }, settings
+                        }, &options.shell_settings
                     )?;
                 }
             }
         }
-        Ok(())
+        Ok(None)
     }    
     pub fn is_main_ci(&self, ci_type: &str) -> bool {
         // default always should exist

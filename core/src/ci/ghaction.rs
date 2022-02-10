@@ -382,8 +382,9 @@ impl<S: shell::Shell> ci::CI for GhAction<S> {
             println!("::set-output name={}::true", job_name);
         } else {
             self.config.borrow().run_job_by_name(
-                &self.shell, job_name, &shell::no_capture(), 
-                config::Command::Job, None
+                &self.shell, job_name, config::Command::Job, &config::JobRunningOptions {
+                    commit: None, remote: false, shell_settings: shell::no_capture(),
+                }
             )?;
         }
         Ok(())
