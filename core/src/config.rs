@@ -124,6 +124,7 @@ impl fmt::Display for Command {
 }
 pub struct JobRunningOptions<'a> {
     pub remote: bool,
+    pub adhoc_envs: HashMap<String, String>,
     pub shell_settings: shell::Settings,
     pub commit: Option<&'a str>,
 }
@@ -429,6 +430,18 @@ impl RuntimeConfig {
             mutc.runtime.release_target = release_target;
             mutc.runtime.workflow_type = workflow_type;
         }
+
+        // change commit hash
+        match std::env::var("DEPLO_CI_OVERWRITE_COMMIT") {
+            Ok(v) => if !v.is_empty() {
+                let c = config.borrow();
+                for (account, ci) in &c.ci_caches {
+                    let prev = ci.overwrite_commit(v.as_str()).unwrap();
+                    log::info!("{}: overwrite commit from {} to {}", account, prev, v);
+                }
+            },
+            Err(_) => ()
+        };
         Ok(())
     }
     fn apply(&self) -> Result<(), Box<dyn Error>> {
@@ -593,7 +606,7 @@ impl Config {
     }
     pub fn generate_wrapper_script(&self) -> String {
         format!(
-            include_str!("../res/cli/deplow.sh.tmpl"), 
+            include_str!("../res/cli/deplow.sh.tmpl"),
             version = DEPLO_VERSION,
             data_dir = self.data_dir()
         )
@@ -740,7 +753,10 @@ impl Config {
     pub fn ci_workflow<'a>(&'a self) -> &'a WorkflowConfig {
         return &self.ci.workflow
     }
-    pub fn job_env(&self, job: &Job, paths: &Option<Vec<String>>) -> Result<HashMap<String, String>, Box<dyn Error>> {
+    pub fn job_env(
+        &self, job: &Job, paths: &Option<Vec<String>>,
+        adhoc: &HashMap<String, String>
+    ) -> Result<HashMap<String, String>, Box<dyn Error>> {
         let mut inherits: HashMap<String, String> = if Self::is_running_on_ci() {
             shell::inherit_env()
         } else {
@@ -752,6 +768,9 @@ impl Config {
             inherits_from_dotenv
         };
         for (k, v) in job.job_env(self, paths) {
+            inherits.insert(k.to_string(), v.to_string());
+        }
+        for (k, v) in adhoc {
             inherits.insert(k.to_string(), v.to_string());
         }
         return Ok(inherits);
@@ -879,6 +898,8 @@ impl Config {
                 name: name.to_string(),
                 command: cmd.to_string(),
                 commit: options.commit.map(|s| s.to_string()),
+                envs: options.adhoc_envs.to_owned(),
+                verbosity: self.runtime.verbosity
             })?));
         }
         match job.runner {
@@ -897,7 +918,10 @@ impl Config {
                         self.vcs_service()?.checkout(c)?;
                     }
                     // run command directly here, add path to locally downloaded cli.
-                    shell.eval(cmd, &job.shell, self.job_env(&job, &paths)?, &job.workdir, &options.shell_settings)?;
+                    shell.eval(
+                        cmd, &job.shell, self.job_env(&job, &paths, &options.adhoc_envs)?, 
+                        &job.workdir, &options.shell_settings
+                    )?;
                 } else {
                     log::debug!("runner os is different from current os {} {}", os, current_os);
                     match local_fallback {
@@ -932,8 +956,9 @@ impl Config {
                             }
                             // running on host. run command in container `image` with docker
                             shell.eval_on_container(
-                                &image, cmd, &shell_cmd, self.job_env(&job, &None)?, &job.workdir, 
-                                &hashmap!{
+                                &image, cmd, &shell_cmd, 
+                                self.job_env(&job, &None, &options.adhoc_envs)?, 
+                                &job.workdir, &hashmap!{
                                     path.as_str() => "/usr/local/bin/deplo"
                                 }, &options.shell_settings
                             )?;
@@ -948,6 +973,8 @@ impl Config {
                         name: name.to_string(),
                         command: cmd.to_string(),
                         commit: options.commit.map(|s| s.to_string()),
+                        envs: hashmap!{},
+                        verbosity: self.runtime.verbosity,
                     })?));
                 }
             },
@@ -958,7 +985,7 @@ impl Config {
                 if Self::is_running_on_ci() {
                     // already run inside container `image`, run command directly here
                     shell.eval(
-                        cmd, &job.shell, self.job_env(&job, &None)?,
+                        cmd, &job.shell, self.job_env(&job, &None, &options.adhoc_envs)?,
                         &job.workdir, &options.shell_settings
                     )?;
                 } else {
@@ -966,7 +993,8 @@ impl Config {
                     let path = &self.deplo_cli_download(os, shell)?.to_string_lossy().to_string();
                     // running on host. run command in container `image` with docker
                     shell.eval_on_container(
-                        image, cmd, &job.shell, self.job_env(&job, &None)?, &job.workdir, &hashmap!{
+                        image, cmd, &job.shell, self.job_env(&job, &None, &options.adhoc_envs)?,
+                        &job.workdir, &hashmap!{
                             path.as_str() => "/usr/local/bin/deplo"
                         }, &options.shell_settings
                     )?;

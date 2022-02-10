@@ -12,6 +12,8 @@ pub struct RemoteJob {
     pub name: String,
     pub commit: Option<String>,
     pub command: String,
+    pub envs: HashMap<String, String>,
+    pub verbosity: u64,
 }
 
 pub trait CI : module::Module {
@@ -19,6 +21,7 @@ pub trait CI : module::Module {
         config: &config::Container, account_name: &str
     ) -> Result<Self, Box<dyn Error>> where Self : Sized;
     fn kick(&self) -> Result<(), Box<dyn Error>>;
+    fn overwrite_commit(&self, commit: &str) -> Result<String, Box<dyn Error>>;
     fn pr_url_from_env(&self) -> Result<Option<String>, Box<dyn Error>>;
     fn mark_job_executed(&self, job_name: &str) -> Result<(), Box<dyn Error>>;
     fn mark_need_cleanup(&self, job_name: &str) -> Result<(), Box<dyn Error>>;
