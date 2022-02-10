@@ -88,10 +88,10 @@ impl<S: shell::Shell> CI<S> {
         let job_name = &format!("{}-{}", kind, args.value_of("name").unwrap());
         let remote_job = config.ci_service_by_job_name(job_name)?.dispatched_remote_job()?;
         // if reach here by remote execution, adopt the settings, otherwise using cli options if any.
-        let (commit, remote) = match remote_job {
+        let (commit, remote, command) = match remote_job {
             // because this process already run in remote environment, remote is always false.
-            Some(ref job) => (job.commit.as_ref().map(|s| s.as_str()), false),
-            None => (args.value_of("ref"), args.occurence_of("remote") > 0)
+            Some(ref job) => (job.commit.as_ref().map(|s| s.as_str()), false, Some(job.command.clone())),
+            None => (args.value_of("ref"), args.occurence_of("remote") > 0, None)
         };
         let may_remote_job_id = match args.subcommand() {
             Some(("sh", subargs)) => {
@@ -145,7 +145,10 @@ impl<S: shell::Shell> CI<S> {
             },
             Some((name, _)) => return escalate!(args.error(&format!("no such subcommand: [{}]", name))),
             None => {
-                config.run_job_by_name(&self.shell, &job_name, config::Command::Job, &config::JobRunningOptions {
+                config.run_job_by_name(&self.shell, &job_name, match command {
+                    Some(cmd) => config::Command::Adhoc(cmd),
+                    None => config::Command::Job
+                },&config::JobRunningOptions {
                     commit, remote, shell_settings: shell::no_capture(),
                 })?
             }
