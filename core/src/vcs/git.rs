@@ -28,7 +28,7 @@ use maplit::hashmap;
 
 use crate::config;
 use crate::shell;
-use crate::util::{defer, escalate, jsonpath};
+use crate::util::{defer, jsonpath};
 use crate::vcs;
 
 
@@ -62,7 +62,6 @@ pub struct Git<S: shell::Shell = shell::Default> {
 pub trait GitFeatures {
     fn new(username: &str, email: &str, config: &config::Container) -> Self;
     fn current_ref(&self) -> Result<(vcs::RefType, String), Box<dyn Error>>;
-    fn current_branch(&self) -> Result<(String, bool), Box<dyn Error>>;
     fn commit_hash(&self, expr: Option<&str>) -> Result<String, Box<dyn Error>>;
     fn checkout(&self, commit: &str, branch_name: Option<&str>) -> Result<(), Box<dyn Error>>;
     fn remote_origin(&self) -> Result<String, Box<dyn Error>>;
@@ -165,32 +164,6 @@ impl<S: shell::Shell> GitFeatures for Git<S> {
             }
         }
     }
-    fn current_branch(&self) -> Result<(String, bool), Box<dyn Error>> {
-        let (ref_type, ref_path) = self.current_ref()?;
-        match ref_type {
-            vcs::RefType::Pull => {
-                // pull ref has actual head of branch exactly before merge commit
-                let ref_path = match self.shell.output_of(&vec!(
-                    "git", "symbolic-ref" , "--short", "HEAD^"
-                ), shell::no_env(), shell::no_cwd()) {
-                    Ok(ref_path) => ref_path,
-                    Err(_) => return Ok((ref_path, false))
-                };
-                Ok((ref_path, true))
-            },
-            vcs::RefType::Tag => {
-                Ok((ref_path, false))
-            },
-            vcs::RefType::Branch|vcs::RefType::Remote => {
-                Ok((ref_path, true))
-            },
-            vcs::RefType::Commit => {
-                escalate!(Box::new(vcs::VCSError {
-                    cause: format!("not on a branch or tag, got: {}", ref_path)
-                }))
-            }
-        }
-    }
     fn checkout(&self, commit: &str, branch_name: Option<&str>) -> Result<(), Box<dyn Error>> {
         match branch_name {
             Some(b) => self.shell.output_of(&vec!(
@@ -277,21 +250,21 @@ impl<S: shell::Shell> GitFeatures for Git<S> {
 			match config.runtime_release_target() {
                 Some(_) => {
                     setup_remote!(self, url);
-                    let (b, is_branch) = self.current_branch()?;
-                    if !is_branch {
-                        log::debug!("skip push because current ref is not a branch {}", b);
+                    let (ref_type, ref_path) = self.current_ref()?;
+                    if ref_type != vcs::RefType::Branch {
+                        log::debug!("skip push because current ref is not a branch {}/{}", ref_type, ref_path);
                         return Ok(false)
                     }
                     // update remote counter part of the deploy branch again
                     // because sometimes other commits are made (eg. merging pull request, job updates metadata)
                     // here, $CI_BASE_BRANCH_NAME before colon means branch which name is $CI_BASE_BRANCH_NAME at remote `latest`
                     self.shell.exec(&vec!(
-                        "git", "fetch", "--force", "latest", &format!("{}:remotes/latest/{}", b, b)
+                        "git", "fetch", "--force", "latest", &format!("{}:remotes/latest/{}", ref_path, ref_path)
                     ), shell::no_env(), shell::no_cwd(), &shell::no_capture())?;
                     // deploy branch: rebase CI branch with remotes `latest`. 
                     // because if other changes commit to the branch, below causes push error without rebasing it
                     self.shell.exec(&vec!(
-                        "git", "rebase", &format!("remotes/latest/{}", b)
+                        "git", "rebase", &format!("remotes/latest/{}", ref_path)
                     ), shell::no_env(), shell::no_cwd(), &shell::no_capture())?;
                 },
                 None => {}

@@ -172,7 +172,8 @@ impl Job {
                 common_envs.insert("DEPLO_CI_RELEASE_TARGET", v.to_string());
             },
             None => {
-                log::info!("job_env: no release target: {}", config.vcs_service().unwrap().current_branch().unwrap().0);
+                let (ref_type, ref_path) = config.vcs_service().unwrap().current_ref().unwrap();
+                log::info!("job_env: no release target: {}/{}", ref_type, ref_path);
             }
         };
         match paths {
@@ -889,7 +890,9 @@ impl Config {
     pub fn recover_branch(&self) -> Result<(), Box<dyn Error>> {
         if !Self::is_running_on_ci() {
             let vcs = self.vcs_service()?;
-            if vcs.current_branch()?.0 == DEPLO_VCS_TEMPORARY_WORKSPACE_NAME {
+            let (ref_type, ref_path) = vcs.current_ref()?;
+            if ref_type == vcs::RefType::Branch &&
+                ref_path == DEPLO_VCS_TEMPORARY_WORKSPACE_NAME {
                 log::debug!("back to previous branch");
                 vcs.checkout("-", None)?;
             }

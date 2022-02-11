@@ -229,34 +229,6 @@ impl<GIT: (git::GitFeatures) + (git::GitHubFeatures), S: shell::Shell> vcs::VCS 
     fn current_ref(&self) -> Result<(vcs::RefType, String), Box<dyn Error>> {
         self.git.current_ref()
     }
-    fn current_branch(&self) -> Result<(String, bool), Box<dyn Error>> {
-        let (ref_type, ref_path) = self.git.current_ref()?;
-        match ref_type {
-            vcs::RefType::Pull => {
-                // pull ref has actual head of branch exactly before merge commit
-                let ref_path = match self.shell.output_of(&vec!(
-                    "git", "symbolic-ref" , "--short", "HEAD^"
-                ), shell::no_env(), shell::no_cwd()) {
-                    Ok(ref_path) => ref_path,
-                    // some CI environment like gh action only retrieve head commit,
-                    // if so we fallback to get it from pulls API
-                    Err(_) => self.pr_data_from_ref_path(&ref_path, "$.head.ref")?
-                };
-                Ok((ref_path, true))
-            },
-            vcs::RefType::Tag => {
-                Ok((ref_path, false))
-            },
-            vcs::RefType::Branch|vcs::RefType::Remote => {
-                Ok((ref_path, true))
-            },
-            vcs::RefType::Commit => {
-                escalate!(Box::new(vcs::VCSError {
-                    cause: format!("not on a branch or tag, got: {}", ref_path)
-                }))
-            }
-        }
-    }
     fn checkout(&self, commit: &str, branch_name: Option<&str>) -> Result<(), Box<dyn Error>> {
         self.git.checkout(commit, branch_name)
     }
