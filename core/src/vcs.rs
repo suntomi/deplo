@@ -16,12 +16,22 @@ pub enum RefType {
     Pull,
     Commit,
 }
+impl fmt::Display for RefType {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Branch => write!(f, "branch"),
+            Self::Remote => write!(f, "remote"),
+            Self::Tag => write!(f, "tag"),
+            Self::Pull => write!(f, "pull"),
+            Self::Commit => write!(f, "commit"),
+        }
+    }
+}
 
 pub trait VCS : module::Module {
     fn new(config: &config::Container) -> Result<Self, Box<dyn Error>> where Self : Sized;
     fn release_target(&self) -> Option<String>;
     fn current_ref(&self) -> Result<(RefType, String), Box<dyn Error>>;
-    fn current_branch(&self) -> Result<(String, bool), Box<dyn Error>>;
     fn commit_hash(&self, expr: Option<&str>) -> Result<String, Box<dyn Error>>;
     fn checkout(&self, commit: &str, branch_name: Option<&str>) -> Result<(), Box<dyn Error>>;
     fn repository_root(&self) -> Result<String, Box<dyn Error>>;

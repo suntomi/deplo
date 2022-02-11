@@ -10,6 +10,7 @@ use serde::{Deserialize, Serialize};
 use crate::config;
 use crate::ci;
 use crate::shell;
+use crate::vcs;
 use crate::module;
 use crate::util::{
     escalate,seal,
@@ -473,11 +474,11 @@ impl<S: shell::Shell> ci::CI for GhAction<S> {
                 }
             },
             Err(_) => {
-                let (name, is_branch) = config.vcs_service().unwrap().current_branch().unwrap();
-                if is_branch {
-                    envs.insert("DEPLO_CI_BRANCH_NAME", name);
+                let (ref_type, ref_path) = config.vcs_service().unwrap().current_ref().unwrap();
+                if ref_type == vcs::RefType::Tag {
+                    envs.insert("DEPLO_CI_TAG_NAME", ref_path);
                 } else {
-                    envs.insert("DEPLO_CI_TAG_NAME", name);
+                    envs.insert("DEPLO_CI_BRANCH_NAME", ref_path);
                 };
             }
         };
