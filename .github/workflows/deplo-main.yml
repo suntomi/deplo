@@ -14,6 +14,8 @@ env:
   DEPLO_CI_PULL_REQUEST_URL: ${{ github.event.pull_request.url }}
   DEPLO_CI_EVENT_TYPE: ${{ github.event.action }}
   DEPLO_CI_EVENT_PAYLOAD: ${{ toJSON(github.event.client_payload) }}
+  DEPLO_CI_OVERWRITE_COMMIT: ${{ github.event.client_payload.commit }}
+  DEPLO_CI_OVERWRITE_VERBOSITY: ${{ github.event.client_payload.verbosity }}
   SUNTOMI_VCS_ACCOUNT: ${{ secrets.SUNTOMI_VCS_ACCOUNT }}
   SUNTOMI_VCS_ACCOUNT_EMAIL: ${{ secrets.SUNTOMI_VCS_ACCOUNT_EMAIL }}
   SUNTOMI_VCS_ACCOUNT_KEY: ${{ secrets.SUNTOMI_VCS_ACCOUNT_KEY }}
@@ -23,6 +25,7 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       DEPLO_OUTPUT_CLI_VERSION: ${{ steps.deplo-ci-kick.outputs.DEPLO_OUTPUT_CLI_VERSION }}
+      DEPLO_OUTPUT_OVERWRITE_COMMIT: ${{ steps.deplo-ci-kick.outputs.DEPLO_OUTPUT_OVERWRITE_COMMIT }}
       deploy-base: ${{ steps.deplo-ci-kick.outputs.deploy-base }}
       deploy-builder: ${{ steps.deplo-ci-kick.outputs.deploy-builder }}
       deploy-latest: ${{ steps.deplo-ci-kick.outputs.deploy-latest }}
@@ -41,6 +44,7 @@ jobs:
         uses: actions/checkout@v2
         with:
           fetch-depth: 2
+          ref: ${{ needs.deplo-main.outputs.DEPLO_OUTPUT_OVERWRITE_COMMIT }}
       - name: Start deplo
         id: deplo-ci-kick
         run: deplo ci kick
@@ -63,6 +67,7 @@ jobs:
         uses: actions/checkout@v2
         with:
           fetch-depth: 2
+          ref: ${{ needs.deplo-main.outputs.DEPLO_OUTPUT_OVERWRITE_COMMIT }}
       - name: Cleanup deplo
         id: deplo-ci-fin
         run: deplo ci fin
@@ -86,7 +91,8 @@ jobs:
           chmod +x /usr/local/bin/deplo
       - name: Checkout
         uses: actions/checkout@v2
-      
+        with:
+          ref: ${{ needs.deplo-main.outputs.DEPLO_OUTPUT_OVERWRITE_COMMIT }}
   
       - name: deploy base
         id: deplo-deploy-base
@@ -111,7 +117,8 @@ jobs:
           chmod +x /usr/local/bin/deplo
       - name: Checkout
         uses: actions/checkout@v2
-      
+        with:
+          ref: ${{ needs.deplo-main.outputs.DEPLO_OUTPUT_OVERWRITE_COMMIT }}
   
       - name: deploy builder
         id: deplo-deploy-builder
@@ -136,7 +143,8 @@ jobs:
           chmod +x /usr/local/bin/deplo
       - name: Checkout
         uses: actions/checkout@v2
-      
+        with:
+          ref: ${{ needs.deplo-main.outputs.DEPLO_OUTPUT_OVERWRITE_COMMIT }}
   
       - name: deploy latest
         id: deplo-deploy-latest
@@ -161,7 +169,8 @@ jobs:
           chmod +x /usr/local/bin/deplo
       - name: Checkout
         uses: actions/checkout@v2
-      
+        with:
+          ref: ${{ needs.deplo-main.outputs.DEPLO_OUTPUT_OVERWRITE_COMMIT }}
       - name: Cache cargo
         id: deplo-cache-cargo
         uses: actions/cache@v2
@@ -200,7 +209,8 @@ jobs:
           chmod +x /usr/local/bin/deplo
       - name: Checkout
         uses: actions/checkout@v2
-      
+        with:
+          ref: ${{ needs.deplo-main.outputs.DEPLO_OUTPUT_OVERWRITE_COMMIT }}
   
       - name: deploy product
         id: deplo-deploy-product
@@ -226,7 +236,8 @@ jobs:
         shell: bash
       - name: Checkout
         uses: actions/checkout@v2
-      
+        with:
+          ref: ${{ needs.deplo-main.outputs.DEPLO_OUTPUT_OVERWRITE_COMMIT }}
       - name: Cache cargo
         id: deplo-cache-cargo
         uses: actions/cache@v2
@@ -266,7 +277,8 @@ jobs:
           chmod +x /usr/local/bin/deplo
       - name: Checkout
         uses: actions/checkout@v2
-      
+        with:
+          ref: ${{ needs.deplo-main.outputs.DEPLO_OUTPUT_OVERWRITE_COMMIT }}
   
       - name: integrate base
         id: deplo-integrate-base
@@ -291,7 +303,8 @@ jobs:
           chmod +x /usr/local/bin/deplo
       - name: Checkout
         uses: actions/checkout@v2
-      
+        with:
+          ref: ${{ needs.deplo-main.outputs.DEPLO_OUTPUT_OVERWRITE_COMMIT }}
   
       - name: integrate builder
         id: deplo-integrate-builder
@@ -316,7 +329,8 @@ jobs:
           chmod +x /usr/local/bin/deplo
       - name: Checkout
         uses: actions/checkout@v2
-      
+        with:
+          ref: ${{ needs.deplo-main.outputs.DEPLO_OUTPUT_OVERWRITE_COMMIT }}
       - name: Cache cargo
         id: deplo-cache-cargo
         uses: actions/cache@v2
