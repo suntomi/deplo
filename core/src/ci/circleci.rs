@@ -129,6 +129,11 @@ impl<'a, S: shell::Shell> ci::CI for CircleCI<S> {
     fn kick(&self) -> Result<(), Box<dyn Error>> {
         Ok(())
     }
+    fn overwrite_commit(&self, commit: &str) -> Result<String, Box<dyn Error>> {
+        let prev = std::env::var("CIRCLE_SHA1")?;
+        std::env::set_var("CIRCLE_SHA1", commit);
+        Ok(prev)
+    }
     fn pr_url_from_env(&self) -> Result<Option<String>, Box<dyn Error>> {
         match std::env::var("CIRCLE_PULL_REQUEST") {
             Ok(v) => if v.is_empty() { Ok(None) } else { Ok(Some(v)) },
@@ -148,6 +153,7 @@ impl<'a, S: shell::Shell> ci::CI for CircleCI<S> {
             self.config.borrow().run_job_by_name(
                 &self.shell, job_name, config::Command::Job, &config::JobRunningOptions {
                     commit: None, remote: false, shell_settings: shell::no_capture(),
+                    adhoc_envs: hashmap!{},
                 }
             )?;
         }

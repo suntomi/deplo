@@ -18,12 +18,13 @@ use crate::args;
 use crate::vcs;
 use crate::ci;
 use crate::shell;
-use crate::util::{escalate,envsubst,make_absolute};
+use crate::util::{escalate,envsubst,make_absolute,defer};
 
 pub const DEPLO_GIT_HASH: &'static str = env!("GIT_HASH");
 pub const DEPLO_VERSION: &'static str = env!("DEPLO_RELEASE_VERSION");
 pub const DEPLO_RELEASE_URL_BASE: &'static str = "https://github.com/suntomi/deplo/releases/download";
 pub const DEPLO_REMOTE_JOB_EVENT_TYPE: &'static str = "deplo-run-remote-job";
+pub const DEPLO_VCS_TEMPORARY_WORKSPACE_NAME: &'static str = "deplo-tmp-workspace";
 
 pub fn cli_download_url(os: RunnerOS, version: &str) -> String {
     return format!("{}/{}/deplo-{}", DEPLO_RELEASE_URL_BASE, version, os.cli_download_postfix());
@@ -124,6 +125,7 @@ impl fmt::Display for Command {
 }
 pub struct JobRunningOptions<'a> {
     pub remote: bool,
+    pub adhoc_envs: HashMap<String, String>,
     pub shell_settings: shell::Settings,
     pub commit: Option<&'a str>,
 }
@@ -429,6 +431,18 @@ impl RuntimeConfig {
             mutc.runtime.release_target = release_target;
             mutc.runtime.workflow_type = workflow_type;
         }
+
+        // change commit hash
+        match std::env::var("DEPLO_CI_OVERWRITE_COMMIT") {
+            Ok(v) => if !v.is_empty() {
+                let c = config.borrow();
+                for (account, ci) in &c.ci_caches {
+                    let prev = ci.overwrite_commit(v.as_str()).unwrap();
+                    log::info!("{}: overwrite commit from {} to {}", account, prev, v);
+                }
+            },
+            Err(_) => ()
+        };
         Ok(())
     }
     fn apply(&self) -> Result<(), Box<dyn Error>> {
@@ -525,7 +539,15 @@ impl Config {
             },
             Err(_) => {},
         };
-        simple_logger::init_with_level(match verbosity {
+        simple_logger::init_with_level(match 
+            match std::env::var("DEPLO_CI_OVERWRITE_VERBOSITY") {
+                Ok(v) => {
+                    println!("overwrite log verbosity from {} to {}", verbosity, v);
+                    v.parse::<u64>().unwrap_or(verbosity)
+                },
+                Err(_) => verbosity
+            } 
+        {
             0 => log::Level::Warn,
             1 => log::Level::Info,
             2 => log::Level::Debug,
@@ -593,7 +615,7 @@ impl Config {
     }
     pub fn generate_wrapper_script(&self) -> String {
         format!(
-            include_str!("../res/cli/deplow.sh.tmpl"), 
+            include_str!("../res/cli/deplow.sh.tmpl"),
             version = DEPLO_VERSION,
             data_dir = self.data_dir()
         )
@@ -740,7 +762,10 @@ impl Config {
     pub fn ci_workflow<'a>(&'a self) -> &'a WorkflowConfig {
         return &self.ci.workflow
     }
-    pub fn job_env(&self, job: &Job, paths: &Option<Vec<String>>) -> Result<HashMap<String, String>, Box<dyn Error>> {
+    pub fn job_env(
+        &self, job: &Job, paths: &Option<Vec<String>>,
+        adhoc: &HashMap<String, String>
+    ) -> Result<HashMap<String, String>, Box<dyn Error>> {
         let mut inherits: HashMap<String, String> = if Self::is_running_on_ci() {
             shell::inherit_env()
         } else {
@@ -752,6 +777,9 @@ impl Config {
             inherits_from_dotenv
         };
         for (k, v) in job.job_env(self, paths) {
+            inherits.insert(k.to_string(), v.to_string());
+        }
+        for (k, v) in adhoc {
             inherits.insert(k.to_string(), v.to_string());
         }
         return Ok(inherits);
@@ -849,6 +877,25 @@ impl Config {
             None => return None
         }
     }
+    pub fn adjust_commit_hash(&self, commit: &Option<&str>) -> Result<(), Box<dyn Error>> {
+        if !Self::is_running_on_ci() {
+            if let Some(ref c) = commit {
+                log::debug!("change commit hash to {}", c);
+                self.vcs_service()?.checkout(c, Some(DEPLO_VCS_TEMPORARY_WORKSPACE_NAME))?;
+            }
+        }
+        Ok(())
+    }
+    pub fn recover_branch(&self) -> Result<(), Box<dyn Error>> {
+        if !Self::is_running_on_ci() {
+            let vcs = self.vcs_service()?;
+            if vcs.current_branch()?.0 == DEPLO_VCS_TEMPORARY_WORKSPACE_NAME {
+                log::debug!("back to previous branch");
+                vcs.checkout("-", None)?;
+            }
+        }
+        Ok(())
+    }
     pub fn run_job_by_name(
         &self, shell: &impl shell::Shell, name: &str, 
         command: Command, options: &JobRunningOptions
@@ -869,6 +916,8 @@ impl Config {
             Command::Job => &job.command,
             Command::Shell => job.shell.as_ref().map_or_else(|| "bash", |v| v.as_str())
         };
+        // if current commit is modified, rollback after all operation is done.
+        defer!(self.recover_branch().unwrap());
         if options.remote {
             log::debug!(
                 "force running job {} on remote with command {} at {}", 
@@ -879,6 +928,8 @@ impl Config {
                 name: name.to_string(),
                 command: cmd.to_string(),
                 commit: options.commit.map(|s| s.to_string()),
+                envs: options.adhoc_envs.to_owned(),
+                verbosity: self.runtime.verbosity
             })?));
         }
         match job.runner {
@@ -893,11 +944,12 @@ impl Config {
                     } else {
                         None
                     };
-                    if let Some(c) = options.commit {
-                        self.vcs_service()?.checkout(c)?;
-                    }
+                    self.adjust_commit_hash(&options.commit)?;
                     // run command directly here, add path to locally downloaded cli.
-                    shell.eval(cmd, &job.shell, self.job_env(&job, &paths)?, &job.workdir, &options.shell_settings)?;
+                    shell.eval(
+                        cmd, &job.shell, self.job_env(&job, &paths, &options.adhoc_envs)?, 
+                        &job.workdir, &options.shell_settings
+                    )?;
                 } else {
                     log::debug!("runner os is different from current os {} {}", os, current_os);
                     match local_fallback {
@@ -927,13 +979,12 @@ impl Config {
                                 cmd = shell_cmd.as_ref().unwrap();
                             }
                             let path = &self.deplo_cli_download(os, shell)?.to_string_lossy().to_string();
-                            if let Some(c) = options.commit {
-                                self.vcs_service()?.checkout(c)?;
-                            }
+                            self.adjust_commit_hash(&options.commit)?;
                             // running on host. run command in container `image` with docker
                             shell.eval_on_container(
-                                &image, cmd, &shell_cmd, self.job_env(&job, &None)?, &job.workdir, 
-                                &hashmap!{
+                                &image, cmd, &shell_cmd, 
+                                self.job_env(&job, &None, &options.adhoc_envs)?, 
+                                &job.workdir, &hashmap!{
                                     path.as_str() => "/usr/local/bin/deplo"
                                 }, &options.shell_settings
                             )?;
@@ -948,17 +999,17 @@ impl Config {
                         name: name.to_string(),
                         command: cmd.to_string(),
                         commit: options.commit.map(|s| s.to_string()),
+                        envs: hashmap!{},
+                        verbosity: self.runtime.verbosity,
                     })?));
                 }
             },
             Runner::Container{ ref image } => {
-                if let Some(c) = options.commit {
-                    self.vcs_service()?.checkout(c)?;
-                }
+                self.adjust_commit_hash(&options.commit)?;
                 if Self::is_running_on_ci() {
                     // already run inside container `image`, run command directly here
                     shell.eval(
-                        cmd, &job.shell, self.job_env(&job, &None)?,
+                        cmd, &job.shell, self.job_env(&job, &None, &options.adhoc_envs)?,
                         &job.workdir, &options.shell_settings
                     )?;
                 } else {
@@ -966,7 +1017,8 @@ impl Config {
                     let path = &self.deplo_cli_download(os, shell)?.to_string_lossy().to_string();
                     // running on host. run command in container `image` with docker
                     shell.eval_on_container(
-                        image, cmd, &job.shell, self.job_env(&job, &None)?, &job.workdir, &hashmap!{
+                        image, cmd, &job.shell, self.job_env(&job, &None, &options.adhoc_envs)?,
+                        &job.workdir, &hashmap!{
                             path.as_str() => "/usr/local/bin/deplo"
                         }, &options.shell_settings
                     )?;

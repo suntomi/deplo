@@ -63,7 +63,7 @@ docker build -t ghcr.io/suntomi/deplo:builder -f tools/docker/Dockerfile.builder
 """
 [ci.workflow.integrate.builder.tasks]
 long_running = """
-for i in `seq 1 10`; do
+for i in `seq 1 ${COUNT:-10}`; do
     echo $i
     sleep 1
 done

@@ -10,6 +10,8 @@ env:
   DEPLO_CI_PULL_REQUEST_URL: ${{{{ github.event.pull_request.url }}}}
   DEPLO_CI_EVENT_TYPE: ${{{{ github.event.action }}}}
   DEPLO_CI_EVENT_PAYLOAD: ${{{{ toJSON(github.event.client_payload) }}}}
+  DEPLO_CI_OVERWRITE_COMMIT: ${{{{ github.event.client_payload.commit }}}}
+  DEPLO_CI_OVERWRITE_VERBOSITY: ${{{{ github.event.client_payload.verbosity }}}}
 {secrets:>2}
 jobs:
   deplo-main:
@@ -17,6 +19,7 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       DEPLO_OUTPUT_CLI_VERSION: ${{{{ steps.deplo-ci-kick.outputs.DEPLO_OUTPUT_CLI_VERSION }}}}
+      DEPLO_OUTPUT_OVERWRITE_COMMIT: ${{{{ steps.deplo-ci-kick.outputs.DEPLO_OUTPUT_OVERWRITE_COMMIT }}}}
 {outputs:>6}
     steps:
 {fetchcli:>6}

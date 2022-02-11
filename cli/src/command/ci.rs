@@ -1,3 +1,4 @@
+use std::collections::{HashMap};
 use std::error::Error;
 
 use log;
@@ -83,15 +84,28 @@ impl<S: shell::Shell> CI<S> {
         // TODO: embedding args into task
         task.to_string()
     }
+    fn adhoc_envs<A: args::Args>(args: &A) -> HashMap<String, String> {
+        let mut envs = HashMap::<String, String>::new();
+        match args.values_of("env") {
+            Some(es) => for e in es {
+                let mut kv = e.split("=");
+                let k = kv.next().unwrap();
+                let v = kv.next().unwrap_or("");
+                envs.insert(k.to_string(), v.to_string());
+            },
+            None => {}
+        };
+        envs
+    }
     fn exec<A: args::Args>(&self, kind: &str, args: &A) -> Result<(), Box<dyn Error>> {
         let config = self.config.borrow();
         let job_name = &format!("{}-{}", kind, args.value_of("name").unwrap());
         let remote_job = config.ci_service_by_job_name(job_name)?.dispatched_remote_job()?;
         // if reach here by remote execution, adopt the settings, otherwise using cli options if any.
-        let (commit, remote, command) = match remote_job {
+        let (commit, remote, command, adhoc_envs) = match remote_job {
             // because this process already run in remote environment, remote is always false.
-            Some(ref job) => (job.commit.as_ref().map(|s| s.as_str()), false, Some(job.command.clone())),
-            None => (args.value_of("ref"), args.occurence_of("remote") > 0, None)
+            Some(ref job) => (job.commit.as_ref().map(|s| s.as_str()), false, Some(job.command.clone()), job.envs.clone()),
+            None => (args.value_of("ref"), args.occurence_of("remote") > 0, None, Self::adhoc_envs(args))
         };
         let may_remote_job_id = match args.subcommand() {
             Some(("sh", subargs)) => {
@@ -108,7 +122,7 @@ impl<S: shell::Shell> CI<S> {
                         };
                         config.run_job(
                             &self.shell, &job_name, &job, config::Command::Shell, &config::JobRunningOptions {
-                                commit, remote, shell_settings: shell::interactive(),
+                                commit, remote, shell_settings: shell::interactive(), adhoc_envs
                             }
                         )?
                     },
@@ -130,14 +144,14 @@ impl<S: shell::Shell> CI<S> {
                         log::debug!("running shell task: result command: {}", command);
                         config.run_job(
                             &self.shell, &job_name, &job, config::Command::Adhoc(command), &config::JobRunningOptions {
-                                commit, remote, shell_settings: shell::no_capture(),
+                                commit, remote, shell_settings: shell::no_capture(), adhoc_envs
                             }
                         )?
                     } else {
                         log::debug!("running shell with adhoc command: {}", task_args.join(" "));
                         config.run_job_by_name(
                             &self.shell, &job_name, config::Command::Adhoc(task_args.join(" ")), &config::JobRunningOptions {
-                                commit, remote, shell_settings: shell::no_capture(),
+                                commit, remote, shell_settings: shell::no_capture(), adhoc_envs,
                             }
                         )?
                     }
@@ -148,8 +162,8 @@ impl<S: shell::Shell> CI<S> {
                 config.run_job_by_name(&self.shell, &job_name, match command {
                     Some(cmd) => config::Command::Adhoc(cmd),
                     None => config::Command::Job
-                },&config::JobRunningOptions {
-                    commit, remote, shell_settings: shell::no_capture(),
+                }, &config::JobRunningOptions {
+                    commit, remote, shell_settings: shell::no_capture(), adhoc_envs,
                 })?
             }
         };

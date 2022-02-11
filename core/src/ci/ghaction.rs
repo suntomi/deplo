@@ -196,13 +196,14 @@ impl<S: shell::Shell> GhAction<S> {
             || defaults.clone().unwrap_or(HashMap::new()),
             |v| merge_hashmap(&defaults.clone().unwrap_or(HashMap::new()), v)
         );
-        let checkout_opts = merged_opts.iter().map(|(k,v)| {
+        let mut checkout_opts = merged_opts.iter().map(|(k,v)| {
             return if vec!["fetch-depth", "lfs"].contains(&k.as_str()) {
                 format!("{}: {}", k, v)
             } else {
-                format!("# warning: deplo only support lfs options for github action checkout but {}({}) is specified", k, v)
+                format!("# warning: deplo only support lfs/fetch-depth options for github action checkout but {}({}) is specified", k, v)
             }
         }).collect::<Vec<String>>();
+        checkout_opts.push("ref: ${{ needs.deplo-main.outputs.DEPLO_OUTPUT_OVERWRITE_COMMIT }}".to_string());
         // hash value for separating repository cache according to checkout options
         let opts_hash = options.as_ref().map_or_else(
             || "".to_string(), 
@@ -366,6 +367,11 @@ impl<S: shell::Shell> ci::CI for GhAction<S> {
         println!("::set-output name=DEPLO_OUTPUT_CLI_VERSION::{}", config::DEPLO_VERSION);
         Ok(())
     }
+    fn overwrite_commit(&self, commit: &str) -> Result<String, Box<dyn Error>> {
+        let prev = std::env::var("GITHUB_SHA")?;
+        std::env::set_var("GITHUB_SHA", commit);
+        Ok(prev)
+    }
     fn pr_url_from_env(&self) -> Result<Option<String>, Box<dyn Error>> {
         match std::env::var("DEPLO_CI_PULL_REQUEST_URL") {
             Ok(v) => if v.is_empty() { Ok(None) } else { Ok(Some(v)) },
@@ -384,6 +390,7 @@ impl<S: shell::Shell> ci::CI for GhAction<S> {
             self.config.borrow().run_job_by_name(
                 &self.shell, job_name, config::Command::Job, &config::JobRunningOptions {
                     commit: None, remote: false, shell_settings: shell::no_capture(),
+                    adhoc_envs: hashmap!{},
                 }
             )?;
         }
@@ -409,7 +416,7 @@ impl<S: shell::Shell> ci::CI for GhAction<S> {
         let config = self.config.borrow();
         let token = self.get_token()?;
         let user_and_repo = config.vcs_service()?.user_and_repo()?;
-        Ok(self.shell.exec(&vec![
+        let response = self.shell.exec(&vec![
             "curl", "-H", &format!("Authorization: token {}", token), 
             "-H", "Accept: application/vnd.github.v3+json", 
             &format!(
@@ -423,7 +430,9 @@ impl<S: shell::Shell> ci::CI for GhAction<S> {
                 job_name = config::DEPLO_REMOTE_JOB_EVENT_TYPE,
                 client_payload = serde_json::to_string(job)?
             )
-        ], shell::no_env(), shell::no_cwd(), &shell::capture())?)
+        ], shell::no_env(), shell::no_cwd(), &shell::capture())?;
+        log::debug!("run_job: response = {}", response);
+        Ok(response)
     }
     fn wait_job(&self, _: &str) -> Result<(), Box<dyn Error>> {
         log::warn!("TODO: implement wait_job for ghaction");

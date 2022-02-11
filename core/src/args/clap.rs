@@ -65,6 +65,13 @@ fn job_running_command_options(
         .help("job name")
         .index(1)
         .required(true))
+    .arg(Arg::new("env")
+        .help("only works with --remote, set adhoc environment variables for remote job. \n\
+               can specify multiple times")
+        .long("env")
+        .short('e')
+        .takes_value(true)
+        .required(false))
     .arg(Arg::new("async")
         .help("only works with --remote, don't wait for finishing remote job")
         .long("async")
