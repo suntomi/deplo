@@ -18,12 +18,13 @@ use crate::args;
 use crate::vcs;
 use crate::ci;
 use crate::shell;
-use crate::util::{escalate,envsubst,make_absolute};
+use crate::util::{escalate,envsubst,make_absolute,defer};
 
 pub const DEPLO_GIT_HASH: &'static str = env!("GIT_HASH");
 pub const DEPLO_VERSION: &'static str = env!("DEPLO_RELEASE_VERSION");
 pub const DEPLO_RELEASE_URL_BASE: &'static str = "https://github.com/suntomi/deplo/releases/download";
 pub const DEPLO_REMOTE_JOB_EVENT_TYPE: &'static str = "deplo-run-remote-job";
+pub const DEPLO_VCS_TEMPORARY_WORKSPACE_NAME: &'static str = "deplo-tmp-workspace";
 
 pub fn cli_download_url(os: RunnerOS, version: &str) -> String {
     return format!("{}/{}/deplo-{}", DEPLO_RELEASE_URL_BASE, version, os.cli_download_postfix());
@@ -876,6 +877,25 @@ impl Config {
             None => return None
         }
     }
+    pub fn adjust_commit_hash(&self, commit: &Option<&str>) -> Result<(), Box<dyn Error>> {
+        if !Self::is_running_on_ci() {
+            if let Some(ref c) = commit {
+                log::debug!("change commit hash to {}", c);
+                self.vcs_service()?.checkout(c, Some(DEPLO_VCS_TEMPORARY_WORKSPACE_NAME))?;
+            }
+        }
+        Ok(())
+    }
+    pub fn recover_branch(&self) -> Result<(), Box<dyn Error>> {
+        if !Self::is_running_on_ci() {
+            let vcs = self.vcs_service()?;
+            if vcs.current_branch()?.0 == DEPLO_VCS_TEMPORARY_WORKSPACE_NAME {
+                log::debug!("back to previous branch");
+                vcs.checkout("-", None)?;
+            }
+        }
+        Ok(())
+    }
     pub fn run_job_by_name(
         &self, shell: &impl shell::Shell, name: &str, 
         command: Command, options: &JobRunningOptions
@@ -896,6 +916,8 @@ impl Config {
             Command::Job => &job.command,
             Command::Shell => job.shell.as_ref().map_or_else(|| "bash", |v| v.as_str())
         };
+        // if current commit is modified, rollback after all operation is done.
+        defer!(self.recover_branch().unwrap());
         if options.remote {
             log::debug!(
                 "force running job {} on remote with command {} at {}", 
@@ -922,9 +944,7 @@ impl Config {
                     } else {
                         None
                     };
-                    if let Some(c) = options.commit {
-                        self.vcs_service()?.checkout(c)?;
-                    }
+                    self.adjust_commit_hash(&options.commit)?;
                     // run command directly here, add path to locally downloaded cli.
                     shell.eval(
                         cmd, &job.shell, self.job_env(&job, &paths, &options.adhoc_envs)?, 
@@ -959,9 +979,7 @@ impl Config {
                                 cmd = shell_cmd.as_ref().unwrap();
                             }
                             let path = &self.deplo_cli_download(os, shell)?.to_string_lossy().to_string();
-                            if let Some(c) = options.commit {
-                                self.vcs_service()?.checkout(c)?;
-                            }
+                            self.adjust_commit_hash(&options.commit)?;
                             // running on host. run command in container `image` with docker
                             shell.eval_on_container(
                                 &image, cmd, &shell_cmd, 
@@ -987,9 +1005,7 @@ impl Config {
                 }
             },
             Runner::Container{ ref image } => {
-                if let Some(c) = options.commit {
-                    self.vcs_service()?.checkout(c)?;
-                }
+                self.adjust_commit_hash(&options.commit)?;
                 if Self::is_running_on_ci() {
                     // already run inside container `image`, run command directly here
                     shell.eval(
