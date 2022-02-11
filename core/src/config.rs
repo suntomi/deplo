@@ -538,7 +538,15 @@ impl Config {
             },
             Err(_) => {},
         };
-        simple_logger::init_with_level(match verbosity {
+        simple_logger::init_with_level(match 
+            match std::env::var("DEPLO_CI_OVERWRITE_VERBOSITY") {
+                Ok(v) => {
+                    println!("overwrite log verbosity from {} to {}", verbosity, v);
+                    v.parse::<u64>().unwrap_or(verbosity)
+                },
+                Err(_) => verbosity
+            } 
+        {
             0 => log::Level::Warn,
             1 => log::Level::Info,
             2 => log::Level::Debug,

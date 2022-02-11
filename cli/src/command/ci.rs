@@ -86,17 +86,15 @@ impl<S: shell::Shell> CI<S> {
     }
     fn adhoc_envs<A: args::Args>(args: &A) -> HashMap<String, String> {
         let mut envs = HashMap::<String, String>::new();
-        if args.occurence_of("remote") > 0 {
-            match args.values_of("env") {
-                Some(es) => for e in es {
-                    let mut kv = e.split("=");
-                    let k = kv.next().unwrap();
-                    let v = kv.next().unwrap_or("");
-                    envs.insert(k.to_string(), v.to_string());
-                },
-                None => {}
-            };
-        }
+        match args.values_of("env") {
+            Some(es) => for e in es {
+                let mut kv = e.split("=");
+                let k = kv.next().unwrap();
+                let v = kv.next().unwrap_or("");
+                envs.insert(k.to_string(), v.to_string());
+            },
+            None => {}
+        };
         envs
     }
     fn exec<A: args::Args>(&self, kind: &str, args: &A) -> Result<(), Box<dyn Error>> {
