@@ -365,6 +365,12 @@ impl<S: shell::Shell> ci::CI for GhAction<S> {
     }
     fn kick(&self) -> Result<(), Box<dyn Error>> {
         println!("::set-output name=DEPLO_OUTPUT_CLI_VERSION::{}", config::DEPLO_VERSION);
+        match std::env::var("DEPLO_CI_OVERWRITE_COMMIT") {
+            Ok(c) => if !c.is_empty() {
+                println!("::set-output name=DEPLO_OUTPUT_OVERWRITE_COMMIT::{}", c);
+            },
+            Err(_) => {}
+        };
         Ok(())
     }
     fn overwrite_commit(&self, commit: &str) -> Result<String, Box<dyn Error>> {
