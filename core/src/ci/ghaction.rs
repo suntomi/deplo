@@ -50,10 +50,14 @@ impl ClientPayload {
 
 #[derive(Deserialize)]
 pub struct PartialWorkflow {
-    pub id: String,
+    pub id: u64,
     pub status: String,
     pub url: String,
     pub jobs_url: String,
+}
+#[derive(Deserialize)]
+pub struct PartialWorkflows {
+    pub workflow_runs: Vec<PartialWorkflow>
 }
 #[derive(Deserialize)]
 pub struct PartialJob {
@@ -499,9 +503,9 @@ impl<S: shell::Shell> ci::CI for GhAction<S> {
                 )
             ], shell::no_env(), shell::no_cwd(), &shell::capture())?;
             log::trace!("current workflows by remote execution: {}", response);
-            let workflows = serde_json::from_str::<Vec<PartialWorkflow>>(&response)?;
-            if workflows.len() > 0 {
-                for wf in workflows {
+            let workflows = serde_json::from_str::<PartialWorkflows>(&response)?;
+            if workflows.workflow_runs.len() > 0 {
+                for wf in workflows.workflow_runs {
                     let response = self.shell.exec(&vec![
                         "curl", "-H", &format!("Authorization: token {}", token), 
                         "-H", "Accept: application/vnd.github.v3+json", &wf.jobs_url
@@ -509,7 +513,7 @@ impl<S: shell::Shell> ci::CI for GhAction<S> {
                     let parsed = serde_json::from_str::<PartialJobs>(&response)?;
                     if parsed.jobs.len() > 0 && parsed.jobs[0].name.contains(&payload.job_id) {
                         log::info!("remote job started at: {}", wf.url);
-                        return Ok(wf.id);
+                        return Ok(wf.id.to_string());
                     }
                 }
             }
@@ -519,7 +523,7 @@ impl<S: shell::Shell> ci::CI for GhAction<S> {
                     cause: format!("timeout waiting for remote job to start {}", payload.job_id),
                 }));
             }
-            sleep(StdDuration::from_secs(5));
+            sleep(StdDuration::from_secs(1));
             print!(".");
         }
     }
@@ -527,6 +531,7 @@ impl<S: shell::Shell> ci::CI for GhAction<S> {
         let config = self.config.borrow();
         let token = self.get_token()?;
         let user_and_repo = config.vcs_service()?.user_and_repo()?;
+        log::info!("wait for remote job {} completion", job_id);
         loop {
             let response = self.shell.exec(&vec![
                 "curl", "-H", &format!("Authorization: token {}", token), 
@@ -541,13 +546,7 @@ impl<S: shell::Shell> ci::CI for GhAction<S> {
                 log::info!("remote job {} completed", job_id);
                 return Ok(());
             }
-            let status = match parsed.status.as_str() {
-                "queued" => "q",
-                "progress" => "p",
-                "canceled" => "x",
-                v => format!("[{}]", v),
-            };
-            print!("{}", status);
+            log::info!("{}", parsed.status);
             sleep(StdDuration::from_secs(5));
         }
     }
