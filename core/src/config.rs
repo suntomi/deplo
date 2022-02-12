@@ -142,6 +142,7 @@ pub struct Job {
     pub checkout: Option<HashMap<String, String>>,
     pub caches: Option<HashMap<String, Cache>>,
     pub depends: Option<Vec<String>>,
+    pub commits: Option<Vec<String>>,
     pub options: Option<HashMap<String, String>>,
     pub tasks: Option<HashMap<String, String>>,
     pub local_fallback: Option<FallbackContainer>,

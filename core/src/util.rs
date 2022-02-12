@@ -137,6 +137,15 @@ pub fn randombytes(x: &mut [u8]) {
     use rand::RngCore;
     rng.fill_bytes(x);
 }
+#[macro_export]
+macro_rules! macro_randombytes_as_string {
+    ( $len:expr ) => {{
+        let mut bytes = [0u8; $len];
+        crate::util::randombytes(&mut bytes);
+        base64::encode_config(&bytes, base64::URL_SAFE_NO_PAD)
+    }}
+}
+pub use macro_randombytes_as_string as randombytes_as_string;
 pub fn seal(plaintext: &str, pkey_encoded: &str) -> Result<String, Box<dyn Error>> {
     let pk_vec = base64::decode(pkey_encoded)?;
     if pk_vec.len() != 32 {
