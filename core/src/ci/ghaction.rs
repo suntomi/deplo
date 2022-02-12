@@ -544,8 +544,8 @@ impl<S: shell::Shell> ci::CI for GhAction<S> {
             let status = match parsed.status.as_str() {
                 "queued" => "q",
                 "progress" => "p",
-                "canary" => "x",
-                _ => panic!("unknown status: {}", parsed.status)
+                "canceled" => "x",
+                v => format!("[{}]", v),
             };
             print!("{}", status);
             sleep(StdDuration::from_secs(5));
