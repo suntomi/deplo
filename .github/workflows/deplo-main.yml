@@ -21,7 +21,7 @@ env:
   SUNTOMI_VCS_ACCOUNT_KEY: ${{ secrets.SUNTOMI_VCS_ACCOUNT_KEY }}
 jobs:
   deplo-main:
-    name: Start CI
+    name: Start CI ${{ github.event.client_payload.job_id }}
     runs-on: ubuntu-latest
     outputs:
       DEPLO_OUTPUT_CLI_VERSION: ${{ steps.deplo-ci-kick.outputs.DEPLO_OUTPUT_CLI_VERSION }}
