@@ -80,9 +80,6 @@ impl<S: shell::Shell> CI<S> {
         let ci = config.ci_service(account_name)?;
         config.parse_dotenv(|k,v| ci.set_secret(k, v))
     }
-    fn fin<A: args::Args>(&self, _: &A) -> Result<(), Box<dyn Error>> {
-        Ok(())
-    }
     fn exec<A: args::Args>(&self, kind: &str, args: &A) -> Result<(), Box<dyn Error>> {
         let job_name = &format!("{}-{}", kind, args.value_of("name").unwrap());
         match self.exec_job(args, job_name)? {
@@ -177,6 +174,7 @@ impl<S: shell::Shell> CI<S> {
                     }
                 }
             },
+            Some(("wait", subargs)) => Ok(Some(subargs.value_of("job_id").unwrap().to_string())),
             Some((name, _)) => return escalate!(args.error(&format!("no such subcommand: [{}]", name))),
             None => {
                 config.run_job_by_name(&self.shell, &job_name, match command {
@@ -238,7 +236,6 @@ impl<S: shell::Shell, A: args::Args> command::Command<A> for CI<S> {
         match args.subcommand() {
             Some(("kick", subargs)) => return self.kick(&subargs),
             Some(("setenv", subargs)) => return self.setenv(&subargs),
-            Some(("fin", subargs)) => return self.fin(&subargs),
             Some(("deploy", subargs)) => return self.exec("deploy", &subargs),
             Some(("integrate", subargs)) => return self.exec("integrate", &subargs),
             Some((name, _)) => return escalate!(args.error(
