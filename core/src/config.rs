@@ -289,7 +289,6 @@ impl fmt::Display for CIAccount {
 pub struct CIConfig {
     pub accounts: HashMap<String, CIAccount>,
     pub invoke_for_all_branches: Option<bool>,
-    pub rebase_before_diff: Option<bool>
 }
 #[derive(Serialize, Deserialize)]
 pub struct Jobs {
@@ -859,9 +858,6 @@ impl Config {
     }
     pub fn get_debug_option<'a>(&'a self, name: &str) -> Option<&'a String> {
         self.runtime.debug.get(name)
-    }
-    pub fn should_silent_shell_exec(&self) -> bool {
-        return self.runtime.verbosity <= 0;
     }
     pub fn enumerate_jobs<'a>(&'a self) -> HashMap<(&'a str, &'a str), &'a Job> {
         let mut related_jobs: HashMap<(&'a str, &'a str), &'a Job> = hashmap!{};

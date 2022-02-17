@@ -279,7 +279,7 @@ impl<S: shell::Shell> GhAction<S> {
     fn get_token(&self) -> Result<String, Box<dyn Error>> {
         let config = self.config.borrow();
         Ok(match &config.ci_config(&self.account_name) {
-            config::CIAccount::GhAction { account:_, key } => { key.to_string() },
+            config::CIAccount::GhAction { key, .. } => { key.to_string() },
             config::CIAccount::CircleCI{..} => { 
                 return escalate!(Box::new(ci::CIError {
                     cause: "should have ghaction CI config but circleci config provided".to_string()

@@ -124,6 +124,11 @@ impl<S: shell::Shell> CI<S> {
             Some(ref job) => (job.commit.as_ref().map(|s| s.as_str()), false, Some(job.command.clone()), job.envs.clone()),
             None => (args.value_of("ref"), args.occurence_of("remote") > 0, None, Self::adhoc_envs(args))
         };
+        let non_interactive_shell_opts = if args.occurence_of("silent") > 0 {
+            shell::silent()
+        } else {
+            shell::no_capture()
+        };
         match args.subcommand() {
             Some(("sh", subargs)) => {
                 log::info!("running shell for job {} at {}",
@@ -161,14 +166,14 @@ impl<S: shell::Shell> CI<S> {
                         log::debug!("running shell task: result command: [{}]", command);
                         config.run_job(
                             &self.shell, &job_name, &job, config::Command::Adhoc(command), &config::JobRunningOptions {
-                                commit, remote, shell_settings: shell::no_capture(), adhoc_envs
+                                commit, remote, shell_settings: non_interactive_shell_opts, adhoc_envs
                             }
                         )
                     } else {
                         log::debug!("running shell with adhoc command: [{}]", task_args.join(" "));
                         config.run_job_by_name(
                             &self.shell, &job_name, config::Command::Adhoc(task_args.join(" ")), &config::JobRunningOptions {
-                                commit, remote, shell_settings: shell::no_capture(), adhoc_envs,
+                                commit, remote, shell_settings: non_interactive_shell_opts, adhoc_envs,
                             }
                         )
                     }
@@ -181,7 +186,7 @@ impl<S: shell::Shell> CI<S> {
                     Some(cmd) => config::Command::Adhoc(cmd),
                     None => config::Command::Job
                 }, &config::JobRunningOptions {
-                    commit, remote, shell_settings: shell::no_capture(), adhoc_envs,
+                    commit, remote, shell_settings: non_interactive_shell_opts, adhoc_envs,
                 })
             }
         }
