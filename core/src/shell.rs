@@ -64,7 +64,7 @@ pub trait Shell {
             vec!["-v", &format!("{}:{}", &repository_mount_path, &repository_mount_path)],
             vec!["--entrypoint", shell.as_ref().map_or_else(|| "bash", |v| v.as_str())],
             vec![image, "-c", code]
-        ].concat(), envs, cwd, &Settings{ capture: settings.capture, interactive: false })?;
+        ].concat(), envs, cwd, &settings)?;
         return Ok(result);
     }
     fn eval_output_of<I, K, V, P>(

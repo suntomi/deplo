@@ -73,10 +73,10 @@ impl<'a> shell::Shell for Native {
             let cmd = args.join(" ");
             println!("dryrun: {}", cmd);
             return Ok(cmd);
-        } else if config.should_silent_shell_exec() {
+        } else if !settings.interactive && config.should_silent_shell_exec() {
             // regardless for the value of `capture`, always capture value
             let (mut cmd, mut ct) = self.create_command(
-                args, envs, cwd, &shell::Settings { capture: true, interactive: settings.interactive}
+                args, envs, cwd, &shell::Settings { capture: true, interactive: false}
             );
             return Native::run_as_child(&mut cmd, &mut ct);
         } else {
