@@ -402,7 +402,12 @@ impl RuntimeConfig {
             let immc = config.borrow();
             let vcs = immc.vcs_service()?;
             match args.value_of("release-target") {
-                Some(v) => Some(v.to_string()),
+                Some(v) => match immc.common.release_targets.get(v) {
+                    Some(_) => Some(v.to_string()),
+                    None => return escalate!(Box::new(ConfigError{ 
+                        cause: format!("undefined release target name: {}", v)
+                    }))
+                },
                 None => match std::env::var("DEPLO_CI_RELEASE_TARGET") {
                     Ok(v) => if !v.is_empty() { 
                         Some(v)
