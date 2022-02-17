@@ -16,6 +16,7 @@ env:
   DEPLO_CI_EVENT_PAYLOAD: ${{ toJSON(github.event.client_payload) }}
   DEPLO_CI_OVERWRITE_COMMIT: ${{ github.event.client_payload.commit }}
   DEPLO_CI_OVERWRITE_VERBOSITY: ${{ github.event.client_payload.verbosity }}
+  DEPLO_CI_RELEASE_TARGET: ${{ github.event.client_payload.release_target }}
   SUNTOMI_VCS_ACCOUNT: ${{ secrets.SUNTOMI_VCS_ACCOUNT }}
   SUNTOMI_VCS_ACCOUNT_EMAIL: ${{ secrets.SUNTOMI_VCS_ACCOUNT_EMAIL }}
   SUNTOMI_VCS_ACCOUNT_KEY: ${{ secrets.SUNTOMI_VCS_ACCOUNT_KEY }}
