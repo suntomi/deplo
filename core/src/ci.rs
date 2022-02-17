@@ -26,8 +26,7 @@ pub trait CI : module::Module {
     fn mark_job_executed(&self, job_name: &str) -> Result<(), Box<dyn Error>>;
     fn mark_need_cleanup(&self, job_name: &str) -> Result<(), Box<dyn Error>>;
     fn run_job(&self, job: &RemoteJob) -> Result<String, Box<dyn Error>>;
-    fn wait_job(&self, job_id: &str) -> Result<(), Box<dyn Error>>;
-    fn wait_job_by_name(&self, job_id: &str) -> Result<(), Box<dyn Error>>;
+    fn check_job_finished(&self, job_id: &str) -> Result<Option<String>, Box<dyn Error>>;
     fn set_secret(&self, key: &str, val: &str) -> Result<(), Box<dyn Error>>;
     fn job_env(&self) -> HashMap<&str, String>;
     fn dispatched_remote_job(&self) -> Result<Option<RemoteJob>, Box<dyn Error>>;
