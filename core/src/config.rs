@@ -367,7 +367,7 @@ impl RuntimeConfig {
         RuntimeConfig {
             verbosity: match args.value_of("verbosity") {
                 Some(o) => o.parse().unwrap_or(0),
-                None => 1
+                None => 0
             },
             dotenv_path: args.value_of("dotenv").map_or_else(|| None, |v| Some(v.to_string())),
             dryrun: args.occurence_of("dryrun") > 0,
@@ -398,14 +398,23 @@ impl RuntimeConfig {
         // because vcs_service create object which have reference of `c` ,
         // scope of `vcs` should be narrower than this function,
         // to prevent `assignment of borrowed value` error below.
-        let release_target = match args.value_of("release-target") {
-            Some(v) => Some(v.to_string()),
-            None => match std::env::var("DEPLO_CI_RELEASE_TARGET") {
-                Ok(v) => Some(v),
-                Err(_) => {
-                    let immc = config.borrow();
-                    let vcs = immc.vcs_service()?;
-                    vcs.release_target()
+        let release_target = {
+            let immc = config.borrow();
+            let vcs = immc.vcs_service()?;
+            match args.value_of("release-target") {
+                Some(v) => match immc.common.release_targets.get(v) {
+                    Some(_) => Some(v.to_string()),
+                    None => return escalate!(Box::new(ConfigError{ 
+                        cause: format!("undefined release target name: {}", v)
+                    }))
+                },
+                None => match std::env::var("DEPLO_CI_RELEASE_TARGET") {
+                    Ok(v) => if !v.is_empty() { 
+                        Some(v)
+                    } else {
+                        vcs.release_target()
+                    },
+                    Err(_) => vcs.release_target()
                 }
             }
         };
@@ -543,9 +552,11 @@ impl Config {
         };
         simple_logger::init_with_level(match 
             match std::env::var("DEPLO_CI_OVERWRITE_VERBOSITY") {
-                Ok(v) => {
+                Ok(v) => if !v.is_empty() {
                     println!("overwrite log verbosity from {} to {}", verbosity, v);
                     v.parse::<u64>().unwrap_or(verbosity)
+                } else {
+                    verbosity
                 },
                 Err(_) => verbosity
             } 
@@ -933,7 +944,8 @@ impl Config {
                 command: cmd.to_string(),
                 commit: options.commit.map(|s| s.to_string()),
                 envs: options.adhoc_envs.to_owned(),
-                verbosity: self.runtime.verbosity
+                verbosity: self.runtime.verbosity,
+                release_target: self.runtime.release_target.clone(),
             })?));
         }
         match job.runner {
@@ -1005,6 +1017,7 @@ impl Config {
                         commit: options.commit.map(|s| s.to_string()),
                         envs: hashmap!{},
                         verbosity: self.runtime.verbosity,
+                        release_target: self.runtime.release_target.clone(),
                     })?));
                 }
             },

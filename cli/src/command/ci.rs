@@ -1,5 +1,8 @@
 use std::collections::{HashMap};
 use std::error::Error;
+use std::io::Write;
+use std::thread::sleep;
+use std::time::Duration;
 
 use log;
 
@@ -77,9 +80,24 @@ impl<S: shell::Shell> CI<S> {
         let ci = config.ci_service(account_name)?;
         config.parse_dotenv(|k,v| ci.set_secret(k, v))
     }
-    fn fin<A: args::Args>(&self, _: &A) -> Result<(), Box<dyn Error>> {
-        Ok(())
+    fn exec<A: args::Args>(&self, kind: &str, args: &A) -> Result<(), Box<dyn Error>> {
+        let job_name = &format!("{}-{}", kind, args.value_of("name").unwrap());
+        match self.exec_job(args, job_name)? {
+            Some(job_id) => {
+                log::info!("remote job {} id={} running", job_name, job_id);
+                if args.occurence_of("async") <= 0 {
+                    self.wait_job(args, &job_name, &job_id)?;
+                } else {
+                    //output job_id to use in user script
+                    println!("{}", job_id);
+                }
+            },
+            None => {}
+        };
+        return Ok(())
     }
+
+    // helpers
     fn make_task_command(task: &str, _: Vec<&str>) -> String {
         // TODO: embedding args into task
         task.to_string()
@@ -97,9 +115,8 @@ impl<S: shell::Shell> CI<S> {
         };
         envs
     }
-    fn exec<A: args::Args>(&self, kind: &str, args: &A) -> Result<(), Box<dyn Error>> {
+    fn exec_job<A: args::Args>(&self, args: &A, job_name: &str) -> Result<Option<String>, Box<dyn Error>> {
         let config = self.config.borrow();
-        let job_name = &format!("{}-{}", kind, args.value_of("name").unwrap());
         let remote_job = config.ci_service_by_job_name(job_name)?.dispatched_remote_job()?;
         // if reach here by remote execution, adopt the settings, otherwise using cli options if any.
         let (commit, remote, command, adhoc_envs) = match remote_job {
@@ -107,10 +124,10 @@ impl<S: shell::Shell> CI<S> {
             Some(ref job) => (job.commit.as_ref().map(|s| s.as_str()), false, Some(job.command.clone()), job.envs.clone()),
             None => (args.value_of("ref"), args.occurence_of("remote") > 0, None, Self::adhoc_envs(args))
         };
-        let may_remote_job_id = match args.subcommand() {
+        match args.subcommand() {
             Some(("sh", subargs)) => {
-                log::info!("running shell for job '{}-{}' at {}",
-                    kind, args.value_of("name").unwrap(),
+                log::info!("running shell for job {} at {}",
+                    job_name,
                     commit.unwrap_or("HEAD")
                 );
                 match subargs.values_of("task") {
@@ -124,10 +141,10 @@ impl<S: shell::Shell> CI<S> {
                             &self.shell, &job_name, &job, config::Command::Shell, &config::JobRunningOptions {
                                 commit, remote, shell_settings: shell::interactive(), adhoc_envs
                             }
-                        )?
+                        )
                     },
                     Some(task_args) => if task_args[0].starts_with("@") {
-                        log::debug!("running shell task '{}' with args '{}'", task_args[0], task_args[1..].join(" "));
+                        log::debug!("running shell task [{}] with args [{}]", task_args[0], task_args[1..].join(" "));
                         let job = match config.find_job(&job_name) {
                             Some(job) => job,
                             None => return escalate!(args.error(&format!("no such job: [{}]", job_name))),
@@ -141,22 +158,23 @@ impl<S: shell::Shell> CI<S> {
                             None => return escalate!(args.error(&format!("no tasks definitions: [{}]", task_name))),
                         };
                         let command = Self::make_task_command(&task, task_args[1..].to_vec());
-                        log::debug!("running shell task: result command: {}", command);
+                        log::debug!("running shell task: result command: [{}]", command);
                         config.run_job(
                             &self.shell, &job_name, &job, config::Command::Adhoc(command), &config::JobRunningOptions {
                                 commit, remote, shell_settings: shell::no_capture(), adhoc_envs
                             }
-                        )?
+                        )
                     } else {
-                        log::debug!("running shell with adhoc command: {}", task_args.join(" "));
+                        log::debug!("running shell with adhoc command: [{}]", task_args.join(" "));
                         config.run_job_by_name(
                             &self.shell, &job_name, config::Command::Adhoc(task_args.join(" ")), &config::JobRunningOptions {
                                 commit, remote, shell_settings: shell::no_capture(), adhoc_envs,
                             }
-                        )?
+                        )
                     }
                 }
             },
+            Some(("wait", subargs)) => Ok(Some(subargs.value_of("job_id").unwrap().to_string())),
             Some((name, _)) => return escalate!(args.error(&format!("no such subcommand: [{}]", name))),
             None => {
                 config.run_job_by_name(&self.shell, &job_name, match command {
@@ -164,27 +182,47 @@ impl<S: shell::Shell> CI<S> {
                     None => config::Command::Job
                 }, &config::JobRunningOptions {
                     commit, remote, shell_settings: shell::no_capture(), adhoc_envs,
-                })?
+                })
             }
-        };
-        match may_remote_job_id {
-            Some(job_id) => {
-                log::info!("{}: remote job id='{}' running", job_name, job_id);
-                if args.occurence_of("async") <= 0 {
-                    log::info!("{}: wait for finishing job", job_name);
-                    let job = match config.find_job(&job_name) {
-                        Some(job) => job,
-                        None => return escalate!(args.error(&format!("no such job: [{}]", job_name))),
-                    };
-                    let ci = config.ci_service_by_job(&job)?;
-                    ci.wait_job(&job_id)?;
-                    log::info!("{}: remote job id='{}' finished", job_name, job_id);
-                }
-            },
-            None => {}
-        };
-        return Ok(())
+        }
     }
+    fn wait_job<A: args::Args>(&self, args: &A, job_name: &str, job_id: &str) -> Result<(), Box<dyn Error>> {
+        log::info!("wait for finishing remote job {} id={}", job_name, job_id);
+        let config = self.config.borrow();
+        let job = match config.find_job(&job_name) {
+            Some(job) => job,
+            None => return escalate!(args.error(&format!("no such job: [{}]", job_name))),
+        };
+        let ci = config.ci_service_by_job(&job)?;
+        let progress = args.occurence_of("no-progress") == 0;
+        let mut timeout = args.value_of("timeout").map(|s| s.parse::<u64>().unwrap_or(0));
+        loop {
+            match ci.check_job_finished(&job_id)? {
+                Some(s) => if progress { 
+                    print!(".{}", s);
+                    std::io::stdout().flush().unwrap();
+                },
+                None => {
+                    println!(".done");
+                    break
+                },
+            }
+            sleep(Duration::from_secs(5));
+            match timeout {
+                Some(t) => if t > 5 {
+                    timeout = Some(t - 5);
+                } else {
+                    return escalate!(args.error(
+                        &format!("remote job {} wait timeout {:?}", 
+                        job_name, args.value_of("timeout")
+                    )));
+                },
+                None => {}
+            }
+        }
+        log::info!("remote job {} id={} finished", job_name, job_id);
+        Ok(())
+    }    
 }
 
 impl<S: shell::Shell, A: args::Args> command::Command<A> for CI<S> {
@@ -198,7 +236,6 @@ impl<S: shell::Shell, A: args::Args> command::Command<A> for CI<S> {
         match args.subcommand() {
             Some(("kick", subargs)) => return self.kick(&subargs),
             Some(("setenv", subargs)) => return self.setenv(&subargs),
-            Some(("fin", subargs)) => return self.fin(&subargs),
             Some(("deploy", subargs)) => return self.exec("deploy", &subargs),
             Some(("integrate", subargs)) => return self.exec("integrate", &subargs),
             Some((name, _)) => return escalate!(args.error(

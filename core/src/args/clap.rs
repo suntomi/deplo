@@ -60,17 +60,17 @@ fn job_running_command_options(
     help: &'static str
 ) -> App<'static> {
     App::new(name)
-    .override_help(help)
+    .about(help)
     .arg(Arg::new("name")
         .help("job name")
         .index(1)
         .required(true))
     .arg(Arg::new("env")
-        .help("only works with --remote, set adhoc environment variables for remote job. \n\
-               can specify multiple times")
+        .help("set adhoc environment variables for remote job")
         .long("env")
         .short('e')
         .takes_value(true)
+        .multiple_occurrences(true)
         .required(false))
     .arg(Arg::new("async")
         .help("only works with --remote, don't wait for finishing remote job")
@@ -80,6 +80,15 @@ fn job_running_command_options(
         .help("if set, run the job on the correspond remote CI service")
         .long("remote")
         .required(false))
+    .arg(Arg::new("no-progress")
+        .help("if set, don't show the progress of the remote job")
+        .long("no-progress")
+        .required(false))
+    .arg(Arg::new("timeout")
+        .help("wait timeout for remote job. if --async is set, this option is ignored")
+        .long("timeout")
+        .required(false)
+        .takes_value(true))
     .arg(Arg::new("ref")
         .help("git ref to run the job")
         .long("ref")
@@ -87,10 +96,18 @@ fn job_running_command_options(
         .required(false))
     .subcommand(
         App::new("sh")
-            .override_help("running arbiter command for environment of jobs")
+            .about("running arbiter command for environment of jobs")
             .arg(Arg::new("task")
                 .help("running command that declared in tasks directive")
-                .multiple_values(true)))    
+                .multiple_values(true)))
+    .subcommand(
+        App::new("wait")
+        .about("wait specified job id. --ref,--remote,--async,--env options of parent command is ignored")
+        .arg(Arg::new("job_id")
+            .help("job id to wait")
+            .index(1)
+            .required(true)
+            .takes_value(true)))
 }
 
 lazy_static! {
@@ -99,7 +116,7 @@ lazy_static! {
             vec!["ci", "deploy"], CommandFactory::new(|name| -> App<'static> { 
                 job_running_command_options(
                     name, 
-                    "run specific deploy job in Deplo.toml. used for auto generated CI/CD settings"
+                    "run specific deploy job in Deplo.toml manually"
                 )
             })
         ),
@@ -107,7 +124,7 @@ lazy_static! {
             vec!["ci", "integrate"], CommandFactory::new(|name| -> App<'static> { 
                 job_running_command_options(
                     name, 
-                    "run specific integrate job in Deplo.toml. used for auto generated CI/CD settings"
+                    "run specific integrate job in Deplo.toml manually"
                 )
             })
         ),
@@ -122,7 +139,7 @@ lazy_static! {
     static ref G_ROOT_MATCH: ArgMatches = App::new("deplo")
         .version(config::DEPLO_VERSION)
         .author("umegaya <iyatomi@gmail.com>")
-        .override_help("write once, run anywhere for CI/CD")
+        .about("write once, run anywhere for CI/CD")
         .arg(Arg::new("config")
             .short('c')
             .long("config")
@@ -169,10 +186,10 @@ lazy_static! {
             .takes_value(true))
         .subcommand(
             App::new("info")
-                .override_help("get information about deplo")
+                .about("get information about deplo")
                 .subcommand(
                     App::new("version")
-                        .override_help("get deplo version")
+                        .about("get deplo version")
                         .arg(Arg::new("output")
                             .help("output format")
                             .short('o')
@@ -185,7 +202,7 @@ lazy_static! {
         )
         .subcommand(
             App::new("init")
-                .override_help("initialize deplo project. need to configure deplo.json beforehand")
+                .about("initialize deplo project. need to configure deplo.json beforehand")
                 .arg(Arg::new("reinit")
                     .long("reinit")
                     .help("initialize component")
@@ -197,7 +214,7 @@ lazy_static! {
         )
         .subcommand(
             App::new("destroy")
-                .override_help("destroy deplo project")
+                .about("destroy deplo project")
         )
         .subcommand(
             G_ALIASED_COMMANDS.create("d")
@@ -207,10 +224,10 @@ lazy_static! {
         )
         .subcommand(
             App::new("ci")
-                .override_help("handling CI input/control CI settings")
+                .about("handling CI input/control CI settings")
                 .subcommand(
                     App::new("kick")
-                    .override_help("entry point of CI/CD process")
+                    .about("entry point of CI/CD process")
                 )
                 .subcommand(
                     G_ALIASED_COMMANDS.create("ci_deploy")
@@ -220,19 +237,19 @@ lazy_static! {
                 )
                 .subcommand(
                     App::new("setenv")
-                    .override_help("upload current .env contents as CI service secrets")
+                    .about("upload current .env contents as CI service secrets")
                 )
                 .subcommand(
                     App::new("fin")
-                    .override_help("cleanup CI/CD process after all related job finished")
+                    .about("cleanup CI/CD process after all related job finished")
                 )
         )
         .subcommand(
             App::new("vcs")
-                .override_help("control VCS resources")
+                .about("control VCS resources")
                 .subcommand(
                     App::new("release")
-                    .override_help("create release")
+                    .about("create release")
                     .arg(Arg::new("tag_name")
                         .help("tag name to use for release")
                         .index(1)
@@ -249,7 +266,7 @@ lazy_static! {
                 )
                 .subcommand(
                     App::new("release-assets")
-                    .override_help("upload release assets")
+                    .about("upload release assets")
                     .arg(Arg::new("tag_name")
                         .help("tag name to use for release")
                         .index(1)

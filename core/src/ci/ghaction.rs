@@ -50,10 +50,14 @@ impl ClientPayload {
 
 #[derive(Deserialize)]
 pub struct PartialWorkflow {
-    pub id: String,
+    pub id: u64,
     pub status: String,
     pub url: String,
     pub jobs_url: String,
+}
+#[derive(Deserialize)]
+pub struct PartialWorkflows {
+    pub workflow_runs: Vec<PartialWorkflow>
 }
 #[derive(Deserialize)]
 pub struct PartialJob {
@@ -487,7 +491,7 @@ impl<S: shell::Shell> ci::CI for GhAction<S> {
         let mut count = 0;
         // we have 1 minutes buffer to search for created workflow
         // to be tolerant of clock skew
-        let start = Utc::now().checked_sub_signed(Duration::minutes(60)).unwrap();
+        let start = Utc::now().checked_sub_signed(Duration::minutes(1)).unwrap();
         loop {
             let response = self.shell.exec(&vec![
                 "curl", "-H", &format!("Authorization: token {}", token), 
@@ -499,9 +503,9 @@ impl<S: shell::Shell> ci::CI for GhAction<S> {
                 )
             ], shell::no_env(), shell::no_cwd(), &shell::capture())?;
             log::trace!("current workflows by remote execution: {}", response);
-            let workflows = serde_json::from_str::<Vec<PartialWorkflow>>(&response)?;
-            if workflows.len() > 0 {
-                for wf in workflows {
+            let workflows = serde_json::from_str::<PartialWorkflows>(&response)?;
+            if workflows.workflow_runs.len() > 0 {
+                for wf in workflows.workflow_runs {
                     let response = self.shell.exec(&vec![
                         "curl", "-H", &format!("Authorization: token {}", token), 
                         "-H", "Accept: application/vnd.github.v3+json", &wf.jobs_url
@@ -509,7 +513,7 @@ impl<S: shell::Shell> ci::CI for GhAction<S> {
                     let parsed = serde_json::from_str::<PartialJobs>(&response)?;
                     if parsed.jobs.len() > 0 && parsed.jobs[0].name.contains(&payload.job_id) {
                         log::info!("remote job started at: {}", wf.url);
-                        return Ok(wf.id);
+                        return Ok(wf.id.to_string());
                     }
                 }
             }
@@ -519,41 +523,29 @@ impl<S: shell::Shell> ci::CI for GhAction<S> {
                     cause: format!("timeout waiting for remote job to start {}", payload.job_id),
                 }));
             }
-            sleep(StdDuration::from_secs(5));
-            print!(".");
+            sleep(StdDuration::from_secs(1));
+            if config.runtime.verbosity > 0 {
+                print!(".");
+            }
         }
     }
-    fn wait_job(&self, job_id: &str) -> Result<(), Box<dyn Error>> {
+    fn check_job_finished(&self, job_id: &str) -> Result<Option<String>, Box<dyn Error>> {
         let config = self.config.borrow();
         let token = self.get_token()?;
         let user_and_repo = config.vcs_service()?.user_and_repo()?;
-        loop {
-            let response = self.shell.exec(&vec![
-                "curl", "-H", &format!("Authorization: token {}", token), 
-                "-H", "Accept: application/vnd.github.v3+json", 
-                &format!(
-                    "https://api.github.com/repos/{}/{}/actions/runs/{}",
-                    user_and_repo.0, user_and_repo.1, job_id
-                )
-            ], shell::no_env(), shell::no_cwd(), &shell::capture())?;
-            let parsed = serde_json::from_str::<PartialWorkflow>(&response)?;
-            if parsed.status == "completed" {
-                log::info!("remote job {} completed", job_id);
-                return Ok(());
-            }
-            let status = match parsed.status.as_str() {
-                "queued" => "q",
-                "progress" => "p",
-                "canary" => "x",
-                _ => panic!("unknown status: {}", parsed.status)
-            };
-            print!("{}", status);
-            sleep(StdDuration::from_secs(5));
+        let response = self.shell.exec(&vec![
+            "curl", "-H", &format!("Authorization: token {}", token), 
+            "-H", "Accept: application/vnd.github.v3+json", 
+            &format!(
+                "https://api.github.com/repos/{}/{}/actions/runs/{}",
+                user_and_repo.0, user_and_repo.1, job_id
+            )
+        ], shell::no_env(), shell::no_cwd(), &shell::capture())?;
+        let parsed = serde_json::from_str::<PartialWorkflow>(&response)?;
+        if parsed.status == "completed" {
+            return Ok(None);
         }
-    }
-    fn wait_job_by_name(&self, _: &str) -> Result<(), Box<dyn Error>> {
-        log::warn!("TODO: implement wait_job_by_name for ghaction");
-        Ok(())
+        return Ok(Some(parsed.status));
     }
     fn job_env(&self) -> HashMap<&str, String> {
         let config = self.config.borrow();

@@ -175,13 +175,9 @@ impl<'a, S: shell::Shell> ci::CI for CircleCI<S> {
         log::warn!("TODO: implement run_job for circleci");
         Ok("".to_string())
     }
-    fn wait_job(&self, _: &str) -> Result<(), Box<dyn Error>> {
+    fn check_job_finished(&self, _: &str) -> Result<Option<String>, Box<dyn Error>> {
         log::warn!("TODO: implement wait_job for circleci");
-        Ok(())
-    }
-    fn wait_job_by_name(&self, _: &str) -> Result<(), Box<dyn Error>> {
-        log::warn!("TODO: implement wait_job_by_name for circleci");
-        Ok(())
+        Ok(None)
     }
     fn job_env(&self) -> HashMap<&str, String> {
         let config = self.config.borrow();
