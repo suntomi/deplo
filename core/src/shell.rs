@@ -13,6 +13,7 @@ pub mod native;
 pub struct Settings {
     capture: bool,
     interactive: bool,
+    silent: bool,
 }
 
 pub trait Shell {
@@ -164,11 +165,14 @@ pub fn inherit_env() -> HashMap<String, String> {
     return std::env::vars().collect();
 }
 pub fn capture() -> Settings {
-    return Settings{ capture: true, interactive: false };
+    return Settings{ capture: true, interactive: false, silent: false };
 }
 pub fn no_capture() -> Settings {
-    return Settings{ capture: false, interactive: false };
+    return Settings{ capture: false, interactive: false, silent: false };
 }
 pub fn interactive() -> Settings {
-    return Settings{ capture: false, interactive: true };
+    return Settings{ capture: false, interactive: true, silent: false };
+}
+pub fn silent() -> Settings {
+    return Settings{ capture: true, interactive: false, silent: true };
 }

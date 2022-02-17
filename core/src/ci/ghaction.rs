@@ -32,18 +32,24 @@ pub struct ClientPayload {
     pub envs: HashMap<String, String>,
     pub verbosity: u64,
     pub job_id: String,
+    pub release_target: Option<String>,
 }
 impl ClientPayload {
     fn new(
         src: &ci::RemoteJob,
     ) -> Self {
+        // dirty hack to detect mismatch ClientPayload and ci::RemoteJob at compile time
+        const CP_SIZE: usize = std::mem::size_of::<ClientPayload>();
+        const RJ_SIZE: usize = std::mem::size_of::<ci::RemoteJob>() + std::mem::size_of::<String>();
+        const ID_SIZE: usize = 16 / if (CP_SIZE - RJ_SIZE) == 0 { 1 } else { 0 };
         Self {
             name: src.name.clone(),
             commit: src.commit.clone(),
             command: src.command.clone(),
             envs: src.envs.clone(),
             verbosity: src.verbosity,
-            job_id: randombytes_as_string!(16),
+            job_id: randombytes_as_string!(ID_SIZE),
+            release_target: src.release_target.clone(),
         }
     }
 }
@@ -279,7 +285,7 @@ impl<S: shell::Shell> GhAction<S> {
     fn get_token(&self) -> Result<String, Box<dyn Error>> {
         let config = self.config.borrow();
         Ok(match &config.ci_config(&self.account_name) {
-            config::CIAccount::GhAction { account:_, key } => { key.to_string() },
+            config::CIAccount::GhAction { key, .. } => { key.to_string() },
             config::CIAccount::CircleCI{..} => { 
                 return escalate!(Box::new(ci::CIError {
                     cause: "should have ghaction CI config but circleci config provided".to_string()

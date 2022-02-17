@@ -60,7 +60,7 @@ impl<'a> shell::Shell for Native {
     ) -> Result<String, shell::ShellError> 
     where I: IntoIterator<Item = (K, V)>, K: AsRef<OsStr>, V: AsRef<OsStr>, P: AsRef<Path> {
         let (mut cmd, mut ct) = self.create_command(
-            args, envs, cwd, &shell::Settings { capture: true, interactive: false}
+            args, envs, cwd, &shell::Settings { capture: true, interactive: false, silent: false}
         );
         return Native::get_output(&mut cmd, &mut ct);
     }
@@ -73,10 +73,10 @@ impl<'a> shell::Shell for Native {
             let cmd = args.join(" ");
             println!("dryrun: {}", cmd);
             return Ok(cmd);
-        } else if !settings.interactive && config.should_silent_shell_exec() {
+        } else if !settings.interactive && settings.silent {
             // regardless for the value of `capture`, always capture value
             let (mut cmd, mut ct) = self.create_command(
-                args, envs, cwd, &shell::Settings { capture: true, interactive: false}
+                args, envs, cwd, &shell::Settings { capture: true, interactive: false, silent: false }
             );
             return Native::run_as_child(&mut cmd, &mut ct);
         } else {

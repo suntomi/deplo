@@ -193,7 +193,7 @@ impl<'a, S: shell::Shell> ci::CI for CircleCI<S> {
     fn set_secret(&self, key: &str, val: &str) -> Result<(), Box<dyn Error>> {
         let config = self.config.borrow();
         let token = match &config.ci_config(&self.account_name) {
-            config::CIAccount::CircleCI { key } => { key },
+            config::CIAccount::CircleCI { key, .. } => { key },
             config::CIAccount::GhAction{..} => { 
                 return escalate!(Box::new(ci::CIError {
                     cause: "should have circleci CI config but ghaction config provided".to_string()

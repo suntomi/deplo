@@ -288,15 +288,14 @@ impl fmt::Display for CIAccount {
 #[derive(Serialize, Deserialize)]
 pub struct CIConfig {
     pub accounts: HashMap<String, CIAccount>,
-    pub workflow: WorkflowConfig,
     pub invoke_for_all_branches: Option<bool>,
-    pub rebase_before_diff: Option<bool>
 }
-impl CIConfig {
-    pub fn workflow<'a>(&'a self) -> &'a WorkflowConfig {
-        return &self.workflow;
-    }
+#[derive(Serialize, Deserialize)]
+pub struct Jobs {
+    pub integrate: HashMap<String, Job>,
+    pub deploy: HashMap<String, Job>,
 }
+
 #[derive(Serialize, Deserialize, Debug)]
 #[serde(tag = "type")]
 pub enum VCSConfig {
@@ -500,6 +499,7 @@ pub struct Config {
     pub common: CommonConfig,
     pub vcs: VCSConfig,
     pub ci: CIConfig,
+    pub jobs: Jobs,
 
     // object cache
     #[serde(skip)]
@@ -772,9 +772,6 @@ impl Config {
             }))
         } 
     }
-    pub fn ci_workflow<'a>(&'a self) -> &'a WorkflowConfig {
-        return &self.ci.workflow
-    }
     pub fn job_env(
         &self, job: &Job, paths: &Option<Vec<String>>,
         adhoc: &HashMap<String, String>
@@ -862,14 +859,11 @@ impl Config {
     pub fn get_debug_option<'a>(&'a self, name: &str) -> Option<&'a String> {
         self.runtime.debug.get(name)
     }
-    pub fn should_silent_shell_exec(&self) -> bool {
-        return self.runtime.verbosity <= 0;
-    }
     pub fn enumerate_jobs<'a>(&'a self) -> HashMap<(&'a str, &'a str), &'a Job> {
         let mut related_jobs: HashMap<(&'a str, &'a str), &'a Job> = hashmap!{};
         for (kind, jobs) in hashmap!{
-            "integrate" => &self.ci.workflow.integrate,
-            "deploy" => &self.ci.workflow.deploy
+            "integrate" => &self.jobs.integrate,
+            "deploy" => &self.jobs.deploy
         } {
             for (name, job) in jobs {
                 match related_jobs.insert((kind, name), job) {
