@@ -14,6 +14,7 @@ pub struct RemoteJob {
     pub command: String,
     pub envs: HashMap<String, String>,
     pub verbosity: u64,
+    pub release_target: Option<String>,
 }
 
 pub trait CI : module::Module {

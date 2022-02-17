@@ -524,7 +524,9 @@ impl<S: shell::Shell> ci::CI for GhAction<S> {
                 }));
             }
             sleep(StdDuration::from_secs(1));
-            print!(".");
+            if config.runtime.verbosity > 0 {
+                print!(".");
+            }
         }
     }
     fn check_job_finished(&self, job_id: &str) -> Result<Option<String>, Box<dyn Error>> {
