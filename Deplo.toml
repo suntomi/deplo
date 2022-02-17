@@ -163,33 +163,3 @@ target/release/cli.exe vcs release-assets ${DEPLO_RELEASE_TAG} target/release/cl
 [jobs.deploy.win.caches.cargo]
 keys = ["integrate-build-${{ runner.os }}-v1-${{ hashFiles('**/Cargo.lock') }}"]
 paths = ["target", "~/.cargo/bin", "~/.cargo/registry/cache", "~/.cargo/registry/index", "~/.cargo/git/db"]
-
-
-[ci.workflow.deploy.mac]
-depends = ["product"]
-patterns = [".*/src/.*", "Cargo.*"]
-runner = { type = "Machine", os = "MacOS" }
-command = """
-. tools/scripts/setup_release_env.sh
-cargo build --release
-target/release/cli vcs release-assets ${DEPLO_RELEASE_TAG} target/release/cli --replace -o name=deplo-Darwin
-"""
-[ci.workflow.deploy.mac.caches.cargo]
-keys = ["integrate-build-${{ runner.os }}-v1-${{ hashFiles('**/Cargo.lock') }}"]
-paths = ["target", "~/.cargo/bin", "~/.cargo/registry/cache", "~/.cargo/registry/index", "~/.cargo/git/db"]
-
-[ci.workflow.deploy.win]
-depends = ["product"]
-patterns = [".*/src/.*", "Cargo.*"]
-runner = { type = "Machine", os = "Windows" }
-command = """
-. tools/scripts/setup_release_env.sh
-cargo build --release
-target/release/cli.exe vcs release-assets ${DEPLO_RELEASE_TAG} target/release/cli.exe --replace -o name=deplo-Windows.exe
-target/release/cli.exe vcs release-assets ${DEPLO_RELEASE_TAG} target/release/cli.pdb --replace -o name=deplo-Windows.pdb
-"""
-[ci.workflow.deploy.win.caches.cargo]
-keys = ["integrate-build-${{ runner.os }}-v1-${{ hashFiles('**/Cargo.lock') }}"]
-paths = ["target", "~/.cargo/bin", "~/.cargo/registry/cache", "~/.cargo/registry/index", "~/.cargo/git/db"]
-
-[ci.workflow.integrate]
