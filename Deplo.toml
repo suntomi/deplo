@@ -163,3 +163,7 @@ target/release/cli.exe vcs release-assets ${DEPLO_RELEASE_TAG} target/release/cl
 [jobs.deploy.win.caches.cargo]
 keys = ["integrate-build-${{ runner.os }}-v1-${{ hashFiles('**/Cargo.lock') }}"]
 paths = ["target", "~/.cargo/bin", "~/.cargo/registry/cache", "~/.cargo/registry/index", "~/.cargo/git/db"]
+
+[ci.workflow.integrate]
+
+[ci.workflow.deploy]
