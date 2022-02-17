@@ -42,8 +42,8 @@ key = "${SUNTOMI_VCS_ACCOUNT_KEY}"
 # ------------
 
 # workflow settings (CI), which runs when branch that has related pull request to release targets created/updated.
-# declare job name `$job_name` like ci.workflow.integrate.$job_name, as table element of toml
-[ci.workflow.integrate.base]
+# declare job name `$job_name` like jobs.integrate.$job_name, as table element of toml
+[jobs.integrate.base]
 # git's changeset pattern to invoke the job. that is, integrate.base only invoked when tools/docker/Dockerfile.base is
 # changed by commit.
 patterns = ["tools/docker/Dockerfile.base"]
@@ -54,14 +54,14 @@ command = """
 docker build -t ghcr.io/suntomi/deplo:base -f tools/docker/Dockerfile.base tools/docker
 """
 
-[ci.workflow.integrate.builder]
+[jobs.integrate.builder]
 patterns = ["tools/docker/Dockerfile.builder", "Cargo.*"]
 runner = { type = "Machine", os = "Linux", local_fallback = { image = "docker:20.10", shell = "sh" } }
 command = """
 sh tools/scripts/copy_manifests.sh
 docker build -t ghcr.io/suntomi/deplo:builder -f tools/docker/Dockerfile.builder tools/docker
 """
-[ci.workflow.integrate.builder.tasks]
+[jobs.integrate.builder.tasks]
 long_running = """
 for i in `seq 1 ${COUNT:-10}`; do
     echo $i
@@ -70,7 +70,7 @@ done
 """
 
 
-[ci.workflow.integrate.src]
+[jobs.integrate.src]
 patterns = [".*/src/.*", "Cargo.*"]
 runner = { type = "Machine", os = "Linux", local_fallback = { image = "ghcr.io/suntomi/deplo:builder" } }
 command = "cargo build"
@@ -78,7 +78,7 @@ tasks = { test = "cargo test", home = "echo ${HOME}" }
 # cache settings. file paths that is listed in paths will be preserved with tha key `keys[0]`.
 # if you specify multiple keys, `keys[1..]` are used as fallback keys to search similar caches 
 # that is craeted by other branches.
-[ci.workflow.integrate.src.caches.cargo]
+[jobs.integrate.src.caches.cargo]
 # way to use variable like ${{ runner.os }} in the keys, is CI service specific. please consult each CI service's
 # document for detail.
 keys = ["integrate-build-${{ runner.os }}-v1-${{ hashFiles('**/Cargo.lock') }}"]
@@ -86,8 +86,8 @@ paths = ["target", "~/.cargo/bin", "~/.cargo/registry/cache", "~/.cargo/registry
 
 
 # workflow settings (CD), which runs when release target branches are created/updated
-# declare job name `$job_name` like ci.workflow.deploy.$job_name, as table element of toml
-[ci.workflow.deploy.base]
+# declare job name `$job_name` like jobs.deploy.$job_name, as table element of toml
+[jobs.deploy.base]
 patterns = ["tools/docker/Dockerfile.base"]
 runner = { type = "Machine", os = "Linux", local_fallback = { image = "docker:20.10", shell = "sh" } }
 command = """
@@ -96,7 +96,7 @@ echo ${SUNTOMI_VCS_ACCOUNT_KEY} | docker login ghcr.io -u ${SUNTOMI_VCS_ACCOUNT}
 docker push ghcr.io/suntomi/deplo:base
 """
 
-[ci.workflow.deploy.builder]
+[jobs.deploy.builder]
 patterns = ["tools/docker/Dockerfile.builder", "Cargo.*"]
 runner = { type = "Machine", os = "Linux", local_fallback = { image = "docker:20.10", shell = "sh" } }
 command = """
@@ -106,7 +106,7 @@ echo ${SUNTOMI_VCS_ACCOUNT_KEY} | docker login ghcr.io -u ${SUNTOMI_VCS_ACCOUNT}
 docker push ghcr.io/suntomi/deplo:builder
 """
 
-[ci.workflow.deploy.product]
+[jobs.deploy.product]
 # job dependencies. deploy.product only starts to run after deploy.builder finished.
 depends = ["builder"]
 patterns = [".*/src/.*", "Cargo.*"]
@@ -123,7 +123,7 @@ tools/docker/bin/cli vcs release ${DEPLO_RELEASE_TAG} -o name=${DEPLO_RELEASE_NA
 tools/docker/bin/cli vcs release-assets ${DEPLO_RELEASE_TAG} tools/docker/bin/cli --replace -o name=deplo-Linux
 """
 
-[ci.workflow.deploy.latest]
+[jobs.deploy.latest]
 depends = ["product"]
 # latest tag of docker image is only updated when production release is created.
 for_targets = ["prod"]
@@ -137,7 +137,7 @@ docker tag ghcr.io/suntomi/deplo:${DEPLO_RELEASE_VERSION} ghcr.io/suntomi/deplo:
 docker push ghcr.io/suntomi/deplo:latest
 """
 
-[ci.workflow.deploy.mac]
+[jobs.deploy.mac]
 depends = ["product"]
 patterns = [".*/src/.*", "Cargo.*"]
 runner = { type = "Machine", os = "MacOS" }
@@ -146,11 +146,11 @@ command = """
 cargo build --release
 target/release/cli vcs release-assets ${DEPLO_RELEASE_TAG} target/release/cli --replace -o name=deplo-Darwin
 """
-[ci.workflow.deploy.mac.caches.cargo]
+[jobs.deploy.mac.caches.cargo]
 keys = ["integrate-build-${{ runner.os }}-v1-${{ hashFiles('**/Cargo.lock') }}"]
 paths = ["target", "~/.cargo/bin", "~/.cargo/registry/cache", "~/.cargo/registry/index", "~/.cargo/git/db"]
 
-[ci.workflow.deploy.win]
+[jobs.deploy.win]
 depends = ["product"]
 patterns = [".*/src/.*", "Cargo.*"]
 runner = { type = "Machine", os = "Windows" }
@@ -160,6 +160,6 @@ cargo build --release
 target/release/cli.exe vcs release-assets ${DEPLO_RELEASE_TAG} target/release/cli.exe --replace -o name=deplo-Windows.exe
 target/release/cli.exe vcs release-assets ${DEPLO_RELEASE_TAG} target/release/cli.pdb --replace -o name=deplo-Windows.pdb
 """
-[ci.workflow.deploy.win.caches.cargo]
+[jobs.deploy.win.caches.cargo]
 keys = ["integrate-build-${{ runner.os }}-v1-${{ hashFiles('**/Cargo.lock') }}"]
 paths = ["target", "~/.cargo/bin", "~/.cargo/registry/cache", "~/.cargo/registry/index", "~/.cargo/git/db"]

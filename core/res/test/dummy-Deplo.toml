@@ -16,12 +16,12 @@ type = "GhAction"
 account = "ci_account"
 key = "ci_key"
 
-[ci.workflow.integrate.test]
+[jobs.integrate.test]
 patterns = [".*/src/.*", "Cargo.*"]
 runner = { type = "Machine", os = "Linux" }
 command = "cargo test"
 
-[ci.workflow.deploy.src]
+[jobs.deploy.src]
 patterns = [".*/src/.*", "Cargo.*"]
 runner = { type = "Machine", os = "Linux" }
 command = """

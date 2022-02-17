@@ -46,11 +46,11 @@ impl<S: shell::Shell> CI<S> {
         let vcs = config.vcs_service()?;
         let jobs_and_kind = match config.runtime.workflow_type {
             Some(v) => match v {
-                config::WorkflowType::Integrate => (&config.ci_workflow().integrate, v),
-                config::WorkflowType::Deploy => (&config.ci_workflow().deploy, v)
+                config::WorkflowType::Integrate => (&config.jobs.integrate, v),
+                config::WorkflowType::Deploy => (&config.jobs.deploy, v)
             }
             None => if config.ci.invoke_for_all_branches.unwrap_or(false) {
-                (&config.ci_workflow().integrate, config::WorkflowType::Integrate)
+                (&config.jobs.integrate, config::WorkflowType::Integrate)
             } else if let Some(v) = ci.pr_url_from_env()? {
                 panic!("PR url is set by env {}, but workflow type is not set", v)
             } else {
