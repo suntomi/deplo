@@ -166,4 +166,19 @@ paths = ["target", "~/.cargo/bin", "~/.cargo/registry/cache", "~/.cargo/registry
 
 [ci.workflow.integrate]
 
-[ci.workflow.deploy]
+[ci.workflow.deploy.product]
+# job dependencies. deploy.product only starts to run after deploy.builder finished.
+depends = ["builder"]
+patterns = [".*/src/.*", "Cargo.*"]
+runner = { type = "Machine", os = "Linux", local_fallback = { path = "tools/docker/Dockerfile.vmfb", shell = "sh"  } }
+command = """
+set -e
+mkdir -p tools/docker/bin
+. tools/scripts/setup_release_env.sh
+sh tools/scripts/build_linux.sh
+docker build -t ghcr.io/suntomi/deplo:${DEPLO_RELEASE_VERSION} -f tools/docker/Dockerfile tools/docker
+echo ${SUNTOMI_VCS_ACCOUNT_KEY} | docker login ghcr.io -u ${SUNTOMI_VCS_ACCOUNT} --password-stdin
+docker push ghcr.io/suntomi/deplo:${DEPLO_RELEASE_VERSION}
+tools/docker/bin/cli vcs release ${DEPLO_RELEASE_TAG} -o name=${DEPLO_RELEASE_NAME}
+tools/docker/bin/cli vcs release-assets ${DEPLO_RELEASE_TAG} tools/docker/bin/cli --replace -o name=deplo-Linux
+"""
