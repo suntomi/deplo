@@ -85,10 +85,10 @@ keys = ["integrate-build-${{ runner.os }}-v1-${{ hashFiles('**/Cargo.lock') }}"]
 paths = ["target", "~/.cargo/bin", "~/.cargo/registry/cache", "~/.cargo/registry/index", "~/.cargo/git/db"]
 
 
-[jobs.integrate.config]
-patterns = ["Deplo.toml"]
-runner = { type = "Machine", os = "Linux", local_fallback = { path = "tools/docker/Dockerfile.vmfb", shell = "sh" } }
-command = "deplo init"
+# [jobs.integrate.config]
+# patterns = ["Deplo.toml"]
+# runner = { type = "Machine", os = "Linux", local_fallback = { path = "tools/docker/Dockerfile.vmfb", shell = "sh" } }
+# command = "deplo init"
 # commits = { patterns = ['\.github/.*'], push = true }
 
 # workflow settings (CD), which runs when release target branches are created/updated

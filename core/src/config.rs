@@ -693,36 +693,47 @@ impl Config {
     }
     pub fn parse_dotenv<F>(&self, mut cb: F) -> Result<(), Box<dyn Error>>
     where F: FnMut (&str, &str) -> Result<(), Box<dyn Error>> {
-        let dotenv_file_content = match &self.runtime.dotenv_path {
-            Some(dotenv_path) => match fs::metadata(dotenv_path) {
-                Ok(_) => match fs::read_to_string(dotenv_path) {
-                    Ok(content) => content,
-                    Err(err) => return escalate!(Box::new(err))
-                },
-                Err(_) => dotenv_path.to_string(),
-            },
-            None => match dotenv() {
-                Ok(dotenv_path) => match fs::read_to_string(dotenv_path) {
-                    Ok(content) => content,
-                    Err(err) => return escalate!(Box::new(err))
-                },
-                Err(err) => return escalate!(Box::new(err))
+        if Self::is_running_on_ci() {
+            // on ci, no dotenv file and secrets are already set as environment variable.
+            // so we need to get secret name list from ci service and get their value from environment.
+            // then pass key and vlaue to the closure cb.
+            let (name, _) = self.ci_config_by_env();
+            for secret in &self.ci_service(name)?.list_secret_name()? {
+                let value = std::env::var(secret).unwrap();
+                cb(secret, &value)?;
             }
-        };
-        let r = BufReader::new(dotenv_file_content.as_bytes());
-        let re = Regex::new(r#"^([^=]+)=(.+)$"#).unwrap();
-        for read_result in r.lines() {
-            match read_result {
-                Ok(line) => match re.captures(&line) {
-                    Some(c) => {
-                        cb(
-                            c.get(1).map(|m| m.as_str()).unwrap(),
-                            c.get(2).map(|m| m.as_str()).unwrap().trim_matches('"')
-                        )?;
+        } else {
+            let dotenv_file_content = match &self.runtime.dotenv_path {
+                Some(dotenv_path) => match fs::metadata(dotenv_path) {
+                    Ok(_) => match fs::read_to_string(dotenv_path) {
+                        Ok(content) => content,
+                        Err(err) => return escalate!(Box::new(err))
                     },
-                    None => {},
+                    Err(_) => dotenv_path.to_string(),
                 },
-                Err(_) => {}
+                None => match dotenv() {
+                    Ok(dotenv_path) => match fs::read_to_string(dotenv_path) {
+                        Ok(content) => content,
+                        Err(err) => return escalate!(Box::new(err))
+                    },
+                    Err(err) => return escalate!(Box::new(err))
+                }
+            };
+            let r = BufReader::new(dotenv_file_content.as_bytes());
+            let re = Regex::new(r#"^([^=]+)=(.+)$"#).unwrap();
+            for read_result in r.lines() {
+                match read_result {
+                    Ok(line) => match re.captures(&line) {
+                        Some(c) => {
+                            cb(
+                                c.get(1).map(|m| m.as_str()).unwrap(),
+                                c.get(2).map(|m| m.as_str()).unwrap().trim_matches('"')
+                            )?;
+                        },
+                        None => {},
+                    },
+                    Err(_) => {}
+                }
             }
         }
         return Ok(())

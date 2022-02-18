@@ -74,10 +74,20 @@ pub struct PartialJobs {
     pub jobs: Vec<PartialJob>
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Deserialize)]
 struct RepositoryPublicKeyResponse {
     key: String,
     key_id: String,
+}
+
+#[derive(Deserialize)]
+struct RepositorySecret {
+    name: String
+}
+#[derive(Deserialize)]
+struct RepositorySecretsResponse {
+    // total_count: u64,
+    secrets: Vec<RepositorySecret>,
 }
 
 pub struct GhAction<S: shell::Shell = shell::Default> {
@@ -665,6 +675,26 @@ impl<S: shell::Shell> ci::CI for GhAction<S> {
             }
         };
         envs
+    }
+    fn list_secret_name(&self) -> Result<Vec<String>, Box<dyn Error>> {
+        let token = self.get_token()?;
+        let config = self.config.borrow();
+        let user_and_repo = config.vcs_service()?.user_and_repo()?;
+        let response = match serde_json::from_str::<RepositorySecretsResponse>(
+            &self.shell.exec(&vec![
+            "curl", &format!(
+                "https://api.github.com/repos/{}/{}/actions/secrets",
+                user_and_repo.0, user_and_repo.1
+            ),
+            "-H", &format!("Authorization: token {}", token),
+            "-H", "Accept: application/json"
+        ], shell::no_env(), shell::no_cwd(), &shell::capture())?) {
+            Ok(v) => v,
+            Err(e) => return escalate!(Box::new(e))
+        };
+        Ok(
+            response.secrets.iter().map(|s| s.name.clone()).collect()
+        )
     }
     fn set_secret(&self, key: &str, _: &str) -> Result<(), Box<dyn Error>> {
         let token = self.get_token()?;

@@ -42,6 +42,7 @@ pub trait CI : module::Module {
     fn run_job(&self, job: &RemoteJob) -> Result<String, Box<dyn Error>>;
     fn check_job_finished(&self, job_id: &str) -> Result<Option<String>, Box<dyn Error>>;
     fn set_secret(&self, key: &str, val: &str) -> Result<(), Box<dyn Error>>;
+    fn list_secret_name(&self) -> Result<Vec<String>, Box<dyn Error>>;
     fn job_env(&self) -> HashMap<&str, String>;
     fn dispatched_remote_job(&self) -> Result<Option<RemoteJob>, Box<dyn Error>>;
     fn set_job_output(&self, job_name: &str, kind: OutputKind, outputs: HashMap<&str, &str>) -> Result<(), Box<dyn Error>>;
