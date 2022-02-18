@@ -78,18 +78,18 @@ pub struct PartialJobs {
 
 #[derive(Deserialize)]
 struct RepositoryPublicKeyResponse {
-    key: String,
-    key_id: String,
+    pub key: String,
+    pub key_id: String,
 }
 
 #[derive(Deserialize)]
 struct RepositorySecret {
-    name: String
+    pub name: String
 }
 #[derive(Deserialize)]
 struct RepositorySecretsResponse {
     // total_count: u64,
-    secrets: Vec<RepositorySecret>,
+    pub secrets: Vec<RepositorySecret>,
 }
 
 pub struct GhAction<S: shell::Shell = shell::Default> {
