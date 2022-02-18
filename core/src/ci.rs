@@ -15,6 +15,7 @@ pub struct RemoteJob {
     pub envs: HashMap<String, String>,
     pub verbosity: u64,
     pub release_target: Option<String>,
+    pub workflow: Option<String>,
 }
 
 pub enum OutputKind {

@@ -431,11 +431,19 @@ impl RuntimeConfig {
                 }
             }
         };
+        let env_workflow_type = match std::env::var("DEPLO_CI_OVERWRITE_WORKFLOW") {
+            Ok(v) => if !v.is_empty() { 
+                Some(WorkflowType::from_str(&v))
+            } else {
+                None
+            },
+            Err(_) => None
+        };
         let workflow_type = match args.value_of("workflow-type") {
             Some(v) => Some(WorkflowType::from_str(v)),
-            None => match release_target {
-                // if release target is set, behave as deploy workflow.
-                Some(_) => Some(WorkflowType::Deploy),
+            None => match env_workflow_type {
+                // if DEPLO_CI_OVERWRITE_WORKFLOW is set, behave as deploy workflow.
+                Some(v) => Some(v),
                 None => {
                     let immc = config.borrow();
                     let vcs = immc.vcs_service()?;
@@ -901,7 +909,7 @@ impl Config {
                 }
             }
         }
-        return related_jobs
+        return related_jobs;
     }
     pub fn find_job<'a>(&'a self, name: &str) -> Option<&'a Job> {
         let tuple = match name.find("-").map(|i| name.split_at(i)).map(|(k, v)| (k, v.split_at(1).1)) {
@@ -962,13 +970,19 @@ impl Config {
                 name, cmd, options.commit.unwrap_or("")
             );
             let ci = self.ci_service_by_job(job)?;
+            let vcs = self.vcs_service()?;
+            let commit = match options.commit {
+                Some(c) => c.to_string(),
+                None => vcs.commit_hash(None)?
+            };
             return Ok(Some(ci.run_job(&ci::RemoteJob{
                 name: name.to_string(),
                 command: cmd.to_string(),
-                commit: options.commit.map(|s| s.to_string()),
+                commit: Some(commit),
                 envs: options.adhoc_envs.to_owned(),
                 verbosity: self.runtime.verbosity,
                 release_target: self.runtime.release_target.clone(),
+                workflow: self.runtime.workflow_type.map(|w| w.as_str().to_string()),
             })?));
         }
         let mut system = SystemJobEnvOptions{
@@ -1041,13 +1055,19 @@ impl Config {
                     // runner os is not linux and not same as current os, and no fallback container specified.
                     // need to run in CI.
                     let ci = self.ci_service_by_job(job)?;
+                    let vcs = self.vcs_service()?;
+                    let commit = match options.commit {
+                        Some(c) => c.to_string(),
+                        None => vcs.commit_hash(None)?
+                    };        
                     return Ok(Some(ci.run_job(&ci::RemoteJob{
                         name: name.to_string(),
                         command: cmd.to_string(),
-                        commit: options.commit.map(|s| s.to_string()),
+                        commit: Some(commit),
                         envs: hashmap!{},
                         verbosity: self.runtime.verbosity,
                         release_target: self.runtime.release_target.clone(),
+                        workflow: self.runtime.workflow_type.map(|w| w.as_str().to_string()),
                     })?));
                 }
             },

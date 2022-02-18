@@ -33,6 +33,7 @@ pub struct ClientPayload {
     pub verbosity: u64,
     pub job_id: String,
     pub release_target: Option<String>,
+    pub workflow: Option<String>,
 }
 impl ClientPayload {
     fn new(
@@ -50,6 +51,7 @@ impl ClientPayload {
             verbosity: src.verbosity,
             job_id: randombytes_as_string!(ID_SIZE),
             release_target: src.release_target.clone(),
+            workflow: src.workflow.clone(),
         }
     }
 }
