@@ -25,6 +25,8 @@ pub const DEPLO_VERSION: &'static str = env!("DEPLO_RELEASE_VERSION");
 pub const DEPLO_RELEASE_URL_BASE: &'static str = "https://github.com/suntomi/deplo/releases/download";
 pub const DEPLO_REMOTE_JOB_EVENT_TYPE: &'static str = "deplo-run-remote-job";
 pub const DEPLO_VCS_TEMPORARY_WORKSPACE_NAME: &'static str = "deplo-tmp-workspace";
+pub const DEPLO_JOB_OUTPUT_TEMPORARY_FILE: &'static str = "deplo-tmp-job-output.json";
+pub const DEPLO_SYSTEM_OUTPUT_COMMIT_BRANCH_NAME: &'static str = "COMMIT_BRANCH";
 
 pub fn cli_download_url(os: RunnerOS, version: &str) -> String {
     return format!("{}/{}/deplo-{}", DEPLO_RELEASE_URL_BASE, version, os.cli_download_postfix());
@@ -123,6 +125,19 @@ impl fmt::Display for Command {
         }
     }
 }
+#[derive(Serialize, Deserialize)]
+pub struct Commits {
+    pub patterns: Vec<String>,
+    pub log_format: Option<String>,
+    pub push: Option<bool>,
+}
+impl Commits {
+    fn generate_commit_log(&self, name: &str, _: &Job) -> String {
+        self.log_format.as_ref().unwrap_or(
+            &format!("[deplo] update by job {job_name}", job_name = name)
+        ).to_string()
+    }
+}
 pub struct JobRunningOptions<'a> {
     pub remote: bool,
     pub adhoc_envs: HashMap<String, String>,
@@ -142,7 +157,7 @@ pub struct Job {
     pub checkout: Option<HashMap<String, String>>,
     pub caches: Option<HashMap<String, Cache>>,
     pub depends: Option<Vec<String>>,
-    pub commits: Option<Vec<String>>,
+    pub commits: Option<Commits>,
     pub options: Option<HashMap<String, String>>,
     pub tasks: Option<HashMap<String, String>>,
     pub local_fallback: Option<FallbackContainer>,
@@ -960,6 +975,7 @@ impl Config {
                         cmd, &job.shell, self.job_env(&job, &paths, &options.adhoc_envs)?, 
                         &job.workdir, &options.shell_settings
                     )?;
+                    self.post_run_job(name, &job)?;
                 } else {
                     log::debug!("runner os is different from current os {} {}", os, current_os);
                     match local_fallback {
@@ -974,7 +990,8 @@ impl Config {
                                     log::info!("generate fallback docker image {} from {}", local_image, path);
                                     let p = Path::new(path);
                                     shell.exec(
-                                        &vec!["docker", "build", 
+                                        &vec![
+                                            "docker", "build", 
                                             "-t", &local_image, 
                                             "-f", p.file_name().unwrap().to_str().unwrap(),
                                             "."
@@ -998,6 +1015,7 @@ impl Config {
                                     path.as_str() => "/usr/local/bin/deplo"
                                 }, &options.shell_settings
                             )?;
+                            self.post_run_job(name, &job)?;
                             return Ok(None);
                         },
                         None => ()
@@ -1034,10 +1052,74 @@ impl Config {
                         }, &options.shell_settings
                     )?;
                 }
+                self.post_run_job(name, &job)?;
             }
         }
         Ok(None)
-    }    
+    }
+    pub fn post_run_job(&self, job_name: &str, job: &Job) -> Result<(), Box<dyn Error>> {
+        let mut system_outputs = hashmap!{};
+        match job.commits {
+            Some(ref commits) => {
+                let vcs = self.vcs_service()?;
+                match vcs.current_ref()? {
+                    (vcs::RefType::Branch, _) => {
+                        let branch_name = format!("deplo-auto-commits-{}-tmp-{}", std::env::var("DEPLO_CI_ID").unwrap(), job_name);
+                        if vcs.push_diff(
+                            &branch_name, &commits.generate_commit_log(job_name, &job),
+                            &commits.patterns.iter().map(AsRef::as_ref).collect::<Vec<&str>>(),
+                            &hashmap!{}
+                        )? {
+                            system_outputs.insert(DEPLO_SYSTEM_OUTPUT_COMMIT_BRANCH_NAME, branch_name);
+                        }
+                    },
+                    (ty, b) => {
+                        log::warn!("current ref is not a branch ({}/{}), skip auto commit", ty, b);
+                    }
+                }
+            },
+            None => {}
+        };
+        let ci = self.ci_service_by_job_name(job_name)?;
+        if system_outputs.len() > 0 {
+            ci.set_job_output(
+                job_name, ci::OutputKind::System, 
+                system_outputs.iter().map(|(k,v)| (*k, v.as_str())).collect()
+            )?;
+            ci.mark_need_cleanup(job_name)?;
+        }
+        match fs::read(Path::new(DEPLO_JOB_OUTPUT_TEMPORARY_FILE)) {
+            Ok(b) => {
+                let outputs = serde_json::from_slice::<HashMap<&str, &str>>(&b)?;
+                ci.set_job_output(job_name, ci::OutputKind::User, outputs)?;
+            },
+            Err(_) => {}
+        }
+        Ok(())
+    }
+    pub fn job_output_ctrl(&self, job_name: &str, key: &str, value: Option<&str>) -> Result<Option<String>, Box<dyn Error>> {
+        let ci = self.ci_service_by_job_name(job_name)?;
+        match value {
+            Some(v) => {
+                match fs::read(Path::new(DEPLO_JOB_OUTPUT_TEMPORARY_FILE)) {
+                    Ok(b) => {
+                        let mut outputs = serde_json::from_slice::<HashMap<&str, &str>>(&b)?;
+                        outputs.insert(key, v);
+                        fs::write(DEPLO_JOB_OUTPUT_TEMPORARY_FILE, serde_json::to_string(&outputs)?)?;
+                    },
+                    Err(_) => {
+                        fs::write(DEPLO_JOB_OUTPUT_TEMPORARY_FILE, serde_json::to_string(&hashmap!{ key => v })?)?;
+                    }
+                };
+                Ok(None)
+            },
+            None => ci.job_output(job_name, ci::OutputKind::User, key)
+        }
+    }
+    pub fn system_output(&self, job_name: &str, key: &str) -> Result<Option<String>, Box<dyn Error>> {
+        let ci = self.ci_service_by_job_name(job_name)?;
+        ci.job_output(job_name, ci::OutputKind::System, key)
+    }
     pub fn is_main_ci(&self, ci_type: &str) -> bool {
         // default always should exist
         return self.ci.accounts.get("default").unwrap().type_matched(ci_type);

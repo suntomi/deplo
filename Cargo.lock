@@ -101,6 +101,7 @@ dependencies = [
  "core",
  "glob",
  "log",
+ "maplit",
  "serde",
  "serde_json",
  "simple_logger",

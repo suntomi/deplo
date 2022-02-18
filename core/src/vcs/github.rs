@@ -229,6 +229,9 @@ impl<GIT: (git::GitFeatures) + (git::GitHubFeatures), S: shell::Shell> vcs::VCS 
     fn current_ref(&self) -> Result<(vcs::RefType, String), Box<dyn Error>> {
         self.git.current_ref()
     }
+    fn delete_branch(&self, branch_name: &str) -> Result<(), Box<dyn Error>> {
+        self.git.delete_branch(&self.push_url()?, branch_name)
+    }
     fn checkout(&self, commit: &str, branch_name: Option<&str>) -> Result<(), Box<dyn Error>> {
         self.git.checkout(commit, branch_name)
     }
@@ -237,11 +240,6 @@ impl<GIT: (git::GitFeatures) + (git::GitHubFeatures), S: shell::Shell> vcs::VCS 
     }
     fn repository_root(&self) -> Result<String, Box<dyn Error>> {
         self.git.repository_root()
-    }
-    fn push(
-        &self, branch: &str, msg: &str, patterns: &Vec<&str>, options: &HashMap<&str, &str>
-    ) -> Result<bool, Box<dyn Error>> {
-        self.git.push(&self.push_url()?, branch, msg, patterns, options)
     }
     fn pr(
         &self, title: &str, head_branch: &str, base_branch: &str, options: &HashMap<&str, &str>
@@ -269,6 +267,19 @@ impl<GIT: (git::GitFeatures) + (git::GitHubFeatures), S: shell::Shell> vcs::VCS 
             }))
         };
         Ok(user_and_repo)
+    }
+    fn pick_ref(&self, ref_spec: &str) -> Result<(), Box<dyn Error>> {
+        self.git.cherry_pick(ref_spec)
+    }
+    fn push(
+        &self, remote_branch: &str, local_ref: &str, option: &HashMap<&str, &str>
+    ) -> Result<(), Box<dyn Error>> {
+        self.git.push(&self.push_url()?, remote_branch, local_ref, option)
+    }
+    fn push_diff(
+        &self, branch: &str, msg: &str, patterns: &Vec<&str>, options: &HashMap<&str, &str>
+    ) -> Result<bool, Box<dyn Error>> {
+        self.git.push_diff(&self.push_url()?, branch, msg, patterns, options)
     }
     fn make_diff(&self) -> Result<String, Box<dyn Error>> {
         let diff = match self.git.current_ref()? {

@@ -5,6 +5,7 @@ use std::thread::sleep;
 use std::time::Duration;
 
 use log;
+use maplit::hashmap;
 
 use core::config;
 use core::shell;
@@ -18,7 +19,7 @@ pub struct CI<S: shell::Shell = shell::Default> {
     pub shell: S
 }
 impl<S: shell::Shell> CI<S> {    
-    fn kick<A: args::Args>(&self, _: &A) -> Result<(), Box<dyn Error>> {
+    fn kick<A: args::Args>(&self, args: &A) -> Result<(), Box<dyn Error>> {
         log::debug!("kick command invoked");
         // init diff data on the fly
         let diff = {
@@ -67,7 +68,10 @@ impl<S: shell::Shell> CI<S> {
                     continue;
                 }
                 log::debug!("========== invoking {}, pattern [{}] ==========", full_name, job.patterns.join(", "));
-                ci.mark_job_executed(&full_name)?;
+                match ci.mark_job_executed(&full_name)? {
+                    Some(job_id) => self.wait_job(args, full_name, &job_id)?,
+                    None => {}
+                }
             } else {
                 log::debug!("========== not invoking {}, pattern [{}] ==========", full_name, job.patterns.join(", "));
             }
@@ -95,6 +99,63 @@ impl<S: shell::Shell> CI<S> {
             None => {}
         };
         return Ok(())
+    }
+    fn fin<A: args::Args>(&self, _: &A) -> Result<(), Box<dyn Error>> {
+        let config = self.config.borrow();
+        let vcs = config.vcs_service()?;
+        let mut pushes = vec![];
+        let mut prs = vec![];
+        let push_opts = hashmap!{ "lfs" => "on" };
+        for (name, job) in config.enumerate_jobs() {
+            let job_name = format!("{}-{}", name.0, name.1);
+            match config.system_output(&job_name, config::DEPLO_SYSTEM_OUTPUT_COMMIT_BRANCH_NAME)? {
+                Some(v) => {
+                    log::info!("ci fin: find commit from job {} at {}", job_name, v);
+                    if job.commits.as_ref().unwrap().push.unwrap_or(false) {
+                        pushes.push(v);
+                    } else {
+                        prs.push(v);
+                    }
+                },
+                None => {}
+            };
+        }
+        let job_id = std::env::var("DEPLO_CI_ID").unwrap();
+        let current_branch = std::env::var("DEPLO_CI_BRANCH_NAME").unwrap();
+        let current_ref = std::env::var("DEPLO_CI_CURRENT_SHA").unwrap();
+        for (ty,branches) in hashmap!{
+            "pr" => prs,
+            "push" => pushes
+        } {
+            let working_branch = &format!("deplo-auto-commits-{}-{}", job_id, ty);
+            vcs.checkout(&current_ref, Some(working_branch))?;
+            if branches.len() > 0 {
+                for b in &branches {
+                    // HEAD of branch b will be picked
+                    vcs.pick_ref(b)?;
+                }
+                match ty {
+                    "pr" => {
+                        vcs.push(&working_branch, &working_branch, &push_opts)?;
+                        vcs.pr(
+                            &format!("[deplo] auto commit by job [{}]", job_id), 
+                            &working_branch, &current_branch, &hashmap!{}
+                        )?;
+                    },
+                    "push" => {
+                        vcs.push(&working_branch, &current_branch, &push_opts)?;
+                        vcs.delete_branch(&working_branch)?;
+                    },
+                    &_ => {
+                        panic!("invalid commit type: {}", ty);
+                    }
+                }
+                for b in &branches {
+                    vcs.delete_branch(b)?;
+                }
+            }
+        }
+        Ok(())
     }
 
     // helpers
@@ -180,6 +241,15 @@ impl<S: shell::Shell> CI<S> {
                 }
             },
             Some(("wait", subargs)) => Ok(Some(subargs.value_of("job_id").unwrap().to_string())),
+            Some(("output", subargs)) => {
+                let key = subargs.value_of("key").unwrap();
+                let value = subargs.value_of("value");
+                match config.job_output_ctrl(job_name, key, value)? {
+                    Some(v) => println!("{}", v),
+                    None => {}
+                };
+                Ok(None)
+            },
             Some((name, _)) => return escalate!(args.error(&format!("no such subcommand: [{}]", name))),
             None => {
                 config.run_job_by_name(&self.shell, &job_name, match command {
@@ -243,6 +313,7 @@ impl<S: shell::Shell, A: args::Args> command::Command<A> for CI<S> {
             Some(("setenv", subargs)) => return self.setenv(&subargs),
             Some(("deploy", subargs)) => return self.exec("deploy", &subargs),
             Some(("integrate", subargs)) => return self.exec("integrate", &subargs),
+            Some(("fin", subargs)) => return self.fin(&subargs),
             Some((name, _)) => return escalate!(args.error(
                 &format!("no such subcommand: [{}]", name) 
             )),

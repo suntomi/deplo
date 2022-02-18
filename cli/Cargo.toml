@@ -9,6 +9,7 @@ edition = "2021"
 core = { path = "../core" }
 glob = "0.3.0"
 log = "0.4.8"
+maplit = "1.0.2"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 simple_logger = "1.6.0"

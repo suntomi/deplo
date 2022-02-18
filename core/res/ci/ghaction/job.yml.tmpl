@@ -3,9 +3,12 @@
   if: ${{{{ needs.deplo-main.outputs.{full_name} && !failure() }}}}
   name: Running job {full_name}
   runs-on: {machine}
+{job_envs:>2}
 {container:>2}
   outputs:
     need-cleanup: ${{{{ steps.deplo-{kind}-{name}.outputs.need-cleanup }}}}
+    system: ${{{{ steps.deplo-{kind}-{name}.outputs.system }}}}
+    user: ${{{{ steps.deplo-{kind}-{name}.outputs.user }}}}
   steps:
 {fetchcli:>4}
 {checkout:>4}

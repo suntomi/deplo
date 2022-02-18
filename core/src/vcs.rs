@@ -32,13 +32,15 @@ pub trait VCS : module::Module {
     fn new(config: &config::Container) -> Result<Self, Box<dyn Error>> where Self : Sized;
     fn release_target(&self) -> Option<String>;
     fn current_ref(&self) -> Result<(RefType, String), Box<dyn Error>>;
+    fn delete_branch(&self, branch_name: &str) -> Result<(), Box<dyn Error>>;
     fn commit_hash(&self, expr: Option<&str>) -> Result<String, Box<dyn Error>>;
     fn checkout(&self, commit: &str, branch_name: Option<&str>) -> Result<(), Box<dyn Error>>;
     fn repository_root(&self) -> Result<String, Box<dyn Error>>;
     fn rebase_with_remote_counterpart(&self, branch: &str) -> Result<(), Box<dyn Error>>;
+    fn pick_ref(&self, target: &str) -> Result<(), Box<dyn Error>>;
     fn push(
-        &self, remote_branch: &str, msg: &str, patterns: &Vec<&str>, option: &HashMap<&str, &str>
-    ) -> Result<bool, Box<dyn Error>>;
+        &self, remote_branch: &str, local_ref: &str, option: &HashMap<&str, &str>
+    ) -> Result<(), Box<dyn Error>>;
     fn pr(
         &self, title: &str, head_branch: &str, base_branch: &str, option: &HashMap<&str, &str>
     ) -> Result<(), Box<dyn Error>>;
@@ -51,7 +53,10 @@ pub trait VCS : module::Module {
         &self, target_ref: (&str, bool), asset_file_path: &str, opts: &JsonValue
     ) -> Result<String, Box<dyn Error>>;
     fn make_diff(&self) -> Result<String, Box<dyn Error>>;
-    fn init_diff(&mut self, diff: String) -> Result<(), Box<dyn Error>>; 
+    fn init_diff(&mut self, diff: String) -> Result<(), Box<dyn Error>>;
+    fn push_diff(
+        &self, remote_branch: &str, msg: &str, patterns: &Vec<&str>, option: &HashMap<&str, &str>
+    ) -> Result<bool, Box<dyn Error>>;
     fn diff<'b>(&'b self) -> &'b Vec<String>;
     fn changed<'b>(&'b self, patterns: &Vec<&str>) -> bool {
         let difflines = self.diff();

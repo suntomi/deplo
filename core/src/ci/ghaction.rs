@@ -87,6 +87,12 @@ pub struct GhAction<S: shell::Shell = shell::Default> {
 }
 
 impl<S: shell::Shell> GhAction<S> {
+    fn job_output_env_name(kind: ci::OutputKind, job_name: &str) -> String {
+        format!(
+            "DEPLO_CI_{}_{}_OUTPUT", 
+            kind.to_str().to_uppercase(), job_name.replace("-", "_").to_uppercase()
+        )
+    }
     fn generate_entrypoint<'a>(&self, config: &'a config::Config) -> Vec<String> {
         // get target branch
         let target_branches = sorted_key_iter(&config.common.release_targets)
@@ -120,6 +126,25 @@ impl<S: shell::Shell> GhAction<S> {
         sorted_key_iter(jobs).map(|(v,_)| {
             format!("needs.{kind}-{name}.outputs.need-cleanup", kind = v.0, name = v.1)
         }).collect::<Vec<String>>().join(" || ")
+    }
+    fn generate_cleanup_envs<'a>(&self, jobs: &HashMap<(&'a str, &'a str), &'a config::Job>) -> Vec<String> {
+        let envs = sorted_key_iter(jobs).map(|(v,_)| {
+            let job_name = format!("{kind}-{name}", kind = v.0, name = v.1);
+            format!("{env_name}: ${{{{ needs.{job_name}.outputs.system }}}}",
+                env_name = Self::job_output_env_name(ci::OutputKind::System, &job_name),
+                job_name = job_name
+            )
+        }).collect::<Vec<String>>();
+        if envs.len() > 0 {
+            format!(include_str!("../../res/ci/ghaction/envs.yml.tmpl"),
+                envs = MultilineFormatString{
+                    strings: &envs,
+                    postfix: None
+                }
+            ).split("\n").map(|s| s.to_string()).collect()
+        } else {
+            vec![]
+        }
     }
     fn generate_debugger(&self, job: Option<&config::Job>, config: &config::Config) -> Vec<String> {
         let sudo = match job {
@@ -192,6 +217,28 @@ impl<S: shell::Shell> GhAction<S> {
         format!(include_str!("../../res/ci/ghaction/rawexec.yml.tmpl"),
             scripts = MultilineFormatString{
                 strings: &job.command.split("\n").map(|s| s.to_string()).collect(),
+                postfix: None
+            }
+        ).split("\n").map(|s| s.to_string()).collect()
+    }
+    fn generate_job_envs<'a>(&self, names: &(&str, &str), job: &'a config::Job) -> Vec<String> {
+        let lines = match job.depends {
+            Some(ref depends) => {
+                let mut envs = vec![];
+                for d in depends {
+                    envs.push(format!(
+                        "{}: needs.{}-{}.outputs.user",
+                        Self::job_output_env_name(ci::OutputKind::User, &format!("{}-{}", names.0, d)),
+                        names.0, d
+                    ));
+                }
+                envs
+            },
+            None => return vec![]
+        };
+        format!(include_str!("../../res/ci/ghaction/envs.yml.tmpl"),
+            envs = MultilineFormatString{
+                strings: &lines,
                 postfix: None
             }
         ).split("\n").map(|s| s.to_string()).collect()
@@ -343,6 +390,10 @@ impl<'a, S: shell::Shell> module::Module for GhAction<S> {
                     strings: &self.generate_command(&names, &job),
                     postfix: None
                 },
+                job_envs = MultilineFormatString{
+                    strings: &self.generate_job_envs(&names, &job),
+                    postfix: None
+                },
                 container = MultilineFormatString{
                     strings: &self.generate_container_setting(&job.runner),
                     postfix: None
@@ -403,6 +454,10 @@ impl<'a, S: shell::Shell> module::Module for GhAction<S> {
                     postfix: None
                 },
                 need_cleanups = &self.generate_need_cleanups(&jobs),
+                cleanup_envs = MultilineFormatString{
+                    strings: &self.generate_cleanup_envs(&jobs),
+                    postfix: None
+                },
                 needs = format!("\"{}\"", all_job_names.join("\",\""))
             )
         )?;
@@ -444,18 +499,18 @@ impl<S: shell::Shell> ci::CI for GhAction<S> {
             }
         }
     }
-    fn mark_job_executed(&self, job_name: &str) -> Result<(), Box<dyn Error>> {
+    fn mark_job_executed(&self, job_name: &str) -> Result<Option<String>, Box<dyn Error>> {
         if config::Config::is_running_on_ci() {
             println!("::set-output name={}::true", job_name);
+            Ok(None)
         } else {
             self.config.borrow().run_job_by_name(
                 &self.shell, job_name, config::Command::Job, &config::JobRunningOptions {
                     commit: None, remote: false, shell_settings: shell::no_capture(),
                     adhoc_envs: hashmap!{},
                 }
-            )?;
+            )
         }
-        Ok(())
     }
     fn mark_need_cleanup(&self, job_name: &str) -> Result<(), Box<dyn Error>> {
         if config::Config::is_running_on_ci() {
@@ -540,8 +595,8 @@ impl<S: shell::Shell> ci::CI for GhAction<S> {
         let token = self.get_token()?;
         let user_and_repo = config.vcs_service()?.user_and_repo()?;
         let response = self.shell.exec(&vec![
-            "curl", "-H", &format!("Authorization: token {}", token), 
-            "-H", "Accept: application/vnd.github.v3+json", 
+            "curl", "-H", &format!("Authorization: token {}", token),
+            "-H", "Accept: application/vnd.github.v3+json",
             &format!(
                 "https://api.github.com/repos/{}/{}/actions/runs/{}",
                 user_and_repo.0, user_and_repo.1, job_id
@@ -552,6 +607,29 @@ impl<S: shell::Shell> ci::CI for GhAction<S> {
             return Ok(None);
         }
         return Ok(Some(parsed.status));
+    }
+    fn job_output(&self, job_name: &str, kind: ci::OutputKind, key: &str) -> Result<Option<String>, Box<dyn Error>> {
+        match std::env::var(&Self::job_output_env_name(kind, job_name)) {
+            Ok(value) => {
+                if value.is_empty() {
+                    return Ok(None);
+                }
+                match serde_json::from_str::<HashMap<String, String>>(&value)?.get(key) {
+                    Some(value) => Ok(Some(value.to_string())),
+                    None => Ok(None),
+                }
+            },
+            Err(_) => Ok(None)
+        }
+    }
+    fn set_job_output(&self, job_name: &str, kind: ci::OutputKind, outputs: HashMap<&str, &str>) -> Result<(), Box<dyn Error>> {
+        let text = serde_json::to_string(&outputs)?;
+        if config::Config::is_running_on_ci() {
+            println!("::set-output name={}::{}", kind.to_str(), text);
+        } else {
+            std::env::set_var(&Self::job_output_env_name(kind, job_name), &text);
+        }
+        Ok(())
     }
     fn job_env(&self) -> HashMap<&str, String> {
         let config = self.config.borrow();
