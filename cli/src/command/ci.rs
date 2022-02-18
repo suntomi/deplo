@@ -84,6 +84,14 @@ impl<S: shell::Shell> CI<S> {
         let ci = config.ci_service(account_name)?;
         config.parse_dotenv(|k,v| ci.set_secret(k, v))
     }
+    fn set_output<A: args::Args>(&self, args: &A) -> Result<(), Box<dyn Error>> {
+        let config = self.config.borrow();
+        let key = args.value_of("key").unwrap();
+        let value = args.value_of("value").unwrap();
+        let job_name = std::env::var("DEPLO_CI_CURRENT_JOB_NAME").unwrap();
+        config.job_output_ctrl(&job_name, key, Some(value))?;
+        Ok(())
+}
     fn exec<A: args::Args>(&self, kind: &str, args: &A) -> Result<(), Box<dyn Error>> {
         let job_name = &format!("{}-{}", kind, args.value_of("name").unwrap());
         match self.exec_job(args, job_name)? {
@@ -311,6 +319,7 @@ impl<S: shell::Shell, A: args::Args> command::Command<A> for CI<S> {
         match args.subcommand() {
             Some(("kick", subargs)) => return self.kick(&subargs),
             Some(("setenv", subargs)) => return self.setenv(&subargs),
+            Some(("set-output", subargs)) => return self.set_output(&subargs),
             Some(("deploy", subargs)) => return self.exec("deploy", &subargs),
             Some(("integrate", subargs)) => return self.exec("integrate", &subargs),
             Some(("fin", subargs)) => return self.fin(&subargs),

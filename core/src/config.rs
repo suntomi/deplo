@@ -144,6 +144,10 @@ pub struct JobRunningOptions<'a> {
     pub shell_settings: shell::Settings,
     pub commit: Option<&'a str>,
 }
+pub struct SystemJobEnvOptions {
+    pub paths: Option<Vec<String>>,
+    pub job_name: String,
+}
 #[derive(Serialize, Deserialize)]
 pub struct Job {
     pub account: Option<String>,
@@ -175,12 +179,13 @@ impl Job {
             Runner::Container{ image: _ } => false
         }
     }
-    pub fn job_env<'a>(&'a self, config: &'a Config, paths: &Option<Vec<String>>) -> HashMap<&'a str, String> {
+    pub fn job_env<'a>(&'a self, config: &'a Config, system: &SystemJobEnvOptions) -> HashMap<&'a str, String> {
         let ci = config.ci_service_by_job(&self).unwrap();
         let env = ci.job_env();
         let mut common_envs = hashmap!{
             "DEPLO_CLI_GIT_HASH" => DEPLO_GIT_HASH.to_string(),
             "DEPLO_CLI_VERSION" => DEPLO_VERSION.to_string(),
+            "DEPLO_CI_CURRENT_JOB_NAME" => system.job_name.clone()
         };
         match config.runtime.release_target {
             Some(ref v) => {
@@ -192,7 +197,7 @@ impl Job {
                 log::info!("job_env: no release target: {}/{}", ref_type, ref_path);
             }
         };
-        match paths {
+        match system.paths {
             Some(ref paths) => {
                 // modify path
                 let mut paths = paths.clone();
@@ -263,12 +268,6 @@ impl WorkflowType {
             Self::Integrate => "integrate",
         }
     }
-}
-#[derive(Serialize, Deserialize)]
-pub struct WorkflowConfig {
-    // we call workflow as combination of jobs
-    pub integrate: HashMap<String, Job>,
-    pub deploy: HashMap<String, Job>,
 }
 #[derive(Serialize, Deserialize)]
 #[serde(tag = "type")]
@@ -788,7 +787,7 @@ impl Config {
         } 
     }
     pub fn job_env(
-        &self, job: &Job, paths: &Option<Vec<String>>,
+        &self, job: &Job, system: &SystemJobEnvOptions,
         adhoc: &HashMap<String, String>
     ) -> Result<HashMap<String, String>, Box<dyn Error>> {
         let mut inherits: HashMap<String, String> = if Self::is_running_on_ci() {
@@ -801,7 +800,7 @@ impl Config {
             })?;
             inherits_from_dotenv
         };
-        for (k, v) in job.job_env(self, paths) {
+        for (k, v) in job.job_env(self, system) {
             inherits.insert(k.to_string(), v.to_string());
         }
         for (k, v) in adhoc {
@@ -957,11 +956,15 @@ impl Config {
                 release_target: self.runtime.release_target.clone(),
             })?));
         }
+        let mut system = SystemJobEnvOptions{
+            paths: None,
+            job_name: name.to_string(),
+        };
         match job.runner {
             Runner::Machine{image:_, os, ref local_fallback, class:_} => {
                 let current_os = shell.detect_os()?;
                 if os == current_os {
-                    let paths = if !Self::is_running_on_ci() {
+                    system.paths = if !Self::is_running_on_ci() {
                         let cli_parent_dir = self.deplo_cli_download(
                             os, shell
                         )?.parent().unwrap().to_string_lossy().to_string();
@@ -972,7 +975,7 @@ impl Config {
                     self.adjust_commit_hash(&options.commit)?;
                     // run command directly here, add path to locally downloaded cli.
                     shell.eval(
-                        cmd, &job.shell, self.job_env(&job, &paths, &options.adhoc_envs)?, 
+                        cmd, &job.shell, self.job_env(&job, &system, &options.adhoc_envs)?, 
                         &job.workdir, &options.shell_settings
                     )?;
                     self.post_run_job(name, &job)?;
@@ -1010,7 +1013,7 @@ impl Config {
                             // running on host. run command in container `image` with docker
                             shell.eval_on_container(
                                 &image, cmd, &shell_cmd, 
-                                self.job_env(&job, &None, &options.adhoc_envs)?, 
+                                self.job_env(&job, &system, &options.adhoc_envs)?, 
                                 &job.workdir, &hashmap!{
                                     path.as_str() => "/usr/local/bin/deplo"
                                 }, &options.shell_settings
@@ -1038,7 +1041,7 @@ impl Config {
                 if Self::is_running_on_ci() {
                     // already run inside container `image`, run command directly here
                     shell.eval(
-                        cmd, &job.shell, self.job_env(&job, &None, &options.adhoc_envs)?,
+                        cmd, &job.shell, self.job_env(&job, &system, &options.adhoc_envs)?,
                         &job.workdir, &options.shell_settings
                     )?;
                 } else {
@@ -1046,7 +1049,7 @@ impl Config {
                     let path = &self.deplo_cli_download(os, shell)?.to_string_lossy().to_string();
                     // running on host. run command in container `image` with docker
                     shell.eval_on_container(
-                        image, cmd, &job.shell, self.job_env(&job, &None, &options.adhoc_envs)?,
+                        image, cmd, &job.shell, self.job_env(&job, &system, &options.adhoc_envs)?,
                         &job.workdir, &hashmap!{
                             path.as_str() => "/usr/local/bin/deplo"
                         }, &options.shell_settings
