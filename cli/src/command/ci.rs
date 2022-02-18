@@ -5,6 +5,7 @@ use std::thread::sleep;
 use std::time::Duration;
 
 use log;
+use maplit::hashmap;
 
 use core::config;
 use core::shell;
@@ -18,7 +19,7 @@ pub struct CI<S: shell::Shell = shell::Default> {
     pub shell: S
 }
 impl<S: shell::Shell> CI<S> {    
-    fn kick<A: args::Args>(&self, _: &A) -> Result<(), Box<dyn Error>> {
+    fn kick<A: args::Args>(&self, args: &A) -> Result<(), Box<dyn Error>> {
         log::debug!("kick command invoked");
         // init diff data on the fly
         let diff = {
@@ -67,10 +68,17 @@ impl<S: shell::Shell> CI<S> {
                     continue;
                 }
                 log::debug!("========== invoking {}, pattern [{}] ==========", full_name, job.patterns.join(", "));
-                ci.mark_job_executed(&full_name)?;
+                match ci.mark_job_executed(&full_name)? {
+                    Some(job_id) => self.wait_job(args, full_name, &job_id)?,
+                    None => {}
+                }
             } else {
                 log::debug!("========== not invoking {}, pattern [{}] ==========", full_name, job.patterns.join(", "));
             }
+        }
+        if !config::Config::is_running_on_ci() {
+            log::debug!("if not running on CI, all jobs should be finished");
+            self.fin(args)?;
         }
         Ok(())
     }
@@ -80,6 +88,14 @@ impl<S: shell::Shell> CI<S> {
         let ci = config.ci_service(account_name)?;
         config.parse_dotenv(|k,v| ci.set_secret(k, v))
     }
+    fn set_output<A: args::Args>(&self, args: &A) -> Result<(), Box<dyn Error>> {
+        let config = self.config.borrow();
+        let key = args.value_of("key").unwrap();
+        let value = args.value_of("value").unwrap();
+        let job_name = std::env::var("DEPLO_CI_CURRENT_JOB_NAME").unwrap();
+        config.job_output_ctrl(&job_name, key, Some(value))?;
+        Ok(())
+}
     fn exec<A: args::Args>(&self, kind: &str, args: &A) -> Result<(), Box<dyn Error>> {
         let job_name = &format!("{}-{}", kind, args.value_of("name").unwrap());
         match self.exec_job(args, job_name)? {
@@ -95,6 +111,63 @@ impl<S: shell::Shell> CI<S> {
             None => {}
         };
         return Ok(())
+    }
+    fn fin<A: args::Args>(&self, _: &A) -> Result<(), Box<dyn Error>> {
+        let config = self.config.borrow();
+        let vcs = config.vcs_service()?;
+        let mut pushes = vec![];
+        let mut prs = vec![];
+        let push_opts = hashmap!{ "lfs" => "on" };
+        for (name, job) in config.enumerate_jobs() {
+            let job_name = format!("{}-{}", name.0, name.1);
+            match config.system_output(&job_name, config::DEPLO_SYSTEM_OUTPUT_COMMIT_BRANCH_NAME)? {
+                Some(v) => {
+                    log::info!("ci fin: find commit from job {} at {}", job_name, v);
+                    if job.commits.as_ref().unwrap().push.unwrap_or(false) {
+                        pushes.push(v);
+                    } else {
+                        prs.push(v);
+                    }
+                },
+                None => {}
+            };
+        }
+        let job_id = std::env::var("DEPLO_CI_ID").unwrap();
+        let current_branch = std::env::var("DEPLO_CI_BRANCH_NAME").unwrap();
+        let current_ref = std::env::var("DEPLO_CI_CURRENT_SHA").unwrap();
+        for (ty,branches) in hashmap!{
+            "pr" => prs,
+            "push" => pushes
+        } {
+            let working_branch = &format!("deplo-auto-commits-{}-{}", job_id, ty);
+            vcs.checkout(&current_ref, Some(working_branch))?;
+            if branches.len() > 0 {
+                for b in &branches {
+                    // HEAD of branch b will be picked
+                    vcs.pick_ref(b)?;
+                }
+                match ty {
+                    "pr" => {
+                        vcs.push(&working_branch, &working_branch, &push_opts)?;
+                        vcs.pr(
+                            &format!("[deplo] auto commit by job [{}]", job_id), 
+                            &working_branch, &current_branch, &hashmap!{}
+                        )?;
+                    },
+                    "push" => {
+                        vcs.push(&working_branch, &current_branch, &push_opts)?;
+                        vcs.delete_branch(&working_branch)?;
+                    },
+                    &_ => {
+                        panic!("invalid commit type: {}", ty);
+                    }
+                }
+                for b in &branches {
+                    vcs.delete_branch(b)?;
+                }
+            }
+        }
+        Ok(())
     }
 
     // helpers
@@ -180,6 +253,15 @@ impl<S: shell::Shell> CI<S> {
                 }
             },
             Some(("wait", subargs)) => Ok(Some(subargs.value_of("job_id").unwrap().to_string())),
+            Some(("output", subargs)) => {
+                let key = subargs.value_of("key").unwrap();
+                let value = subargs.value_of("value");
+                match config.job_output_ctrl(job_name, key, value)? {
+                    Some(v) => println!("{}", v),
+                    None => {}
+                };
+                Ok(None)
+            },
             Some((name, _)) => return escalate!(args.error(&format!("no such subcommand: [{}]", name))),
             None => {
                 config.run_job_by_name(&self.shell, &job_name, match command {
@@ -241,8 +323,10 @@ impl<S: shell::Shell, A: args::Args> command::Command<A> for CI<S> {
         match args.subcommand() {
             Some(("kick", subargs)) => return self.kick(&subargs),
             Some(("setenv", subargs)) => return self.setenv(&subargs),
+            Some(("set-output", subargs)) => return self.set_output(&subargs),
             Some(("deploy", subargs)) => return self.exec("deploy", &subargs),
             Some(("integrate", subargs)) => return self.exec("integrate", &subargs),
+            Some(("fin", subargs)) => return self.fin(&subargs),
             Some((name, _)) => return escalate!(args.error(
                 &format!("no such subcommand: [{}]", name) 
             )),

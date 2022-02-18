@@ -13,6 +13,7 @@ env:
   DEPLO_CI_OVERWRITE_COMMIT: ${{{{ github.event.client_payload.commit }}}}
   DEPLO_CI_OVERWRITE_VERBOSITY: ${{{{ github.event.client_payload.verbosity }}}}
   DEPLO_CI_RELEASE_TARGET: ${{{{ github.event.client_payload.release_target }}}}
+  DEPLO_CI_ID: ${{ github.run_id }}-${{ github.run_attempt }}
 {secrets:>2}
 jobs:
   deplo-main:
@@ -38,6 +39,7 @@ jobs:
     if: ${{{{ !failure() && ({need_cleanups}) }}}}
     needs: [{needs}]
     runs-on: ubuntu-latest
+{cleanup_envs:>4}
     steps:
 {fetchcli:>6}
 {checkout:>6}

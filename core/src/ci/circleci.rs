@@ -145,19 +145,19 @@ impl<'a, S: shell::Shell> ci::CI for CircleCI<S> {
             }
         }
     }
-    fn mark_job_executed(&self, job_name: &str) -> Result<(), Box<dyn Error>> {
+    fn mark_job_executed(&self, job_name: &str) -> Result<Option<String>, Box<dyn Error>> {
         if config::Config::is_running_on_ci() {
             fs::create_dir_all("/tmp/deplo/marked_jobs")?;
             fs::write(format!("/tmp/deplo/marked_jobs/{}", job_name), "")?;
+            Ok(None)
         } else {
             self.config.borrow().run_job_by_name(
                 &self.shell, job_name, config::Command::Job, &config::JobRunningOptions {
                     commit: None, remote: false, shell_settings: shell::no_capture(),
                     adhoc_envs: hashmap!{},
                 }
-            )?;
+            )
         }
-        Ok(())
     }
     fn mark_need_cleanup(&self, job_name: &str) -> Result<(), Box<dyn Error>> {
         if config::Config::is_running_on_ci() {
@@ -176,8 +176,16 @@ impl<'a, S: shell::Shell> ci::CI for CircleCI<S> {
         Ok("".to_string())
     }
     fn check_job_finished(&self, _: &str) -> Result<Option<String>, Box<dyn Error>> {
-        log::warn!("TODO: implement wait_job for circleci");
+        log::warn!("TODO: implement check_job_finished for circleci");
         Ok(None)
+    }
+    fn job_output(&self, _: &str, _: ci::OutputKind, _: &str) -> Result<Option<String>, Box<dyn Error>> {
+        log::warn!("TODO: implement job_output for circleci");
+        Ok(None)
+    }
+    fn set_job_output(&self, _: &str, _: ci::OutputKind, _: HashMap<&str, &str>) -> Result<(), Box<dyn Error>> {
+        log::warn!("TODO: implement set_job_output for circleci");
+        Ok(())
     }
     fn job_env(&self) -> HashMap<&str, String> {
         let config = self.config.borrow();
@@ -189,6 +197,10 @@ impl<'a, S: shell::Shell> ci::CI for CircleCI<S> {
                 |_| config.vcs_service().unwrap().commit_hash(None).unwrap()
             ),
         }
+    }
+    fn list_secret_name(&self) -> Result<Vec<String>, Box<dyn Error>> {
+        log::warn!("TODO: implement list_secret_name for circleci");
+        Ok(vec![])   
     }
     fn set_secret(&self, key: &str, val: &str) -> Result<(), Box<dyn Error>> {
         let config = self.config.borrow();

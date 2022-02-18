@@ -62,6 +62,7 @@ pub struct Git<S: shell::Shell = shell::Default> {
 pub trait GitFeatures {
     fn new(username: &str, email: &str, config: &config::Container) -> Self;
     fn current_ref(&self) -> Result<(vcs::RefType, String), Box<dyn Error>>;
+    fn delete_branch(&self, url: &str, remote_branch: &str) -> Result<(), Box<dyn Error>>;
     fn commit_hash(&self, expr: Option<&str>) -> Result<String, Box<dyn Error>>;
     fn checkout(&self, commit: &str, branch_name: Option<&str>) -> Result<(), Box<dyn Error>>;
     fn remote_origin(&self) -> Result<String, Box<dyn Error>>;
@@ -70,7 +71,12 @@ pub trait GitFeatures {
     fn rebase_with_remote_counterpart(
         &self, url: &str, remote_branch: &str
     ) -> Result<(), Box<dyn Error>>;
+    fn cherry_pick(&self, branch: &str) -> Result<(), Box<dyn Error>>;
     fn push(
+        &self, url: &str, remote_branch: &str, 
+        local_ref: &str, option: &HashMap<&str, &str>
+    ) -> Result<(), Box<dyn Error>>;
+    fn push_diff(
         &self, url: &str, remote_branch: &str, msg: &str, 
         patterns: &Vec<&str>, options: &HashMap<&str, &str>
     ) -> Result<bool, Box<dyn Error>>;
@@ -164,6 +170,12 @@ impl<S: shell::Shell> GitFeatures for Git<S> {
             }
         }
     }
+    fn delete_branch(&self, url: &str, remote_branch: &str) -> Result<(), Box<dyn Error>> {
+        self.shell.exec(&vec!(
+            "git", "push", url, "--delete", remote_branch
+        ), shell::no_env(), shell::no_cwd(), &shell::no_capture())?;
+        Ok(())
+    }
     fn checkout(&self, commit: &str, branch_name: Option<&str>) -> Result<(), Box<dyn Error>> {
         match branch_name {
             Some(b) => self.shell.output_of(&vec!(
@@ -209,21 +221,42 @@ impl<S: shell::Shell> GitFeatures for Git<S> {
             "git", "tag"
         ), shell::no_env(), shell::no_cwd())?.split('\n').map(|s| s.to_string()).collect())
     }
+    fn cherry_pick(&self, target: &str) -> Result<(), Box<dyn Error>> {
+        self.shell.exec(&vec!(
+            "git", "cherry-pick", &target
+        ), shell::no_env(), shell::no_cwd(), &shell::capture())?;
+        Ok(())        
+    }
     fn push(
+        &self, url: &str, remote_branch: &str, 
+        local_ref: &str, options: &HashMap<&str, &str>
+    ) -> Result<(), Box<dyn Error>> {
+        let use_lfs = match options.get("lfs") {
+            Some(v) => !v.is_empty(),
+            None => false
+        };
+        if use_lfs {
+            self.shell.exec(&vec!["git", "lfs", "push", url], shell::no_env(), shell::no_cwd(), &shell::no_capture())?;
+        }
+        self.shell.exec(&vec![
+            "git", "push", "--no-verify", url, &format!("{}:{}", local_ref, remote_branch)
+        ], shell::no_env(), shell::no_cwd(), &shell::no_capture())?;
+        Ok(())
+    }
+    fn push_diff(
         &self, url: &str, remote_branch: &str, msg: &str, 
         patterns: &Vec<&str>, options: &HashMap<&str, &str> 
     ) -> Result<bool, Box<dyn Error>> {
         let config = self.config.borrow();        
-        let use_lfs = match options.get("use-lfs") {
-            Some(v) => *v == "yes",
+        let use_lfs = match options.get("lfs") {
+            Some(v) => !v.is_empty(),
             None => false
         };
         if use_lfs {
             // this useless diffing is for making lfs tracked files refreshed.
             // otherwise if lfs tracked file is written, codes below seems to treat these write as git diff.
             // even if actually no change.
-            // TODO_PATH: use Path to generate path of /dev/null
-		    self.shell.exec(&vec!["git", "--no-pager", "diff"], shell::no_env(), shell::no_cwd(), &shell::no_capture())?;
+		    self.shell.exec(&vec!["git", "--no-pager", "diff"], shell::no_env(), shell::no_cwd(), &shell::capture())?;
         }
 		let mut changed = false;
 
@@ -242,7 +275,7 @@ impl<S: shell::Shell> GitFeatures for Git<S> {
         } else {
 			if use_lfs {
 				self.shell.exec(
-                    &vec!["git", "lfs", "fetch", "--all"], shell::no_env(), shell::no_cwd(), &shell::no_capture()
+                    &vec!["git", "lfs", "fetch"], shell::no_env(), shell::no_cwd(), &shell::no_capture()
                 )?;
             }
 			self.shell.exec(&vec!("git", "commit", "-m", msg), shell::no_env(), shell::no_cwd(), &shell::no_capture())?;
@@ -270,7 +303,7 @@ impl<S: shell::Shell> GitFeatures for Git<S> {
                 None => {}
             }
 			if use_lfs {
-                self.shell.exec(&vec!("git", "lfs", "push", url, "--all"), shell::no_env(), shell::no_cwd(), &shell::no_capture())?;
+                self.shell.exec(&vec!["git", "lfs", "push", url], shell::no_env(), shell::no_cwd(), &shell::no_capture())?;
             }
             self.shell.exec(&vec!(
                 "git", "push", "--no-verify", url, &format!("HEAD:{}", remote_branch)

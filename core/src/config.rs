@@ -25,6 +25,8 @@ pub const DEPLO_VERSION: &'static str = env!("DEPLO_RELEASE_VERSION");
 pub const DEPLO_RELEASE_URL_BASE: &'static str = "https://github.com/suntomi/deplo/releases/download";
 pub const DEPLO_REMOTE_JOB_EVENT_TYPE: &'static str = "deplo-run-remote-job";
 pub const DEPLO_VCS_TEMPORARY_WORKSPACE_NAME: &'static str = "deplo-tmp-workspace";
+pub const DEPLO_JOB_OUTPUT_TEMPORARY_FILE: &'static str = "deplo-tmp-job-output.json";
+pub const DEPLO_SYSTEM_OUTPUT_COMMIT_BRANCH_NAME: &'static str = "COMMIT_BRANCH";
 
 pub fn cli_download_url(os: RunnerOS, version: &str) -> String {
     return format!("{}/{}/deplo-{}", DEPLO_RELEASE_URL_BASE, version, os.cli_download_postfix());
@@ -123,11 +125,28 @@ impl fmt::Display for Command {
         }
     }
 }
+#[derive(Serialize, Deserialize)]
+pub struct Commits {
+    pub patterns: Vec<String>,
+    pub log_format: Option<String>,
+    pub push: Option<bool>,
+}
+impl Commits {
+    fn generate_commit_log(&self, name: &str, _: &Job) -> String {
+        self.log_format.as_ref().unwrap_or(
+            &format!("[deplo] update by job {job_name}", job_name = name)
+        ).to_string()
+    }
+}
 pub struct JobRunningOptions<'a> {
     pub remote: bool,
     pub adhoc_envs: HashMap<String, String>,
     pub shell_settings: shell::Settings,
     pub commit: Option<&'a str>,
+}
+pub struct SystemJobEnvOptions {
+    pub paths: Option<Vec<String>>,
+    pub job_name: String,
 }
 #[derive(Serialize, Deserialize)]
 pub struct Job {
@@ -142,7 +161,7 @@ pub struct Job {
     pub checkout: Option<HashMap<String, String>>,
     pub caches: Option<HashMap<String, Cache>>,
     pub depends: Option<Vec<String>>,
-    pub commits: Option<Vec<String>>,
+    pub commits: Option<Commits>,
     pub options: Option<HashMap<String, String>>,
     pub tasks: Option<HashMap<String, String>>,
     pub local_fallback: Option<FallbackContainer>,
@@ -160,12 +179,13 @@ impl Job {
             Runner::Container{ image: _ } => false
         }
     }
-    pub fn job_env<'a>(&'a self, config: &'a Config, paths: &Option<Vec<String>>) -> HashMap<&'a str, String> {
+    pub fn job_env<'a>(&'a self, config: &'a Config, system: &SystemJobEnvOptions) -> HashMap<&'a str, String> {
         let ci = config.ci_service_by_job(&self).unwrap();
         let env = ci.job_env();
         let mut common_envs = hashmap!{
             "DEPLO_CLI_GIT_HASH" => DEPLO_GIT_HASH.to_string(),
             "DEPLO_CLI_VERSION" => DEPLO_VERSION.to_string(),
+            "DEPLO_CI_CURRENT_JOB_NAME" => system.job_name.clone()
         };
         match config.runtime.release_target {
             Some(ref v) => {
@@ -177,7 +197,7 @@ impl Job {
                 log::info!("job_env: no release target: {}/{}", ref_type, ref_path);
             }
         };
-        match paths {
+        match system.paths {
             Some(ref paths) => {
                 // modify path
                 let mut paths = paths.clone();
@@ -248,12 +268,6 @@ impl WorkflowType {
             Self::Integrate => "integrate",
         }
     }
-}
-#[derive(Serialize, Deserialize)]
-pub struct WorkflowConfig {
-    // we call workflow as combination of jobs
-    pub integrate: HashMap<String, Job>,
-    pub deploy: HashMap<String, Job>,
 }
 #[derive(Serialize, Deserialize)]
 #[serde(tag = "type")]
@@ -419,18 +433,22 @@ impl RuntimeConfig {
         };
         let workflow_type = match args.value_of("workflow-type") {
             Some(v) => Some(WorkflowType::from_str(v)),
-            None => {
-                let immc = config.borrow();
-                let vcs = immc.vcs_service()?;
-                let (account_name, _) = immc.ci_config_by_env();
-                let ci = immc.ci_service(account_name)?;
-                match ci.pr_url_from_env()? {
-                    Some(_) => Some(WorkflowType::Integrate),
-                    None => match vcs.pr_url_from_current_ref()? {
+            None => match release_target {
+                // if release target is set, behave as deploy workflow.
+                Some(_) => Some(WorkflowType::Deploy),
+                None => {
+                    let immc = config.borrow();
+                    let vcs = immc.vcs_service()?;
+                    let (account_name, _) = immc.ci_config_by_env();
+                    let ci = immc.ci_service(account_name)?;
+                    match ci.pr_url_from_env()? {
                         Some(_) => Some(WorkflowType::Integrate),
-                        None => match vcs.release_target() {
-                            Some(_) => Some(WorkflowType::Deploy),
-                            None => None
+                        None => match vcs.pr_url_from_current_ref()? {
+                            Some(_) => Some(WorkflowType::Integrate),
+                            None => match vcs.release_target() {
+                                Some(_) => Some(WorkflowType::Deploy),
+                                None => None
+                            }
                         }
                     }
                 }
@@ -675,36 +693,47 @@ impl Config {
     }
     pub fn parse_dotenv<F>(&self, mut cb: F) -> Result<(), Box<dyn Error>>
     where F: FnMut (&str, &str) -> Result<(), Box<dyn Error>> {
-        let dotenv_file_content = match &self.runtime.dotenv_path {
-            Some(dotenv_path) => match fs::metadata(dotenv_path) {
-                Ok(_) => match fs::read_to_string(dotenv_path) {
-                    Ok(content) => content,
-                    Err(err) => return escalate!(Box::new(err))
-                },
-                Err(_) => dotenv_path.to_string(),
-            },
-            None => match dotenv() {
-                Ok(dotenv_path) => match fs::read_to_string(dotenv_path) {
-                    Ok(content) => content,
-                    Err(err) => return escalate!(Box::new(err))
-                },
-                Err(err) => return escalate!(Box::new(err))
+        if Self::is_running_on_ci() {
+            // on ci, no dotenv file and secrets are already set as environment variable.
+            // so we need to get secret name list from ci service and get their value from environment.
+            // then pass key and vlaue to the closure cb.
+            let (name, _) = self.ci_config_by_env();
+            for secret in &self.ci_service(name)?.list_secret_name()? {
+                let value = std::env::var(secret).unwrap();
+                cb(secret, &value)?;
             }
-        };
-        let r = BufReader::new(dotenv_file_content.as_bytes());
-        let re = Regex::new(r#"^([^=]+)=(.+)$"#).unwrap();
-        for read_result in r.lines() {
-            match read_result {
-                Ok(line) => match re.captures(&line) {
-                    Some(c) => {
-                        cb(
-                            c.get(1).map(|m| m.as_str()).unwrap(),
-                            c.get(2).map(|m| m.as_str()).unwrap().trim_matches('"')
-                        )?;
+        } else {
+            let dotenv_file_content = match &self.runtime.dotenv_path {
+                Some(dotenv_path) => match fs::metadata(dotenv_path) {
+                    Ok(_) => match fs::read_to_string(dotenv_path) {
+                        Ok(content) => content,
+                        Err(err) => return escalate!(Box::new(err))
                     },
-                    None => {},
+                    Err(_) => dotenv_path.to_string(),
                 },
-                Err(_) => {}
+                None => match dotenv() {
+                    Ok(dotenv_path) => match fs::read_to_string(dotenv_path) {
+                        Ok(content) => content,
+                        Err(err) => return escalate!(Box::new(err))
+                    },
+                    Err(err) => return escalate!(Box::new(err))
+                }
+            };
+            let r = BufReader::new(dotenv_file_content.as_bytes());
+            let re = Regex::new(r#"^([^=]+)=(.+)$"#).unwrap();
+            for read_result in r.lines() {
+                match read_result {
+                    Ok(line) => match re.captures(&line) {
+                        Some(c) => {
+                            cb(
+                                c.get(1).map(|m| m.as_str()).unwrap(),
+                                c.get(2).map(|m| m.as_str()).unwrap().trim_matches('"')
+                            )?;
+                        },
+                        None => {},
+                    },
+                    Err(_) => {}
+                }
             }
         }
         return Ok(())
@@ -773,7 +802,7 @@ impl Config {
         } 
     }
     pub fn job_env(
-        &self, job: &Job, paths: &Option<Vec<String>>,
+        &self, job: &Job, system: &SystemJobEnvOptions,
         adhoc: &HashMap<String, String>
     ) -> Result<HashMap<String, String>, Box<dyn Error>> {
         let mut inherits: HashMap<String, String> = if Self::is_running_on_ci() {
@@ -786,7 +815,7 @@ impl Config {
             })?;
             inherits_from_dotenv
         };
-        for (k, v) in job.job_env(self, paths) {
+        for (k, v) in job.job_env(self, system) {
             inherits.insert(k.to_string(), v.to_string());
         }
         for (k, v) in adhoc {
@@ -942,11 +971,15 @@ impl Config {
                 release_target: self.runtime.release_target.clone(),
             })?));
         }
+        let mut system = SystemJobEnvOptions{
+            paths: None,
+            job_name: name.to_string(),
+        };
         match job.runner {
             Runner::Machine{image:_, os, ref local_fallback, class:_} => {
                 let current_os = shell.detect_os()?;
                 if os == current_os {
-                    let paths = if !Self::is_running_on_ci() {
+                    system.paths = if !Self::is_running_on_ci() {
                         let cli_parent_dir = self.deplo_cli_download(
                             os, shell
                         )?.parent().unwrap().to_string_lossy().to_string();
@@ -957,9 +990,10 @@ impl Config {
                     self.adjust_commit_hash(&options.commit)?;
                     // run command directly here, add path to locally downloaded cli.
                     shell.eval(
-                        cmd, &job.shell, self.job_env(&job, &paths, &options.adhoc_envs)?, 
+                        cmd, &job.shell, self.job_env(&job, &system, &options.adhoc_envs)?, 
                         &job.workdir, &options.shell_settings
                     )?;
+                    self.post_run_job(name, &job)?;
                 } else {
                     log::debug!("runner os is different from current os {} {}", os, current_os);
                     match local_fallback {
@@ -974,7 +1008,8 @@ impl Config {
                                     log::info!("generate fallback docker image {} from {}", local_image, path);
                                     let p = Path::new(path);
                                     shell.exec(
-                                        &vec!["docker", "build", 
+                                        &vec![
+                                            "docker", "build", 
                                             "-t", &local_image, 
                                             "-f", p.file_name().unwrap().to_str().unwrap(),
                                             "."
@@ -993,11 +1028,12 @@ impl Config {
                             // running on host. run command in container `image` with docker
                             shell.eval_on_container(
                                 &image, cmd, &shell_cmd, 
-                                self.job_env(&job, &None, &options.adhoc_envs)?, 
+                                self.job_env(&job, &system, &options.adhoc_envs)?, 
                                 &job.workdir, &hashmap!{
                                     path.as_str() => "/usr/local/bin/deplo"
                                 }, &options.shell_settings
                             )?;
+                            self.post_run_job(name, &job)?;
                             return Ok(None);
                         },
                         None => ()
@@ -1020,7 +1056,7 @@ impl Config {
                 if Self::is_running_on_ci() {
                     // already run inside container `image`, run command directly here
                     shell.eval(
-                        cmd, &job.shell, self.job_env(&job, &None, &options.adhoc_envs)?,
+                        cmd, &job.shell, self.job_env(&job, &system, &options.adhoc_envs)?,
                         &job.workdir, &options.shell_settings
                     )?;
                 } else {
@@ -1028,16 +1064,80 @@ impl Config {
                     let path = &self.deplo_cli_download(os, shell)?.to_string_lossy().to_string();
                     // running on host. run command in container `image` with docker
                     shell.eval_on_container(
-                        image, cmd, &job.shell, self.job_env(&job, &None, &options.adhoc_envs)?,
+                        image, cmd, &job.shell, self.job_env(&job, &system, &options.adhoc_envs)?,
                         &job.workdir, &hashmap!{
                             path.as_str() => "/usr/local/bin/deplo"
                         }, &options.shell_settings
                     )?;
                 }
+                self.post_run_job(name, &job)?;
             }
         }
         Ok(None)
-    }    
+    }
+    pub fn post_run_job(&self, job_name: &str, job: &Job) -> Result<(), Box<dyn Error>> {
+        let mut system_outputs = hashmap!{};
+        match job.commits {
+            Some(ref commits) => {
+                let vcs = self.vcs_service()?;
+                match vcs.current_ref()? {
+                    (vcs::RefType::Branch, _) => {
+                        let branch_name = format!("deplo-auto-commits-{}-tmp-{}", std::env::var("DEPLO_CI_ID").unwrap(), job_name);
+                        if vcs.push_diff(
+                            &branch_name, &commits.generate_commit_log(job_name, &job),
+                            &commits.patterns.iter().map(AsRef::as_ref).collect::<Vec<&str>>(),
+                            &hashmap!{}
+                        )? {
+                            system_outputs.insert(DEPLO_SYSTEM_OUTPUT_COMMIT_BRANCH_NAME, branch_name);
+                        }
+                    },
+                    (ty, b) => {
+                        log::warn!("current ref is not a branch ({}/{}), skip auto commit", ty, b);
+                    }
+                }
+            },
+            None => {}
+        };
+        let ci = self.ci_service_by_job_name(job_name)?;
+        if system_outputs.len() > 0 {
+            ci.set_job_output(
+                job_name, ci::OutputKind::System, 
+                system_outputs.iter().map(|(k,v)| (*k, v.as_str())).collect()
+            )?;
+            ci.mark_need_cleanup(job_name)?;
+        }
+        match fs::read(Path::new(DEPLO_JOB_OUTPUT_TEMPORARY_FILE)) {
+            Ok(b) => {
+                let outputs = serde_json::from_slice::<HashMap<&str, &str>>(&b)?;
+                ci.set_job_output(job_name, ci::OutputKind::User, outputs)?;
+            },
+            Err(_) => {}
+        }
+        Ok(())
+    }
+    pub fn job_output_ctrl(&self, job_name: &str, key: &str, value: Option<&str>) -> Result<Option<String>, Box<dyn Error>> {
+        let ci = self.ci_service_by_job_name(job_name)?;
+        match value {
+            Some(v) => {
+                match fs::read(Path::new(DEPLO_JOB_OUTPUT_TEMPORARY_FILE)) {
+                    Ok(b) => {
+                        let mut outputs = serde_json::from_slice::<HashMap<&str, &str>>(&b)?;
+                        outputs.insert(key, v);
+                        fs::write(DEPLO_JOB_OUTPUT_TEMPORARY_FILE, serde_json::to_string(&outputs)?)?;
+                    },
+                    Err(_) => {
+                        fs::write(DEPLO_JOB_OUTPUT_TEMPORARY_FILE, serde_json::to_string(&hashmap!{ key => v })?)?;
+                    }
+                };
+                Ok(None)
+            },
+            None => ci.job_output(job_name, ci::OutputKind::User, key)
+        }
+    }
+    pub fn system_output(&self, job_name: &str, key: &str) -> Result<Option<String>, Box<dyn Error>> {
+        let ci = self.ci_service_by_job_name(job_name)?;
+        ci.job_output(job_name, ci::OutputKind::System, key)
+    }
     pub fn is_main_ci(&self, ci_type: &str) -> bool {
         // default always should exist
         return self.ci.accounts.get("default").unwrap().type_matched(ci_type);

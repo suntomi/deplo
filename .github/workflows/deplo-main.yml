@@ -17,6 +17,7 @@ env:
   DEPLO_CI_OVERWRITE_COMMIT: ${{ github.event.client_payload.commit }}
   DEPLO_CI_OVERWRITE_VERBOSITY: ${{ github.event.client_payload.verbosity }}
   DEPLO_CI_RELEASE_TARGET: ${{ github.event.client_payload.release_target }}
+  DEPLO_CI_ID: ${ github.run_id }-${ github.run_attempt }
   SUNTOMI_VCS_ACCOUNT: ${{ secrets.SUNTOMI_VCS_ACCOUNT }}
   SUNTOMI_VCS_ACCOUNT_EMAIL: ${{ secrets.SUNTOMI_VCS_ACCOUNT_EMAIL }}
   SUNTOMI_VCS_ACCOUNT_KEY: ${{ secrets.SUNTOMI_VCS_ACCOUNT_KEY }}
@@ -35,6 +36,7 @@ jobs:
       deploy-win: ${{ steps.deplo-ci-kick.outputs.deploy-win }}
       integrate-base: ${{ steps.deplo-ci-kick.outputs.integrate-base }}
       integrate-builder: ${{ steps.deplo-ci-kick.outputs.integrate-builder }}
+      integrate-config: ${{ steps.deplo-ci-kick.outputs.integrate-config }}
       integrate-src: ${{ steps.deplo-ci-kick.outputs.integrate-src }}
     steps:
       - name: Fetch deplo cli
@@ -56,9 +58,20 @@ jobs:
           sudo: true
   deplo-finish:
     name: Cleanup CI
-    if: ${{ !failure() && (needs.deploy-base.outputs.need-cleanup || needs.deploy-builder.outputs.need-cleanup || needs.deploy-latest.outputs.need-cleanup || needs.deploy-mac.outputs.need-cleanup || needs.deploy-product.outputs.need-cleanup || needs.deploy-win.outputs.need-cleanup || needs.integrate-base.outputs.need-cleanup || needs.integrate-builder.outputs.need-cleanup || needs.integrate-src.outputs.need-cleanup) }}
-    needs: ["deplo-main","deploy-base","deploy-builder","deploy-latest","deploy-mac","deploy-product","deploy-win","integrate-base","integrate-builder","integrate-src"]
+    if: ${{ !failure() && (needs.deploy-base.outputs.need-cleanup || needs.deploy-builder.outputs.need-cleanup || needs.deploy-latest.outputs.need-cleanup || needs.deploy-mac.outputs.need-cleanup || needs.deploy-product.outputs.need-cleanup || needs.deploy-win.outputs.need-cleanup || needs.integrate-base.outputs.need-cleanup || needs.integrate-builder.outputs.need-cleanup || needs.integrate-config.outputs.need-cleanup || needs.integrate-src.outputs.need-cleanup) }}
+    needs: ["deplo-main","deploy-base","deploy-builder","deploy-latest","deploy-mac","deploy-product","deploy-win","integrate-base","integrate-builder","integrate-config","integrate-src"]
     runs-on: ubuntu-latest
+    env:
+      DEPLO_CI_SYSTEM_DEPLOY_BASE_OUTPUT: ${{ needs.deploy-base.outputs.system }}
+      DEPLO_CI_SYSTEM_DEPLOY_BUILDER_OUTPUT: ${{ needs.deploy-builder.outputs.system }}
+      DEPLO_CI_SYSTEM_DEPLOY_LATEST_OUTPUT: ${{ needs.deploy-latest.outputs.system }}
+      DEPLO_CI_SYSTEM_DEPLOY_MAC_OUTPUT: ${{ needs.deploy-mac.outputs.system }}
+      DEPLO_CI_SYSTEM_DEPLOY_PRODUCT_OUTPUT: ${{ needs.deploy-product.outputs.system }}
+      DEPLO_CI_SYSTEM_DEPLOY_WIN_OUTPUT: ${{ needs.deploy-win.outputs.system }}
+      DEPLO_CI_SYSTEM_INTEGRATE_BASE_OUTPUT: ${{ needs.integrate-base.outputs.system }}
+      DEPLO_CI_SYSTEM_INTEGRATE_BUILDER_OUTPUT: ${{ needs.integrate-builder.outputs.system }}
+      DEPLO_CI_SYSTEM_INTEGRATE_CONFIG_OUTPUT: ""
+      DEPLO_CI_SYSTEM_INTEGRATE_SRC_OUTPUT: ${{ needs.integrate-src.outputs.system }}
     steps:
       - name: Fetch deplo cli
         run: |
@@ -83,8 +96,11 @@ jobs:
     name: Running job deploy-base
     runs-on: ubuntu-latest
   
+  
     outputs:
       need-cleanup: ${{ steps.deplo-deploy-base.outputs.need-cleanup }}
+      system: ${{ steps.deplo-deploy-base.outputs.system }}
+      user: ${{ steps.deplo-deploy-base.outputs.user }}
     steps:
       - name: Fetch deplo cli
         run: |
@@ -109,8 +125,11 @@ jobs:
     name: Running job deploy-builder
     runs-on: ubuntu-latest
   
+  
     outputs:
       need-cleanup: ${{ steps.deplo-deploy-builder.outputs.need-cleanup }}
+      system: ${{ steps.deplo-deploy-builder.outputs.system }}
+      user: ${{ steps.deplo-deploy-builder.outputs.user }}
     steps:
       - name: Fetch deplo cli
         run: |
@@ -134,9 +153,13 @@ jobs:
     if: ${{ needs.deplo-main.outputs.deploy-latest && !failure() }}
     name: Running job deploy-latest
     runs-on: ubuntu-latest
+    env:
+      DEPLO_CI_USER_DEPLOY_PRODUCT_OUTPUT: needs.deploy-product.outputs.user
   
     outputs:
       need-cleanup: ${{ steps.deplo-deploy-latest.outputs.need-cleanup }}
+      system: ${{ steps.deplo-deploy-latest.outputs.system }}
+      user: ${{ steps.deplo-deploy-latest.outputs.user }}
     steps:
       - name: Fetch deplo cli
         run: |
@@ -160,9 +183,13 @@ jobs:
     if: ${{ needs.deplo-main.outputs.deploy-mac && !failure() }}
     name: Running job deploy-mac
     runs-on: macos-latest
+    env:
+      DEPLO_CI_USER_DEPLOY_PRODUCT_OUTPUT: needs.deploy-product.outputs.user
   
     outputs:
       need-cleanup: ${{ steps.deplo-deploy-mac.outputs.need-cleanup }}
+      system: ${{ steps.deplo-deploy-mac.outputs.system }}
+      user: ${{ steps.deplo-deploy-mac.outputs.user }}
     steps:
       - name: Fetch deplo cli
         run: |
@@ -200,9 +227,13 @@ jobs:
     if: ${{ needs.deplo-main.outputs.deploy-product && !failure() }}
     name: Running job deploy-product
     runs-on: ubuntu-latest
+    env:
+      DEPLO_CI_USER_DEPLOY_BUILDER_OUTPUT: needs.deploy-builder.outputs.user
   
     outputs:
       need-cleanup: ${{ steps.deplo-deploy-product.outputs.need-cleanup }}
+      system: ${{ steps.deplo-deploy-product.outputs.system }}
+      user: ${{ steps.deplo-deploy-product.outputs.user }}
     steps:
       - name: Fetch deplo cli
         run: |
@@ -226,9 +257,13 @@ jobs:
     if: ${{ needs.deplo-main.outputs.deploy-win && !failure() }}
     name: Running job deploy-win
     runs-on: windows-latest
+    env:
+      DEPLO_CI_USER_DEPLOY_PRODUCT_OUTPUT: needs.deploy-product.outputs.user
   
     outputs:
       need-cleanup: ${{ steps.deplo-deploy-win.outputs.need-cleanup }}
+      system: ${{ steps.deplo-deploy-win.outputs.system }}
+      user: ${{ steps.deplo-deploy-win.outputs.user }}
     steps:
       - name: Fetch deplo cli
         run: |
@@ -269,8 +304,11 @@ jobs:
     name: Running job integrate-base
     runs-on: ubuntu-latest
   
+  
     outputs:
       need-cleanup: ${{ steps.deplo-integrate-base.outputs.need-cleanup }}
+      system: ${{ steps.deplo-integrate-base.outputs.system }}
+      user: ${{ steps.deplo-integrate-base.outputs.user }}
     steps:
       - name: Fetch deplo cli
         run: |
@@ -295,8 +333,11 @@ jobs:
     name: Running job integrate-builder
     runs-on: ubuntu-latest
   
+  
     outputs:
       need-cleanup: ${{ steps.deplo-integrate-builder.outputs.need-cleanup }}
+      system: ${{ steps.deplo-integrate-builder.outputs.system }}
+      user: ${{ steps.deplo-integrate-builder.outputs.user }}
     steps:
       - name: Fetch deplo cli
         run: |
@@ -315,14 +356,46 @@ jobs:
         uses: umegaya/action-tmate@a3d459813f3429bd95fc48bcd980b2fb40f10ad0
         with:
           sudo: true
+  integrate-config:
+    needs: [deplo-main]
+    if: ${{ needs.deplo-main.outputs.integrate-config && !failure() }}
+    name: Running job integrate-config
+    runs-on: ubuntu-latest
+  
+  
+    outputs:
+      need-cleanup: ${{ steps.deplo-integrate-config.outputs.need-cleanup }}
+      system: ${{ steps.deplo-integrate-config.outputs.system }}
+      user: ${{ steps.deplo-integrate-config.outputs.user }}
+    steps:
+      - name: Fetch deplo cli
+        run: |
+          curl -L https://github.com/suntomi/deplo/releases/download/nightly/deplo-Linux -o /usr/local/bin/deplo
+          chmod +x /usr/local/bin/deplo
+      - name: Checkout
+        uses: actions/checkout@v2
+        with:
+          ref: ${{ needs.deplo-main.outputs.DEPLO_OUTPUT_OVERWRITE_COMMIT }}
+  
+      - name: integrate config
+        id: deplo-integrate-config
+        run: deplo ci integrate config
+      - name: Setup ssh session to debug
+        if: ${{ failure() }}
+        uses: umegaya/action-tmate@a3d459813f3429bd95fc48bcd980b2fb40f10ad0
+        with:
+          sudo: true
   integrate-src:
     needs: [deplo-main]
     if: ${{ needs.deplo-main.outputs.integrate-src && !failure() }}
     name: Running job integrate-src
     runs-on: ubuntu-latest
   
+  
     outputs:
       need-cleanup: ${{ steps.deplo-integrate-src.outputs.need-cleanup }}
+      system: ${{ steps.deplo-integrate-src.outputs.system }}
+      user: ${{ steps.deplo-integrate-src.outputs.user }}
     steps:
       - name: Fetch deplo cli
         run: |

@@ -112,6 +112,17 @@ fn job_running_command_options(
             .index(1)
             .required(true)
             .takes_value(true)))
+    .subcommand(
+        App::new("output")
+        .about("set/get output, data passed between jobs")
+        .arg(Arg::new("key")
+            .help("key to set/get data")
+            .index(1)
+            .required(true))
+        .arg(Arg::new("value")
+            .help("value to set for key. if ommited, get the value of key")
+            .index(2)
+            .required(false)))        
 }
 
 lazy_static! {
@@ -247,6 +258,17 @@ lazy_static! {
                     App::new("fin")
                     .about("cleanup CI/CD process after all related job finished")
                 )
+                .subcommand(
+                    App::new("set-output")
+                    .about("set output, data passed between jobs, of current running job")
+                    .arg(Arg::new("key")
+                        .help("key to set/get data")
+                        .index(1)
+                        .required(true))
+                    .arg(Arg::new("value")
+                        .help("value to set for key. if ommited, get the value of key")
+                        .index(2)
+                        .required(false)))                    
         )
         .subcommand(
             App::new("vcs")
