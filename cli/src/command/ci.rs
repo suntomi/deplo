@@ -76,6 +76,10 @@ impl<S: shell::Shell> CI<S> {
                 log::debug!("========== not invoking {}, pattern [{}] ==========", full_name, job.patterns.join(", "));
             }
         }
+        if !config::Config::is_running_on_ci() {
+            log::debug!("if not running on CI, all jobs should be finished");
+            self.fin(args)?;
+        }
         Ok(())
     }
     fn setenv<A: args::Args>(&self, _: &A) -> Result<(), Box<dyn Error>> {

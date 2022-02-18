@@ -433,18 +433,22 @@ impl RuntimeConfig {
         };
         let workflow_type = match args.value_of("workflow-type") {
             Some(v) => Some(WorkflowType::from_str(v)),
-            None => {
-                let immc = config.borrow();
-                let vcs = immc.vcs_service()?;
-                let (account_name, _) = immc.ci_config_by_env();
-                let ci = immc.ci_service(account_name)?;
-                match ci.pr_url_from_env()? {
-                    Some(_) => Some(WorkflowType::Integrate),
-                    None => match vcs.pr_url_from_current_ref()? {
+            None => match release_target {
+                // if release target is set, behave as deploy workflow.
+                Some(_) => Some(WorkflowType::Deploy),
+                None => {
+                    let immc = config.borrow();
+                    let vcs = immc.vcs_service()?;
+                    let (account_name, _) = immc.ci_config_by_env();
+                    let ci = immc.ci_service(account_name)?;
+                    match ci.pr_url_from_env()? {
                         Some(_) => Some(WorkflowType::Integrate),
-                        None => match vcs.release_target() {
-                            Some(_) => Some(WorkflowType::Deploy),
-                            None => None
+                        None => match vcs.pr_url_from_current_ref()? {
+                            Some(_) => Some(WorkflowType::Integrate),
+                            None => match vcs.release_target() {
+                                Some(_) => Some(WorkflowType::Deploy),
+                                None => None
+                            }
                         }
                     }
                 }
