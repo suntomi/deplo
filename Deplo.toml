@@ -69,7 +69,6 @@ for i in `seq 1 ${COUNT:-10}`; do
 done
 """
 
-
 [jobs.integrate.src]
 patterns = [".*/src/.*", "Cargo.*"]
 runner = { type = "Machine", os = "Linux", local_fallback = { image = "ghcr.io/suntomi/deplo:builder" } }
@@ -84,12 +83,13 @@ tasks = { test = "cargo test", home = "echo ${HOME}" }
 keys = ["integrate-build-${{ runner.os }}-v1-${{ hashFiles('**/Cargo.lock') }}"]
 paths = ["target", "~/.cargo/bin", "~/.cargo/registry/cache", "~/.cargo/registry/index", "~/.cargo/git/db"]
 
-
 [jobs.integrate.config]
 patterns = ["Deplo.toml"]
 runner = { type = "Machine", os = "Linux", local_fallback = { path = "tools/docker/Dockerfile.vmfb", shell = "sh" } }
 command = "deplo init"
 commits = { patterns = [".github/*"], push = true }
+
+
 
 # workflow settings (CD), which runs when release target branches are created/updated
 # declare job name `$job_name` like jobs.deploy.$job_name, as table element of toml

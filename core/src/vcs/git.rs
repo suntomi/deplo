@@ -115,6 +115,12 @@ impl<S: shell::Shell> Git<S> {
             }))
         }
     }
+    fn commit_env(&self) -> HashMap<String, String> {
+        hashmap!{
+            "GIT_COMMITTER_NAME".to_string() => self.username.to_string(),
+            "GIT_COMMITTER_EMAIL".to_string() => self.email.to_string()
+        }
+    }
     fn parse_ref_path(&self, ref_path: &str) -> Result<(vcs::RefType, String), Box<dyn Error>> {
         if ref_path.starts_with("remotes/") {
             // remote branch that does not have local counterpart
@@ -278,7 +284,7 @@ impl<S: shell::Shell> GitFeatures for Git<S> {
                     &vec!["git", "lfs", "fetch"], shell::no_env(), shell::no_cwd(), &shell::no_capture()
                 )?;
             }
-			self.shell.exec(&vec!("git", "commit", "-m", msg), shell::no_env(), shell::no_cwd(), &shell::no_capture())?;
+			self.shell.exec(&vec!("git", "commit", "-m", msg), self.commit_env(), shell::no_cwd(), &shell::no_capture())?;
 			log::debug!("commit done: [{}]", msg);
 			match config.runtime_release_target() {
                 Some(_) => {
