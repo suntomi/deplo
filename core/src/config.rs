@@ -707,8 +707,10 @@ impl Config {
             // then pass key and vlaue to the closure cb.
             let (name, _) = self.ci_config_by_env();
             for secret in &self.ci_service(name)?.list_secret_name()? {
-                let value = std::env::var(secret).unwrap();
-                cb(secret, &value)?;
+                match std::env::var(secret) {
+                    Ok(v) => cb(secret, &v)?,
+                    Err(_) => {}
+                }
             }
         } else {
             let dotenv_file_content = match &self.runtime.dotenv_path {
