@@ -118,7 +118,9 @@ impl<S: shell::Shell> Git<S> {
     fn commit_env(&self) -> HashMap<String, String> {
         hashmap!{
             "GIT_COMMITTER_NAME".to_string() => self.username.to_string(),
-            "GIT_COMMITTER_EMAIL".to_string() => self.email.to_string()
+            "GIT_AUTHOR_NAME".to_string() => self.username.to_string(),
+            "GIT_COMMITTER_EMAIL".to_string() => self.email.to_string(),
+            "GIT_AUTHOR_EMAIL".to_string() => self.email.to_string(),
         }
     }
     fn parse_ref_path(&self, ref_path: &str) -> Result<(vcs::RefType, String), Box<dyn Error>> {

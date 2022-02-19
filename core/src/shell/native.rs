@@ -93,19 +93,30 @@ impl Native {
         let mut c = Command::new(args[0]);
         c.args(&args[1..]);
         c.envs(envs);
-        match cwd {
-            Some(d) => { c.current_dir(d.as_ref()); },
+        let cwd_used = match cwd {
+            Some(d) => {
+                c.current_dir(d.as_ref()); 
+                d.as_ref().to_string_lossy().to_string()
+            },
             None => match &self.cwd {
                 Some(cwd) => {
                     c.current_dir(cwd); 
-                    log::trace!("create_command:[{}]@[{}]", args.join(" "), cwd);
+                    cwd.clone()
                 },
-                _ => {
-                    log::trace!("create_command:[{}]", args.join(" "));
-                }
+                _ => "no cwd".to_string()
             }
-        }
+        };
         c.envs(&self.envs);
+        log::trace!(
+            "create_command:[{}]@[{}] envs[{}]", 
+            args.join(" "), cwd_used,
+            c.get_envs().collect::<Vec<(&OsStr, Option<&OsStr>)>>().iter().map(
+                |(k,v)| format!(
+                    "{}={}", k.to_string_lossy(), 
+                    v.map(|s| s.to_string_lossy().to_string()).unwrap_or("".to_string())
+                )
+            ).collect::<Vec<String>>().join(",")
+        );
         let ct = if settings.capture {
             // windows std::process::Command does not work well with huge (>1kb) output piping.
             // see https://github.com/rust-lang/rust/issues/45572 for detail
