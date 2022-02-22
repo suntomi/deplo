@@ -187,16 +187,29 @@ impl<'a, S: shell::Shell> ci::CI for CircleCI<S> {
         log::warn!("TODO: implement set_job_output for circleci");
         Ok(())
     }
-    fn job_env(&self) -> HashMap<&str, String> {
-        let config = self.config.borrow();
-        return hashmap!{
-            //TODO_CI: need to get pr URL value on local execution
-            "DEPLO_CI_PULL_REQUEST_URL" => std::env::var("CIRCLE_PULL_REQUEST").unwrap_or_else(|_| "".to_string()),
+    fn process_env(&self, local: bool) -> HashMap<&str, String> {
+        let mut envs = hashmap!{
             "DEPLO_CI_TYPE" => "CircleCI".to_string(),
-            "DEPLO_CI_CURRENT_SHA" => std::env::var("CIRCLE_SHA1").unwrap_or_else(
-                |_| config.vcs_service().unwrap().commit_hash(None).unwrap()
-            ),
-        }
+        };
+        // get from env
+        for (src, target) in hashmap!{
+            "CIRCLE_WORKFLOW_ID" => "DEPLO_CI_ID",
+            "CIRCLE_PULL_REQUEST" => "DEPLO_CI_PULL_REQUEST_URL",
+            "CIRCLE_SHA1" => "DEPLO_CI_CURRENT_SHA",
+        } {
+            match std::env::var(src) {
+                Ok(v) => {
+                    envs.insert(target, v);
+                },
+                Err(_) => if !local {
+                    panic!("{} should set on CI service", src);
+                }
+            };
+        };
+        envs
+    }
+    fn job_env(&self) -> HashMap<&str, String> {
+        hashmap!{}
     }
     fn list_secret_name(&self) -> Result<Vec<String>, Box<dyn Error>> {
         log::warn!("TODO: implement list_secret_name for circleci");

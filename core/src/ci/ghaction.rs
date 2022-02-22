@@ -13,7 +13,6 @@ use serde::{Deserialize, Serialize};
 use crate::config;
 use crate::ci;
 use crate::shell;
-use crate::vcs;
 use crate::module;
 use crate::util::{
     escalate,seal,
@@ -101,7 +100,7 @@ pub struct GhAction<S: shell::Shell = shell::Default> {
 impl<S: shell::Shell> GhAction<S> {
     fn job_output_env_name(kind: ci::OutputKind, job_name: &str) -> String {
         format!(
-            "DEPLO_CI_{}_{}_OUTPUT", 
+            "DEPLO_JOB_{}_OUTPUT_{}",
             kind.to_str().to_uppercase(), job_name.replace("-", "_").to_uppercase()
         )
     }
@@ -486,8 +485,7 @@ impl<S: shell::Shell> ci::CI for GhAction<S> {
         });
     }
     fn kick(&self) -> Result<(), Box<dyn Error>> {
-        println!("::set-output name=DEPLO_OUTPUT_CLI_VERSION::{}", config::DEPLO_VERSION);
-        match std::env::var("DEPLO_CI_OVERWRITE_COMMIT") {
+        match std::env::var("DEPLO_OVERWRITE_COMMIT") {
             Ok(c) => if !c.is_empty() {
                 println!("::set-output name=DEPLO_OUTPUT_OVERWRITE_COMMIT::{}", c);
             },
@@ -501,7 +499,7 @@ impl<S: shell::Shell> ci::CI for GhAction<S> {
         Ok(prev)
     }
     fn pr_url_from_env(&self) -> Result<Option<String>, Box<dyn Error>> {
-        match std::env::var("DEPLO_CI_PULL_REQUEST_URL") {
+        match std::env::var("DEPLO_GHACTION_PR_URL") {
             Ok(v) => if v.is_empty() { Ok(None) } else { Ok(Some(v)) },
             Err(e) => {
                 match e {
@@ -533,8 +531,8 @@ impl<S: shell::Shell> ci::CI for GhAction<S> {
         Ok(())
     }
     fn dispatched_remote_job(&self) -> Result<Option<ci::RemoteJob>, Box<dyn Error>> {
-        if std::env::var("DEPLO_CI_EVENT_TYPE") == Ok(config::DEPLO_REMOTE_JOB_EVENT_TYPE.to_string()) {
-            let payload = std::env::var("DEPLO_CI_EVENT_PAYLOAD").unwrap();
+        if std::env::var("DEPLO_GHACTION_EVENT_TYPE") == Ok(config::DEPLO_REMOTE_JOB_EVENT_TYPE.to_string()) {
+            let payload = std::env::var("DEPLO_GHACTION_EVENT_PAYLOAD").unwrap();
             Ok(Some(serde_json::from_str::<ci::RemoteJob>(&payload)?))
         } else {
             Ok(None)
@@ -643,40 +641,48 @@ impl<S: shell::Shell> ci::CI for GhAction<S> {
         }
         Ok(())
     }
-    fn job_env(&self) -> HashMap<&str, String> {
-        let config = self.config.borrow();
+    fn process_env(&self, local: bool) -> HashMap<&str, String> {
         let mut envs = hashmap!{
-            // DEPLO_CI_PULL_REQUEST_URL is set by generated deplo-main.yml by default
-            //TODO_CI: need to get pr URL value on local execution
-            "DEPLO_CI_PULL_REQUEST_URL" => std::env::var("DEPLO_CI_PULL_REQUEST_URL").unwrap_or_else(|_| "".to_string()),
-            "DEPLO_CI_TYPE" => "GhAction".to_string(),
-            "DEPLO_CI_CURRENT_SHA" => std::env::var("GITHUB_SHA").unwrap_or_else(
-                |_| config.vcs_service().unwrap().commit_hash(None).unwrap()
-            ),
+            "DEPLO_CI_TYPE" => "GhAction".to_string()
+        };
+        // get from env
+        for (src, target) in hashmap!{
+            "DEPLO_GHACTION_CI_ID" => "DEPLO_CI_ID",
+            "DEPLO_GHACTION_PR_URL" => "DEPLO_CI_PULL_REQUEST_URL",
+            "GITHUB_SHA" => "DEPLO_CI_CURRENT_SHA",
+        } {
+            match std::env::var(src) {
+                Ok(v) => {
+                    envs.insert(target, v);
+                },
+                Err(_) => if !local {
+                    panic!("{} should set on CI service", src);
+                }
+            }
         };
         match std::env::var("GITHUB_REF_TYPE") {
             Ok(ref_type) => {
                 match std::env::var("GITHUB_REF") {
                     Ok(ref_name) => {
                         match ref_type.as_str() {
-                            "branch" => envs.insert("DEPLO_CI_BRANCH_NAME", ref_name.replace("refs/heads/", "")),
-                            "tag" => envs.insert("DEPLO_CI_TAG_NAME", ref_name.replace("refs/tags/", "")),
+                            "branch" => envs.insert(
+                                "DEPLO_CI_BRANCH_NAME", ref_name.replace("refs/heads/", "")
+                            ),
+                            "tag" => envs.insert(
+                                "DEPLO_CI_TAG_NAME", ref_name.replace("refs/tags/", "")
+                            ),
                             v => panic!("invalid ref_type {}", v),
                         };
                     },
                     Err(_) => panic!("GITHUB_REF_TYPE is set but GITHUB_REF is not set"),
                 }
             },
-            Err(_) => {
-                let (ref_type, ref_path) = config.vcs_service().unwrap().current_ref().unwrap();
-                if ref_type == vcs::RefType::Tag {
-                    envs.insert("DEPLO_CI_TAG_NAME", ref_path);
-                } else {
-                    envs.insert("DEPLO_CI_BRANCH_NAME", ref_path);
-                };
-            }
-        };
+            Err(_) => {}
+        };        
         envs
+    }
+    fn job_env(&self) -> HashMap<&str, String> {
+        hashmap!{}
     }
     fn list_secret_name(&self) -> Result<Vec<String>, Box<dyn Error>> {
         let token = self.get_token()?;

@@ -249,7 +249,6 @@ impl<S: shell::Shell> GitFeatures for Git<S> {
         &self, url: &str, remote_branch: &str, msg: &str, 
         patterns: &Vec<&str>, options: &HashMap<&str, &str> 
     ) -> Result<bool, Box<dyn Error>> {
-        let config = self.config.borrow();        
         let use_lfs = match options.get("lfs") {
             Some(v) => !v.is_empty(),
             None => false

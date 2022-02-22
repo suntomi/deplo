@@ -18,7 +18,7 @@ use crate::args;
 use crate::vcs;
 use crate::ci;
 use crate::shell;
-use crate::util::{escalate,envsubst,make_absolute,defer};
+use crate::util::{escalate,envsubst,make_absolute,defer, randombytes_as_string};
 
 pub const DEPLO_GIT_HASH: &'static str = env!("GIT_HASH");
 pub const DEPLO_VERSION: &'static str = env!("DEPLO_RELEASE_VERSION");
@@ -183,14 +183,11 @@ impl Job {
         let ci = config.ci_service_by_job(&self).unwrap();
         let env = ci.job_env();
         let mut common_envs = hashmap!{
-            "DEPLO_CLI_GIT_HASH" => DEPLO_GIT_HASH.to_string(),
-            "DEPLO_CLI_VERSION" => DEPLO_VERSION.to_string(),
-            "DEPLO_CI_CURRENT_JOB_NAME" => system.job_name.clone()
+            "DEPLO_JOB_CURRENT_NAME" => system.job_name.clone()
         };
         match config.runtime.release_target {
             Some(ref v) => {
                 log::info!("job_env: release target: {}", v);
-                common_envs.insert("DEPLO_CI_RELEASE_TARGET", v.to_string());
             },
             None => {
                 let (ref_type, ref_path) = config.vcs_service().unwrap().current_ref().unwrap();
@@ -403,7 +400,36 @@ impl RuntimeConfig {
             workdir: args.value_of("workdir").map_or_else(|| None, |v| Some(v.to_string())),
         }
     }
-    fn post_init<A: args::Args>(
+    fn setup_logger(verbosity: u64) {
+        // apply verbosity
+        match std::env::var("RUST_LOG") {
+            Ok(v) => {
+                if !v.is_empty() {
+                    simple_logger::init_with_env().unwrap();
+                    return;
+                }
+            },
+            Err(_) => {},
+        };
+        simple_logger::init_with_level(match 
+            match std::env::var("DEPLO_OVERWRITE_VERBOSITY") {
+                Ok(v) => if !v.is_empty() {
+                    println!("overwrite log verbosity from {} to {}", verbosity, v);
+                    v.parse::<u64>().unwrap_or(verbosity)
+                } else {
+                    verbosity
+                },
+                Err(_) => verbosity
+            } 
+        {
+            0 => log::Level::Warn,
+            1 => log::Level::Info,
+            2 => log::Level::Debug,
+            3 => log::Level::Trace,
+            _ => log::Level::Trace
+        }).unwrap();
+    }
+    fn post_apply<A: args::Args>(
         config: &mut Container, args: &A
     ) -> Result<(), Box<dyn Error>> {
         // set release target
@@ -421,7 +447,7 @@ impl RuntimeConfig {
                         cause: format!("undefined release target name: {}", v)
                     }))
                 },
-                None => match std::env::var("DEPLO_CI_RELEASE_TARGET") {
+                None => match std::env::var("DEPLO_OVERWRITE_RELEASE_TARGET") {
                     Ok(v) => if !v.is_empty() { 
                         Some(v)
                     } else {
@@ -431,7 +457,7 @@ impl RuntimeConfig {
                 }
             }
         };
-        let env_workflow_type = match std::env::var("DEPLO_CI_OVERWRITE_WORKFLOW") {
+        let env_workflow_type = match std::env::var("DEPLO_OVERWRITE_WORKFLOW") {
             Ok(v) => if !v.is_empty() { 
                 Some(WorkflowType::from_str(&v))
             } else {
@@ -442,7 +468,7 @@ impl RuntimeConfig {
         let workflow_type = match args.value_of("workflow-type") {
             Some(v) => Some(WorkflowType::from_str(v)),
             None => match env_workflow_type {
-                // if DEPLO_CI_OVERWRITE_WORKFLOW is set, behave as deploy workflow.
+                // if DEPLO_OVERWRITE_WORKFLOW is set, behave as deploy workflow.
                 Some(v) => Some(v),
                 None => {
                     let immc = config.borrow();
@@ -469,7 +495,7 @@ impl RuntimeConfig {
         }
 
         // change commit hash
-        match std::env::var("DEPLO_CI_OVERWRITE_COMMIT") {
+        match std::env::var("DEPLO_OVERWRITE_COMMIT") {
             Ok(v) => if !v.is_empty() {
                 let c = config.borrow();
                 for (account, ci) in &c.ci_caches {
@@ -482,13 +508,13 @@ impl RuntimeConfig {
         Ok(())
     }
     fn apply(&self) -> Result<(), Box<dyn Error>> {
+        Self::setup_logger(self.verbosity);
         match self.workdir {
             Some(ref wd) => { 
                 std::env::set_current_dir(wd)?; 
             },
             None => ()
         };
-        Config::setup_logger(self.verbosity);
         // if the cli running on host, need to load dotenv to inject secrets
         if !Config::is_running_on_ci() {
             // load dotenv
@@ -520,19 +546,24 @@ pub enum ConfigSource<'a> {
 }
 #[derive(Serialize, Deserialize)]
 pub struct Config {
+    // config from cli args
     #[serde(skip)]
     pub runtime: RuntimeConfig,
-    pub common: CommonConfig,
-    pub vcs: VCSConfig,
-    pub ci: CIConfig,
-    pub jobs: Jobs,
+    // environment variables generated from environment variables given by CI service or localhost
+    #[serde(skip)]
+    pub process_envs: HashMap<String, String>,
 
     // object cache
     #[serde(skip)]
     pub ci_caches: HashMap<String, Box<dyn ci::CI>>,
-    // HACK: I don't know the way to have uninitialized box object...
     #[serde(skip)]
     pub vcs_cache: Vec<Box<dyn vcs::VCS>>,
+
+    // config that loads from config file
+    pub common: CommonConfig,
+    pub vcs: VCSConfig,
+    pub ci: CIConfig,
+    pub jobs: Jobs,
 }
 pub type Ref<'a>= std::cell::Ref<'a, Config>;
 pub type RefMut<'a> = std::cell::RefMut<'a, Config>;
@@ -565,35 +596,6 @@ impl Config {
             Err(err) => escalate!(Box::new(err))
         }
     }
-    fn setup_logger(verbosity: u64) {
-        // apply verbosity
-        match std::env::var("RUST_LOG") {
-            Ok(v) => {
-                if !v.is_empty() {
-                    simple_logger::init_with_env().unwrap();
-                    return;
-                }
-            },
-            Err(_) => {},
-        };
-        simple_logger::init_with_level(match 
-            match std::env::var("DEPLO_CI_OVERWRITE_VERBOSITY") {
-                Ok(v) => if !v.is_empty() {
-                    println!("overwrite log verbosity from {} to {}", verbosity, v);
-                    v.parse::<u64>().unwrap_or(verbosity)
-                } else {
-                    verbosity
-                },
-                Err(_) => verbosity
-            } 
-        {
-            0 => log::Level::Warn,
-            1 => log::Level::Info,
-            2 => log::Level::Debug,
-            3 => log::Level::Trace,
-            _ => log::Level::Trace
-        }).unwrap();
-    }
     pub fn with_config(
         src: ConfigSource,
         runtime_config: RuntimeConfig        
@@ -625,8 +627,52 @@ impl Config {
         // setup module cache
         Self::setup_ci(&c)?;
         Self::setup_vcs(&c)?;
-        RuntimeConfig::post_init(&mut c, args)?;
+        RuntimeConfig::post_apply(&mut c, args)?;
+        c.borrow().setup_process_env()?;
         return Ok(c);
+    }
+    pub fn setup_process_env(&self) -> Result<(), Box<dyn Error>> {
+        let (ci, local) = match self.ci_service_by_env() {
+            Ok(ci) => (ci, false),
+            Err(_) => (self.ci_service_main()?, true)
+        };
+        let vcs = self.vcs_service()?;
+        let (ref_type, ref_path) = vcs.current_ref()?;
+        let (may_tag, may_branch) = if ref_type == vcs::RefType::Tag {
+            (Some(ref_path.as_str()), None)
+        } else {
+            (None, Some(ref_path.as_str()))
+        };
+        let sha = vcs.commit_hash(None)?;
+        let random_id = randombytes_as_string!(16);
+        let ci_type = match self.current_ci_type() {
+            Ok(v) => v,
+            Err(_) => self.ci.accounts.get("default").unwrap().type_as_str().to_string(),
+        };
+        let mut default_envs = hashmap!{
+            "DEPLO_CI_ID" => Some(random_id.as_str()),
+            "DEPLO_CI_TYPE" => Some(ci_type.as_str()),
+            "DEPLO_CI_TAG_NAME" => may_tag,
+            "DEPLO_CI_BRANCH_NAME" => may_branch,
+            "DEPLO_CI_CURRENT_SHA" => Some(sha.as_str()),
+            "DEPLO_CI_RELEASE_TARGET" => self.runtime.release_target.as_ref().map(|s| s.as_str()),
+            "DEPLO_CI_WORKFLOW_TYPE" => self.runtime.workflow_type.as_ref().map(|s| s.as_str()),
+            // TODO_CI: get pull request url from local execution
+            "DEPLO_CI_PULL_REQUEST_URL" => Some(""),
+            "DEPLO_CI_CLI_COMMIT_HASH" => Some(DEPLO_GIT_HASH),
+            "DEPLO_CI_CLI_VERSION" => Some(DEPLO_VERSION),
+        };
+        let envs = ci.process_env(local);
+        for (k, v) in &envs {
+            default_envs.insert(k, Some(v.as_str()));
+        }
+        for (k, v) in &default_envs {
+            match v {
+                Some(v) => std::env::set_var(k, v),
+                None => std::env::remove_var(k),
+            }
+        };
+        Ok(())
     }
     pub fn data_dir<'a>(&'a self) -> &'a str {
         return match self.common.data_dir {
@@ -644,7 +690,10 @@ impl Config {
         }
     }
     pub fn is_running_on_ci() -> bool {
-        std::env::var("CI").is_ok()        
+        match std::env::var("CI") {
+            Ok(v) => !v.is_empty(),
+            Err(_) => false
+        }
     }
     pub fn ci_cli_options(&self) -> String {
         let wdref = self.runtime.workdir.as_ref();
@@ -748,7 +797,7 @@ impl Config {
         }
         return Ok(())
     }
-    pub fn ci_type(&self) -> Result<String, ConfigError> {
+    pub fn current_ci_type(&self) -> Result<String, ConfigError> {
         let cis = hashmap!{
             "CIRCLE_SHA1" => "CircleCI",
             "GITHUB_ACTION" => "GhAction"
@@ -780,7 +829,7 @@ impl Config {
         }
     }
     pub fn ci_config_by_env<'b>(&'b self) -> (&'b str, &'b CIAccount) {
-        let t = self.ci_type().unwrap();
+        let t = self.current_ci_type().unwrap();
         for (account_name, account) in &self.ci.accounts {
             if account.type_matched(&t) { return (account_name, account) }
         }
@@ -791,6 +840,23 @@ impl Config {
             Some(ci) => Ok(ci),
             None => escalate!(Box::new(ConfigError{ 
                 cause: format!("no ci service for {}", account_name) 
+            }))
+        } 
+    }
+    pub fn ci_service_by_env<'a>(&'a self) -> Result<&'a Box<dyn ci::CI>, Box<dyn Error>> {
+        let (account_name, _) = self.ci_config_by_env();
+        return match self.ci_caches.get(account_name) {
+            Some(ci) => Ok(ci),
+            None => escalate!(Box::new(ConfigError{ 
+                cause: format!("no ci service for {}", account_name) 
+            }))
+        } 
+    }
+    pub fn ci_service_main<'a>(&'a self) -> Result<&'a Box<dyn ci::CI>, Box<dyn Error>> {
+        return match self.ci_caches.get("default") {
+            Some(ci) => Ok(ci),
+            None => escalate!(Box::new(ConfigError{ 
+                cause: format!("no ci service for default") 
             }))
         } 
     }
