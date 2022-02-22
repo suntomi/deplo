@@ -1182,12 +1182,15 @@ impl Config {
                 match vcs.current_ref()? {
                     (vcs::RefType::Branch|vcs::RefType::Pull, _) => {
                         let branch_name = format!(
-                            "refs/heads/deplo-auto-commits-{}-tmp-{}", 
+                            "deplo-auto-commits-{}-tmp-{}", 
                             std::env::var("DEPLO_CI_ID").unwrap(),
                             job_name
                         );
                         if vcs.push_diff(
-                            &branch_name, &commits.generate_commit_log(job_name, &job),
+                            // basically the branch_name does not exists in remote,
+                            // we need to add refs/heads to create it automatically
+                            &format!("refs/heads/{}", branch_name), 
+                            &commits.generate_commit_log(job_name, &job),
                             &commits.patterns.iter().map(AsRef::as_ref).collect::<Vec<&str>>(),
                             &hashmap!{}
                         )? {
