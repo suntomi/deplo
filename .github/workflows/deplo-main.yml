@@ -27,7 +27,7 @@ jobs:
     name: Start CI ${{ github.event.client_payload.job_id }}
     runs-on: ubuntu-latest
     outputs:
-      DEPLO_OUTPUT_OVERWRITE_COMMIT: ${{ steps.deplo-ci-kick.outputs.DEPLO_OUTPUT_OVERWRITE_COMMIT }}
+      overwrite-commit: ${{ steps.deplo-ci-kick.outputs.overwrite-commit }}
       deploy-base: ${{ steps.deplo-ci-kick.outputs.deploy-base }}
       deploy-builder: ${{ steps.deplo-ci-kick.outputs.deploy-builder }}
       deploy-latest: ${{ steps.deplo-ci-kick.outputs.deploy-latest }}
@@ -47,7 +47,7 @@ jobs:
         uses: actions/checkout@v2
         with:
           fetch-depth: 2
-          ref: ${{ needs.deplo-main.outputs.DEPLO_OUTPUT_OVERWRITE_COMMIT }}
+          ref: ${{ needs.deplo-main.outputs.overwrite-commit }}
       - name: Start deplo
         id: deplo-ci-kick
         run: deplo ci kick
@@ -81,7 +81,7 @@ jobs:
         uses: actions/checkout@v2
         with:
           fetch-depth: 2
-          ref: ${{ needs.deplo-main.outputs.DEPLO_OUTPUT_OVERWRITE_COMMIT }}
+          ref: ${{ needs.deplo-main.outputs.overwrite-commit }}
       - name: Cleanup deplo
         id: deplo-ci-fin
         run: deplo ci fin
@@ -109,7 +109,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v2
         with:
-          ref: ${{ needs.deplo-main.outputs.DEPLO_OUTPUT_OVERWRITE_COMMIT }}
+          ref: ${{ needs.deplo-main.outputs.overwrite-commit }}
   
       - name: deploy base
         id: deplo-deploy-base
@@ -138,7 +138,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v2
         with:
-          ref: ${{ needs.deplo-main.outputs.DEPLO_OUTPUT_OVERWRITE_COMMIT }}
+          ref: ${{ needs.deplo-main.outputs.overwrite-commit }}
   
       - name: deploy builder
         id: deplo-deploy-builder
@@ -168,7 +168,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v2
         with:
-          ref: ${{ needs.deplo-main.outputs.DEPLO_OUTPUT_OVERWRITE_COMMIT }}
+          ref: ${{ needs.deplo-main.outputs.overwrite-commit }}
   
       - name: deploy latest
         id: deplo-deploy-latest
@@ -198,7 +198,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v2
         with:
-          ref: ${{ needs.deplo-main.outputs.DEPLO_OUTPUT_OVERWRITE_COMMIT }}
+          ref: ${{ needs.deplo-main.outputs.overwrite-commit }}
       - name: Cache cargo
         id: deplo-cache-cargo
         uses: actions/cache@v2
@@ -242,7 +242,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v2
         with:
-          ref: ${{ needs.deplo-main.outputs.DEPLO_OUTPUT_OVERWRITE_COMMIT }}
+          ref: ${{ needs.deplo-main.outputs.overwrite-commit }}
   
       - name: deploy product
         id: deplo-deploy-product
@@ -273,7 +273,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v2
         with:
-          ref: ${{ needs.deplo-main.outputs.DEPLO_OUTPUT_OVERWRITE_COMMIT }}
+          ref: ${{ needs.deplo-main.outputs.overwrite-commit }}
       - name: Cache cargo
         id: deplo-cache-cargo
         uses: actions/cache@v2
@@ -317,7 +317,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v2
         with:
-          ref: ${{ needs.deplo-main.outputs.DEPLO_OUTPUT_OVERWRITE_COMMIT }}
+          ref: ${{ needs.deplo-main.outputs.overwrite-commit }}
   
       - name: integrate base
         id: deplo-integrate-base
@@ -346,7 +346,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v2
         with:
-          ref: ${{ needs.deplo-main.outputs.DEPLO_OUTPUT_OVERWRITE_COMMIT }}
+          ref: ${{ needs.deplo-main.outputs.overwrite-commit }}
   
       - name: integrate builder
         id: deplo-integrate-builder
@@ -375,7 +375,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v2
         with:
-          ref: ${{ needs.deplo-main.outputs.DEPLO_OUTPUT_OVERWRITE_COMMIT }}
+          ref: ${{ needs.deplo-main.outputs.overwrite-commit }}
   
       - name: integrate config
         id: deplo-integrate-config
@@ -404,7 +404,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v2
         with:
-          ref: ${{ needs.deplo-main.outputs.DEPLO_OUTPUT_OVERWRITE_COMMIT }}
+          ref: ${{ needs.deplo-main.outputs.overwrite-commit }}
       - name: Cache cargo
         id: deplo-cache-cargo
         uses: actions/cache@v2

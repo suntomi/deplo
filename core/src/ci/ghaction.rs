@@ -316,7 +316,7 @@ impl<S: shell::Shell> GhAction<S> {
                 format!("# warning: deplo only support lfs/fetch-depth options for github action checkout but {}({}) is specified", k, v)
             }
         }).collect::<Vec<String>>();
-        checkout_opts.push("ref: ${{ needs.deplo-main.outputs.DEPLO_OUTPUT_OVERWRITE_COMMIT }}".to_string());
+        checkout_opts.push("ref: ${{ needs.deplo-main.outputs.overwrite-commit }}".to_string());
         // hash value for separating repository cache according to checkout options
         let opts_hash = options.as_ref().map_or_else(
             || "".to_string(), 
@@ -487,7 +487,7 @@ impl<S: shell::Shell> ci::CI for GhAction<S> {
     fn kick(&self) -> Result<(), Box<dyn Error>> {
         match std::env::var("DEPLO_OVERWRITE_COMMIT") {
             Ok(c) => if !c.is_empty() {
-                println!("::set-output name=DEPLO_OUTPUT_OVERWRITE_COMMIT::{}", c);
+                println!("::set-output name=overwrite-commit::{}", c);
             },
             Err(_) => {}
         };

@@ -21,7 +21,7 @@ jobs:
     name: Start CI ${{{{ github.event.client_payload.job_id }}}}
     runs-on: ubuntu-latest
     outputs:
-      DEPLO_OUTPUT_OVERWRITE_COMMIT: ${{{{ steps.deplo-ci-kick.outputs.DEPLO_OUTPUT_OVERWRITE_COMMIT }}}}
+      overwrite-commit: ${{{{ steps.deplo-ci-kick.outputs.overwrite-commit }}}}
 {outputs:>6}
     steps:
 {fetchcli:>6}
