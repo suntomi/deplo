@@ -11,14 +11,14 @@ on:
     types: [deplo-run-remote-job]
 
 env:
-  DEPLO_GHACTION_CI_ID: ${{ github.run_id }}-${{ github.run_attempt }}
-  DEPLO_GHACTION_PR_URL: ${{ github.event.pull_request.url }}
-  DEPLO_GHACTION_EVENT_TYPE: ${{ github.event.action }}
-  DEPLO_GHACTION_EVENT_PAYLOAD: ${{ toJSON(github.event.client_payload) }}
-  DEPLO_OVERWRITE_COMMIT: ${{ github.event.client_payload.commit }}
-  DEPLO_OVERWRITE_RELEASE_TARGET: ${{ github.event.client_payload.release_target }}
-  DEPLO_OVERWRITE_VERBOSITY: ${{ github.event.client_payload.verbosity }}
-  DEPLO_OVERWRITE_WORKFLOW: ${{ github.event.client_payload.workflow }}
+  DEPLO_CI_PULL_REQUEST_URL: ${{ github.event.pull_request.url }}
+  DEPLO_CI_EVENT_TYPE: ${{ github.event.action }}
+  DEPLO_CI_EVENT_PAYLOAD: ${{ toJSON(github.event.client_payload) }}
+  DEPLO_CI_OVERWRITE_COMMIT: ${{ github.event.client_payload.commit }}
+  DEPLO_CI_OVERWRITE_VERBOSITY: ${{ github.event.client_payload.verbosity }}
+  DEPLO_CI_OVERWRITE_WORKFLOW: ${{ github.event.client_payload.workflow }}
+  DEPLO_CI_RELEASE_TARGET: ${{ github.event.client_payload.release_target }}
+  DEPLO_CI_ID: ${ github.run_id }-${ github.run_attempt }
   SUNTOMI_VCS_ACCOUNT: ${{ secrets.SUNTOMI_VCS_ACCOUNT }}
   SUNTOMI_VCS_ACCOUNT_EMAIL: ${{ secrets.SUNTOMI_VCS_ACCOUNT_EMAIL }}
   SUNTOMI_VCS_ACCOUNT_KEY: ${{ secrets.SUNTOMI_VCS_ACCOUNT_KEY }}
@@ -27,7 +27,8 @@ jobs:
     name: Start CI ${{ github.event.client_payload.job_id }}
     runs-on: ubuntu-latest
     outputs:
-      overwrite-commit: ${{ steps.deplo-ci-kick.outputs.overwrite-commit }}
+      DEPLO_OUTPUT_CLI_VERSION: ${{ steps.deplo-ci-kick.outputs.DEPLO_OUTPUT_CLI_VERSION }}
+      DEPLO_OUTPUT_OVERWRITE_COMMIT: ${{ steps.deplo-ci-kick.outputs.DEPLO_OUTPUT_OVERWRITE_COMMIT }}
       deploy-base: ${{ steps.deplo-ci-kick.outputs.deploy-base }}
       deploy-builder: ${{ steps.deplo-ci-kick.outputs.deploy-builder }}
       deploy-latest: ${{ steps.deplo-ci-kick.outputs.deploy-latest }}
@@ -47,7 +48,7 @@ jobs:
         uses: actions/checkout@v2
         with:
           fetch-depth: 2
-          ref: ${{ needs.deplo-main.outputs.overwrite-commit }}
+          ref: ${{ needs.deplo-main.outputs.DEPLO_OUTPUT_OVERWRITE_COMMIT }}
       - name: Start deplo
         id: deplo-ci-kick
         run: deplo ci kick
@@ -62,16 +63,16 @@ jobs:
     needs: ["deplo-main","deploy-base","deploy-builder","deploy-latest","deploy-mac","deploy-product","deploy-win","integrate-base","integrate-builder","integrate-config","integrate-src"]
     runs-on: ubuntu-latest
     env:
-      DEPLO_JOB_SYSTEM_OUTPUT_DEPLOY_BASE: ${{ needs.deploy-base.outputs.system }}
-      DEPLO_JOB_SYSTEM_OUTPUT_DEPLOY_BUILDER: ${{ needs.deploy-builder.outputs.system }}
-      DEPLO_JOB_SYSTEM_OUTPUT_DEPLOY_LATEST: ${{ needs.deploy-latest.outputs.system }}
-      DEPLO_JOB_SYSTEM_OUTPUT_DEPLOY_MAC: ${{ needs.deploy-mac.outputs.system }}
-      DEPLO_JOB_SYSTEM_OUTPUT_DEPLOY_PRODUCT: ${{ needs.deploy-product.outputs.system }}
-      DEPLO_JOB_SYSTEM_OUTPUT_DEPLOY_WIN: ${{ needs.deploy-win.outputs.system }}
-      DEPLO_JOB_SYSTEM_OUTPUT_INTEGRATE_BASE: ""
-      DEPLO_JOB_SYSTEM_OUTPUT_INTEGRATE_BUILDER: ${{ needs.integrate-builder.outputs.system }}
-      DEPLO_JOB_SYSTEM_OUTPUT_INTEGRATE_CONFIG: ${{ needs.integrate-config.outputs.system }}
-      DEPLO_JOB_SYSTEM_OUTPUT_INTEGRATE_SRC: ${{ needs.integrate-src.outputs.system }}
+      DEPLO_CI_SYSTEM_DEPLOY_BASE_OUTPUT: ${{ needs.deploy-base.outputs.system }}
+      DEPLO_CI_SYSTEM_DEPLOY_BUILDER_OUTPUT: ${{ needs.deploy-builder.outputs.system }}
+      DEPLO_CI_SYSTEM_DEPLOY_LATEST_OUTPUT: ${{ needs.deploy-latest.outputs.system }}
+      DEPLO_CI_SYSTEM_DEPLOY_MAC_OUTPUT: ${{ needs.deploy-mac.outputs.system }}
+      DEPLO_CI_SYSTEM_DEPLOY_PRODUCT_OUTPUT: ${{ needs.deploy-product.outputs.system }}
+      DEPLO_CI_SYSTEM_DEPLOY_WIN_OUTPUT: ${{ needs.deploy-win.outputs.system }}
+      DEPLO_CI_SYSTEM_INTEGRATE_BASE_OUTPUT: ${{ needs.integrate-base.outputs.system }}
+      DEPLO_CI_SYSTEM_INTEGRATE_BUILDER_OUTPUT: ${{ needs.integrate-builder.outputs.system }}
+      DEPLO_CI_SYSTEM_INTEGRATE_CONFIG_OUTPUT: ${{ needs.integrate-config.outputs.system }}
+      DEPLO_CI_SYSTEM_INTEGRATE_SRC_OUTPUT: ${{ needs.integrate-src.outputs.system }}
     steps:
       - name: Fetch deplo cli
         run: |
@@ -81,7 +82,7 @@ jobs:
         uses: actions/checkout@v2
         with:
           fetch-depth: 2
-          ref: ${{ needs.deplo-main.outputs.overwrite-commit }}
+          ref: ${{ needs.deplo-main.outputs.DEPLO_OUTPUT_OVERWRITE_COMMIT }}
       - name: Cleanup deplo
         id: deplo-ci-fin
         run: deplo ci fin
@@ -109,7 +110,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v2
         with:
-          ref: ${{ needs.deplo-main.outputs.overwrite-commit }}
+          ref: ${{ needs.deplo-main.outputs.DEPLO_OUTPUT_OVERWRITE_COMMIT }}
   
       - name: deploy base
         id: deplo-deploy-base
@@ -138,7 +139,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v2
         with:
-          ref: ${{ needs.deplo-main.outputs.overwrite-commit }}
+          ref: ${{ needs.deplo-main.outputs.DEPLO_OUTPUT_OVERWRITE_COMMIT }}
   
       - name: deploy builder
         id: deplo-deploy-builder
@@ -154,7 +155,7 @@ jobs:
     name: Running job deploy-latest
     runs-on: ubuntu-latest
     env:
-      DEPLO_JOB_USER_OUTPUT_DEPLOY_PRODUCT: needs.deploy-product.outputs.user
+      DEPLO_CI_USER_DEPLOY_PRODUCT_OUTPUT: needs.deploy-product.outputs.user
   
     outputs:
       need-cleanup: ${{ steps.deplo-deploy-latest.outputs.need-cleanup }}
@@ -168,7 +169,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v2
         with:
-          ref: ${{ needs.deplo-main.outputs.overwrite-commit }}
+          ref: ${{ needs.deplo-main.outputs.DEPLO_OUTPUT_OVERWRITE_COMMIT }}
   
       - name: deploy latest
         id: deplo-deploy-latest
@@ -184,7 +185,7 @@ jobs:
     name: Running job deploy-mac
     runs-on: macos-latest
     env:
-      DEPLO_JOB_USER_OUTPUT_DEPLOY_PRODUCT: needs.deploy-product.outputs.user
+      DEPLO_CI_USER_DEPLOY_PRODUCT_OUTPUT: needs.deploy-product.outputs.user
   
     outputs:
       need-cleanup: ${{ steps.deplo-deploy-mac.outputs.need-cleanup }}
@@ -198,7 +199,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v2
         with:
-          ref: ${{ needs.deplo-main.outputs.overwrite-commit }}
+          ref: ${{ needs.deplo-main.outputs.DEPLO_OUTPUT_OVERWRITE_COMMIT }}
       - name: Cache cargo
         id: deplo-cache-cargo
         uses: actions/cache@v2
@@ -228,7 +229,7 @@ jobs:
     name: Running job deploy-product
     runs-on: ubuntu-latest
     env:
-      DEPLO_JOB_USER_OUTPUT_DEPLOY_BUILDER: needs.deploy-builder.outputs.user
+      DEPLO_CI_USER_DEPLOY_BUILDER_OUTPUT: needs.deploy-builder.outputs.user
   
     outputs:
       need-cleanup: ${{ steps.deplo-deploy-product.outputs.need-cleanup }}
@@ -242,7 +243,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v2
         with:
-          ref: ${{ needs.deplo-main.outputs.overwrite-commit }}
+          ref: ${{ needs.deplo-main.outputs.DEPLO_OUTPUT_OVERWRITE_COMMIT }}
   
       - name: deploy product
         id: deplo-deploy-product
@@ -258,7 +259,7 @@ jobs:
     name: Running job deploy-win
     runs-on: windows-latest
     env:
-      DEPLO_JOB_USER_OUTPUT_DEPLOY_PRODUCT: needs.deploy-product.outputs.user
+      DEPLO_CI_USER_DEPLOY_PRODUCT_OUTPUT: needs.deploy-product.outputs.user
   
     outputs:
       need-cleanup: ${{ steps.deplo-deploy-win.outputs.need-cleanup }}
@@ -273,7 +274,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v2
         with:
-          ref: ${{ needs.deplo-main.outputs.overwrite-commit }}
+          ref: ${{ needs.deplo-main.outputs.DEPLO_OUTPUT_OVERWRITE_COMMIT }}
       - name: Cache cargo
         id: deplo-cache-cargo
         uses: actions/cache@v2
@@ -317,7 +318,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v2
         with:
-          ref: ${{ needs.deplo-main.outputs.overwrite-commit }}
+          ref: ${{ needs.deplo-main.outputs.DEPLO_OUTPUT_OVERWRITE_COMMIT }}
   
       - name: integrate base
         id: deplo-integrate-base
@@ -346,7 +347,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v2
         with:
-          ref: ${{ needs.deplo-main.outputs.overwrite-commit }}
+          ref: ${{ needs.deplo-main.outputs.DEPLO_OUTPUT_OVERWRITE_COMMIT }}
   
       - name: integrate builder
         id: deplo-integrate-builder
@@ -375,7 +376,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v2
         with:
-          ref: ${{ needs.deplo-main.outputs.overwrite-commit }}
+          ref: ${{ needs.deplo-main.outputs.DEPLO_OUTPUT_OVERWRITE_COMMIT }}
   
       - name: integrate config
         id: deplo-integrate-config
@@ -404,7 +405,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v2
         with:
-          ref: ${{ needs.deplo-main.outputs.overwrite-commit }}
+          ref: ${{ needs.deplo-main.outputs.DEPLO_OUTPUT_OVERWRITE_COMMIT }}
       - name: Cache cargo
         id: deplo-cache-cargo
         uses: actions/cache@v2
