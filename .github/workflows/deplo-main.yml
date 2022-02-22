@@ -11,7 +11,7 @@ on:
     types: [deplo-run-remote-job]
 
 env:
-  DEPLO_GHACTION_CI_ID: ${ github.run_id }-${ github.run_attempt }
+  DEPLO_GHACTION_CI_ID: ${{ github.run_id }}-${{ github.run_attempt }}
   DEPLO_GHACTION_PR_URL: ${{ github.event.pull_request.url }}
   DEPLO_GHACTION_EVENT_TYPE: ${{ github.event.action }}
   DEPLO_GHACTION_EVENT_PAYLOAD: ${{ toJSON(github.event.client_payload) }}
@@ -68,7 +68,7 @@ jobs:
       DEPLO_JOB_SYSTEM_OUTPUT_DEPLOY_MAC: ${{ needs.deploy-mac.outputs.system }}
       DEPLO_JOB_SYSTEM_OUTPUT_DEPLOY_PRODUCT: ${{ needs.deploy-product.outputs.system }}
       DEPLO_JOB_SYSTEM_OUTPUT_DEPLOY_WIN: ${{ needs.deploy-win.outputs.system }}
-      DEPLO_JOB_SYSTEM_OUTPUT_INTEGRATE_BASE: ${{ needs.integrate-base.outputs.system }}
+      DEPLO_JOB_SYSTEM_OUTPUT_INTEGRATE_BASE: ""
       DEPLO_JOB_SYSTEM_OUTPUT_INTEGRATE_BUILDER: ${{ needs.integrate-builder.outputs.system }}
       DEPLO_JOB_SYSTEM_OUTPUT_INTEGRATE_CONFIG: ${{ needs.integrate-config.outputs.system }}
       DEPLO_JOB_SYSTEM_OUTPUT_INTEGRATE_SRC: ${{ needs.integrate-src.outputs.system }}

@@ -473,7 +473,7 @@ impl RuntimeConfig {
                 None => {
                     let immc = config.borrow();
                     let vcs = immc.vcs_service()?;
-                    let (account_name, _) = immc.ci_config_by_env();
+                    let (account_name, _) = immc.ci_config_by_env_or_default();
                     let ci = immc.ci_service(account_name)?;
                     match ci.pr_url_from_env()? {
                         Some(_) => Some(WorkflowType::Integrate),
@@ -645,7 +645,7 @@ impl Config {
         };
         let sha = vcs.commit_hash(None)?;
         let random_id = randombytes_as_string!(16);
-        let ci_type = match self.current_ci_type() {
+        let ci_type = match self.current_ci_type_by_env() {
             Ok(v) => v,
             Err(_) => self.ci.accounts.get("default").unwrap().type_as_str().to_string(),
         };
@@ -754,7 +754,7 @@ impl Config {
             // on ci, no dotenv file and secrets are already set as environment variable.
             // so we need to get secret name list from ci service and get their value from environment.
             // then pass key and vlaue to the closure cb.
-            let (name, _) = self.ci_config_by_env();
+            let (name, _) = self.ci_config_by_env_or_default();
             for secret in &self.ci_service(name)?.list_secret_name()? {
                 match std::env::var(secret) {
                     Ok(v) => cb(secret, &v)?,
@@ -797,7 +797,7 @@ impl Config {
         }
         return Ok(())
     }
-    pub fn current_ci_type(&self) -> Result<String, ConfigError> {
+    pub fn current_ci_type_by_env(&self) -> Result<String, ConfigError> {
         let cis = hashmap!{
             "CIRCLE_SHA1" => "CircleCI",
             "GITHUB_ACTION" => "GhAction"
@@ -813,11 +813,6 @@ impl Config {
                 }
             }
         }
-        for (_, value) in &cis {
-            if self.is_main_ci(value) {
-                return Ok(value.to_string());
-            }
-        }
         return Err(ConfigError{ 
             cause: "you don't set CI type and deplo cannot detect it. abort".to_string()
         })
@@ -828,12 +823,22 @@ impl Config {
             None => panic!("provider corresponding to account {} does not exist", account_name)
         }
     }
-    pub fn ci_config_by_env<'b>(&'b self) -> (&'b str, &'b CIAccount) {
-        let t = self.current_ci_type().unwrap();
-        for (account_name, account) in &self.ci.accounts {
-            if account.type_matched(&t) { return (account_name, account) }
+    pub fn ci_config_by_env<'b>(&'b self) -> Option<(&'b str, &'b CIAccount)> {
+        match self.current_ci_type_by_env() {
+            Ok(t) => {
+                for (account_name, account) in &self.ci.accounts {
+                    if account.type_matched(&t) { return Some((account_name, account)) }
+                }
+            },
+            Err(_) => {}
+        };
+        None
+    }
+    pub fn ci_config_by_env_or_default<'b>(&'b self) -> (&'b str, &'b CIAccount) {
+        match self.ci_config_by_env() {
+            Some(config) => config,
+            None => ("default", self.ci.accounts.get("default").unwrap())
         }
-        panic!("ci_type = {}, but does not have corresponding CI Config", t)
     }
     pub fn ci_service<'a>(&'a self, account_name: &str) -> Result<&'a Box<dyn ci::CI>, Box<dyn Error>> {
         return match self.ci_caches.get(account_name) {
@@ -844,12 +849,18 @@ impl Config {
         } 
     }
     pub fn ci_service_by_env<'a>(&'a self) -> Result<&'a Box<dyn ci::CI>, Box<dyn Error>> {
-        let (account_name, _) = self.ci_config_by_env();
-        return match self.ci_caches.get(account_name) {
-            Some(ci) => Ok(ci),
-            None => escalate!(Box::new(ConfigError{ 
-                cause: format!("no ci service for {}", account_name) 
-            }))
+        match self.ci_config_by_env() {
+            Some((account_name, _)) => match self.ci_caches.get(account_name) {
+                Some(ci) => Ok(ci),
+                None => escalate!(Box::new(ConfigError{
+                    cause: format!("no ci service for {}", account_name)
+                }))
+            },
+            None => {
+                return escalate!(Box::new(ConfigError{
+                    cause: "you don't set CI type and deplo cannot detect it. abort".to_string()
+                }))
+            }
         } 
     }
     pub fn ci_service_main<'a>(&'a self) -> Result<&'a Box<dyn ci::CI>, Box<dyn Error>> {

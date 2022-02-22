@@ -33,7 +33,7 @@ impl<S: shell::Shell> CI<S> {
             vcs_mut.init_diff(diff)?;
         }
         let config = self.config.borrow();
-        let (account_name, _) = config.ci_config_by_env();
+        let (account_name, _) = config.ci_config_by_env_or_default();
         let ci = config.ci_service(account_name)?;
         ci.kick()?;
         match ci.dispatched_remote_job()? {
@@ -84,7 +84,7 @@ impl<S: shell::Shell> CI<S> {
     }
     fn setenv<A: args::Args>(&self, _: &A) -> Result<(), Box<dyn Error>> {
         let config = self.config.borrow();
-        let (account_name, _) = config.ci_config_by_env();
+        let (account_name, _) = config.ci_config_by_env_or_default();
         let ci = config.ci_service(account_name)?;
         config.parse_dotenv(|k,v| ci.set_secret(k, v))
     }

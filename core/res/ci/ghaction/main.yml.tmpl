@@ -7,7 +7,7 @@ on:
     types: [{remote_job_dispatch_type}]
 
 env:
-  DEPLO_GHACTION_CI_ID: ${{ github.run_id }}-${{ github.run_attempt }}
+  DEPLO_GHACTION_CI_ID: ${{{{ github.run_id }}}}-${{{{ github.run_attempt }}}}
   DEPLO_GHACTION_PR_URL: ${{{{ github.event.pull_request.url }}}}
   DEPLO_GHACTION_EVENT_TYPE: ${{{{ github.event.action }}}}
   DEPLO_GHACTION_EVENT_PAYLOAD: ${{{{ toJSON(github.event.client_payload) }}}}
