@@ -1181,7 +1181,11 @@ impl Config {
                 let vcs = self.vcs_service()?;
                 match vcs.current_ref()? {
                     (vcs::RefType::Branch|vcs::RefType::Pull, _) => {
-                        let branch_name = format!("deplo-auto-commits-{}-tmp-{}", std::env::var("DEPLO_CI_ID").unwrap(), job_name);
+                        let branch_name = format!(
+                            "refs/heads/deplo-auto-commits-{}-tmp-{}", 
+                            std::env::var("DEPLO_CI_ID").unwrap(),
+                            job_name
+                        );
                         if vcs.push_diff(
                             &branch_name, &commits.generate_commit_log(job_name, &job),
                             &commits.patterns.iter().map(AsRef::as_ref).collect::<Vec<&str>>(),
