@@ -93,16 +93,6 @@ pub trait GitHubFeatures {
 }
 
 impl<S: shell::Shell> Git<S> {
-    fn setup_author(&self) -> Result<(), Box<dyn Error>> {
-        log::debug!("git: setup {}/{}", self.email, self.username);
-        self.shell.exec(&vec!(
-            "git", "config", "--global", "user.email", &self.email
-        ), shell::no_env(), shell::no_cwd(), &shell::no_capture())?;
-        self.shell.exec(&vec!(
-            "git", "config", "--global", "user.name", &self.username
-        ), shell::no_env(), shell::no_cwd(), &shell::no_capture())?;
-        Ok(())
-    }
     fn hub_env(&self) -> Result<HashMap<String, String>, Box<dyn Error>> {
         let config = self.config.borrow();
         if let config::VCSConfig::Github{ email:_, account:_, key } = &config.vcs {
@@ -113,6 +103,14 @@ impl<S: shell::Shell> Git<S> {
             Err(Box::new(config::ConfigError {
                 cause: format!("should have github config, got: {}", config.vcs)
             }))
+        }
+    }
+    fn commit_env(&self) -> HashMap<String, String> {
+        hashmap!{
+            "GIT_COMMITTER_NAME".to_string() => self.username.to_string(),
+            "GIT_AUTHOR_NAME".to_string() => self.username.to_string(),
+            "GIT_COMMITTER_EMAIL".to_string() => self.email.to_string(),
+            "GIT_AUTHOR_EMAIL".to_string() => self.email.to_string(),
         }
     }
     fn parse_ref_path(&self, ref_path: &str) -> Result<(vcs::RefType, String), Box<dyn Error>> {
@@ -235,19 +233,22 @@ impl<S: shell::Shell> GitFeatures for Git<S> {
             Some(v) => !v.is_empty(),
             None => false
         };
+        self.rebase_with_remote_counterpart(url, remote_branch)?;
         if use_lfs {
-            self.shell.exec(&vec!["git", "lfs", "push", url], shell::no_env(), shell::no_cwd(), &shell::no_capture())?;
+            self.shell.exec(
+                &vec!["git", "lfs", "fetch"], shell::no_env(), shell::no_cwd(), &shell::no_capture()
+            )?;
+            self.shell.exec(&vec!["git", "lfs", "push", url], self.commit_env(), shell::no_cwd(), &shell::no_capture())?;
         }
         self.shell.exec(&vec![
             "git", "push", "--no-verify", url, &format!("{}:{}", local_ref, remote_branch)
-        ], shell::no_env(), shell::no_cwd(), &shell::no_capture())?;
+        ], self.commit_env(), shell::no_cwd(), &shell::no_capture())?;
         Ok(())
     }
     fn push_diff(
         &self, url: &str, remote_branch: &str, msg: &str, 
         patterns: &Vec<&str>, options: &HashMap<&str, &str> 
     ) -> Result<bool, Box<dyn Error>> {
-        let config = self.config.borrow();        
         let use_lfs = match options.get("lfs") {
             Some(v) => !v.is_empty(),
             None => false
@@ -278,60 +279,34 @@ impl<S: shell::Shell> GitFeatures for Git<S> {
                     &vec!["git", "lfs", "fetch"], shell::no_env(), shell::no_cwd(), &shell::no_capture()
                 )?;
             }
-			self.shell.exec(&vec!("git", "commit", "-m", msg), shell::no_env(), shell::no_cwd(), &shell::no_capture())?;
+			self.shell.exec(&vec!("git", "commit", "-m", msg), self.commit_env(), shell::no_cwd(), &shell::no_capture())?;
 			log::debug!("commit done: [{}]", msg);
-			match config.runtime_release_target() {
-                Some(_) => {
-                    setup_remote!(self, url);
-                    let (ref_type, ref_path) = self.current_ref()?;
-                    if ref_type != vcs::RefType::Branch {
-                        log::debug!("skip push because current ref is not a branch {}/{}", ref_type, ref_path);
-                        return Ok(false)
-                    }
-                    // update remote counter part of the deploy branch again
-                    // because sometimes other commits are made (eg. merging pull request, job updates metadata)
-                    // here, $CI_BASE_BRANCH_NAME before colon means branch which name is $CI_BASE_BRANCH_NAME at remote `latest`
-                    self.shell.exec(&vec!(
-                        "git", "fetch", "--force", "latest", &format!("{}:remotes/latest/{}", ref_path, ref_path)
-                    ), shell::no_env(), shell::no_cwd(), &shell::no_capture())?;
-                    // deploy branch: rebase CI branch with remotes `latest`. 
-                    // because if other changes commit to the branch, below causes push error without rebasing it
-                    self.shell.exec(&vec!(
-                        "git", "rebase", &format!("remotes/latest/{}", ref_path)
-                    ), shell::no_env(), shell::no_cwd(), &shell::no_capture())?;
-                },
-                None => {}
-            }
 			if use_lfs {
-                self.shell.exec(&vec!["git", "lfs", "push", url], shell::no_env(), shell::no_cwd(), &shell::no_capture())?;
+                self.shell.exec(&vec!["git", "lfs", "push", url], self.commit_env(), shell::no_cwd(), &shell::no_capture())?;
             }
             self.shell.exec(&vec!(
                 "git", "push", "--no-verify", url, &format!("HEAD:{}", remote_branch)
-            ), shell::no_env(), shell::no_cwd(), &shell::no_capture())?;
+            ), self.commit_env(), shell::no_cwd(), &shell::no_capture())?;
 			return Ok(true)
         }
     }
     fn rebase_with_remote_counterpart(
         &self, url: &str, remote_branch: &str
     ) -> Result<(), Box<dyn Error>> {
-        // user and email
-        self.setup_author()?;
+        // rebase to get latest remote branch, because sometimes latest/master and master diverged, 
+        // and pull causes merge FETCH_HEAD into master.
         setup_remote!(self, url);
-        // we cannot `git pull latest $remote_branch` here. eg. $remote_branch = master case on circleCI. 
-        // sometimes latest/master and master diverged, and pull causes merge FETCH_HEAD into master.
-        // then it raises error if no mail/user name specified, because these are diverged branches. 
-        // (but we don't know how master and latest/master are diverged with cached .git of circleCI)
 
         // here, remote_branch before colon means branch which name is $remote_branch at remote `latest`
         // fetch remote counter part of the branch to temporary remote 'latest' for rebasing.
         self.shell.exec(&vec!(
             "git", "fetch", "--force", "latest", 
             &format!("{}:remotes/latest/{}", remote_branch, remote_branch)
-        ), shell::no_env(), shell::no_cwd(), &shell::no_capture())?;
+        ), self.commit_env(), shell::no_cwd(), &shell::no_capture())?;
         // rebase with fetched remote latest branch. it may change HEAD.
         self.shell.exec(&vec!(
             "git", "rebase", &format!("remotes/latest/{}", remote_branch)
-        ), shell::no_env(), shell::no_cwd(), &shell::no_capture())?;
+        ), self.commit_env(), shell::no_cwd(), &shell::no_capture())?;
         Ok(())
     }
 }
