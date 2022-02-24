@@ -232,6 +232,9 @@ impl<GIT: (git::GitFeatures) + (git::GitHubFeatures), S: shell::Shell> vcs::VCS 
     fn delete_branch(&self, branch_name: &str) -> Result<(), Box<dyn Error>> {
         self.git.delete_branch(&self.push_url()?, branch_name)
     }
+    fn fetch_branch(&self, branch_name: &str) -> Result<(), Box<dyn Error>> {
+        self.git.fetch_branch(&self.push_url()?, branch_name)
+    }
     fn checkout(&self, commit: &str, branch_name: Option<&str>) -> Result<(), Box<dyn Error>> {
         self.git.checkout(commit, branch_name)
     }
@@ -246,7 +249,7 @@ impl<GIT: (git::GitFeatures) + (git::GitHubFeatures), S: shell::Shell> vcs::VCS 
     ) -> Result<(), Box<dyn Error>> {
         self.git.pr(title, head_branch, base_branch, options)
     }
-    fn pr_url_from_current_ref(&self) -> Result<Option<String>, Box<dyn Error>> {
+    fn pr_url_from_env(&self) -> Result<Option<String>, Box<dyn Error>> {
         match self.git.current_ref()? {
             (vcs::RefType::Branch|vcs::RefType::Remote, _) => Ok(None),
             (vcs::RefType::Pull, ref_name) => Ok(Some(self.url_from_pull_ref(&ref_name))),
@@ -271,10 +274,10 @@ impl<GIT: (git::GitFeatures) + (git::GitHubFeatures), S: shell::Shell> vcs::VCS 
     fn pick_ref(&self, ref_spec: &str) -> Result<(), Box<dyn Error>> {
         self.git.cherry_pick(ref_spec)
     }
-    fn push(
-        &self, remote_branch: &str, local_ref: &str, option: &HashMap<&str, &str>
+    fn push_branch(
+        &self, local_ref: &str, remote_branch: &str, option: &HashMap<&str, &str>
     ) -> Result<(), Box<dyn Error>> {
-        self.git.push(&self.push_url()?, remote_branch, local_ref, option)
+        self.git.push_branch(&self.push_url()?, local_ref, remote_branch, option)
     }
     fn push_diff(
         &self, branch: &str, msg: &str, patterns: &Vec<&str>, options: &HashMap<&str, &str>

@@ -477,7 +477,7 @@ impl RuntimeConfig {
                     let ci = immc.ci_service(account_name)?;
                     match ci.pr_url_from_env()? {
                         Some(_) => Some(WorkflowType::Integrate),
-                        None => match vcs.pr_url_from_current_ref()? {
+                        None => match vcs.pr_url_from_env()? {
                             Some(_) => Some(WorkflowType::Integrate),
                             None => match vcs.release_target() {
                                 Some(_) => Some(WorkflowType::Deploy),
@@ -1042,7 +1042,7 @@ impl Config {
             Command::Shell => job.shell.as_ref().map_or_else(|| "bash", |v| v.as_str())
         };
         // if current commit is modified, rollback after all operation is done.
-        defer!(self.recover_branch().unwrap());
+        defer!{self.recover_branch().unwrap();};
         if options.remote {
             log::debug!(
                 "force running job {} on remote with command {} at {}", 

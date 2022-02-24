@@ -40,11 +40,11 @@ macro_rules! setup_remote {
             "git", "remote", "add", "latest", $url
         ), shell::no_env(), shell::no_cwd(), &shell::no_capture())?;
         // defered removal of latest
-        defer!(
+        defer! {
             $git.shell.exec(&vec!(
                 "git", "remote", "remove", "latest"
             ), shell::no_env(), shell::no_cwd(), &shell::no_capture()).unwrap();
-        );
+        };
     };
 }
 
@@ -63,6 +63,7 @@ pub trait GitFeatures {
     fn new(username: &str, email: &str, config: &config::Container) -> Self;
     fn current_ref(&self) -> Result<(vcs::RefType, String), Box<dyn Error>>;
     fn delete_branch(&self, url: &str, remote_branch: &str) -> Result<(), Box<dyn Error>>;
+    fn fetch_branch(&self, url: &str, branch_name: &str) -> Result<(), Box<dyn Error>>;
     fn commit_hash(&self, expr: Option<&str>) -> Result<String, Box<dyn Error>>;
     fn checkout(&self, commit: &str, branch_name: Option<&str>) -> Result<(), Box<dyn Error>>;
     fn remote_origin(&self) -> Result<String, Box<dyn Error>>;
@@ -72,9 +73,9 @@ pub trait GitFeatures {
         &self, url: &str, remote_branch: &str
     ) -> Result<(), Box<dyn Error>>;
     fn cherry_pick(&self, branch: &str) -> Result<(), Box<dyn Error>>;
-    fn push(
-        &self, url: &str, remote_branch: &str, 
-        local_ref: &str, option: &HashMap<&str, &str>
+    fn push_branch(
+        &self, url: &str, local_ref: &str, 
+        remote_branch: &str, option: &HashMap<&str, &str>
     ) -> Result<(), Box<dyn Error>>;
     fn push_diff(
         &self, url: &str, remote_branch: &str, msg: &str, 
@@ -174,6 +175,12 @@ impl<S: shell::Shell> GitFeatures for Git<S> {
         ), shell::no_env(), shell::no_cwd(), &shell::no_capture())?;
         Ok(())
     }
+    fn fetch_branch(&self, url: &str, branch_name: &str) -> Result<(), Box<dyn Error>> {
+        self.shell.exec(&vec!(
+            "git", "fetch", url, branch_name
+        ), shell::no_env(), shell::no_cwd(), &shell::no_capture())?;
+        Ok(())
+    }
     fn checkout(&self, commit: &str, branch_name: Option<&str>) -> Result<(), Box<dyn Error>> {
         match branch_name {
             Some(b) => self.shell.output_of(&vec!(
@@ -225,16 +232,22 @@ impl<S: shell::Shell> GitFeatures for Git<S> {
         ), shell::no_env(), shell::no_cwd(), &shell::capture())?;
         Ok(())        
     }
-    fn push(
-        &self, url: &str, remote_branch: &str, 
-        local_ref: &str, options: &HashMap<&str, &str>
+    fn push_branch(
+        &self, url: &str, local_ref: &str, 
+        remote_branch: &str, options: &HashMap<&str, &str>
     ) -> Result<(), Box<dyn Error>> {
-        let use_lfs = match options.get("lfs") {
+        let explicit_lfs = match options.get("explicit_lfs") {
             Some(v) => !v.is_empty(),
             None => false
         };
-        self.rebase_with_remote_counterpart(url, remote_branch)?;
-        if use_lfs {
+        if match options.get("new") {
+            Some(v) => !v.is_empty(),
+            None => false
+        } {
+            // refresh remote branch with its latest state
+            self.rebase_with_remote_counterpart(url, remote_branch)?;
+        }
+        if explicit_lfs {
             self.shell.exec(
                 &vec!["git", "lfs", "fetch"], shell::no_env(), shell::no_cwd(), &shell::no_capture()
             )?;
@@ -249,11 +262,18 @@ impl<S: shell::Shell> GitFeatures for Git<S> {
         &self, url: &str, remote_branch: &str, msg: &str, 
         patterns: &Vec<&str>, options: &HashMap<&str, &str> 
     ) -> Result<bool, Box<dyn Error>> {
-        let use_lfs = match options.get("lfs") {
+        let explicit_lfs = match options.get("explicit_lfs") {
             Some(v) => !v.is_empty(),
             None => false
         };
-        if use_lfs {
+        let original_ref = self.commit_hash(None)?;
+        defer! {
+            self.shell.exec(
+                &vec!["git", "reset", "--hard", &original_ref],
+                shell::no_env(), shell::no_cwd(), &shell::capture()
+            ).unwrap();
+        };
+        if explicit_lfs {
             // this useless diffing is for making lfs tracked files refreshed.
             // otherwise if lfs tracked file is written, codes below seems to treat these write as git diff.
             // even if actually no change.
@@ -274,14 +294,14 @@ impl<S: shell::Shell> GitFeatures for Git<S> {
 			log::debug!("skip push because no changes for provided pattern [{}]", patterns.join(" "));
 			return Ok(false)
         } else {
-			if use_lfs {
+			if explicit_lfs {
 				self.shell.exec(
                     &vec!["git", "lfs", "fetch"], shell::no_env(), shell::no_cwd(), &shell::no_capture()
                 )?;
             }
 			self.shell.exec(&vec!("git", "commit", "-m", msg), self.commit_env(), shell::no_cwd(), &shell::no_capture())?;
 			log::debug!("commit done: [{}]", msg);
-			if use_lfs {
+			if explicit_lfs {
                 self.shell.exec(&vec!["git", "lfs", "push", url], self.commit_env(), shell::no_cwd(), &shell::no_capture())?;
             }
             self.shell.exec(&vec!(

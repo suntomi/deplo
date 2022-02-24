@@ -264,13 +264,15 @@ impl<S: shell::Shell> CI<S> {
         let vcs = config.vcs_service()?;
         let mut pushes = vec![];
         let mut prs = vec![];
-        let push_opts = hashmap!{ "lfs" => "on" };
         for (name, job) in config.enumerate_jobs() {
             let job_name = format!("{}-{}", name.0, name.1);
             match config.system_output(&job_name, config::DEPLO_SYSTEM_OUTPUT_COMMIT_BRANCH_NAME)? {
                 Some(v) => {
                     log::info!("ci fin: find commit from job {} at {}", job_name, v);
-                    if job.commits.as_ref().unwrap().push.unwrap_or(false) {
+                    // if push option is not set, default behaviour is:
+                    // push to current branch for integrate jobs,
+                    // make pr to branch for deploy jobs.
+                    if job.commits.as_ref().unwrap().push.unwrap_or(name.0 == "integrate") {
                         pushes.push(v);
                     } else {
                         prs.push(v);
@@ -290,19 +292,22 @@ impl<S: shell::Shell> CI<S> {
             vcs.checkout(&current_ref, Some(working_branch))?;
             if branches.len() > 0 {
                 for b in &branches {
-                    // HEAD of branch b will be picked
-                    vcs.pick_ref(b)?;
+                    vcs.fetch_branch(b)?;
+                    // FETCH_HEAD of branch b will be picked
+                    vcs.pick_ref("FETCH_HEAD")?;
                 }
                 match ty {
                     "pr" => {
-                        vcs.push(&working_branch, &working_branch, &push_opts)?;
+                        vcs.push_branch(&working_branch, &working_branch, &hashmap!{
+                            "new" => "true",
+                        })?;
                         vcs.pr(
                             &format!("[deplo] auto commit by job [{}]", job_id), 
                             &working_branch, &current_branch, &hashmap!{}
                         )?;
                     },
                     "push" => {
-                        vcs.push(&working_branch, &current_branch, &push_opts)?;
+                        vcs.push_branch(&working_branch, &current_branch, &hashmap!{})?;
                         vcs.delete_branch(&working_branch)?;
                     },
                     &_ => {
@@ -310,7 +315,7 @@ impl<S: shell::Shell> CI<S> {
                     }
                 }
                 for b in &branches {
-                    vcs.delete_branch(b)?;
+                    vcs.delete_branch(&format!("remotes/origin/{}", b))?;
                 }
             }
         }
