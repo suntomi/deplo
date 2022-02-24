@@ -288,9 +288,9 @@ impl<S: shell::Shell> CI<S> {
             "pr" => prs,
             "push" => pushes
         } {
-            let working_branch = &format!("deplo-auto-commits-{}-{}", job_id, ty);
-            vcs.checkout(&current_ref, Some(working_branch))?;
             if branches.len() > 0 {
+                let working_branch = &format!("deplo-auto-commits-{}-{}", job_id, ty);
+                vcs.checkout(&current_ref, Some(working_branch))?;
                 for b in &branches {
                     vcs.fetch_branch(b)?;
                     // FETCH_HEAD of branch b will be picked
