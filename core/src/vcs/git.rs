@@ -28,7 +28,7 @@ use maplit::hashmap;
 
 use crate::config;
 use crate::shell;
-use crate::util::{defer, jsonpath};
+use crate::util::{defer, jsonpath, escalate};
 use crate::vcs;
 
 
@@ -62,7 +62,7 @@ pub struct Git<S: shell::Shell = shell::Default> {
 pub trait GitFeatures {
     fn new(username: &str, email: &str, config: &config::Container) -> Self;
     fn current_ref(&self) -> Result<(vcs::RefType, String), Box<dyn Error>>;
-    fn delete_branch(&self, url: &str, remote_branch: &str) -> Result<(), Box<dyn Error>>;
+    fn delete_branch(&self, url: &str, ref_type: vcs::RefType, ref_path: &str) -> Result<(), Box<dyn Error>>;
     fn fetch_branch(&self, url: &str, branch_name: &str) -> Result<(), Box<dyn Error>>;
     fn commit_hash(&self, expr: Option<&str>) -> Result<String, Box<dyn Error>>;
     fn checkout(&self, commit: &str, branch_name: Option<&str>) -> Result<(), Box<dyn Error>>;
@@ -169,10 +169,24 @@ impl<S: shell::Shell> GitFeatures for Git<S> {
             }
         }
     }
-    fn delete_branch(&self, url: &str, remote_branch: &str) -> Result<(), Box<dyn Error>> {
-        self.shell.exec(&vec!(
-            "git", "push", url, "--delete", remote_branch
-        ), shell::no_env(), shell::no_cwd(), &shell::no_capture())?;
+    fn delete_branch(&self, url: &str, ref_type: vcs::RefType, ref_path: &str) -> Result<(), Box<dyn Error>> {
+        match ref_type {
+            vcs::RefType::Branch => {
+                self.shell.exec(&vec!(
+                    "git", "branch", "-D", ref_path
+                ), shell::no_env(), shell::no_cwd(), &shell::no_capture())?;
+            },
+            vcs::RefType::Remote => {
+                self.shell.exec(&vec!(
+                    "git", "push", url, "--delete", ref_path
+                ), shell::no_env(), shell::no_cwd(), &shell::no_capture())?;
+            }
+            _ => {
+                return escalate!(Box::new(vcs::VCSError {
+                    cause: format!("delete_branch: unsupported ref type: {}/{}", ref_type, ref_path)
+                }))
+            }
+        }
         Ok(())
     }
     fn fetch_branch(&self, url: &str, branch_name: &str) -> Result<(), Box<dyn Error>> {

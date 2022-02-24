@@ -5,9 +5,9 @@ pub mod args;
 pub mod config;
 pub mod shell;
 pub mod util;
+pub mod vcs;
 
 mod ci;
-mod vcs;
 mod module;
 
 #[cfg(test)]

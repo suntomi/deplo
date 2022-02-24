@@ -229,8 +229,8 @@ impl<GIT: (git::GitFeatures) + (git::GitHubFeatures), S: shell::Shell> vcs::VCS 
     fn current_ref(&self) -> Result<(vcs::RefType, String), Box<dyn Error>> {
         self.git.current_ref()
     }
-    fn delete_branch(&self, branch_name: &str) -> Result<(), Box<dyn Error>> {
-        self.git.delete_branch(&self.push_url()?, branch_name)
+    fn delete_branch(&self, ref_type: vcs::RefType, ref_path: &str) -> Result<(), Box<dyn Error>> {
+        self.git.delete_branch(&self.push_url()?, ref_type, ref_path)
     }
     fn fetch_branch(&self, branch_name: &str) -> Result<(), Box<dyn Error>> {
         self.git.fetch_branch(&self.push_url()?, branch_name)

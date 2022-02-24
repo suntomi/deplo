@@ -9,10 +9,11 @@ use maplit::hashmap;
 
 use core::config;
 use core::shell;
+use core::vcs;
 
 use crate::args;
 use crate::command;
-use crate::util::escalate;
+use crate::util::{escalate};
 
 pub struct CI<S: shell::Shell = shell::Default> {
     pub config: config::Container,
@@ -259,7 +260,7 @@ impl<S: shell::Shell> CI<S> {
         log::info!("remote job {} id={} finished", job_name, job_id);
         Ok(())
     }
-    fn cleanup_jobs(&self) -> Result<(), Box<dyn Error>> {
+    fn push_job_result_branches(&self) -> Result<(), Box<dyn Error>> {
         let config = self.config.borrow();
         let vcs = config.vcs_service()?;
         let mut pushes = vec![];
@@ -289,14 +290,14 @@ impl<S: shell::Shell> CI<S> {
             "push" => pushes
         } {
             if branches.len() > 0 {
-                let working_branch = &format!("deplo-auto-commits-{}-{}", job_id, ty);
-                vcs.checkout(&current_ref, Some(working_branch))?;
+                let working_branch = format!("deplo-auto-commits-{}-{}", job_id, ty);
+                vcs.checkout(&current_ref, Some(&working_branch))?;
                 for b in &branches {
                     vcs.fetch_branch(b)?;
                     // FETCH_HEAD of branch b will be picked
                     vcs.pick_ref("FETCH_HEAD")?;
                 }
-                match ty {
+                let result_head_ref = match ty {
                     "pr" => {
                         vcs.push_branch(&working_branch, &working_branch, &hashmap!{
                             "new" => "true",
@@ -305,20 +306,42 @@ impl<S: shell::Shell> CI<S> {
                             &format!("[deplo] auto commit by job [{}]", job_id), 
                             &working_branch, &current_branch, &hashmap!{}
                         )?;
+                        // if pushed successfully, back to original branch
+                        &current_ref
                     },
                     "push" => {
                         vcs.push_branch(&working_branch, &current_branch, &hashmap!{})?;
-                        vcs.delete_branch(&working_branch)?;
+                        // if pushed successfully, move current branch HEAD to pushed HEAD
+                        &working_branch
                     },
                     &_ => {
                         panic!("invalid commit type: {}", ty);
                     }
-                }
-                for b in &branches {
-                    vcs.delete_branch(&format!("remotes/origin/{}", b))?;
+                };
+                // only local execution need to recover repository status
+                if !config::Config::is_running_on_ci() {
+                    vcs.checkout(result_head_ref, Some(&current_branch))?;
+                    vcs.delete_branch(vcs::RefType::Branch, &working_branch)?;
+                    for b in &branches {
+                        vcs.delete_branch(vcs::RefType::Remote, b)?;
+                    }
                 }
             }
         }
+        Ok(())
+    }
+    fn cleanup_jobs(&self) -> Result<(), Box<dyn Error>> {
+        match self.push_job_result_branches() {
+            Ok(_) => {},
+            Err(_) => {
+                log::error!("push_job_result_branches fails: back to original branch");
+                let config = self.config.borrow();
+                let vcs = config.vcs_service().unwrap();
+                let current_branch = std::env::var("DEPLO_CI_BRANCH_NAME").unwrap();
+                let current_ref = std::env::var("DEPLO_CI_CURRENT_SHA").unwrap();
+                vcs.checkout(&current_ref, Some(&current_branch)).unwrap();
+            }
+        };
         Ok(())
     }    
 }
