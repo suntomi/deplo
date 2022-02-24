@@ -370,7 +370,8 @@ pub struct RuntimeConfig {
     pub release_target: Option<String>,
     pub workflow_type: Option<WorkflowType>,
     pub workdir: Option<String>,
-    pub dotenv_path: Option<String>
+    pub dotenv_path: Option<String>,
+    pub process_envs: HashMap<String, String>,
 }
 impl RuntimeConfig {
     fn with_args<A: args::Args>(args: &A) -> Self {
@@ -398,6 +399,7 @@ impl RuntimeConfig {
             release_target: None, // set after
             workflow_type: None, // set after
             workdir: args.value_of("workdir").map_or_else(|| None, |v| Some(v.to_string())),
+            process_envs: hashmap!{}, // set after
         }
     }
     fn setup_logger(verbosity: u64) {
@@ -619,19 +621,24 @@ impl Config {
     }
     pub fn create<A: args::Args>(args: &A) -> Result<Container, Box<dyn Error>> {
         let runtime_config = RuntimeConfig::with_args(args);
+        // phase1. apply command line args that is essential for following phases
         runtime_config.apply()?;
+        // phase2. load config file into this object
         let mut c = Self::with_config(
             ConfigSource::File(args.value_of("config").unwrap_or("Deplo.toml")),
             runtime_config
         )?;
-        // setup module cache
+        // phase3. setup module cache
         Self::setup_ci(&c)?;
         Self::setup_vcs(&c)?;
+        // phase4. apply command line args which requires module cache existences
+        // here, all command line argument should be applied.
         RuntimeConfig::post_apply(&mut c, args)?;
-        c.borrow().setup_process_env()?;
+        // phase5. generate process environment.
+        c.borrow_mut().setup_process_env()?;
         return Ok(c);
     }
-    pub fn setup_process_env(&self) -> Result<(), Box<dyn Error>> {
+    pub fn setup_process_env(&mut self) -> Result<(), Box<dyn Error>> {
         let (ci, local) = match self.ci_service_by_env() {
             Ok(ci) => (ci, false),
             Err(_) => (self.ci_service_main()?, true)
@@ -666,12 +673,17 @@ impl Config {
         for (k, v) in &envs {
             default_envs.insert(k, Some(v.as_str()));
         }
+        let mut applied_process_envs = hashmap!{};
         for (k, v) in &default_envs {
             match v {
-                Some(v) => std::env::set_var(k, v),
+                Some(v) => {
+                    std::env::set_var(k, v);
+                    applied_process_envs.insert(k.to_string(), v.to_string());
+                },
                 None => std::env::remove_var(k),
             }
         };
+        self.runtime.process_envs = applied_process_envs;
         Ok(())
     }
     pub fn data_dir<'a>(&'a self) -> &'a str {
@@ -900,6 +912,9 @@ impl Config {
                 inherits_from_dotenv.insert(k.to_string(), v.to_string());
                 Ok(())
             })?;
+            for (k, v) in &self.runtime.process_envs {
+                inherits_from_dotenv.insert(k.to_string(), v.to_string());
+            }
             inherits_from_dotenv
         };
         for (k, v) in job.job_env(self, system) {
