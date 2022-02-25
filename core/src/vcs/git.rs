@@ -28,7 +28,7 @@ use maplit::hashmap;
 
 use crate::config;
 use crate::shell;
-use crate::util::{defer, jsonpath, escalate};
+use crate::util::{defer, escalate};
 use crate::vcs;
 
 
@@ -49,6 +49,7 @@ macro_rules! setup_remote {
 }
 
 pub struct Git<S: shell::Shell = shell::Default> {
+    #[allow(dead_code)]
     config: config::Container,
     username: String,
     email: String,
@@ -64,6 +65,7 @@ pub trait GitFeatures {
     fn current_ref(&self) -> Result<(vcs::RefType, String), Box<dyn Error>>;
     fn delete_branch(&self, url: &str, ref_type: vcs::RefType, ref_path: &str) -> Result<(), Box<dyn Error>>;
     fn fetch_branch(&self, url: &str, branch_name: &str) -> Result<(), Box<dyn Error>>;
+    fn squash_branch(&self, n: usize) -> Result<(), Box<dyn Error>>;
     fn commit_hash(&self, expr: Option<&str>) -> Result<String, Box<dyn Error>>;
     fn checkout(&self, commit: &str, branch_name: Option<&str>) -> Result<(), Box<dyn Error>>;
     fn remote_origin(&self) -> Result<String, Box<dyn Error>>;
@@ -84,28 +86,7 @@ pub trait GitFeatures {
     fn tags(&self) -> Result<Vec<String>, Box<dyn Error>>;
 }
 
-pub trait GitHubFeatures {
-    fn pr(
-        &self, title: &str, head_branch: &str, base_branch: &str, options: &HashMap<&str, &str>
-    ) -> Result<(), Box<dyn Error>>;  
-    fn pr_data(
-        &self, pr_url: &str, account: &str, token: &str, json_path: &str
-    ) -> Result<String, Box<dyn Error>>;
-}
-
 impl<S: shell::Shell> Git<S> {
-    fn hub_env(&self) -> Result<HashMap<String, String>, Box<dyn Error>> {
-        let config = self.config.borrow();
-        if let config::VCSConfig::Github{ email:_, account:_, key } = &config.vcs {
-            Ok(hashmap!{
-                "GITHUB_TOKEN".to_string() => key.to_string()
-            })
-        } else {
-            Err(Box::new(config::ConfigError {
-                cause: format!("should have github config, got: {}", config.vcs)
-            }))
-        }
-    }
     fn commit_env(&self) -> HashMap<String, String> {
         hashmap!{
             "GIT_COMMITTER_NAME".to_string() => self.username.to_string(),
@@ -192,6 +173,12 @@ impl<S: shell::Shell> GitFeatures for Git<S> {
     fn fetch_branch(&self, url: &str, branch_name: &str) -> Result<(), Box<dyn Error>> {
         self.shell.exec(&vec!(
             "git", "fetch", url, branch_name
+        ), shell::no_env(), shell::no_cwd(), &shell::no_capture())?;
+        Ok(())
+    }
+    fn squash_branch(&self, n: usize) -> Result<(), Box<dyn Error>> {
+        self.shell.exec(&vec!(
+            "git", "rebase", "-i", &format!("HEAD~{}", n)
         ), shell::no_env(), shell::no_cwd(), &shell::no_capture())?;
         Ok(())
     }
@@ -342,41 +329,6 @@ impl<S: shell::Shell> GitFeatures for Git<S> {
             "git", "rebase", &format!("remotes/latest/{}", remote_branch)
         ), self.commit_env(), shell::no_cwd(), &shell::no_capture())?;
         Ok(())
-    }
-}
-
-impl<S: shell::Shell> GitHubFeatures for Git<S> {
-    fn pr(
-        &self, title: &str, head_branch: &str, base_branch: &str, options: &HashMap<&str, &str>
-    ) -> Result<(), Box<dyn Error>> {
-        match options.get("labels") {
-            Some(l) => {
-                self.shell.exec(&vec!(
-                    "hub", "pull-request", "-f", "-m", title, 
-                    "-h", head_branch, "-b", base_branch, "-l", l
-                ), self.hub_env()?, shell::no_cwd(), &shell::no_capture())?;
-            },
-            None => {
-                self.shell.exec(&vec!(
-                    "hub", "pull-request", "-f", "-m", title, 
-                    "-h", head_branch, "-b", base_branch,
-                ), self.hub_env()?, shell::no_cwd(), &shell::no_capture())?;
-            }
-        }
-        Ok(())
-    }
-    fn pr_data(
-        &self, pr_url: &str, _account: &str, token: &str, json_path: &str
-    ) -> Result<String, Box<dyn Error>> {
-        let api_url = format!(
-            "https://api.github.com/repos/{pr_part}",
-            pr_part = &pr_url[19..].replace("/pull/", "/pulls/")
-        );
-        let output = self.shell.exec(&vec![
-            "curl", "-s", "-H", &format!("Authorization: token {}", token), 
-            "-H", "Accept: application/vnd.github.v3+json", &api_url
-        ], shell::no_env(), shell::no_cwd(), &shell::capture())?;
-        Ok(jsonpath(&output, json_path)?.unwrap_or("".to_string()))
     }
 }
 

@@ -4,6 +4,7 @@ use std::path::Path;
 use std::result::Result;
 
 use glob::Pattern;
+use maplit::hashmap;
 use regex;
 use serde_json::{Value as JsonValue};
 
@@ -15,14 +16,14 @@ use crate::util::{escalate,make_escalation,jsonpath,str_to_json};
 
 use super::git;
 
-pub struct Github<GIT: (git::GitFeatures) + (git::GitHubFeatures) = git::Git, S: shell::Shell = shell::Default> {
+pub struct Github<GIT: git::GitFeatures = git::Git, S: shell::Shell = shell::Default> {
     pub config: config::Container,
     pub git: GIT,
     pub shell: S,
     pub diff: Vec<String>
 }
 
-impl<GIT: (git::GitFeatures) + (git::GitHubFeatures), S: shell::Shell> Github<GIT, S> {
+impl<GIT: git::GitFeatures, S: shell::Shell> Github<GIT, S> {
     fn push_url(&self) -> Result<String, Box<dyn Error>> {
         let config = self.config.borrow();
         if let config::VCSConfig::Github{ email:_, account, key } = &config.vcs {
@@ -97,21 +98,30 @@ impl<GIT: (git::GitFeatures) + (git::GitHubFeatures), S: shell::Shell> Github<GI
         format!("https://github.com/{}/{}/{}", user_and_repo.0, user_and_repo.1, ref_name)
     }
     fn pr_data_from_ref_path(&self, ref_path: &str, json_path: &str) ->Result<String, Box<dyn Error>> {
-        if let config::VCSConfig::Github{ key, account, .. } = &self.config.borrow().vcs {
-            self.git.pr_data(&self.url_from_pull_ref(&ref_path), account, key, json_path)
+        if let config::VCSConfig::Github{ key, .. } = &self.config.borrow().vcs {
+            let pr_url = self.url_from_pull_ref(ref_path);
+            let api_url = format!(
+                "https://api.github.com/repos/{pr_part}",
+                pr_part = &pr_url[19..].replace("/pull/", "/pulls/")
+            );
+            let output = self.shell.exec(&vec![
+                "curl", "-s", "-H", &format!("Authorization: token {}", key), 
+                "-H", "Accept: application/vnd.github.v3+json", &api_url
+            ], shell::no_env(), shell::no_cwd(), &shell::capture())?;
+            Ok(jsonpath(&output, json_path)?.unwrap_or("".to_string()))    
         } else {
             panic!("vcs account is not for github ${:?}", &self.config.borrow().vcs)
         }
     }
 }
 
-impl<GIT: (git::GitFeatures) + (git::GitHubFeatures), S: shell::Shell> module::Module for Github<GIT, S> {
+impl<GIT: git::GitFeatures, S: shell::Shell> module::Module for Github<GIT, S> {
     fn prepare(&self, _:bool) -> Result<(), Box<dyn Error>> {
         Ok(())
     }
 }
 
-impl<GIT: (git::GitFeatures) + (git::GitHubFeatures), S: shell::Shell> vcs::VCS for Github<GIT, S> {
+impl<GIT: git::GitFeatures, S: shell::Shell> vcs::VCS for Github<GIT, S> {
     fn new(config: &config::Container) -> Result<Github<GIT,S>, Box<dyn Error>> {
         if let config::VCSConfig::Github{ account, key:_, email } = &config.borrow().vcs {
             return Ok(Github {
@@ -235,6 +245,9 @@ impl<GIT: (git::GitFeatures) + (git::GitHubFeatures), S: shell::Shell> vcs::VCS 
     fn fetch_branch(&self, branch_name: &str) -> Result<(), Box<dyn Error>> {
         self.git.fetch_branch(&self.push_url()?, branch_name)
     }
+    fn squash_branch(&self, n: usize) -> Result<(), Box<dyn Error>> {
+        self.git.squash_branch(n)
+    }
     fn checkout(&self, commit: &str, branch_name: Option<&str>) -> Result<(), Box<dyn Error>> {
         self.git.checkout(commit, branch_name)
     }
@@ -247,7 +260,55 @@ impl<GIT: (git::GitFeatures) + (git::GitHubFeatures), S: shell::Shell> vcs::VCS 
     fn pr(
         &self, title: &str, head_branch: &str, base_branch: &str, options: &HashMap<&str, &str>
     ) -> Result<(), Box<dyn Error>> {
-        self.git.pr(title, head_branch, base_branch, options)
+        if let config::VCSConfig::Github{ key, .. } = &self.config.borrow().vcs {
+            let user_and_repo = (self as &dyn vcs::VCS).user_and_repo().unwrap();
+            let mut body = hashmap!{
+                "title" => title, "owner" => &user_and_repo.0, 
+                "repo" => &user_and_repo.1,
+                "head" => head_branch, "base" => base_branch                
+            };
+            for (k, v) in options {
+                if *k != "labels" {
+                    body.insert(k, v);
+                }
+            }
+            let response = self.shell.exec(&vec![
+                "curl", "-H", &format!("Authorization: token {}", key), 
+                "-H", "Accept: application/vnd.github.v3+json", 
+                &format!(
+                    "https://api.github.com/repos/{}/{}/pulls", 
+                    user_and_repo.0, user_and_repo.1
+                ),
+                "-d", &serde_json::to_string(&body)?
+                ], shell::no_env(), shell::no_cwd(), &shell::capture()
+            )?;
+            let issues_api_url = jsonpath(&response, "$.issue_url")?.unwrap();
+            match options.get("labels") {
+                Some(labels) => {
+                    log::debug!("attach labels({}) to PR via {}", labels, issues_api_url);
+                    self.shell.exec(&vec![
+                        "curl", "-H", &format!("Authorization: token {}", key), 
+                        "-H", "Accept: application/vnd.github.v3+json", &format!("{}/issues", issues_api_url),
+                        "-d", &serde_json::to_string(&hashmap!{ "labels" => labels })?
+                    ], shell::no_env(), shell::no_cwd(), &shell::capture())?;
+                },
+                None => {}
+            };
+            match options.get("assignees") {
+                Some(assignees) => {
+                    log::debug!("assign accounts({}) to PR via {}", assignees, issues_api_url);
+                    self.shell.exec(&vec![
+                        "curl", "-H", &format!("Authorization: token {}", key), 
+                        "-H", "Accept: application/vnd.github.v3+json", &format!("{}/assignees", issues_api_url),
+                        "-d", &serde_json::to_string(&hashmap!{ "assignees" => assignees })?
+                    ], shell::no_env(), shell::no_cwd(), &shell::capture())?;
+                },
+                None => {}
+            };
+        } else {
+            panic!("vcs is not github: {}", self.config.borrow().vcs);
+        }
+        Ok(())
     }
     fn pr_url_from_env(&self) -> Result<Option<String>, Box<dyn Error>> {
         match self.git.current_ref()? {

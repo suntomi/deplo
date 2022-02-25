@@ -126,10 +126,22 @@ impl fmt::Display for Command {
     }
 }
 #[derive(Serialize, Deserialize)]
+#[serde(tag = "type")]
+pub enum PushOptions {
+    Push {
+        squash: Option<bool>,
+    },
+    PullRequest {
+        labels: Option<Vec<String>>,
+        assignees: Option<Vec<String>>,
+        aggregate: Option<bool>,
+    }
+}
+#[derive(Serialize, Deserialize)]
 pub struct Commits {
     pub patterns: Vec<String>,
     pub log_format: Option<String>,
-    pub push: Option<bool>,
+    pub push_opts: Option<PushOptions>,
 }
 impl Commits {
     fn generate_commit_log(&self, name: &str, _: &Job) -> String {
@@ -164,7 +176,6 @@ pub struct Job {
     pub commits: Option<Commits>,
     pub options: Option<HashMap<String, String>>,
     pub tasks: Option<HashMap<String, String>>,
-    pub local_fallback: Option<FallbackContainer>,
 }
 impl Job {
     pub fn runner_os(&self) -> RunnerOS {
@@ -652,12 +663,20 @@ impl Config {
         };
         let sha = vcs.commit_hash(None)?;
         let random_id = randombytes_as_string!(16);
+        let may_parent_ci_id = std::env::var("DEPLO_CI_ID");
         let ci_type = match self.current_ci_type_by_env() {
             Ok(v) => v,
             Err(_) => self.ci.accounts.get("default").unwrap().type_as_str().to_string(),
         };
         let mut default_envs = hashmap!{
-            "DEPLO_CI_ID" => Some(random_id.as_str()),
+            // on local, CI ID should be inherited from parent, if exists.
+            // on CI DEPLO_CI_ID replaced with CI specific environment variable that represents canonical ID
+            "DEPLO_CI_ID" => Some(match may_parent_ci_id {
+                Ok(ref v) => v.as_str(),
+                Err(_) => random_id.as_str(),
+            }),
+            // other CI process env should be recalculated, because user may call deplo on deferent environment.
+            // but on CI, some of these variables may replaced by CI specific way, by return values of ci.process_env
             "DEPLO_CI_TYPE" => Some(ci_type.as_str()),
             "DEPLO_CI_TAG_NAME" => may_tag,
             "DEPLO_CI_BRANCH_NAME" => may_branch,
