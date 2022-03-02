@@ -339,13 +339,6 @@ impl<S: shell::Shell> GhAction<S> {
             ).split("\n").map(|s| s.to_string()).collect()
         }
     }
-    fn get_vcs_checkout_token(&self) -> Result<String, Box<dyn Error>> {
-        let config = self.config.borrow();
-        Ok(match &config.vcs {
-            config::VCSConfig::Github{ key, .. } => { key.to_string() },
-            config::VCSConfig::Gitlab{ key, .. } => { key.to_string() },
-        })
-    }
     fn get_token(&self) -> Result<String, Box<dyn Error>> {
         let config = self.config.borrow();
         Ok(match &config.ci_config(&self.account_name) {
@@ -422,11 +415,15 @@ impl<'a, S: shell::Shell> module::Module for GhAction<S> {
                 checkout = MultilineFormatString{
                     strings: &self.generate_checkout_steps(&name, &job.checkout, &Some(merge_hashmap(
                         &job.checkout.as_ref().map_or_else(
-                            || hashmap!{},
-                            |v| if v.get("lfs").is_some() {
-                                hashmap! { "fetch-depth".to_string() => "0".to_string() }
+                            || if job.commits.is_some() {
+                                hashmap!{ "fetch-depth".to_string() => "0".to_string() }
                             } else {
-                                hashmap! {}
+                                hashmap!{}
+                            },
+                            |v| if v.get("lfs").is_some() || job.commits.is_some() {
+                                hashmap!{ "fetch-depth".to_string() => "0".to_string() }
+                            } else {
+                                hashmap!{}
                             }
                         ), &hashmap!{
                             "ref".to_string() => "${{ github.event.client_payload.commit }}".to_string()

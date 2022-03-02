@@ -370,10 +370,23 @@ jobs:
         run: |
           curl -L https://github.com/suntomi/deplo/releases/download/nightly/deplo-Linux -o /usr/local/bin/deplo
           chmod +x /usr/local/bin/deplo
+      - name: Fetch repository cache
+        id: fetch-repository-cache
+        uses: actions/cache@v2
+        with:
+          path: .git
+          key: deplo-git-v1-${{ github.sha }}
+          restore-keys:
+            deplo-git-v1-
       - name: Checkout
+        if: steps.fetch-repository-cache.outputs.cache-hit != 'true'
         uses: actions/checkout@v2
         with:
+          fetch-depth: 0
           ref: ${{ github.event.client_payload.commit }}
+      - name: Restore repository from cache
+        if: steps.fetch-repository-cache.outputs.cache-hit == 'true'
+        run: git reset --hard HEAD
   
       - name: integrate config
         id: deplo-integrate-config
