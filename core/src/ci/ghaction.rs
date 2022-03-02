@@ -309,14 +309,13 @@ impl<S: shell::Shell> GhAction<S> {
             || defaults.clone().unwrap_or(HashMap::new()),
             |v| merge_hashmap(&defaults.clone().unwrap_or(HashMap::new()), v)
         );
-        let mut checkout_opts = merged_opts.iter().map(|(k,v)| {
-            return if vec!["fetch-depth", "lfs"].contains(&k.as_str()) {
+        let checkout_opts = sorted_key_iter(&merged_opts).map(|(k,v)| {
+            return if vec!["fetch-depth", "lfs", "ref", "token"].contains(&k.as_str()) {
                 format!("{}: {}", k, v)
             } else {
                 format!("# warning: deplo only support lfs/fetch-depth options for github action checkout but {}({}) is specified", k, v)
             }
         }).collect::<Vec<String>>();
-        checkout_opts.push("ref: ${{ needs.deplo-main.outputs.overwrite-commit }}".to_string());
         // hash value for separating repository cache according to checkout options
         let opts_hash = options.as_ref().map_or_else(
             || "".to_string(), 
@@ -339,6 +338,13 @@ impl<S: shell::Shell> GhAction<S> {
                 }
             ).split("\n").map(|s| s.to_string()).collect()
         }
+    }
+    fn get_vcs_checkout_token(&self) -> Result<String, Box<dyn Error>> {
+        let config = self.config.borrow();
+        Ok(match &config.vcs {
+            config::VCSConfig::Github{ key, .. } => { key.to_string() },
+            config::VCSConfig::Gitlab{ key, .. } => { key.to_string() },
+        })
     }
     fn get_token(&self) -> Result<String, Box<dyn Error>> {
         let config = self.config.borrow();
@@ -414,14 +420,18 @@ impl<'a, S: shell::Shell> module::Module for GhAction<S> {
                     postfix: None
                 },
                 checkout = MultilineFormatString{
-                    strings: &self.generate_checkout_steps(&name, &job.checkout, &job.checkout.as_ref().map_or_else(
-                        || None,
-                        |v| if v.get("lfs").is_some() {
-                            Some(hashmap! { "fetch-depth".to_string() => "0".to_string() })
-                        } else {
-                            None
-                        }
-                    )),
+                    strings: &self.generate_checkout_steps(&name, &job.checkout, &Some(merge_hashmap(
+                        &job.checkout.as_ref().map_or_else(
+                            || hashmap!{},
+                            |v| if v.get("lfs").is_some() {
+                                hashmap! { "fetch-depth".to_string() => "0".to_string() }
+                            } else {
+                                hashmap! {}
+                            }
+                        ), &hashmap!{
+                            "ref".to_string() => "${{ github.event.client_payload.commit }}".to_string()
+                        }))
+                    ),
                     postfix: None
                 },
                 debugger = MultilineFormatString{
@@ -450,9 +460,16 @@ impl<'a, S: shell::Shell> module::Module for GhAction<S> {
                     ),
                     postfix: None
                 },
-                checkout = MultilineFormatString{
+                kick_checkout = MultilineFormatString{
                     strings: &self.generate_checkout_steps("main", &None, &Some(hashmap!{
-                        "fetch-depth".to_string() => "2".to_string()
+                        "fetch-depth".to_string() => "2".to_string(),
+                        "ref".to_string() => "${{ github.event.client_payload.commit }}".to_string()
+                    })),
+                    postfix: None
+                },
+                fin_checkout = MultilineFormatString{
+                    strings: &self.generate_checkout_steps("main", &None, &Some(hashmap!{
+                        "ref".to_string() => "${{ github.event.client_payload.commit }}".to_string()
                     })),
                     postfix: None
                 },
@@ -485,12 +502,6 @@ impl<S: shell::Shell> ci::CI for GhAction<S> {
         });
     }
     fn kick(&self) -> Result<(), Box<dyn Error>> {
-        match std::env::var("DEPLO_OVERWRITE_COMMIT") {
-            Ok(c) => if !c.is_empty() {
-                println!("::set-output name=overwrite-commit::{}", c);
-            },
-            Err(_) => {}
-        };
         Ok(())
     }
     fn overwrite_commit(&self, commit: &str) -> Result<String, Box<dyn Error>> {

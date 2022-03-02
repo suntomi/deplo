@@ -12,7 +12,7 @@ use crate::config;
 use crate::vcs;
 use crate::module;
 use crate::shell;
-use crate::util::{escalate,make_escalation,jsonpath,str_to_json};
+use crate::util::{escalate,make_escalation,jsonpath,str_to_json,defer};
 
 use super::git;
 
@@ -23,12 +23,22 @@ pub struct Github<GIT: git::GitFeatures = git::Git, S: shell::Shell = shell::Def
     pub diff: Vec<String>
 }
 
+const DEFAULT_REMOTE_NAME: &'static str = "depplo_push_origin";
+
 impl<GIT: git::GitFeatures, S: shell::Shell> Github<GIT, S> {
-    fn push_url(&self) -> Result<String, Box<dyn Error>> {
+    fn cleanup_remote(&self, remote_name: Option<&str>) -> Result<(), Box<dyn Error>> {
+        Ok(self.git.cleanup_remote(
+            remote_name.unwrap_or(DEFAULT_REMOTE_NAME)
+        )?)
+    }
+    fn setup_remote(&self, remote_name: Option<&str>) -> Result<String, Box<dyn Error>> {
         let config = self.config.borrow();
         if let config::VCSConfig::Github{ email:_, account, key } = &config.vcs {
             let user_and_repo = (self as &dyn vcs::VCS).user_and_repo()?;
-            Ok(format!("https://{}:{}@github.com/{}/{}", account, key, user_and_repo.0, user_and_repo.1))
+            Ok(self.git.setup_remote(
+                remote_name.unwrap_or(DEFAULT_REMOTE_NAME), 
+                &format!("https://{}:{}@github.com/{}/{}", account, key, user_and_repo.0, user_and_repo.1)
+            )?)
         } else {
             Err(Box::new(vcs::VCSError {
                 cause: format!("should have github config, got: {}", config.vcs)
@@ -234,16 +244,19 @@ impl<GIT: git::GitFeatures, S: shell::Shell> vcs::VCS for Github<GIT, S> {
         self.get_value_from_json_object(&response, "browser_download_url")
     }
     fn rebase_with_remote_counterpart(&self, branch: &str) -> Result<(), Box<dyn Error>> {
-        self.git.rebase_with_remote_counterpart(&self.push_url()?, branch)
+        defer!{ self.cleanup_remote(None).unwrap(); };
+        self.git.rebase_with_remote_counterpart(&self.setup_remote(None)?, branch)
     }
     fn current_ref(&self) -> Result<(vcs::RefType, String), Box<dyn Error>> {
         self.git.current_ref()
     }
     fn delete_branch(&self, ref_type: vcs::RefType, ref_path: &str) -> Result<(), Box<dyn Error>> {
-        self.git.delete_branch(&self.push_url()?, ref_type, ref_path)
+        defer!{ self.cleanup_remote(None).unwrap(); };
+        self.git.delete_branch(&self.setup_remote(None)?, ref_type, ref_path)
     }
     fn fetch_branch(&self, branch_name: &str) -> Result<(), Box<dyn Error>> {
-        self.git.fetch_branch(&self.push_url()?, branch_name)
+        defer!{ self.cleanup_remote(None).unwrap(); };
+        self.git.fetch_branch(&self.setup_remote(None)?, branch_name)
     }
     fn squash_branch(&self, n: usize) -> Result<(), Box<dyn Error>> {
         self.git.squash_branch(n)
@@ -338,12 +351,14 @@ impl<GIT: git::GitFeatures, S: shell::Shell> vcs::VCS for Github<GIT, S> {
     fn push_branch(
         &self, local_ref: &str, remote_branch: &str, option: &HashMap<&str, &str>
     ) -> Result<(), Box<dyn Error>> {
-        self.git.push_branch(&self.push_url()?, local_ref, remote_branch, option)
+        defer!{ self.cleanup_remote(None).unwrap(); };
+        self.git.push_branch(&self.setup_remote(None)?, local_ref, remote_branch, option)
     }
     fn push_diff(
         &self, branch: &str, msg: &str, patterns: &Vec<&str>, options: &HashMap<&str, &str>
     ) -> Result<bool, Box<dyn Error>> {
-        self.git.push_diff(&self.push_url()?, branch, msg, patterns, options)
+        defer!{ self.cleanup_remote(None).unwrap(); };
+        self.git.push_diff(&self.setup_remote(None)?, branch, msg, patterns, options)
     }
     fn make_diff(&self) -> Result<String, Box<dyn Error>> {
         let diff = match self.git.current_ref()? {

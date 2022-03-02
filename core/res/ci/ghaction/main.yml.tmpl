@@ -21,11 +21,10 @@ jobs:
     name: Start CI ${{{{ github.event.client_payload.job_id }}}}
     runs-on: ubuntu-latest
     outputs:
-      overwrite-commit: ${{{{ steps.deplo-ci-kick.outputs.overwrite-commit }}}}
 {outputs:>6}
     steps:
 {fetchcli:>6}
-{checkout:>6}
+{kick_checkout:>6}
       - name: Start deplo
         id: deplo-ci-kick
         run: deplo ci kick
@@ -42,7 +41,7 @@ jobs:
 {cleanup_envs:>4}
     steps:
 {fetchcli:>6}
-{checkout:>6}
+{fin_checkout:>6}
       - name: Cleanup deplo
         id: deplo-ci-fin
         run: deplo ci fin

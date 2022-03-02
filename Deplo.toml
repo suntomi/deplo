@@ -68,6 +68,7 @@ for i in `seq 1 ${COUNT:-10}`; do
     sleep 1
 done
 """
+test = "echo 'suntomi-bot'"
 
 [jobs.integrate.src]
 patterns = [".*/src/.*", "Cargo.*"]
@@ -87,7 +88,7 @@ paths = ["target", "~/.cargo/bin", "~/.cargo/registry/cache", "~/.cargo/registry
 patterns = ["Deplo.toml"]
 runner = { type = "Machine", os = "Linux", local_fallback = { path = "tools/docker/Dockerfile.vmfb", shell = "sh" } }
 command = "deplo init"
-commits = { patterns = [".github/*"], push = true }
+commits = { patterns = [".github/*"], push_opts = { type = "PullRequest", labels = ["bug"] } }
 
 
 

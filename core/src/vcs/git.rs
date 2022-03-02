@@ -63,8 +63,10 @@ pub struct Git<S: shell::Shell = shell::Default> {
 pub trait GitFeatures {
     fn new(username: &str, email: &str, config: &config::Container) -> Self;
     fn current_ref(&self) -> Result<(vcs::RefType, String), Box<dyn Error>>;
-    fn delete_branch(&self, url: &str, ref_type: vcs::RefType, ref_path: &str) -> Result<(), Box<dyn Error>>;
-    fn fetch_branch(&self, url: &str, branch_name: &str) -> Result<(), Box<dyn Error>>;
+    fn setup_remote(&self, remote_name: &str, url: &str) -> Result<String, Box<dyn Error>>;
+    fn cleanup_remote(&self, remote_name: &str) -> Result<(), Box<dyn Error>>;
+    fn delete_branch(&self, remote: &str, ref_type: vcs::RefType, ref_path: &str) -> Result<(), Box<dyn Error>>;
+    fn fetch_branch(&self, remote: &str, branch_name: &str) -> Result<(), Box<dyn Error>>;
     fn squash_branch(&self, n: usize) -> Result<(), Box<dyn Error>>;
     fn commit_hash(&self, expr: Option<&str>) -> Result<String, Box<dyn Error>>;
     fn checkout(&self, commit: &str, branch_name: Option<&str>) -> Result<(), Box<dyn Error>>;
@@ -72,15 +74,15 @@ pub trait GitFeatures {
     fn repository_root(&self) -> Result<String, Box<dyn Error>>;
     fn diff_paths(&self, expression: &str) -> Result<String, Box<dyn Error>>;
     fn rebase_with_remote_counterpart(
-        &self, url: &str, remote_branch: &str
+        &self, remote: &str, remote_branch: &str
     ) -> Result<(), Box<dyn Error>>;
     fn cherry_pick(&self, branch: &str) -> Result<(), Box<dyn Error>>;
     fn push_branch(
-        &self, url: &str, local_ref: &str, 
+        &self, remote: &str, local_ref: &str, 
         remote_branch: &str, option: &HashMap<&str, &str>
     ) -> Result<(), Box<dyn Error>>;
     fn push_diff(
-        &self, url: &str, remote_branch: &str, msg: &str, 
+        &self, remote: &str, remote_branch: &str, msg: &str, 
         patterns: &Vec<&str>, options: &HashMap<&str, &str>
     ) -> Result<bool, Box<dyn Error>>;
     fn tags(&self) -> Result<Vec<String>, Box<dyn Error>>;
@@ -138,6 +140,18 @@ impl<S: shell::Shell> GitFeatures for Git<S> {
             repo: StubRepository {},
         }
     }
+    fn setup_remote(&self, remote_name: &str, url: &str) -> Result<String, Box<dyn Error>> {
+        self.shell.exec(&vec!(
+            "git", "remote", "add", remote_name, url
+        ), shell::no_env(), shell::no_cwd(), &shell::no_capture())?;
+        Ok(remote_name.to_string())
+    }
+    fn cleanup_remote(&self, remote_name: &str) -> Result<(), Box<dyn Error>> {
+        self.shell.exec(&vec!(
+            "git", "remote", "remove", remote_name
+        ), shell::no_env(), shell::no_cwd(), &shell::no_capture()).unwrap();
+        Ok(())
+    }
     fn current_ref(&self) -> Result<(vcs::RefType, String), Box<dyn Error>> {
         match self.shell.output_of(&vec!(
             "git", "describe" , "--all"
@@ -150,7 +164,7 @@ impl<S: shell::Shell> GitFeatures for Git<S> {
             }
         }
     }
-    fn delete_branch(&self, url: &str, ref_type: vcs::RefType, ref_path: &str) -> Result<(), Box<dyn Error>> {
+    fn delete_branch(&self, remote: &str, ref_type: vcs::RefType, ref_path: &str) -> Result<(), Box<dyn Error>> {
         match ref_type {
             vcs::RefType::Branch => {
                 self.shell.exec(&vec!(
@@ -159,7 +173,7 @@ impl<S: shell::Shell> GitFeatures for Git<S> {
             },
             vcs::RefType::Remote => {
                 self.shell.exec(&vec!(
-                    "git", "push", url, "--delete", ref_path
+                    "git", "push", remote, "--delete", ref_path
                 ), shell::no_env(), shell::no_cwd(), &shell::no_capture())?;
             }
             _ => {
@@ -170,9 +184,9 @@ impl<S: shell::Shell> GitFeatures for Git<S> {
         }
         Ok(())
     }
-    fn fetch_branch(&self, url: &str, branch_name: &str) -> Result<(), Box<dyn Error>> {
+    fn fetch_branch(&self, remote: &str, branch_name: &str) -> Result<(), Box<dyn Error>> {
         self.shell.exec(&vec!(
-            "git", "fetch", url, branch_name
+            "git", "fetch", remote, branch_name
         ), shell::no_env(), shell::no_cwd(), &shell::no_capture())?;
         Ok(())
     }
@@ -234,7 +248,7 @@ impl<S: shell::Shell> GitFeatures for Git<S> {
         Ok(())        
     }
     fn push_branch(
-        &self, url: &str, local_ref: &str, 
+        &self, remote: &str, local_ref: &str, 
         remote_branch: &str, options: &HashMap<&str, &str>
     ) -> Result<(), Box<dyn Error>> {
         let explicit_lfs = match options.get("explicit_lfs") {
@@ -246,21 +260,21 @@ impl<S: shell::Shell> GitFeatures for Git<S> {
             None => false
         } {
             // refresh remote branch with its latest state
-            self.rebase_with_remote_counterpart(url, remote_branch)?;
+            self.rebase_with_remote_counterpart(remote, remote_branch)?;
         }
         if explicit_lfs {
             self.shell.exec(
                 &vec!["git", "lfs", "fetch"], shell::no_env(), shell::no_cwd(), &shell::no_capture()
             )?;
-            self.shell.exec(&vec!["git", "lfs", "push", url], self.commit_env(), shell::no_cwd(), &shell::no_capture())?;
+            self.shell.exec(&vec!["git", "lfs", "push", remote], self.commit_env(), shell::no_cwd(), &shell::no_capture())?;
         }
         self.shell.exec(&vec![
-            "git", "push", "--no-verify", url, &format!("{}:{}", local_ref, remote_branch)
+            "git", "push", "--no-verify", remote, &format!("{}:{}", local_ref, remote_branch)
         ], self.commit_env(), shell::no_cwd(), &shell::no_capture())?;
         Ok(())
     }
     fn push_diff(
-        &self, url: &str, remote_branch: &str, msg: &str, 
+        &self, remote: &str, remote_branch: &str, msg: &str, 
         patterns: &Vec<&str>, options: &HashMap<&str, &str> 
     ) -> Result<bool, Box<dyn Error>> {
         let explicit_lfs = match options.get("explicit_lfs") {
@@ -303,20 +317,20 @@ impl<S: shell::Shell> GitFeatures for Git<S> {
 			self.shell.exec(&vec!("git", "commit", "-m", msg), self.commit_env(), shell::no_cwd(), &shell::no_capture())?;
 			log::debug!("commit done: [{}]", msg);
 			if explicit_lfs {
-                self.shell.exec(&vec!["git", "lfs", "push", url], self.commit_env(), shell::no_cwd(), &shell::no_capture())?;
+                self.shell.exec(&vec!["git", "lfs", "push", remote], self.commit_env(), shell::no_cwd(), &shell::no_capture())?;
             }
             self.shell.exec(&vec!(
-                "git", "push", "--no-verify", url, &format!("HEAD:{}", remote_branch)
+                "git", "push", "--no-verify", remote, &format!("HEAD:{}", remote_branch)
             ), self.commit_env(), shell::no_cwd(), &shell::no_capture())?;
 			return Ok(true)
         }
     }
     fn rebase_with_remote_counterpart(
-        &self, url: &str, remote_branch: &str
+        &self, remote: &str, remote_branch: &str
     ) -> Result<(), Box<dyn Error>> {
         // rebase to get latest remote branch, because sometimes latest/master and master diverged, 
         // and pull causes merge FETCH_HEAD into master.
-        setup_remote!(self, url);
+        setup_remote!(self, remote);
 
         // here, remote_branch before colon means branch which name is $remote_branch at remote `latest`
         // fetch remote counter part of the branch to temporary remote 'latest' for rebasing.
