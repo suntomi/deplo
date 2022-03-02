@@ -12,38 +12,27 @@ use crate::config;
 use crate::vcs;
 use crate::module;
 use crate::shell;
-use crate::util::{escalate,make_escalation,jsonpath,str_to_json,defer};
+use crate::util::{escalate,make_escalation,jsonpath,str_to_json};
 
 use super::git;
 
-pub struct Github<GIT: git::GitFeatures = git::Git, S: shell::Shell = shell::Default> {
+pub struct Github<GIT: git::GitFeatures<S> = git::Git, S: shell::Shell = shell::Default> {
     pub config: config::Container,
     pub git: GIT,
     pub shell: S,
     pub diff: Vec<String>
 }
 
-const DEFAULT_REMOTE_NAME: &'static str = "depplo_push_origin";
-
-impl<GIT: git::GitFeatures, S: shell::Shell> Github<GIT, S> {
-    fn cleanup_remote(&self, remote_name: Option<&str>) -> Result<(), Box<dyn Error>> {
-        Ok(self.git.cleanup_remote(
-            remote_name.unwrap_or(DEFAULT_REMOTE_NAME)
-        )?)
+impl<GIT: git::GitFeatures<S>, S: shell::Shell> Github<GIT, S> {
+    fn pushable_remote_url(&self) -> Result<String, Box<dyn Error>> {
+        let user_and_repo = (self as &dyn vcs::VCS).user_and_repo()?;
+        Ok(format!("https://github.com/{}/{}", user_and_repo.0, user_and_repo.1))
     }
-    fn setup_remote(&self, remote_name: Option<&str>) -> Result<String, Box<dyn Error>> {
-        let config = self.config.borrow();
-        if let config::VCSConfig::Github{ email:_, account, key } = &config.vcs {
-            let user_and_repo = (self as &dyn vcs::VCS).user_and_repo()?;
-            Ok(self.git.setup_remote(
-                remote_name.unwrap_or(DEFAULT_REMOTE_NAME), 
-                &format!("https://{}:{}@github.com/{}/{}", account, key, user_and_repo.0, user_and_repo.1)
-            )?)
-        } else {
-            Err(Box::new(vcs::VCSError {
-                cause: format!("should have github config, got: {}", config.vcs)
-            }))
-        }
+    fn with_remote_for_push<F,R>(
+        &self, executer: F
+    ) -> Result<R, Box<dyn Error>> where F: Fn (&str) -> Result<R, Box<dyn Error>>{
+        let url = self.pushable_remote_url()?;
+        executer(&url)
     }
     fn get_release(&self, target_ref: (&str, bool)) -> Result<String, Box<dyn Error>> {
         if target_ref.1 {
@@ -54,7 +43,7 @@ impl<GIT: git::GitFeatures, S: shell::Shell> Github<GIT, S> {
         let config = self.config.borrow();
         let token = match &config.vcs {
             config::VCSConfig::Github{ account:_, key, email:_ } => key,
-            _ => panic!("vcs account is not for github ${:?}", &config.vcs)
+            _ => panic!("vcs account is not for github but {:?}", &config.vcs)
         };
         let user_and_repo = (self as &dyn vcs::VCS).user_and_repo()?;
         let response = self.shell.exec(&vec![
@@ -125,20 +114,20 @@ impl<GIT: git::GitFeatures, S: shell::Shell> Github<GIT, S> {
     }
 }
 
-impl<GIT: git::GitFeatures, S: shell::Shell> module::Module for Github<GIT, S> {
+impl<GIT: git::GitFeatures<S>, S: shell::Shell> module::Module for Github<GIT, S> {
     fn prepare(&self, _:bool) -> Result<(), Box<dyn Error>> {
         Ok(())
     }
 }
 
-impl<GIT: git::GitFeatures, S: shell::Shell> vcs::VCS for Github<GIT, S> {
+impl<GIT: git::GitFeatures<S>, S: shell::Shell> vcs::VCS for Github<GIT, S> {
     fn new(config: &config::Container) -> Result<Github<GIT,S>, Box<dyn Error>> {
-        if let config::VCSConfig::Github{ account, key:_, email } = &config.borrow().vcs {
+        if let config::VCSConfig::Github{ account, key, email } = &config.borrow().vcs {
             return Ok(Github {
                 config: config.clone(),
                 diff: vec!(),
                 shell: S::new(config),
-                git: GIT::new(&account, &email, config)
+                git: GIT::new(&account, &email, &key, S::new(config))
             });
         } 
         return Err(Box::new(vcs::VCSError {
@@ -244,19 +233,20 @@ impl<GIT: git::GitFeatures, S: shell::Shell> vcs::VCS for Github<GIT, S> {
         self.get_value_from_json_object(&response, "browser_download_url")
     }
     fn rebase_with_remote_counterpart(&self, branch: &str) -> Result<(), Box<dyn Error>> {
-        defer!{ self.cleanup_remote(None).unwrap(); };
-        self.git.rebase_with_remote_counterpart(&self.setup_remote(None)?, branch)
+        self.git.rebase_with_remote_counterpart(&self.pushable_remote_url()?, branch)
     }
     fn current_ref(&self) -> Result<(vcs::RefType, String), Box<dyn Error>> {
         self.git.current_ref()
     }
     fn delete_branch(&self, ref_type: vcs::RefType, ref_path: &str) -> Result<(), Box<dyn Error>> {
-        defer!{ self.cleanup_remote(None).unwrap(); };
-        self.git.delete_branch(&self.setup_remote(None)?, ref_type, ref_path)
+        self.with_remote_for_push(|remote_url| {
+            self.git.delete_branch(remote_url, ref_type, ref_path)
+        })
     }
     fn fetch_branch(&self, branch_name: &str) -> Result<(), Box<dyn Error>> {
-        defer!{ self.cleanup_remote(None).unwrap(); };
-        self.git.fetch_branch(&self.setup_remote(None)?, branch_name)
+        self.with_remote_for_push(|remote_url| {
+            self.git.fetch_branch(remote_url, branch_name)
+        })
     }
     fn squash_branch(&self, n: usize) -> Result<(), Box<dyn Error>> {
         self.git.squash_branch(n)
@@ -332,15 +322,15 @@ impl<GIT: git::GitFeatures, S: shell::Shell> vcs::VCS for Github<GIT, S> {
         }
     }
     fn user_and_repo(&self) -> Result<(String, String), Box<dyn Error>> {
-        let remote_origin = self.git.remote_origin()?;
+        let remote_url = self.git.remote_url(None)?;
         let re = regex::Regex::new(r"[^:]+[:/]([^/\.]+)/([^/\.]+)").unwrap();
-        let user_and_repo = match re.captures(&remote_origin) {
+        let user_and_repo = match re.captures(&remote_url) {
             Some(c) => (
                 c.get(1).map_or("".to_string(), |m| m.as_str().to_string()), 
                 c.get(2).map_or("".to_string(), |m| m.as_str().to_string())
             ),
             None => return escalate!(Box::new(vcs::VCSError {
-                cause: format!("invalid remote origin url: {}", remote_origin)
+                cause: format!("invalid remote origin url: {}", remote_url)
             }))
         };
         Ok(user_and_repo)
@@ -351,14 +341,16 @@ impl<GIT: git::GitFeatures, S: shell::Shell> vcs::VCS for Github<GIT, S> {
     fn push_branch(
         &self, local_ref: &str, remote_branch: &str, option: &HashMap<&str, &str>
     ) -> Result<(), Box<dyn Error>> {
-        defer!{ self.cleanup_remote(None).unwrap(); };
-        self.git.push_branch(&self.setup_remote(None)?, local_ref, remote_branch, option)
+        self.with_remote_for_push(|remote_url| {
+            self.git.push_branch(remote_url, local_ref, remote_branch, option)
+        })
     }
     fn push_diff(
         &self, branch: &str, msg: &str, patterns: &Vec<&str>, options: &HashMap<&str, &str>
     ) -> Result<bool, Box<dyn Error>> {
-        defer!{ self.cleanup_remote(None).unwrap(); };
-        self.git.push_diff(&self.setup_remote(None)?, branch, msg, patterns, options)
+        self.with_remote_for_push(|remote_url| {
+            self.git.push_diff(remote_url, branch, msg, patterns, options)
+        })
     }
     fn make_diff(&self) -> Result<String, Box<dyn Error>> {
         let diff = match self.git.current_ref()? {

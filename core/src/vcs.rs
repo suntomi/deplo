@@ -8,7 +8,7 @@ use serde_json::{Value as JsonValue};
 use super::config;
 use crate::module;
 
-#[derive(Eq, PartialEq, Debug)]
+#[derive(Eq, PartialEq, Clone, Copy, Debug)]
 pub enum RefType {
     Branch,
     Remote,
