@@ -466,6 +466,7 @@ impl<'a, S: shell::Shell> module::Module for GhAction<S> {
                 },
                 fin_checkout = MultilineFormatString{
                     strings: &self.generate_checkout_steps("main", &None, &Some(hashmap!{
+                        "fetch-depth".to_string() => "0".to_string(),
                         "ref".to_string() => "${{ github.event.client_payload.commit }}".to_string()
                     })),
                     postfix: None
