@@ -298,10 +298,10 @@ impl<S: shell::Shell> GitFeatures<S> for Git<S> {
             None => false
         };
         if match options.get("new") {
-            Some(v) => !v.is_empty(),
-            None => false
+            Some(v) => v.is_empty(),
+            None => true
         } {
-            // refresh remote branch with its latest state
+            // if the branch already exists, refresh remote branch with its latest state
             self.rebase_with_remote_counterpart(remote_url, remote_branch)?;
         }
         if explicit_lfs {
