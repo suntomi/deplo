@@ -286,7 +286,7 @@ impl<S: shell::Shell> GitFeatures<S> for Git<S> {
     fn cherry_pick(&self, target: &str) -> Result<(), Box<dyn Error>> {
         self.shell.exec(&vec!(
             "git", "cherry-pick", &target
-        ), shell::no_env(), shell::no_cwd(), &shell::capture())?;
+        ), self.commit_env(), shell::no_cwd(), &shell::capture())?;
         Ok(())        
     }
     fn push_branch(
