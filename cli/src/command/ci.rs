@@ -388,7 +388,7 @@ impl<S: shell::Shell> CI<S> {
             match self.push_job_result_branches(&branches_and_options) {
                 Ok(_) => {},
                 Err(e) => {
-                    log::error!("push_job_result_branches fails: back to original branch {}", e);
+                    log::error!("push_job_result_branches fails: back to original branch");
                     let config = self.config.borrow();
                     let vcs = config.vcs_service().unwrap();
                     let current_branch = std::env::var("DEPLO_CI_BRANCH_NAME").unwrap();

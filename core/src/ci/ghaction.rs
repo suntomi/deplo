@@ -666,24 +666,31 @@ impl<S: shell::Shell> ci::CI for GhAction<S> {
                 Err(_) => {}
             }
         };
-        match std::env::var("GITHUB_REF_TYPE") {
-            Ok(ref_type) => {
-                match std::env::var("GITHUB_REF") {
-                    Ok(ref_name) => {
-                        match ref_type.as_str() {
-                            "branch" => envs.insert(
-                                "DEPLO_CI_BRANCH_NAME", ref_name.replace("refs/heads/", "")
-                            ),
-                            "tag" => envs.insert(
-                                "DEPLO_CI_TAG_NAME", ref_name.replace("refs/tags/", "")
-                            ),
-                            v => panic!("invalid ref_type {}", v),
-                        };
-                    },
-                    Err(_) => panic!("GITHUB_REF_TYPE is set but GITHUB_REF is not set"),
-                }
+        match std::env::var("GITHUB_HEAD_REF") {
+            Ok(v) => if !v.is_empty() {
+                envs.insert("DEPLO_CI_BRANCH_NAME", v);
+            } else {
+                log::error!("GITHUB_HEAD_REF is set but empty");
             },
-            Err(_) => {}
+            Err(_) => match std::env::var("GITHUB_REF_TYPE") {
+                Ok(ref_type) => {
+                    match std::env::var("GITHUB_REF") {
+                        Ok(ref_name) => {
+                            match ref_type.as_str() {
+                                "branch" => envs.insert(
+                                    "DEPLO_CI_BRANCH_NAME", ref_name.replace("refs/heads/", "")
+                                ),
+                                "tag" => envs.insert(
+                                    "DEPLO_CI_TAG_NAME", ref_name.replace("refs/tags/", "")
+                                ),
+                                v => { log::error!("invalid ref_type {}", v); None },
+                            };
+                        },
+                        Err(_) => { log::error!("GITHUB_REF_TYPE is set but GITHUB_REF is not set"); },
+                    }
+                },
+                Err(_) => {}
+            }
         };        
         envs
     }
