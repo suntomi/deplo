@@ -387,13 +387,14 @@ impl<S: shell::Shell> CI<S> {
         for branches_and_options in self.aggregate_commits()? {
             match self.push_job_result_branches(&branches_and_options) {
                 Ok(_) => {},
-                Err(_) => {
-                    log::error!("push_job_result_branches fails: back to original branch");
+                Err(e) => {
+                    log::error!("push_job_result_branches fails: back to original branch {}", e);
                     let config = self.config.borrow();
                     let vcs = config.vcs_service().unwrap();
                     let current_branch = std::env::var("DEPLO_CI_BRANCH_NAME").unwrap();
                     let current_ref = std::env::var("DEPLO_CI_CURRENT_SHA").unwrap();
                     vcs.checkout(&current_ref, Some(&current_branch)).unwrap();
+                    return Err(e);
                 }
             }
         }
