@@ -646,10 +646,11 @@ impl Config {
         // here, all command line argument should be applied.
         RuntimeConfig::post_apply(&mut c, args)?;
         // phase5. generate process environment.
-        c.borrow_mut().setup_process_env()?;
+        let envs = c.borrow().setup_process_env()?;
+        c.borrow_mut().runtime.process_envs = envs;
         return Ok(c);
     }
-    pub fn setup_process_env(&mut self) -> Result<(), Box<dyn Error>> {
+    pub fn setup_process_env(&self) -> Result<HashMap<String, String>, Box<dyn Error>> {
         let (ci, local) = match self.ci_service_by_env() {
             Ok(ci) => (ci, false),
             Err(_) => (self.ci_service_main()?, true)
@@ -688,7 +689,7 @@ impl Config {
             "DEPLO_CI_CLI_COMMIT_HASH" => Some(DEPLO_GIT_HASH),
             "DEPLO_CI_CLI_VERSION" => Some(DEPLO_VERSION),
         };
-        let envs = ci.process_env(local);
+        let envs = ci.process_env(local)?;
         for (k, v) in &envs {
             default_envs.insert(k, Some(v.as_str()));
         }
@@ -702,8 +703,7 @@ impl Config {
                 None => std::env::remove_var(k),
             }
         };
-        self.runtime.process_envs = applied_process_envs;
-        Ok(())
+        Ok(applied_process_envs)
     }
     pub fn data_dir<'a>(&'a self) -> &'a str {
         return match self.common.data_dir {

@@ -98,7 +98,7 @@ jobs:
         run: deplo ci fin
       - name: Setup ssh session to debug
         if: ${{ failure() }}
-        uses: umegaya/action-tmate@a3d459813f3429bd95fc48bcd980b2fb40f10ad0
+        uses: mxschmitt/action-tmate@v3
         with:
           sudo: true
   deploy-base:
@@ -120,6 +120,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v2
         with:
+          fetch-depth: 2
           ref: ${{ github.event.client_payload.commit }}
   
       - name: deploy base
@@ -127,7 +128,7 @@ jobs:
         run: deplo ci deploy base
       - name: Setup ssh session to debug
         if: ${{ failure() }}
-        uses: umegaya/action-tmate@a3d459813f3429bd95fc48bcd980b2fb40f10ad0
+        uses: mxschmitt/action-tmate@v3
         with:
           sudo: true
   deploy-builder:
@@ -149,6 +150,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v2
         with:
+          fetch-depth: 2
           ref: ${{ github.event.client_payload.commit }}
   
       - name: deploy builder
@@ -156,7 +158,7 @@ jobs:
         run: deplo ci deploy builder
       - name: Setup ssh session to debug
         if: ${{ failure() }}
-        uses: umegaya/action-tmate@a3d459813f3429bd95fc48bcd980b2fb40f10ad0
+        uses: mxschmitt/action-tmate@v3
         with:
           sudo: true
   deploy-latest:
@@ -179,6 +181,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v2
         with:
+          fetch-depth: 2
           ref: ${{ github.event.client_payload.commit }}
   
       - name: deploy latest
@@ -186,7 +189,7 @@ jobs:
         run: deplo ci deploy latest
       - name: Setup ssh session to debug
         if: ${{ failure() }}
-        uses: umegaya/action-tmate@a3d459813f3429bd95fc48bcd980b2fb40f10ad0
+        uses: mxschmitt/action-tmate@v3
         with:
           sudo: true
   deploy-mac:
@@ -209,6 +212,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v2
         with:
+          fetch-depth: 2
           ref: ${{ github.event.client_payload.commit }}
       - name: Cache cargo
         id: deplo-cache-cargo
@@ -230,7 +234,7 @@ jobs:
         run: deplo ci deploy mac
       - name: Setup ssh session to debug
         if: ${{ failure() }}
-        uses: umegaya/action-tmate@a3d459813f3429bd95fc48bcd980b2fb40f10ad0
+        uses: mxschmitt/action-tmate@v3
         with:
           sudo: true
   deploy-product:
@@ -253,6 +257,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v2
         with:
+          fetch-depth: 2
           ref: ${{ github.event.client_payload.commit }}
   
       - name: deploy product
@@ -260,7 +265,7 @@ jobs:
         run: deplo ci deploy product
       - name: Setup ssh session to debug
         if: ${{ failure() }}
-        uses: umegaya/action-tmate@a3d459813f3429bd95fc48bcd980b2fb40f10ad0
+        uses: mxschmitt/action-tmate@v3
         with:
           sudo: true
   deploy-win:
@@ -284,6 +289,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v2
         with:
+          fetch-depth: 2
           ref: ${{ github.event.client_payload.commit }}
       - name: Cache cargo
         id: deplo-cache-cargo
@@ -306,7 +312,7 @@ jobs:
         shell: bash
       - name: Setup ssh session to debug
         if: ${{ failure() }}
-        uses: umegaya/action-tmate@a3d459813f3429bd95fc48bcd980b2fb40f10ad0
+        uses: mxschmitt/action-tmate@v3
         with:
           sudo: true
   integrate-base:
@@ -328,6 +334,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v2
         with:
+          fetch-depth: 2
           ref: ${{ github.event.client_payload.commit }}
   
       - name: integrate base
@@ -335,7 +342,7 @@ jobs:
         run: deplo ci integrate base
       - name: Setup ssh session to debug
         if: ${{ failure() }}
-        uses: umegaya/action-tmate@a3d459813f3429bd95fc48bcd980b2fb40f10ad0
+        uses: mxschmitt/action-tmate@v3
         with:
           sudo: true
   integrate-builder:
@@ -357,6 +364,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v2
         with:
+          fetch-depth: 2
           ref: ${{ github.event.client_payload.commit }}
   
       - name: integrate builder
@@ -364,7 +372,7 @@ jobs:
         run: deplo ci integrate builder
       - name: Setup ssh session to debug
         if: ${{ failure() }}
-        uses: umegaya/action-tmate@a3d459813f3429bd95fc48bcd980b2fb40f10ad0
+        uses: mxschmitt/action-tmate@v3
         with:
           sudo: true
   integrate-config:
@@ -383,30 +391,18 @@ jobs:
         run: |
           curl -L https://github.com/suntomi/deplo/releases/download/nightly/deplo-Linux -o /usr/local/bin/deplo
           chmod +x /usr/local/bin/deplo
-      - name: Fetch repository cache
-        id: fetch-repository-cache
-        uses: actions/cache@v2
-        with:
-          path: .git
-          key: deplo-git-v1-${{ github.sha }}
-          restore-keys:
-            deplo-git-v1-
       - name: Checkout
-        if: steps.fetch-repository-cache.outputs.cache-hit != 'true'
         uses: actions/checkout@v2
         with:
-          fetch-depth: 0
+          fetch-depth: 2
           ref: ${{ github.event.client_payload.commit }}
-      - name: Restore repository from cache
-        if: steps.fetch-repository-cache.outputs.cache-hit == 'true'
-        run: git reset --hard HEAD
   
       - name: integrate config
         id: deplo-integrate-config
         run: deplo ci integrate config
       - name: Setup ssh session to debug
         if: ${{ failure() }}
-        uses: umegaya/action-tmate@a3d459813f3429bd95fc48bcd980b2fb40f10ad0
+        uses: mxschmitt/action-tmate@v3
         with:
           sudo: true
   integrate-src:
@@ -428,6 +424,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v2
         with:
+          fetch-depth: 2
           ref: ${{ github.event.client_payload.commit }}
       - name: Cache cargo
         id: deplo-cache-cargo
@@ -449,6 +446,6 @@ jobs:
         run: deplo ci integrate src
       - name: Setup ssh session to debug
         if: ${{ failure() }}
-        uses: umegaya/action-tmate@a3d459813f3429bd95fc48bcd980b2fb40f10ad0
+        uses: mxschmitt/action-tmate@v3
         with:
           sudo: true

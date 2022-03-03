@@ -13,6 +13,7 @@ use serde::{Deserialize, Serialize};
 use crate::config;
 use crate::ci;
 use crate::shell;
+use crate::vcs;
 use crate::module;
 use crate::util::{
     escalate,seal,
@@ -414,7 +415,10 @@ impl<'a, S: shell::Shell> module::Module for GhAction<S> {
                 },
                 checkout = MultilineFormatString{
                     strings: &self.generate_checkout_steps(&name, &job.checkout, &Some(merge_hashmap(
-                        &job.checkout.as_ref().map_or_else(
+                        &hashmap!{
+                            "ref".to_string() => "${{ github.event.client_payload.commit }}".to_string(),
+                            "fetch-depth".to_string() => "2".to_string()
+                        }, &job.checkout.as_ref().map_or_else(
                             || if job.commits.is_some() {
                                 hashmap!{ "fetch-depth".to_string() => "0".to_string() }
                             } else {
@@ -425,9 +429,7 @@ impl<'a, S: shell::Shell> module::Module for GhAction<S> {
                             } else {
                                 hashmap!{}
                             }
-                        ), &hashmap!{
-                            "ref".to_string() => "${{ github.event.client_payload.commit }}".to_string()
-                        }))
+                        )))
                     ),
                     postfix: None
                 },
@@ -650,15 +652,16 @@ impl<S: shell::Shell> ci::CI for GhAction<S> {
         }
         Ok(())
     }
-    fn process_env(&self, _local: bool) -> HashMap<&str, String> {
+    fn process_env(&self, _local: bool) -> Result<HashMap<&str, String>, Box<dyn Error>> {
+        let config = self.config.borrow();
+        let vcs = config.vcs_service()?;
         let mut envs = hashmap!{
             "DEPLO_CI_TYPE" => "GhAction".to_string()
         };
         // get from env
         for (src, target) in hashmap!{
             "DEPLO_GHACTION_CI_ID" => "DEPLO_CI_ID",
-            "DEPLO_GHACTION_PR_URL" => "DEPLO_CI_PULL_REQUEST_URL",
-            "GITHUB_SHA" => "DEPLO_CI_CURRENT_SHA",
+            "DEPLO_GHACTION_PR_URL" => "DEPLO_CI_PULL_REQUEST_URL"
         } {
             match std::env::var(src) {
                 Ok(v) => {
@@ -666,6 +669,24 @@ impl<S: shell::Shell> ci::CI for GhAction<S> {
                 },
                 Err(_) => {}
             }
+        };
+        match std::env::var("GITHUB_SHA") {
+            Ok(v) => envs.insert(
+                "DEPLO_CI_CURRENT_SHA", 
+                match vcs.current_ref()? {
+                    (vcs::RefType::Pull, _) => {
+                        let output = vcs.commit_hash(Some(&format!("{}^@", v)))?;
+                        let commits = output.split("\n").collect::<Vec<&str>>();
+                        if commits.len() > 1 {
+                            commits[1].to_string()
+                        } else {
+                            commits[0].to_string()
+                        }
+                    },
+                    (_, _) => v
+                }
+            ),
+            Err(_) => None
         };
         match std::env::var("GITHUB_HEAD_REF") {
             Ok(v) => if !v.is_empty() {
@@ -692,8 +713,8 @@ impl<S: shell::Shell> ci::CI for GhAction<S> {
                 },
                 Err(_) => {}
             }
-        };        
-        envs
+        };
+        Ok(envs)
     }
     fn job_env(&self) -> HashMap<&str, String> {
         hashmap!{}
