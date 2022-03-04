@@ -126,10 +126,10 @@ sh tools/scripts/build_linux.sh
 docker build -t ghcr.io/suntomi/deplo:${DEPLO_RELEASE_VERSION} -f tools/docker/Dockerfile tools/docker
 echo ${SUNTOMI_VCS_ACCOUNT_KEY} | docker login ghcr.io -u ${SUNTOMI_VCS_ACCOUNT} --password-stdin
 docker push ghcr.io/suntomi/deplo:${DEPLO_RELEASE_VERSION}
-tools/docker/bin/cli vcs release ${DEPLO_RELEASE_TAG} -o name=${DEPLO_RELEASE_NAME}
-tools/docker/bin/cli vcs release-assets ${DEPLO_RELEASE_TAG} tools/docker/bin/cli --replace -o name=deplo-Linux
-tools/docker/bin/cli ci set-output foo bar
-tools/docker/bin/cli ci set-output fuga hoge
+deplo vcs release ${DEPLO_RELEASE_TAG} -o name=${DEPLO_RELEASE_NAME}
+deplo vcs release-assets ${DEPLO_RELEASE_TAG} tools/docker/bin/cli --replace -o name=deplo-Linux
+deplo ci set-output foo bar
+deplo ci set-output fuga hoge
 if [ $(deplo d product output foo) != "bar" ]; then
     echo "failed to get output from deploy-product locally"
     exit 1
@@ -158,8 +158,8 @@ command = """
 set -e
 . tools/scripts/setup_release_env.sh
 cargo build --release
-target/release/cli vcs release-assets ${DEPLO_RELEASE_TAG} target/release/cli --replace -o name=deplo-Darwin
-if [ $(target/release/cli d product output foo) != "bar" ]; then
+deplo vcs release-assets ${DEPLO_RELEASE_TAG} target/release/cli --replace -o name=deplo-Darwin
+if [ $(deplo d product output foo) != "bar" ]; then
     echo "failed to get output from deploy-product"
     exit 1
 fi
@@ -176,9 +176,9 @@ command = """
 set -e
 . tools/scripts/setup_release_env.sh
 cargo build --release
-target/release/cli.exe vcs release-assets ${DEPLO_RELEASE_TAG} target/release/cli.exe --replace -o name=deplo-Windows.exe
-target/release/cli.exe vcs release-assets ${DEPLO_RELEASE_TAG} target/release/cli.pdb --replace -o name=deplo-Windows.pdb
-if [ $(target/release/cli.exe d product output fuga) != "hoge" ]; then
+deplo vcs release-assets ${DEPLO_RELEASE_TAG} target/release/cli.exe --replace -o name=deplo-Windows.exe
+deplo vcs release-assets ${DEPLO_RELEASE_TAG} target/release/cli.pdb --replace -o name=deplo-Windows.pdb
+if [ $(deplo d product output fuga) != "hoge" ]; then
     echo "failed to get output from deploy-product"
     exit 1
 fi
