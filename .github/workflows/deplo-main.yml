@@ -406,11 +406,12 @@ jobs:
         with:
           sudo: true
   integrate-src:
-    needs: [deplo-main]
+    needs: ["integrate-config","deplo-main"]
     if: ${{ needs.deplo-main.outputs.integrate-src && !failure() }}
     name: Running job integrate-src
     runs-on: ubuntu-latest
-  
+    env:
+      DEPLO_JOB_USER_OUTPUT_INTEGRATE_CONFIG: needs.integrate-config.outputs.user
   
     outputs:
       need-cleanup: ${{ steps.deplo-integrate-src.outputs.need-cleanup }}

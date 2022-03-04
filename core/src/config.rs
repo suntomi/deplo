@@ -18,7 +18,13 @@ use crate::args;
 use crate::vcs;
 use crate::ci;
 use crate::shell;
-use crate::util::{escalate,envsubst,make_absolute,defer, randombytes_as_string};
+use crate::util::{
+    escalate,envsubst,
+    make_absolute,
+    defer,
+    randombytes_as_string,
+    rm
+};
 
 pub const DEPLO_GIT_HASH: &'static str = env!("GIT_HASH");
 pub const DEPLO_VERSION: &'static str = env!("DEPLO_RELEASE_VERSION");
@@ -1209,7 +1215,7 @@ impl Config {
         Ok(None)
     }
     pub fn post_run_job(&self, job_name: &str, job: &Job) -> Result<(), Box<dyn Error>> {
-        let mut system_outputs = hashmap!{};
+        let mut system_job_outputs = hashmap!{};
         match job.commits {
             Some(ref commits) => {
                 let vcs = self.vcs_service()?;
@@ -1228,7 +1234,7 @@ impl Config {
                             &commits.patterns.iter().map(AsRef::as_ref).collect::<Vec<&str>>(),
                             &hashmap!{}
                         )? {
-                            system_outputs.insert(DEPLO_SYSTEM_OUTPUT_COMMIT_BRANCH_NAME, branch_name);
+                            system_job_outputs.insert(DEPLO_SYSTEM_OUTPUT_COMMIT_BRANCH_NAME, branch_name);
                         }
                     },
                     (ty, b) => {
@@ -1239,42 +1245,59 @@ impl Config {
             None => {}
         };
         let ci = self.ci_service_by_job_name(job_name)?;
-        if system_outputs.len() > 0 {
+        if system_job_outputs.len() > 0 {
+            log::debug!("set system job outputs: {:?}", system_job_outputs);
             ci.set_job_output(
                 job_name, ci::OutputKind::System, 
-                system_outputs.iter().map(|(k,v)| (*k, v.as_str())).collect()
+                system_job_outputs.iter().map(|(k,v)| (*k, v.as_str())).collect()
             )?;
             ci.mark_need_cleanup(job_name)?;
         }
         match fs::read(Path::new(DEPLO_JOB_OUTPUT_TEMPORARY_FILE)) {
             Ok(b) => {
                 let outputs = serde_json::from_slice::<HashMap<&str, &str>>(&b)?;
+                log::debug!("set user job outputs: {:?}", outputs);
                 ci.set_job_output(job_name, ci::OutputKind::User, outputs)?;
+                rm(DEPLO_JOB_OUTPUT_TEMPORARY_FILE);
             },
             Err(_) => {}
         }
         Ok(())
     }
-    pub fn job_output_ctrl(&self, job_name: &str, key: &str, value: Option<&str>) -> Result<Option<String>, Box<dyn Error>> {
-        let ci = self.ci_service_by_job_name(job_name)?;
-        match value {
-            Some(v) => {
-                match fs::read(Path::new(DEPLO_JOB_OUTPUT_TEMPORARY_FILE)) {
-                    Ok(b) => {
-                        let mut outputs = serde_json::from_slice::<HashMap<&str, &str>>(&b)?;
-                        outputs.insert(key, v);
-                        fs::write(DEPLO_JOB_OUTPUT_TEMPORARY_FILE, serde_json::to_string(&outputs)?)?;
-                    },
-                    Err(_) => {
-                        fs::write(DEPLO_JOB_OUTPUT_TEMPORARY_FILE, serde_json::to_string(&hashmap!{ key => v })?)?;
-                    }
-                };
-                Ok(None)
+    pub fn set_user_job_output(&self, key: &str, value: &str) -> Result<(), Box<dyn Error>> {
+        match fs::read(Path::new(DEPLO_JOB_OUTPUT_TEMPORARY_FILE)) {
+            Ok(b) => {
+                let mut outputs = serde_json::from_slice::<HashMap<&str, &str>>(&b)?;
+                outputs.insert(key, value);
+                fs::write(DEPLO_JOB_OUTPUT_TEMPORARY_FILE, serde_json::to_string(&outputs)?)?;
             },
-            None => ci.job_output(job_name, ci::OutputKind::User, key)
+            Err(_) => {
+                fs::write(DEPLO_JOB_OUTPUT_TEMPORARY_FILE, serde_json::to_string(&hashmap!{ key => value })?)?;
+            }
+        };
+        Ok(())
+    }
+    pub fn user_job_output(&self, job_name: &str, key: &str) -> Result<Option<String>, Box<dyn Error>> {
+        let ci = self.ci_service_by_job_name(job_name)?;
+        match std::env::var("DEPLO_JOB_CURRENT_NAME") {
+            Ok(n) => {
+                if n == job_name {
+                    // get output of current job. read from temporary file
+                    match fs::read(Path::new(DEPLO_JOB_OUTPUT_TEMPORARY_FILE)) {
+                        Ok(b) => {
+                            let outputs = serde_json::from_slice::<HashMap<&str, &str>>(&b)?;
+                            Ok(outputs.get(key).map(|v| v.to_string()))
+                        },
+                        Err(e) => escalate!(Box::new(e))
+                    }
+                } else {
+                    ci.job_output(job_name, ci::OutputKind::User, key)
+                }
+            },
+            Err(_) => ci.job_output(job_name, ci::OutputKind::User, key)
         }
     }
-    pub fn system_output(&self, job_name: &str, key: &str) -> Result<Option<String>, Box<dyn Error>> {
+    pub fn system_job_output(&self, job_name: &str, key: &str) -> Result<Option<String>, Box<dyn Error>> {
         let ci = self.ci_service_by_job_name(job_name)?;
         ci.job_output(job_name, ci::OutputKind::System, key)
     }

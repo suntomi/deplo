@@ -97,8 +97,7 @@ impl<S: shell::Shell> CI<S> {
         let config = self.config.borrow();
         let key = args.value_of("key").unwrap();
         let value = args.value_of("value").unwrap();
-        let job_name = std::env::var("DEPLO_CI_CURRENT_JOB_NAME").unwrap();
-        config.job_output_ctrl(&job_name, key, Some(value))?;
+        config.set_user_job_output(key, value)?;
         Ok(())
 }
     fn exec<A: args::Args>(&self, kind: &str, args: &A) -> Result<(), Box<dyn Error>> {
@@ -209,8 +208,7 @@ impl<S: shell::Shell> CI<S> {
             Some(("wait", subargs)) => Ok(Some(subargs.value_of("job_id").unwrap().to_string())),
             Some(("output", subargs)) => {
                 let key = subargs.value_of("key").unwrap();
-                let value = subargs.value_of("value");
-                match config.job_output_ctrl(job_name, key, value)? {
+                match config.user_job_output(job_name, key)? {
                     Some(v) => println!("{}", v),
                     None => {}
                 };
@@ -274,7 +272,7 @@ impl<S: shell::Shell> CI<S> {
         };
         for (name, job) in config.enumerate_jobs() {
             let job_name = format!("{}-{}", name.0, name.1);
-            match config.system_output(&job_name, config::DEPLO_SYSTEM_OUTPUT_COMMIT_BRANCH_NAME)? {
+            match config.system_job_output(&job_name, config::DEPLO_SYSTEM_OUTPUT_COMMIT_BRANCH_NAME)? {
                 Some(v) => {
                     log::info!("ci fin: find commit from job {} at {}", job_name, v);
                     match job.commits.as_ref().unwrap().push_opts {
