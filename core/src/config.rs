@@ -347,13 +347,13 @@ impl fmt::Display for VCSConfig {
     }    
 }
 #[derive(Serialize, Deserialize)]
-#[serde(tag = "type", content = "path")]
+#[serde(tag = "type", content = "paths")]
 pub enum ReleaseTarget {
-    Branch(String),
-    Tag(String),
+    Branch(Vec<String>),
+    Tag(Vec<String>),
 }
 impl ReleaseTarget {
-    pub fn path<'a>(&'a self) -> &'a str {
+    pub fn paths<'a>(&'a self) -> &'a Vec<String> {
         match self {
             Self::Branch(v) => v.as_ref(),
             Self::Tag(v) => v.as_ref(),

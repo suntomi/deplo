@@ -84,10 +84,12 @@ impl<GIT: git::GitFeatures<S>, S: shell::Shell> Github<GIT, S> {
             if !is_branch && !v.is_tag() {
                 continue;
             }
-            let re = Pattern::new(v.path()).unwrap();
-            match re.matches(&ref_name) {
-                true => return Some(k.to_string()),
-                false => {}, 
+            for path in v.paths() {
+                let re = Pattern::new(path.as_str()).unwrap();
+                match re.matches(&ref_name) {
+                    true => return Some(k.to_string()),
+                    false => {}, 
+                }
             }
         }
         None
