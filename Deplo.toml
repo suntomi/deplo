@@ -75,7 +75,9 @@ depends = ["config"]
 patterns = [".*/src/.*", "Cargo.*"]
 runner = { type = "Machine", os = "Linux", local_fallback = { image = "ghcr.io/suntomi/deplo:builder" } }
 command = """
-if [ $(deplo i config output baz) != "quex" ]; then
+output=$(deplo i config output baz)
+echo "output: baz = [$output]"
+if [ $output != "quex" ]; then
     echo "failed to get output from integrate-config"
     exit 1
 fi
@@ -97,7 +99,9 @@ runner = { type = "Machine", os = "Linux", local_fallback = { path = "tools/dock
 command = """
 deplo init
 deplo ci set-output baz quex
-if [ $(deplo i config output baz) != "quex" ]; then
+output=$(deplo i config output baz)
+echo "output: baz = [$output]"
+if [ $output != "quex" ]; then
     echo "failed to get output from integrate-config"
     exit 1
 fi
