@@ -167,7 +167,7 @@ jobs:
     name: Running job deploy-latest
     runs-on: ubuntu-latest
     env:
-      DEPLO_JOB_USER_OUTPUT_DEPLOY_PRODUCT: needs.deploy-product.outputs.user
+      DEPLO_JOB_USER_OUTPUT_DEPLOY_PRODUCT: ${{ needs.deploy-product.outputs.user }}
   
     outputs:
       need-cleanup: ${{ steps.deplo-deploy-latest.outputs.need-cleanup }}
@@ -198,7 +198,7 @@ jobs:
     name: Running job deploy-mac
     runs-on: macos-latest
     env:
-      DEPLO_JOB_USER_OUTPUT_DEPLOY_PRODUCT: needs.deploy-product.outputs.user
+      DEPLO_JOB_USER_OUTPUT_DEPLOY_PRODUCT: ${{ needs.deploy-product.outputs.user }}
   
     outputs:
       need-cleanup: ${{ steps.deplo-deploy-mac.outputs.need-cleanup }}
@@ -243,7 +243,7 @@ jobs:
     name: Running job deploy-product
     runs-on: ubuntu-latest
     env:
-      DEPLO_JOB_USER_OUTPUT_DEPLOY_BUILDER: needs.deploy-builder.outputs.user
+      DEPLO_JOB_USER_OUTPUT_DEPLOY_BUILDER: ${{ needs.deploy-builder.outputs.user }}
   
     outputs:
       need-cleanup: ${{ steps.deplo-deploy-product.outputs.need-cleanup }}
@@ -274,7 +274,7 @@ jobs:
     name: Running job deploy-win
     runs-on: windows-latest
     env:
-      DEPLO_JOB_USER_OUTPUT_DEPLOY_PRODUCT: needs.deploy-product.outputs.user
+      DEPLO_JOB_USER_OUTPUT_DEPLOY_PRODUCT: ${{ needs.deploy-product.outputs.user }}
   
     outputs:
       need-cleanup: ${{ steps.deplo-deploy-win.outputs.need-cleanup }}
@@ -411,7 +411,7 @@ jobs:
     name: Running job integrate-src
     runs-on: ubuntu-latest
     env:
-      DEPLO_JOB_USER_OUTPUT_INTEGRATE_CONFIG: needs.integrate-config.outputs.user
+      DEPLO_JOB_USER_OUTPUT_INTEGRATE_CONFIG: ${{ needs.integrate-config.outputs.user }}
   
     outputs:
       need-cleanup: ${{ steps.deplo-integrate-src.outputs.need-cleanup }}

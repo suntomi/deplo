@@ -75,7 +75,10 @@ depends = ["config"]
 patterns = [".*/src/.*", "Cargo.*"]
 runner = { type = "Machine", os = "Linux", local_fallback = { image = "ghcr.io/suntomi/deplo:builder" } }
 command = """
-if [ $(deplo i config output baz) != "quex" ]; then
+set -e
+output=$(deplo i config output baz)
+echo "output: baz = [$output]"
+if [ $output != "quex" ]; then
     echo "failed to get output from integrate-config"
     exit 1
 fi
@@ -97,7 +100,9 @@ runner = { type = "Machine", os = "Linux", local_fallback = { path = "tools/dock
 command = """
 deplo init
 deplo ci set-output baz quex
-if [ $(deplo i config output baz) != "quex" ]; then
+output=$(deplo i config output baz)
+echo "output: baz = [$output]"
+if [ $output != "quex" ]; then
     echo "failed to get output from integrate-config"
     exit 1
 fi
@@ -169,6 +174,7 @@ depends = ["product"]
 patterns = [".*/src/.*", "Cargo.*"]
 runner = { type = "Machine", os = "MacOS" }
 command = """
+set -e
 . tools/scripts/setup_release_env.sh
 cargo build --release
 target/release/cli vcs release-assets ${DEPLO_RELEASE_TAG} target/release/cli --replace -o name=deplo-Darwin
@@ -186,6 +192,7 @@ depends = ["product"]
 patterns = [".*/src/.*", "Cargo.*"]
 runner = { type = "Machine", os = "Windows" }
 command = """
+set -e
 . tools/scripts/setup_release_env.sh
 cargo build --release
 target/release/cli.exe vcs release-assets ${DEPLO_RELEASE_TAG} target/release/cli.exe --replace -o name=deplo-Windows.exe

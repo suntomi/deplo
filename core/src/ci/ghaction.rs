@@ -239,7 +239,7 @@ impl<S: shell::Shell> GhAction<S> {
                 let mut envs = vec![];
                 for d in depends {
                     envs.push(format!(
-                        "{}: needs.{}-{}.outputs.user",
+                        "{}: ${{{{ needs.{}-{}.outputs.user }}}}",
                         Self::job_output_env_name(ci::OutputKind::User, &format!("{}-{}", names.0, d)),
                         names.0, d
                     ));
