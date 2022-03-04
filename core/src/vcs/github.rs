@@ -271,7 +271,7 @@ impl<GIT: git::GitFeatures<S>, S: shell::Shell> vcs::VCS for Github<GIT, S> {
                 "head" => head_branch, "base" => base_branch                
             };
             for (k, v) in options {
-                if *k != "labels" {
+                if *k != "labels" && *k != "assignees"{
                     body.insert(k, v);
                 }
             }
@@ -291,8 +291,8 @@ impl<GIT: git::GitFeatures<S>, S: shell::Shell> vcs::VCS for Github<GIT, S> {
                     log::debug!("attach labels({}) to PR via {}", labels, issues_api_url);
                     self.shell.exec(&vec![
                         "curl", "-H", &format!("Authorization: token {}", key), 
-                        "-H", "Accept: application/vnd.github.v3+json", &format!("{}/issues", issues_api_url),
-                        "-d", &serde_json::to_string(&hashmap!{ "labels" => labels })?
+                        "-H", "Accept: application/vnd.github.v3+json", &format!("{}/labels", issues_api_url),
+                        "-d", &format!(r#"{{"labels":{}}}"#, labels)
                     ], shell::no_env(), shell::no_cwd(), &shell::capture())?;
                 },
                 None => {}
@@ -303,7 +303,7 @@ impl<GIT: git::GitFeatures<S>, S: shell::Shell> vcs::VCS for Github<GIT, S> {
                     self.shell.exec(&vec![
                         "curl", "-H", &format!("Authorization: token {}", key), 
                         "-H", "Accept: application/vnd.github.v3+json", &format!("{}/assignees", issues_api_url),
-                        "-d", &serde_json::to_string(&hashmap!{ "assignees" => assignees })?
+                        "-d", &format!(r#"{{"assignees":{}}}"#, assignees)
                     ], shell::no_env(), shell::no_cwd(), &shell::capture())?;
                 },
                 None => {}
