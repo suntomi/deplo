@@ -374,6 +374,7 @@ impl<'a, S: shell::Shell> module::Module for GhAction<S> {
         // generate job entries
         let mut job_descs = Vec::new();
         let mut all_job_names = vec!["deplo-main".to_string()];
+        let mut lfs = false;
         let jobs = config.enumerate_jobs();
         for (names, job) in sorted_key_iter(&jobs) {
             let name = format!("{}-{}", names.0, names.1);
@@ -439,6 +440,11 @@ impl<'a, S: shell::Shell> module::Module for GhAction<S> {
                 }
             ).split("\n").map(|s| s.to_string()).collect::<Vec<String>>();
             job_descs = job_descs.into_iter().chain(lines.into_iter()).collect();
+            // check if lfs is enabled
+            if !lfs {
+                lfs = job.checkout.as_ref().map_or_else(|| false, |v| v.get("lfs").is_some() && job.commits.is_some());
+                log::debug!("there is an job {}, that has commits option and does lfs checkout. enable lfs for deplo fin", name)
+            }
         }
         fs::write(&workflow_yml_path,
             format!(
@@ -468,8 +474,9 @@ impl<'a, S: shell::Shell> module::Module for GhAction<S> {
                 },
                 fin_checkout = MultilineFormatString{
                     strings: &self.generate_checkout_steps("main", &None, &Some(hashmap!{
-                        "fetch-depth".to_string() => "0".to_string(),
-                        "ref".to_string() => "${{ github.event.client_payload.commit }}".to_string()
+                        "fetch-depth".to_string() => "2".to_string(),
+                        "ref".to_string() => "${{ github.event.client_payload.commit }}".to_string(),
+                        "lfs".to_string() => lfs.to_string()
                     })),
                     postfix: None
                 },
