@@ -3,6 +3,7 @@ CWD=$(cd $(dirname ${{BASH_SOURCE[0]}}) && pwd)
 OS=$(uname -s)
 if [[ "${{OS}}" =~ ^MINGW.*|^MSYS.*|^CYGWIN.* ]]; then
     DEPLO_BIN_PATH_POSTFIX="Windows.exe"
+    OS="Windows"
 else
     DEPLO_BIN_PATH_POSTFIX="${{OS}}"
 fi
