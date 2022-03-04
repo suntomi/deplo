@@ -336,6 +336,9 @@ pub fn docker_mount_path(path: &str) -> String {
     } else {
         return path.to_string();
     };
+    if path == "/var/run/docker.sock" {
+        return "//var/run/docker.sock".to_string();
+    }
     let re = regex::Regex::new(r"(^[A-Z]):(.*)").unwrap();
     match re.captures(&path) {
         Some(c) => {
@@ -587,6 +590,7 @@ mod tests {
             "C:/foo/bar" => "//c/foo/bar",
             "E:/bar/baz" => "//e/bar/baz",
             "/usr/local/bin" => "/usr/local/bin",
+            "/var/run/docker.sock" => "//var/run/docker.sock",
         };
         std::env::set_var("MSYSTEM", "MINGW64");
         for (input, expect) in testcase.iter() {

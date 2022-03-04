@@ -57,7 +57,7 @@ pub trait Shell {
         let result = self.exec(&vec![
             vec!["docker", "run", "--init", "--rm"],
             if settings.interactive { vec!["-it"] } else { vec![] },
-            vec!["--workdir", &workdir],
+            vec!["--workdir", &docker_mount_path(&workdir)],
             envs_vec.iter().map(|s| s.as_ref()).collect::<Vec<&str>>(),
             mounts_vec.iter().map(|s| s.as_ref()).collect::<Vec<&str>>(),
             // TODO_PATH: use Path to generate path of /var/run/docker.sock (left(host) side)
