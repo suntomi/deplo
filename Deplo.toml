@@ -71,19 +71,9 @@ done
 test = "echo 'suntomi-bot'"
 
 [jobs.integrate.src]
-depends = ["config"]
 patterns = [".*/src/.*", "Cargo.*"]
 runner = { type = "Machine", os = "Linux", local_fallback = { image = "ghcr.io/suntomi/deplo:builder" } }
-command = """
-set -e
-output=$(deplo i config output baz)
-echo "output: baz = [$output]"
-if [ $output != "quex" ]; then
-    echo "failed to get output from integrate-config"
-    exit 1
-fi
-cargo build
-"""
+command = "cargo build"
 tasks = { test = "cargo test", home = "echo ${HOME}" }
 # cache settings. file paths that is listed in paths will be preserved with tha key `keys[0]`.
 # if you specify multiple keys, `keys[1..]` are used as fallback keys to search similar caches 
@@ -97,17 +87,8 @@ paths = ["target", "~/.cargo/bin", "~/.cargo/registry/cache", "~/.cargo/registry
 [jobs.integrate.config]
 patterns = ["Deplo.toml"]
 runner = { type = "Machine", os = "Linux", local_fallback = { path = "tools/docker/Dockerfile.vmfb", shell = "sh" } }
-command = """
-deplo init
-deplo ci set-output baz quex
-output=$(deplo i config output baz)
-echo "output: baz = [$output]"
-if [ $output != "quex" ]; then
-    echo "failed to get output from integrate-config"
-    exit 1
-fi
-"""
-commits = { patterns = [".github/*"], push_opts = { type = "PullRequest", labels = ["bug"], assignees = ["umegaya"] } }
+command = "deplo init"
+commits = { patterns = [".github/*"], push_opts = { type = "Push" } }
 
 
 
