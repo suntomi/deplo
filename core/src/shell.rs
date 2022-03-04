@@ -6,7 +6,7 @@ use std::ffi::OsStr;
 use std::convert::AsRef;
 
 use crate::config;
-use crate::util::{escalate,make_absolute};
+use crate::util::{escalate,make_absolute,docker_mount_path};
 
 pub mod native;
 
@@ -47,7 +47,7 @@ pub trait Shell {
             return vec!["-e".to_string(), format!("{k}={v}", k = key, v = val)]
         }).collect::<Vec<Vec<String>>>().concat();
         let mounts_vec: Vec<String> = mounts.iter().map(|(k,v)| {
-            return vec!["-v".to_string(), format!("{k}:{v}", k = k, v = v)]
+            return vec!["-v".to_string(), format!("{k}:{v}", k = docker_mount_path(k), v = v)]
         }).collect::<Vec<Vec<String>>>().concat();
         let repository_mount_path = config.vcs_service()?.repository_root()?;
         let workdir = match cwd {
@@ -61,8 +61,8 @@ pub trait Shell {
             envs_vec.iter().map(|s| s.as_ref()).collect::<Vec<&str>>(),
             mounts_vec.iter().map(|s| s.as_ref()).collect::<Vec<&str>>(),
             // TODO_PATH: use Path to generate path of /var/run/docker.sock (left(host) side)
-            vec!["-v", "/var/run/docker.sock:/var/run/docker.sock"],
-            vec!["-v", &format!("{}:{}", &repository_mount_path, &repository_mount_path)],
+            vec!["-v", &format!("{}:/var/run/docker.sock", docker_mount_path("/var/run/docker.sock"))],
+            vec!["-v", &format!("{}:{}", docker_mount_path(&repository_mount_path), docker_mount_path(&repository_mount_path))],
             vec!["--entrypoint", shell.as_ref().map_or_else(|| "bash", |v| v.as_str())],
             vec![image, "-c", code]
         ].concat(), envs, cwd, &settings)?;

@@ -327,6 +327,31 @@ pub fn path_join(components: Vec<impl AsRef<OsStr>>) -> PathBuf {
         }
     }
 }
+pub fn docker_mount_path(path: &str) -> String {
+    if let Ok(msystem) = std::env::var("MSYSTEM") {
+        match msystem.as_str() {
+            "MINGW64" | "MINGW32" | "MSYS" => {},
+            _ => return path.to_string(),
+        }
+    } else {
+        return path.to_string();
+    };
+    let re = regex::Regex::new(r"(^[A-Z]):(.*)").unwrap();
+    match re.captures(&path) {
+        Some(c) => {
+            return format!("//{}{}", c.get(1).unwrap().as_str().to_lowercase(), c.get(2).unwrap().as_str());
+        },
+        None => {}
+    };
+    let re = regex::Regex::new(r"^/([a-z])/(.*)").unwrap();
+    match re.captures(&path) {
+        Some(c) => {
+            return format!("//{}/{}", c.get(1).unwrap().as_str(), c.get(2).unwrap().as_str());
+        },
+        None => {}
+    };
+    return path.to_string();
+}
 
 // hashmap utils
 use crc::{Crc, CRC_64_ECMA_182};
@@ -411,6 +436,7 @@ pub fn jsonpath(src: &str, expr: &str) -> Result<Option<String>, Box<dyn Error>>
 #[cfg(test)]
 mod tests {
     use super::*;
+    use maplit::hashmap;
 
     #[test]
     fn seal_test() {
@@ -553,5 +579,18 @@ mod tests {
         assert_eq!(&jsonpath(&s2, "$.base.ref").unwrap().unwrap(), "fuga");
         assert_eq!(&jsonpath(&s2, "$.base.obj").unwrap().unwrap(), r#"{"key":"value"}"#);
         assert_eq!(&jsonpath(&s2, "$.base.array").unwrap().unwrap(), "[1,2,3]");
+    }
+
+    #[test]
+    fn docker_mount_path_test() {
+        let testcase = hashmap!{
+            "C:/foo/bar" => "//c/foo/bar",
+            "E:/bar/baz" => "//e/bar/baz",
+            "/usr/local/bin" => "/usr/local/bin",
+        };
+        std::env::set_var("MSYSTEM", "MINGW64");
+        for (input, expect) in testcase.iter() {
+            assert_eq!(docker_mount_path(input), expect.to_string());
+        }
     }
 }
