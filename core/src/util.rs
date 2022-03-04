@@ -327,6 +327,31 @@ pub fn path_join(components: Vec<impl AsRef<OsStr>>) -> PathBuf {
         }
     }
 }
+pub fn docker_mount_path(path: &str) -> String {
+    if let Ok(msystem) = std::env::var("MSYSTEM") {
+        match msystem.as_str() {
+            "MINGW64" | "MINGW32" | "MSYS" => {},
+            _ => return path.to_string(),
+        }
+    } else {
+        return path.to_string();
+    };
+    let re = regex::Regex::new(r"(^[A-Z]):(.*)").unwrap();
+    match re.captures(&path) {
+        Some(c) => {
+            return format!("//{}{}", c.get(1).unwrap().as_str().to_lowercase(), c.get(2).unwrap().as_str());
+        },
+        None => {}
+    };
+    let re = regex::Regex::new(r"^/([a-z])/(.*)").unwrap();
+    match re.captures(&path) {
+        Some(c) => {
+            return format!("//{}/{}", c.get(1).unwrap().as_str(), c.get(2).unwrap().as_str());
+        },
+        None => {}
+    };
+    return path.to_string();
+}
 
 // hashmap utils
 use crc::{Crc, CRC_64_ECMA_182};
