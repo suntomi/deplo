@@ -299,11 +299,36 @@ pub fn make_absolute(rel_or_abs: impl AsRef<OsStr>, root_directory: impl AsRef<O
             return rel_or_abs.as_ref().to_owned().into();
         }
     }
-    let mut pathbuf = PathBuf::from(root_directory.as_ref());
-    pathbuf.push(rel_or_abs.as_ref());
-    return pathbuf;
+    return path_join(vec![root_directory.as_ref(), rel_or_abs.as_ref()]);
 }
 
+pub fn path_join(components: Vec<impl AsRef<OsStr>>) -> PathBuf {
+    // if os is windows and MSYSTEM is set, use / for path separator,
+    // otherwise use rust's std::path::Path
+    let skewed_sep = if let Ok(msystem) = std::env::var("MSYSTEM") {
+        // nest this match inside if-let to more easily unwrap and call .as_str
+        match msystem.as_str() {
+            "MINGW64" | "MINGW32" | "MSYS" => Some("/".to_owned()),
+            _ => None,
+        }
+    } else {
+        None
+    };
+    match skewed_sep {
+        Some(ref v) => {
+            PathBuf::from(components.iter().map(|c| c.as_ref().to_str().unwrap()).collect::<Vec<&str>>().join(v))
+        },
+        None => {
+            let mut buf = PathBuf::new();
+            for c in components {
+                buf.push(c.as_ref().to_str().unwrap());
+            }
+            buf
+        }
+    }
+}
+
+// hashmap utils
 use crc::{Crc, CRC_64_ECMA_182};
 
 const CRC_64: Crc<u64> = Crc::<u64>::new(&CRC_64_ECMA_182);

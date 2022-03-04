@@ -23,7 +23,8 @@ use crate::util::{
     make_absolute,
     defer,
     randombytes_as_string,
-    rm
+    rm,
+    path_join
 };
 
 pub const DEPLO_GIT_HASH: &'static str = env!("GIT_HASH");
@@ -763,12 +764,8 @@ impl Config {
         Ok(path)
     }
     pub fn deplo_cli_download(&self, os: RunnerOS, shell: &impl shell::Shell) -> Result<PathBuf, Box<dyn Error>> {
-        let mut base = self.deplo_data_path()?;
-        base.push("cli");
-        base.push(DEPLO_VERSION);
-        base.push(os.uname());
-        let mut file_path = base.clone();
-        file_path.push("deplo");
+        let base = self.deplo_data_path()?;
+        let file_path = path_join(vec![base.to_str().unwrap(), "cli", DEPLO_VERSION, os.uname(), "deplo"]);
         match fs::metadata(&file_path) {
             Ok(mata) => {
                 if mata.is_dir() {
