@@ -7,7 +7,7 @@ on:
     types: [{remote_job_dispatch_type}]
 
 env:
-  DEPLO_GHACTION_CI_ID: ${{ github.run_id }}-${{ github.run_attempt }}
+  DEPLO_GHACTION_CI_ID: ${{{{ github.run_id }}}}-${{{{ github.run_attempt }}}}
   DEPLO_GHACTION_PR_URL: ${{{{ github.event.pull_request.url }}}}
   DEPLO_GHACTION_EVENT_TYPE: ${{{{ github.event.action }}}}
   DEPLO_GHACTION_EVENT_PAYLOAD: ${{{{ toJSON(github.event.client_payload) }}}}
@@ -21,11 +21,10 @@ jobs:
     name: Start CI ${{{{ github.event.client_payload.job_id }}}}
     runs-on: ubuntu-latest
     outputs:
-      DEPLO_OUTPUT_OVERWRITE_COMMIT: ${{{{ steps.deplo-ci-kick.outputs.DEPLO_OUTPUT_OVERWRITE_COMMIT }}}}
 {outputs:>6}
     steps:
 {fetchcli:>6}
-{checkout:>6}
+{kick_checkout:>6}
       - name: Start deplo
         id: deplo-ci-kick
         run: deplo ci kick
@@ -42,7 +41,7 @@ jobs:
 {cleanup_envs:>4}
     steps:
 {fetchcli:>6}
-{checkout:>6}
+{fin_checkout:>6}
       - name: Cleanup deplo
         id: deplo-ci-fin
         run: deplo ci fin

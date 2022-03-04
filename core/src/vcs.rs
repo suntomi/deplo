@@ -8,7 +8,7 @@ use serde_json::{Value as JsonValue};
 use super::config;
 use crate::module;
 
-#[derive(Eq, PartialEq, Debug)]
+#[derive(Eq, PartialEq, Clone, Copy, Debug)]
 pub enum RefType {
     Branch,
     Remote,
@@ -32,19 +32,21 @@ pub trait VCS : module::Module {
     fn new(config: &config::Container) -> Result<Self, Box<dyn Error>> where Self : Sized;
     fn release_target(&self) -> Option<String>;
     fn current_ref(&self) -> Result<(RefType, String), Box<dyn Error>>;
-    fn delete_branch(&self, branch_name: &str) -> Result<(), Box<dyn Error>>;
+    fn delete_branch(&self, ref_type: RefType, ref_path: &str) -> Result<(), Box<dyn Error>>;
+    fn fetch_branch(&self, branch_name: &str) -> Result<(), Box<dyn Error>>;
+    fn squash_branch(&self, n: usize) -> Result<(), Box<dyn Error>>;
     fn commit_hash(&self, expr: Option<&str>) -> Result<String, Box<dyn Error>>;
     fn checkout(&self, commit: &str, branch_name: Option<&str>) -> Result<(), Box<dyn Error>>;
     fn repository_root(&self) -> Result<String, Box<dyn Error>>;
     fn rebase_with_remote_counterpart(&self, branch: &str) -> Result<(), Box<dyn Error>>;
     fn pick_ref(&self, target: &str) -> Result<(), Box<dyn Error>>;
-    fn push(
-        &self, remote_branch: &str, local_ref: &str, option: &HashMap<&str, &str>
+    fn push_branch(
+        &self, local_ref: &str, remote_branch: &str, option: &HashMap<&str, &str>
     ) -> Result<(), Box<dyn Error>>;
     fn pr(
         &self, title: &str, head_branch: &str, base_branch: &str, option: &HashMap<&str, &str>
     ) -> Result<(), Box<dyn Error>>;
-    fn pr_url_from_current_ref(&self) -> Result<Option<String>, Box<dyn Error>>;
+    fn pr_url_from_env(&self) -> Result<Option<String>, Box<dyn Error>>;
     fn user_and_repo(&self) -> Result<(String, String), Box<dyn Error>>;
     fn release(
         &self, target_ref: (&str, bool), opts: &JsonValue

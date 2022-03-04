@@ -18,7 +18,13 @@ use crate::args;
 use crate::vcs;
 use crate::ci;
 use crate::shell;
-use crate::util::{escalate,envsubst,make_absolute,defer, randombytes_as_string};
+use crate::util::{
+    escalate,envsubst,
+    make_absolute,
+    defer,
+    randombytes_as_string,
+    rm
+};
 
 pub const DEPLO_GIT_HASH: &'static str = env!("GIT_HASH");
 pub const DEPLO_VERSION: &'static str = env!("DEPLO_RELEASE_VERSION");
@@ -126,10 +132,22 @@ impl fmt::Display for Command {
     }
 }
 #[derive(Serialize, Deserialize)]
+#[serde(tag = "type")]
+pub enum PushOptions {
+    Push {
+        squash: Option<bool>,
+    },
+    PullRequest {
+        labels: Option<Vec<String>>,
+        assignees: Option<Vec<String>>,
+        aggregate: Option<bool>,
+    }
+}
+#[derive(Serialize, Deserialize)]
 pub struct Commits {
     pub patterns: Vec<String>,
     pub log_format: Option<String>,
-    pub push: Option<bool>,
+    pub push_opts: Option<PushOptions>,
 }
 impl Commits {
     fn generate_commit_log(&self, name: &str, _: &Job) -> String {
@@ -164,7 +182,6 @@ pub struct Job {
     pub commits: Option<Commits>,
     pub options: Option<HashMap<String, String>>,
     pub tasks: Option<HashMap<String, String>>,
-    pub local_fallback: Option<FallbackContainer>,
 }
 impl Job {
     pub fn runner_os(&self) -> RunnerOS {
@@ -370,7 +387,8 @@ pub struct RuntimeConfig {
     pub release_target: Option<String>,
     pub workflow_type: Option<WorkflowType>,
     pub workdir: Option<String>,
-    pub dotenv_path: Option<String>
+    pub dotenv_path: Option<String>,
+    pub process_envs: HashMap<String, String>,
 }
 impl RuntimeConfig {
     fn with_args<A: args::Args>(args: &A) -> Self {
@@ -398,6 +416,7 @@ impl RuntimeConfig {
             release_target: None, // set after
             workflow_type: None, // set after
             workdir: args.value_of("workdir").map_or_else(|| None, |v| Some(v.to_string())),
+            process_envs: hashmap!{}, // set after
         }
     }
     fn setup_logger(verbosity: u64) {
@@ -473,11 +492,11 @@ impl RuntimeConfig {
                 None => {
                     let immc = config.borrow();
                     let vcs = immc.vcs_service()?;
-                    let (account_name, _) = immc.ci_config_by_env();
+                    let (account_name, _) = immc.ci_config_by_env_or_default();
                     let ci = immc.ci_service(account_name)?;
                     match ci.pr_url_from_env()? {
                         Some(_) => Some(WorkflowType::Integrate),
-                        None => match vcs.pr_url_from_current_ref()? {
+                        None => match vcs.pr_url_from_env()? {
                             Some(_) => Some(WorkflowType::Integrate),
                             None => match vcs.release_target() {
                                 Some(_) => Some(WorkflowType::Deploy),
@@ -619,19 +638,25 @@ impl Config {
     }
     pub fn create<A: args::Args>(args: &A) -> Result<Container, Box<dyn Error>> {
         let runtime_config = RuntimeConfig::with_args(args);
+        // phase1. apply command line args that is essential for following phases
         runtime_config.apply()?;
+        // phase2. load config file into this object
         let mut c = Self::with_config(
             ConfigSource::File(args.value_of("config").unwrap_or("Deplo.toml")),
             runtime_config
         )?;
-        // setup module cache
+        // phase3. setup module cache
         Self::setup_ci(&c)?;
         Self::setup_vcs(&c)?;
+        // phase4. apply command line args which requires module cache existences
+        // here, all command line argument should be applied.
         RuntimeConfig::post_apply(&mut c, args)?;
-        c.borrow().setup_process_env()?;
+        // phase5. generate process environment.
+        let envs = c.borrow().setup_process_env()?;
+        c.borrow_mut().runtime.process_envs = envs;
         return Ok(c);
     }
-    pub fn setup_process_env(&self) -> Result<(), Box<dyn Error>> {
+    pub fn setup_process_env(&self) -> Result<HashMap<String, String>, Box<dyn Error>> {
         let (ci, local) = match self.ci_service_by_env() {
             Ok(ci) => (ci, false),
             Err(_) => (self.ci_service_main()?, true)
@@ -645,12 +670,20 @@ impl Config {
         };
         let sha = vcs.commit_hash(None)?;
         let random_id = randombytes_as_string!(16);
-        let ci_type = match self.current_ci_type() {
+        let may_parent_ci_id = std::env::var("DEPLO_CI_ID");
+        let ci_type = match self.current_ci_type_by_env() {
             Ok(v) => v,
             Err(_) => self.ci.accounts.get("default").unwrap().type_as_str().to_string(),
         };
         let mut default_envs = hashmap!{
-            "DEPLO_CI_ID" => Some(random_id.as_str()),
+            // on local, CI ID should be inherited from parent, if exists.
+            // on CI DEPLO_CI_ID replaced with CI specific environment variable that represents canonical ID
+            "DEPLO_CI_ID" => Some(match may_parent_ci_id {
+                Ok(ref v) => v.as_str(),
+                Err(_) => random_id.as_str(),
+            }),
+            // other CI process env should be recalculated, because user may call deplo on deferent environment.
+            // but on CI, some of these variables may replaced by CI specific way, by return values of ci.process_env
             "DEPLO_CI_TYPE" => Some(ci_type.as_str()),
             "DEPLO_CI_TAG_NAME" => may_tag,
             "DEPLO_CI_BRANCH_NAME" => may_branch,
@@ -662,17 +695,21 @@ impl Config {
             "DEPLO_CI_CLI_COMMIT_HASH" => Some(DEPLO_GIT_HASH),
             "DEPLO_CI_CLI_VERSION" => Some(DEPLO_VERSION),
         };
-        let envs = ci.process_env(local);
+        let envs = ci.process_env(local)?;
         for (k, v) in &envs {
             default_envs.insert(k, Some(v.as_str()));
         }
+        let mut applied_process_envs = hashmap!{};
         for (k, v) in &default_envs {
             match v {
-                Some(v) => std::env::set_var(k, v),
+                Some(v) => {
+                    std::env::set_var(k, v);
+                    applied_process_envs.insert(k.to_string(), v.to_string());
+                },
                 None => std::env::remove_var(k),
             }
         };
-        Ok(())
+        Ok(applied_process_envs)
     }
     pub fn data_dir<'a>(&'a self) -> &'a str {
         return match self.common.data_dir {
@@ -754,7 +791,7 @@ impl Config {
             // on ci, no dotenv file and secrets are already set as environment variable.
             // so we need to get secret name list from ci service and get their value from environment.
             // then pass key and vlaue to the closure cb.
-            let (name, _) = self.ci_config_by_env();
+            let (name, _) = self.ci_config_by_env_or_default();
             for secret in &self.ci_service(name)?.list_secret_name()? {
                 match std::env::var(secret) {
                     Ok(v) => cb(secret, &v)?,
@@ -797,7 +834,7 @@ impl Config {
         }
         return Ok(())
     }
-    pub fn current_ci_type(&self) -> Result<String, ConfigError> {
+    pub fn current_ci_type_by_env(&self) -> Result<String, ConfigError> {
         let cis = hashmap!{
             "CIRCLE_SHA1" => "CircleCI",
             "GITHUB_ACTION" => "GhAction"
@@ -813,11 +850,6 @@ impl Config {
                 }
             }
         }
-        for (_, value) in &cis {
-            if self.is_main_ci(value) {
-                return Ok(value.to_string());
-            }
-        }
         return Err(ConfigError{ 
             cause: "you don't set CI type and deplo cannot detect it. abort".to_string()
         })
@@ -828,12 +860,22 @@ impl Config {
             None => panic!("provider corresponding to account {} does not exist", account_name)
         }
     }
-    pub fn ci_config_by_env<'b>(&'b self) -> (&'b str, &'b CIAccount) {
-        let t = self.current_ci_type().unwrap();
-        for (account_name, account) in &self.ci.accounts {
-            if account.type_matched(&t) { return (account_name, account) }
+    pub fn ci_config_by_env<'b>(&'b self) -> Option<(&'b str, &'b CIAccount)> {
+        match self.current_ci_type_by_env() {
+            Ok(t) => {
+                for (account_name, account) in &self.ci.accounts {
+                    if account.type_matched(&t) { return Some((account_name, account)) }
+                }
+            },
+            Err(_) => {}
+        };
+        None
+    }
+    pub fn ci_config_by_env_or_default<'b>(&'b self) -> (&'b str, &'b CIAccount) {
+        match self.ci_config_by_env() {
+            Some(config) => config,
+            None => ("default", self.ci.accounts.get("default").unwrap())
         }
-        panic!("ci_type = {}, but does not have corresponding CI Config", t)
     }
     pub fn ci_service<'a>(&'a self, account_name: &str) -> Result<&'a Box<dyn ci::CI>, Box<dyn Error>> {
         return match self.ci_caches.get(account_name) {
@@ -844,12 +886,18 @@ impl Config {
         } 
     }
     pub fn ci_service_by_env<'a>(&'a self) -> Result<&'a Box<dyn ci::CI>, Box<dyn Error>> {
-        let (account_name, _) = self.ci_config_by_env();
-        return match self.ci_caches.get(account_name) {
-            Some(ci) => Ok(ci),
-            None => escalate!(Box::new(ConfigError{ 
-                cause: format!("no ci service for {}", account_name) 
-            }))
+        match self.ci_config_by_env() {
+            Some((account_name, _)) => match self.ci_caches.get(account_name) {
+                Some(ci) => Ok(ci),
+                None => escalate!(Box::new(ConfigError{
+                    cause: format!("no ci service for {}", account_name)
+                }))
+            },
+            None => {
+                return escalate!(Box::new(ConfigError{
+                    cause: "you don't set CI type and deplo cannot detect it. abort".to_string()
+                }))
+            }
         } 
     }
     pub fn ci_service_main<'a>(&'a self) -> Result<&'a Box<dyn ci::CI>, Box<dyn Error>> {
@@ -889,6 +937,9 @@ impl Config {
                 inherits_from_dotenv.insert(k.to_string(), v.to_string());
                 Ok(())
             })?;
+            for (k, v) in &self.runtime.process_envs {
+                inherits_from_dotenv.insert(k.to_string(), v.to_string());
+            }
             inherits_from_dotenv
         };
         for (k, v) in job.job_env(self, system) {
@@ -1031,7 +1082,7 @@ impl Config {
             Command::Shell => job.shell.as_ref().map_or_else(|| "bash", |v| v.as_str())
         };
         // if current commit is modified, rollback after all operation is done.
-        defer!(self.recover_branch().unwrap());
+        defer!{self.recover_branch().unwrap();};
         if options.remote {
             log::debug!(
                 "force running job {} on remote with command {} at {}", 
@@ -1164,19 +1215,26 @@ impl Config {
         Ok(None)
     }
     pub fn post_run_job(&self, job_name: &str, job: &Job) -> Result<(), Box<dyn Error>> {
-        let mut system_outputs = hashmap!{};
+        let mut system_job_outputs = hashmap!{};
         match job.commits {
             Some(ref commits) => {
                 let vcs = self.vcs_service()?;
                 match vcs.current_ref()? {
                     (vcs::RefType::Branch|vcs::RefType::Pull, _) => {
-                        let branch_name = format!("deplo-auto-commits-{}-tmp-{}", std::env::var("DEPLO_CI_ID").unwrap(), job_name);
+                        let branch_name = format!(
+                            "deplo-auto-commits-{}-tmp-{}", 
+                            std::env::var("DEPLO_CI_ID").unwrap(),
+                            job_name
+                        );
                         if vcs.push_diff(
-                            &branch_name, &commits.generate_commit_log(job_name, &job),
+                            // basically the branch_name does not exists in remote,
+                            // we need to add refs/heads to create it automatically
+                            &format!("refs/heads/{}", branch_name), 
+                            &commits.generate_commit_log(job_name, &job),
                             &commits.patterns.iter().map(AsRef::as_ref).collect::<Vec<&str>>(),
                             &hashmap!{}
                         )? {
-                            system_outputs.insert(DEPLO_SYSTEM_OUTPUT_COMMIT_BRANCH_NAME, branch_name);
+                            system_job_outputs.insert(DEPLO_SYSTEM_OUTPUT_COMMIT_BRANCH_NAME, branch_name);
                         }
                     },
                     (ty, b) => {
@@ -1187,42 +1245,59 @@ impl Config {
             None => {}
         };
         let ci = self.ci_service_by_job_name(job_name)?;
-        if system_outputs.len() > 0 {
+        if system_job_outputs.len() > 0 {
+            log::debug!("set system job outputs: {:?}", system_job_outputs);
             ci.set_job_output(
                 job_name, ci::OutputKind::System, 
-                system_outputs.iter().map(|(k,v)| (*k, v.as_str())).collect()
+                system_job_outputs.iter().map(|(k,v)| (*k, v.as_str())).collect()
             )?;
             ci.mark_need_cleanup(job_name)?;
         }
         match fs::read(Path::new(DEPLO_JOB_OUTPUT_TEMPORARY_FILE)) {
             Ok(b) => {
                 let outputs = serde_json::from_slice::<HashMap<&str, &str>>(&b)?;
+                log::debug!("set user job outputs: {:?}", outputs);
                 ci.set_job_output(job_name, ci::OutputKind::User, outputs)?;
+                rm(DEPLO_JOB_OUTPUT_TEMPORARY_FILE);
             },
             Err(_) => {}
         }
         Ok(())
     }
-    pub fn job_output_ctrl(&self, job_name: &str, key: &str, value: Option<&str>) -> Result<Option<String>, Box<dyn Error>> {
-        let ci = self.ci_service_by_job_name(job_name)?;
-        match value {
-            Some(v) => {
-                match fs::read(Path::new(DEPLO_JOB_OUTPUT_TEMPORARY_FILE)) {
-                    Ok(b) => {
-                        let mut outputs = serde_json::from_slice::<HashMap<&str, &str>>(&b)?;
-                        outputs.insert(key, v);
-                        fs::write(DEPLO_JOB_OUTPUT_TEMPORARY_FILE, serde_json::to_string(&outputs)?)?;
-                    },
-                    Err(_) => {
-                        fs::write(DEPLO_JOB_OUTPUT_TEMPORARY_FILE, serde_json::to_string(&hashmap!{ key => v })?)?;
-                    }
-                };
-                Ok(None)
+    pub fn set_user_job_output(&self, key: &str, value: &str) -> Result<(), Box<dyn Error>> {
+        match fs::read(Path::new(DEPLO_JOB_OUTPUT_TEMPORARY_FILE)) {
+            Ok(b) => {
+                let mut outputs = serde_json::from_slice::<HashMap<&str, &str>>(&b)?;
+                outputs.insert(key, value);
+                fs::write(DEPLO_JOB_OUTPUT_TEMPORARY_FILE, serde_json::to_string(&outputs)?)?;
             },
-            None => ci.job_output(job_name, ci::OutputKind::User, key)
+            Err(_) => {
+                fs::write(DEPLO_JOB_OUTPUT_TEMPORARY_FILE, serde_json::to_string(&hashmap!{ key => value })?)?;
+            }
+        };
+        Ok(())
+    }
+    pub fn user_job_output(&self, job_name: &str, key: &str) -> Result<Option<String>, Box<dyn Error>> {
+        let ci = self.ci_service_by_job_name(job_name)?;
+        match std::env::var("DEPLO_JOB_CURRENT_NAME") {
+            Ok(n) => {
+                if n == job_name {
+                    // get output of current job. read from temporary file
+                    match fs::read(Path::new(DEPLO_JOB_OUTPUT_TEMPORARY_FILE)) {
+                        Ok(b) => {
+                            let outputs = serde_json::from_slice::<HashMap<&str, &str>>(&b)?;
+                            Ok(outputs.get(key).map(|v| v.to_string()))
+                        },
+                        Err(e) => escalate!(Box::new(e))
+                    }
+                } else {
+                    ci.job_output(job_name, ci::OutputKind::User, key)
+                }
+            },
+            Err(_) => ci.job_output(job_name, ci::OutputKind::User, key)
         }
     }
-    pub fn system_output(&self, job_name: &str, key: &str) -> Result<Option<String>, Box<dyn Error>> {
+    pub fn system_job_output(&self, job_name: &str, key: &str) -> Result<Option<String>, Box<dyn Error>> {
         let ci = self.ci_service_by_job_name(job_name)?;
         ci.job_output(job_name, ci::OutputKind::System, key)
     }

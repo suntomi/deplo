@@ -9,11 +9,16 @@ use maplit::hashmap;
 
 use core::config;
 use core::shell;
+use core::vcs;
 
 use crate::args;
 use crate::command;
-use crate::util::escalate;
+use crate::util::{escalate};
 
+struct AggregatedPullRequestOptions {
+    labels: Vec<String>,
+    assignees: Vec<String>,
+}
 pub struct CI<S: shell::Shell = shell::Default> {
     pub config: config::Container,
     pub shell: S
@@ -33,7 +38,7 @@ impl<S: shell::Shell> CI<S> {
             vcs_mut.init_diff(diff)?;
         }
         let config = self.config.borrow();
-        let (account_name, _) = config.ci_config_by_env();
+        let (account_name, _) = config.ci_config_by_env_or_default();
         let ci = config.ci_service(account_name)?;
         ci.kick()?;
         match ci.dispatched_remote_job()? {
@@ -78,13 +83,13 @@ impl<S: shell::Shell> CI<S> {
         }
         if !config::Config::is_running_on_ci() {
             log::debug!("if not running on CI, all jobs should be finished");
-            self.fin(args)?;
+            self.cleanup_jobs()?;
         }
         Ok(())
     }
     fn setenv<A: args::Args>(&self, _: &A) -> Result<(), Box<dyn Error>> {
         let config = self.config.borrow();
-        let (account_name, _) = config.ci_config_by_env();
+        let (account_name, _) = config.ci_config_by_env_or_default();
         let ci = config.ci_service(account_name)?;
         config.parse_dotenv(|k,v| ci.set_secret(k, v))
     }
@@ -92,8 +97,7 @@ impl<S: shell::Shell> CI<S> {
         let config = self.config.borrow();
         let key = args.value_of("key").unwrap();
         let value = args.value_of("value").unwrap();
-        let job_name = std::env::var("DEPLO_CI_CURRENT_JOB_NAME").unwrap();
-        config.job_output_ctrl(&job_name, key, Some(value))?;
+        config.set_user_job_output(key, value)?;
         Ok(())
 }
     fn exec<A: args::Args>(&self, kind: &str, args: &A) -> Result<(), Box<dyn Error>> {
@@ -108,66 +112,15 @@ impl<S: shell::Shell> CI<S> {
                     println!("{}", job_id);
                 }
             },
-            None => {}
+            None => if !config::Config::is_running_on_ci() {
+                log::debug!("the job {} should finish because no job_id. do cleanup", job_name);
+                self.cleanup_jobs()?;
+            }
         };
         return Ok(())
     }
     fn fin<A: args::Args>(&self, _: &A) -> Result<(), Box<dyn Error>> {
-        let config = self.config.borrow();
-        let vcs = config.vcs_service()?;
-        let mut pushes = vec![];
-        let mut prs = vec![];
-        let push_opts = hashmap!{ "lfs" => "on" };
-        for (name, job) in config.enumerate_jobs() {
-            let job_name = format!("{}-{}", name.0, name.1);
-            match config.system_output(&job_name, config::DEPLO_SYSTEM_OUTPUT_COMMIT_BRANCH_NAME)? {
-                Some(v) => {
-                    log::info!("ci fin: find commit from job {} at {}", job_name, v);
-                    if job.commits.as_ref().unwrap().push.unwrap_or(false) {
-                        pushes.push(v);
-                    } else {
-                        prs.push(v);
-                    }
-                },
-                None => {}
-            };
-        }
-        let job_id = std::env::var("DEPLO_CI_ID").unwrap();
-        let current_branch = std::env::var("DEPLO_CI_BRANCH_NAME").unwrap();
-        let current_ref = std::env::var("DEPLO_CI_CURRENT_SHA").unwrap();
-        for (ty,branches) in hashmap!{
-            "pr" => prs,
-            "push" => pushes
-        } {
-            let working_branch = &format!("deplo-auto-commits-{}-{}", job_id, ty);
-            vcs.checkout(&current_ref, Some(working_branch))?;
-            if branches.len() > 0 {
-                for b in &branches {
-                    // HEAD of branch b will be picked
-                    vcs.pick_ref(b)?;
-                }
-                match ty {
-                    "pr" => {
-                        vcs.push(&working_branch, &working_branch, &push_opts)?;
-                        vcs.pr(
-                            &format!("[deplo] auto commit by job [{}]", job_id), 
-                            &working_branch, &current_branch, &hashmap!{}
-                        )?;
-                    },
-                    "push" => {
-                        vcs.push(&working_branch, &current_branch, &push_opts)?;
-                        vcs.delete_branch(&working_branch)?;
-                    },
-                    &_ => {
-                        panic!("invalid commit type: {}", ty);
-                    }
-                }
-                for b in &branches {
-                    vcs.delete_branch(b)?;
-                }
-            }
-        }
-        Ok(())
+        self.cleanup_jobs()
     }
 
     // helpers
@@ -255,8 +208,7 @@ impl<S: shell::Shell> CI<S> {
             Some(("wait", subargs)) => Ok(Some(subargs.value_of("job_id").unwrap().to_string())),
             Some(("output", subargs)) => {
                 let key = subargs.value_of("key").unwrap();
-                let value = subargs.value_of("value");
-                match config.job_output_ctrl(job_name, key, value)? {
+                match config.user_job_output(job_name, key)? {
                     Some(v) => println!("{}", v),
                     None => {}
                 };
@@ -308,6 +260,142 @@ impl<S: shell::Shell> CI<S> {
             }
         }
         log::info!("remote job {} id={} finished", job_name, job_id);
+        Ok(())
+    }
+    fn aggregate_commits(&self) -> Result<Vec<(String, Vec<String>, config::PushOptions)>, Box<dyn Error>> {
+        let config = self.config.borrow();
+        let mut commits: Vec<(String, Vec<String>, config::PushOptions)> = vec![];
+        let mut aggregated_push_branches = vec![];
+        let mut aggregated_pr_branches = vec![];
+        let mut aggregated_pr_opts = AggregatedPullRequestOptions {
+            labels: vec![], assignees: vec![],
+        };
+        for (name, job) in config.enumerate_jobs() {
+            let job_name = format!("{}-{}", name.0, name.1);
+            match config.system_job_output(&job_name, config::DEPLO_SYSTEM_OUTPUT_COMMIT_BRANCH_NAME)? {
+                Some(v) => {
+                    log::info!("ci fin: find commit from job {} at {}", job_name, v);
+                    match job.commits.as_ref().unwrap().push_opts {
+                        Some(ref options) => match options {
+                            config::PushOptions::Push{squash} => {
+                                if squash.unwrap_or(true) {
+                                    aggregated_push_branches.push(v);
+                                } else {
+                                    commits.push((format!("{}-push", job_name), vec![v], config::PushOptions::Push{squash: Some(false)}));
+                                }
+                            },
+                            config::PushOptions::PullRequest{labels, assignees, aggregate} => {
+                                if aggregate.unwrap_or(false) {
+                                    aggregated_pr_branches.push(v);
+                                    aggregated_pr_opts.labels = [aggregated_pr_opts.labels, labels.clone().unwrap_or(vec![])].concat();
+                                    aggregated_pr_opts.assignees = [aggregated_pr_opts.assignees, assignees.clone().unwrap_or(vec![])].concat();
+                                } else {
+                                    commits.push((format!("{}-pr", job_name), vec![v], config::PushOptions::PullRequest{
+                                        labels: labels.as_ref().map(|v| v.clone()), assignees: assignees.as_ref().map(|v| v.clone()),
+                                        aggregate: Some(false)
+                                    }));
+                                }
+                            }
+                        },
+                        // if push option is not set, default behaviour is:
+                        // push to current branch for integrate jobs,
+                        // make pr to branch for deploy jobs.
+                        None => if name.0 == "integrate" {
+                            // aggregated by default
+                            aggregated_push_branches.push(v);
+                        } else {
+                            // made single PR by default
+                            commits.push((format!("{}-pr", job_name), vec![v], config::PushOptions::PullRequest{
+                                labels: None, assignees: None, aggregate: Some(false)
+                            }));
+                        }
+                    }
+                },
+                None => {}
+            };
+        }
+        commits.push(("aggregate-push".to_string(), aggregated_push_branches, config::PushOptions::Push{squash: Some(true)}));
+        commits.push(("aggregate-pr".to_string(), aggregated_pr_branches, config::PushOptions::PullRequest{
+            labels: if aggregated_pr_opts.labels.len() > 0 { Some(aggregated_pr_opts.labels) } else { None }, 
+            assignees: if aggregated_pr_opts.assignees.len() > 0 { Some(aggregated_pr_opts.assignees) } else { None }, 
+            aggregate: Some(true)
+        }));
+        Ok(commits)
+    }
+    fn push_job_result_branches(
+        &self, branches_and_options: &(String, Vec<String>, config::PushOptions)
+    ) -> Result<(), Box<dyn Error>> {
+        let config = self.config.borrow();
+        let vcs = config.vcs_service()?;
+        let job_id = std::env::var("DEPLO_CI_ID").unwrap();
+        let current_branch = std::env::var("DEPLO_CI_BRANCH_NAME").unwrap();
+        let current_ref = std::env::var("DEPLO_CI_CURRENT_SHA").unwrap();
+        let (name, branches, options) = branches_and_options;
+        if branches.len() > 0 {
+            let working_branch = format!("deplo-auto-commits-{}-{}", job_id, name);
+            vcs.checkout(&current_ref, Some(&working_branch))?;
+            for b in branches {
+                vcs.fetch_branch(&b)?;
+                // FETCH_HEAD of branch b will be picked
+                vcs.pick_ref("FETCH_HEAD")?;
+            }
+            let result_head_ref = match options {
+                config::PushOptions::PullRequest{labels,assignees,..} => {
+                    vcs.push_branch(&working_branch, &working_branch, &hashmap!{
+                        "new" => "true",
+                    })?;
+                    let mut pr_opts_for_vcs = hashmap!{};
+                    match labels {
+                        Some(v) => { pr_opts_for_vcs.insert("labels", serde_json::to_string(&v)?); },
+                        None => {}
+                    };
+                    match assignees {
+                        Some(v) => { pr_opts_for_vcs.insert("assignees", serde_json::to_string(&v)?); },
+                        None => {}
+                    };
+                    vcs.pr(
+                        &format!("[deplo] auto commit by job [{}]", job_id),
+                        &working_branch, &current_branch, 
+                        &pr_opts_for_vcs.iter().map(|(k,v)| (*k,v.as_str())).collect()
+                    )?;
+                    // if pushed successfully, back to original branch
+                    &current_ref
+                },
+                config::PushOptions::Push{squash} => {
+                    if squash.unwrap_or(true) && branches.len() > 1 {
+                        vcs.squash_branch(branches.len())?;
+                    }
+                    vcs.push_branch(&working_branch, &current_branch, &hashmap!{})?;
+                    // if pushed successfully, move current branch HEAD to pushed HEAD
+                    &working_branch
+                }
+            };
+            // only local execution need to recover repository status
+            if !config::Config::is_running_on_ci() {
+                vcs.checkout(result_head_ref, Some(&current_branch))?;
+                vcs.delete_branch(vcs::RefType::Branch, &working_branch)?;
+                for b in branches {
+                    vcs.delete_branch(vcs::RefType::Remote, b)?;
+                }
+            }
+        }
+        Ok(())
+    }
+    fn cleanup_jobs(&self) -> Result<(), Box<dyn Error>> {
+        for branches_and_options in self.aggregate_commits()? {
+            match self.push_job_result_branches(&branches_and_options) {
+                Ok(_) => {},
+                Err(e) => {
+                    log::error!("push_job_result_branches fails: back to original branch");
+                    let config = self.config.borrow();
+                    let vcs = config.vcs_service().unwrap();
+                    let current_branch = std::env::var("DEPLO_CI_BRANCH_NAME").unwrap();
+                    let current_ref = std::env::var("DEPLO_CI_CURRENT_SHA").unwrap();
+                    vcs.checkout(&current_ref, Some(&current_branch)).unwrap();
+                    return Err(e);
+                }
+            }
+        }
         Ok(())
     }    
 }

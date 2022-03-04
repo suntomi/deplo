@@ -11,7 +11,7 @@ on:
     types: [deplo-run-remote-job]
 
 env:
-  DEPLO_GHACTION_CI_ID: ${ github.run_id }-${ github.run_attempt }
+  DEPLO_GHACTION_CI_ID: ${{ github.run_id }}-${{ github.run_attempt }}
   DEPLO_GHACTION_PR_URL: ${{ github.event.pull_request.url }}
   DEPLO_GHACTION_EVENT_TYPE: ${{ github.event.action }}
   DEPLO_GHACTION_EVENT_PAYLOAD: ${{ toJSON(github.event.client_payload) }}
@@ -27,7 +27,6 @@ jobs:
     name: Start CI ${{ github.event.client_payload.job_id }}
     runs-on: ubuntu-latest
     outputs:
-      DEPLO_OUTPUT_OVERWRITE_COMMIT: ${{ steps.deplo-ci-kick.outputs.DEPLO_OUTPUT_OVERWRITE_COMMIT }}
       deploy-base: ${{ steps.deplo-ci-kick.outputs.deploy-base }}
       deploy-builder: ${{ steps.deplo-ci-kick.outputs.deploy-builder }}
       deploy-latest: ${{ steps.deplo-ci-kick.outputs.deploy-latest }}
@@ -44,10 +43,10 @@ jobs:
           curl -L https://github.com/suntomi/deplo/releases/download/nightly/deplo-Linux -o /usr/local/bin/deplo
           chmod +x /usr/local/bin/deplo
       - name: Checkout
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
         with:
           fetch-depth: 2
-          ref: ${{ needs.deplo-main.outputs.DEPLO_OUTPUT_OVERWRITE_COMMIT }}
+          ref: ${{ github.event.client_payload.commit }}
       - name: Start deplo
         id: deplo-ci-kick
         run: deplo ci kick
@@ -78,16 +77,17 @@ jobs:
           curl -L https://github.com/suntomi/deplo/releases/download/nightly/deplo-Linux -o /usr/local/bin/deplo
           chmod +x /usr/local/bin/deplo
       - name: Checkout
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
         with:
           fetch-depth: 2
-          ref: ${{ needs.deplo-main.outputs.DEPLO_OUTPUT_OVERWRITE_COMMIT }}
+          lfs: false
+          ref: ${{ github.event.client_payload.commit }}
       - name: Cleanup deplo
         id: deplo-ci-fin
         run: deplo ci fin
       - name: Setup ssh session to debug
         if: ${{ failure() }}
-        uses: umegaya/action-tmate@a3d459813f3429bd95fc48bcd980b2fb40f10ad0
+        uses: mxschmitt/action-tmate@v3
         with:
           sudo: true
   deploy-base:
@@ -107,16 +107,17 @@ jobs:
           curl -L https://github.com/suntomi/deplo/releases/download/nightly/deplo-Linux -o /usr/local/bin/deplo
           chmod +x /usr/local/bin/deplo
       - name: Checkout
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
         with:
-          ref: ${{ needs.deplo-main.outputs.DEPLO_OUTPUT_OVERWRITE_COMMIT }}
+          fetch-depth: 2
+          ref: ${{ github.event.client_payload.commit }}
   
       - name: deploy base
         id: deplo-deploy-base
         run: deplo ci deploy base
       - name: Setup ssh session to debug
         if: ${{ failure() }}
-        uses: umegaya/action-tmate@a3d459813f3429bd95fc48bcd980b2fb40f10ad0
+        uses: mxschmitt/action-tmate@v3
         with:
           sudo: true
   deploy-builder:
@@ -136,16 +137,17 @@ jobs:
           curl -L https://github.com/suntomi/deplo/releases/download/nightly/deplo-Linux -o /usr/local/bin/deplo
           chmod +x /usr/local/bin/deplo
       - name: Checkout
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
         with:
-          ref: ${{ needs.deplo-main.outputs.DEPLO_OUTPUT_OVERWRITE_COMMIT }}
+          fetch-depth: 2
+          ref: ${{ github.event.client_payload.commit }}
   
       - name: deploy builder
         id: deplo-deploy-builder
         run: deplo ci deploy builder
       - name: Setup ssh session to debug
         if: ${{ failure() }}
-        uses: umegaya/action-tmate@a3d459813f3429bd95fc48bcd980b2fb40f10ad0
+        uses: mxschmitt/action-tmate@v3
         with:
           sudo: true
   deploy-latest:
@@ -154,7 +156,7 @@ jobs:
     name: Running job deploy-latest
     runs-on: ubuntu-latest
     env:
-      DEPLO_JOB_USER_OUTPUT_DEPLOY_PRODUCT: needs.deploy-product.outputs.user
+      DEPLO_JOB_USER_OUTPUT_DEPLOY_PRODUCT: ${{ needs.deploy-product.outputs.user }}
   
     outputs:
       need-cleanup: ${{ steps.deplo-deploy-latest.outputs.need-cleanup }}
@@ -166,16 +168,17 @@ jobs:
           curl -L https://github.com/suntomi/deplo/releases/download/nightly/deplo-Linux -o /usr/local/bin/deplo
           chmod +x /usr/local/bin/deplo
       - name: Checkout
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
         with:
-          ref: ${{ needs.deplo-main.outputs.DEPLO_OUTPUT_OVERWRITE_COMMIT }}
+          fetch-depth: 2
+          ref: ${{ github.event.client_payload.commit }}
   
       - name: deploy latest
         id: deplo-deploy-latest
         run: deplo ci deploy latest
       - name: Setup ssh session to debug
         if: ${{ failure() }}
-        uses: umegaya/action-tmate@a3d459813f3429bd95fc48bcd980b2fb40f10ad0
+        uses: mxschmitt/action-tmate@v3
         with:
           sudo: true
   deploy-mac:
@@ -184,7 +187,7 @@ jobs:
     name: Running job deploy-mac
     runs-on: macos-latest
     env:
-      DEPLO_JOB_USER_OUTPUT_DEPLOY_PRODUCT: needs.deploy-product.outputs.user
+      DEPLO_JOB_USER_OUTPUT_DEPLOY_PRODUCT: ${{ needs.deploy-product.outputs.user }}
   
     outputs:
       need-cleanup: ${{ steps.deplo-deploy-mac.outputs.need-cleanup }}
@@ -196,9 +199,10 @@ jobs:
           curl -L https://github.com/suntomi/deplo/releases/download/nightly/deplo-Darwin -o /usr/local/bin/deplo
           chmod +x /usr/local/bin/deplo
       - name: Checkout
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
         with:
-          ref: ${{ needs.deplo-main.outputs.DEPLO_OUTPUT_OVERWRITE_COMMIT }}
+          fetch-depth: 2
+          ref: ${{ github.event.client_payload.commit }}
       - name: Cache cargo
         id: deplo-cache-cargo
         uses: actions/cache@v2
@@ -219,7 +223,7 @@ jobs:
         run: deplo ci deploy mac
       - name: Setup ssh session to debug
         if: ${{ failure() }}
-        uses: umegaya/action-tmate@a3d459813f3429bd95fc48bcd980b2fb40f10ad0
+        uses: mxschmitt/action-tmate@v3
         with:
           sudo: true
   deploy-product:
@@ -228,7 +232,7 @@ jobs:
     name: Running job deploy-product
     runs-on: ubuntu-latest
     env:
-      DEPLO_JOB_USER_OUTPUT_DEPLOY_BUILDER: needs.deploy-builder.outputs.user
+      DEPLO_JOB_USER_OUTPUT_DEPLOY_BUILDER: ${{ needs.deploy-builder.outputs.user }}
   
     outputs:
       need-cleanup: ${{ steps.deplo-deploy-product.outputs.need-cleanup }}
@@ -240,16 +244,17 @@ jobs:
           curl -L https://github.com/suntomi/deplo/releases/download/nightly/deplo-Linux -o /usr/local/bin/deplo
           chmod +x /usr/local/bin/deplo
       - name: Checkout
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
         with:
-          ref: ${{ needs.deplo-main.outputs.DEPLO_OUTPUT_OVERWRITE_COMMIT }}
+          fetch-depth: 2
+          ref: ${{ github.event.client_payload.commit }}
   
       - name: deploy product
         id: deplo-deploy-product
         run: deplo ci deploy product
       - name: Setup ssh session to debug
         if: ${{ failure() }}
-        uses: umegaya/action-tmate@a3d459813f3429bd95fc48bcd980b2fb40f10ad0
+        uses: mxschmitt/action-tmate@v3
         with:
           sudo: true
   deploy-win:
@@ -258,7 +263,7 @@ jobs:
     name: Running job deploy-win
     runs-on: windows-latest
     env:
-      DEPLO_JOB_USER_OUTPUT_DEPLOY_PRODUCT: needs.deploy-product.outputs.user
+      DEPLO_JOB_USER_OUTPUT_DEPLOY_PRODUCT: ${{ needs.deploy-product.outputs.user }}
   
     outputs:
       need-cleanup: ${{ steps.deplo-deploy-win.outputs.need-cleanup }}
@@ -271,9 +276,10 @@ jobs:
           chmod +x /usr/bin/deplo
         shell: bash
       - name: Checkout
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
         with:
-          ref: ${{ needs.deplo-main.outputs.DEPLO_OUTPUT_OVERWRITE_COMMIT }}
+          fetch-depth: 2
+          ref: ${{ github.event.client_payload.commit }}
       - name: Cache cargo
         id: deplo-cache-cargo
         uses: actions/cache@v2
@@ -295,7 +301,7 @@ jobs:
         shell: bash
       - name: Setup ssh session to debug
         if: ${{ failure() }}
-        uses: umegaya/action-tmate@a3d459813f3429bd95fc48bcd980b2fb40f10ad0
+        uses: mxschmitt/action-tmate@v3
         with:
           sudo: true
   integrate-base:
@@ -315,16 +321,17 @@ jobs:
           curl -L https://github.com/suntomi/deplo/releases/download/nightly/deplo-Linux -o /usr/local/bin/deplo
           chmod +x /usr/local/bin/deplo
       - name: Checkout
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
         with:
-          ref: ${{ needs.deplo-main.outputs.DEPLO_OUTPUT_OVERWRITE_COMMIT }}
+          fetch-depth: 2
+          ref: ${{ github.event.client_payload.commit }}
   
       - name: integrate base
         id: deplo-integrate-base
         run: deplo ci integrate base
       - name: Setup ssh session to debug
         if: ${{ failure() }}
-        uses: umegaya/action-tmate@a3d459813f3429bd95fc48bcd980b2fb40f10ad0
+        uses: mxschmitt/action-tmate@v3
         with:
           sudo: true
   integrate-builder:
@@ -344,16 +351,17 @@ jobs:
           curl -L https://github.com/suntomi/deplo/releases/download/nightly/deplo-Linux -o /usr/local/bin/deplo
           chmod +x /usr/local/bin/deplo
       - name: Checkout
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
         with:
-          ref: ${{ needs.deplo-main.outputs.DEPLO_OUTPUT_OVERWRITE_COMMIT }}
+          fetch-depth: 2
+          ref: ${{ github.event.client_payload.commit }}
   
       - name: integrate builder
         id: deplo-integrate-builder
         run: deplo ci integrate builder
       - name: Setup ssh session to debug
         if: ${{ failure() }}
-        uses: umegaya/action-tmate@a3d459813f3429bd95fc48bcd980b2fb40f10ad0
+        uses: mxschmitt/action-tmate@v3
         with:
           sudo: true
   integrate-config:
@@ -373,16 +381,17 @@ jobs:
           curl -L https://github.com/suntomi/deplo/releases/download/nightly/deplo-Linux -o /usr/local/bin/deplo
           chmod +x /usr/local/bin/deplo
       - name: Checkout
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
         with:
-          ref: ${{ needs.deplo-main.outputs.DEPLO_OUTPUT_OVERWRITE_COMMIT }}
+          fetch-depth: 2
+          ref: ${{ github.event.client_payload.commit }}
   
       - name: integrate config
         id: deplo-integrate-config
         run: deplo ci integrate config
       - name: Setup ssh session to debug
         if: ${{ failure() }}
-        uses: umegaya/action-tmate@a3d459813f3429bd95fc48bcd980b2fb40f10ad0
+        uses: mxschmitt/action-tmate@v3
         with:
           sudo: true
   integrate-src:
@@ -402,9 +411,10 @@ jobs:
           curl -L https://github.com/suntomi/deplo/releases/download/nightly/deplo-Linux -o /usr/local/bin/deplo
           chmod +x /usr/local/bin/deplo
       - name: Checkout
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
         with:
-          ref: ${{ needs.deplo-main.outputs.DEPLO_OUTPUT_OVERWRITE_COMMIT }}
+          fetch-depth: 2
+          ref: ${{ github.event.client_payload.commit }}
       - name: Cache cargo
         id: deplo-cache-cargo
         uses: actions/cache@v2
@@ -425,6 +435,6 @@ jobs:
         run: deplo ci integrate src
       - name: Setup ssh session to debug
         if: ${{ failure() }}
-        uses: umegaya/action-tmate@a3d459813f3429bd95fc48bcd980b2fb40f10ad0
+        uses: mxschmitt/action-tmate@v3
         with:
           sudo: true

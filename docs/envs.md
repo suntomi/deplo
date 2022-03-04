@@ -5,8 +5,9 @@
 ### process env
 - environment variable that can be used entire deplo process invocation
   - start with DEPLO_CI_ are available all execution of deplo, include local execution
-  - start with DEPLO_GHACTION_ are only available when runs on github action.
-  - start with DEPLO_CIRCLECI_ are only available when runs on circle ci.
+  - start with DEPLO_GHACTION_ are only available when runs on github action to generate DEPLO_CI_ or DEPLO_JOB_ variables
+  - start with DEPLO_CIRCLECI_ are only available when runs on circle ci to generate DEPLO_CI_ or DEPLO_JOB_ variables
+- user application should only use DEPLO_CI_ and DEPLO_JOB_ for portability, instead of above CI specific envs or native CI service envs like CIRCLE_SHA1
 
 ### job env
 - environment variable that can be used the job which is invoked as subprocess of main deplo process. 
@@ -31,11 +32,13 @@
 - DEPLO_CI_CLI_COMMIT_HASH
 - DEPLO_CI_CLI_VERSION
 
-### current list of ghaction specific process env
+### current list of ghaction specific process env (only for internal use)
 - DEPLO_GHACTION_EVENT_TYPE
 - DEPLO_GHACTION_EVENT_PAYLOAD
+- DEPLO_GHACTION_CI_ID
+- DEPLO_GHACTION_PR_URL
 
-### current list of circleci specific process env 
+### current list of circleci specific process env (only for internal use)
 none
 
 ### current overwrite env

@@ -114,15 +114,11 @@ fn job_running_command_options(
             .takes_value(true)))
     .subcommand(
         App::new("output")
-        .about("set/get output, data passed between jobs")
+        .about("get output, data passed between jobs, of specified job")
         .arg(Arg::new("key")
-            .help("key to set/get data")
+            .help("key to get data")
             .index(1)
-            .required(true))
-        .arg(Arg::new("value")
-            .help("value to set for key. if ommited, get the value of key")
-            .index(2)
-            .required(false)))        
+            .required(true)))
 }
 
 lazy_static! {
@@ -266,9 +262,9 @@ lazy_static! {
                         .index(1)
                         .required(true))
                     .arg(Arg::new("value")
-                        .help("value to set for key. if ommited, get the value of key")
+                        .help("value to set for key")
                         .index(2)
-                        .required(false)))                    
+                        .required(true)))                    
         )
         .subcommand(
             App::new("vcs")

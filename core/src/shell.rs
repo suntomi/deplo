@@ -110,6 +110,10 @@ pub trait Shell {
 }
 pub type Default = native::Native;
 
+pub fn new_default(config: &config::Container) -> Default {
+    return native::Native::new(config);
+}
+
 #[derive(Debug)]
 pub enum ShellError {
     ExitStatus {

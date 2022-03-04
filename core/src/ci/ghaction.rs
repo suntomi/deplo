@@ -13,6 +13,7 @@ use serde::{Deserialize, Serialize};
 use crate::config;
 use crate::ci;
 use crate::shell;
+use crate::vcs;
 use crate::module;
 use crate::util::{
     escalate,seal,
@@ -238,7 +239,7 @@ impl<S: shell::Shell> GhAction<S> {
                 let mut envs = vec![];
                 for d in depends {
                     envs.push(format!(
-                        "{}: needs.{}-{}.outputs.user",
+                        "{}: ${{{{ needs.{}-{}.outputs.user }}}}",
                         Self::job_output_env_name(ci::OutputKind::User, &format!("{}-{}", names.0, d)),
                         names.0, d
                     ));
@@ -309,14 +310,13 @@ impl<S: shell::Shell> GhAction<S> {
             || defaults.clone().unwrap_or(HashMap::new()),
             |v| merge_hashmap(&defaults.clone().unwrap_or(HashMap::new()), v)
         );
-        let mut checkout_opts = merged_opts.iter().map(|(k,v)| {
-            return if vec!["fetch-depth", "lfs"].contains(&k.as_str()) {
+        let checkout_opts = sorted_key_iter(&merged_opts).map(|(k,v)| {
+            return if vec!["fetch-depth", "lfs", "ref", "token"].contains(&k.as_str()) {
                 format!("{}: {}", k, v)
             } else {
                 format!("# warning: deplo only support lfs/fetch-depth options for github action checkout but {}({}) is specified", k, v)
             }
         }).collect::<Vec<String>>();
-        checkout_opts.push("ref: ${{ needs.deplo-main.outputs.DEPLO_OUTPUT_OVERWRITE_COMMIT }}".to_string());
         // hash value for separating repository cache according to checkout options
         let opts_hash = options.as_ref().map_or_else(
             || "".to_string(), 
@@ -374,6 +374,7 @@ impl<'a, S: shell::Shell> module::Module for GhAction<S> {
         // generate job entries
         let mut job_descs = Vec::new();
         let mut all_job_names = vec!["deplo-main".to_string()];
+        let mut lfs = false;
         let jobs = config.enumerate_jobs();
         for (names, job) in sorted_key_iter(&jobs) {
             let name = format!("{}-{}", names.0, names.1);
@@ -414,14 +415,23 @@ impl<'a, S: shell::Shell> module::Module for GhAction<S> {
                     postfix: None
                 },
                 checkout = MultilineFormatString{
-                    strings: &self.generate_checkout_steps(&name, &job.checkout, &job.checkout.as_ref().map_or_else(
-                        || None,
-                        |v| if v.get("lfs").is_some() {
-                            Some(hashmap! { "fetch-depth".to_string() => "0".to_string() })
-                        } else {
-                            None
-                        }
-                    )),
+                    strings: &self.generate_checkout_steps(&name, &job.checkout, &Some(merge_hashmap(
+                        &hashmap!{
+                            "ref".to_string() => "${{ github.event.client_payload.commit }}".to_string(),
+                            "fetch-depth".to_string() => "2".to_string()
+                        }, &job.checkout.as_ref().map_or_else(
+                            || if job.commits.is_some() {
+                                hashmap!{ "fetch-depth".to_string() => "0".to_string() }
+                            } else {
+                                hashmap!{}
+                            },
+                            |v| if v.get("lfs").is_some() || job.commits.is_some() {
+                                hashmap!{ "fetch-depth".to_string() => "0".to_string() }
+                            } else {
+                                hashmap!{}
+                            }
+                        )))
+                    ),
                     postfix: None
                 },
                 debugger = MultilineFormatString{
@@ -430,6 +440,11 @@ impl<'a, S: shell::Shell> module::Module for GhAction<S> {
                 }
             ).split("\n").map(|s| s.to_string()).collect::<Vec<String>>();
             job_descs = job_descs.into_iter().chain(lines.into_iter()).collect();
+            // check if lfs is enabled
+            if !lfs {
+                lfs = job.checkout.as_ref().map_or_else(|| false, |v| v.get("lfs").is_some() && job.commits.is_some());
+                log::debug!("there is an job {}, that has commits option and does lfs checkout. enable lfs for deplo fin", name)
+            }
         }
         fs::write(&workflow_yml_path,
             format!(
@@ -450,9 +465,18 @@ impl<'a, S: shell::Shell> module::Module for GhAction<S> {
                     ),
                     postfix: None
                 },
-                checkout = MultilineFormatString{
+                kick_checkout = MultilineFormatString{
                     strings: &self.generate_checkout_steps("main", &None, &Some(hashmap!{
-                        "fetch-depth".to_string() => "2".to_string()
+                        "fetch-depth".to_string() => "2".to_string(),
+                        "ref".to_string() => "${{ github.event.client_payload.commit }}".to_string()
+                    })),
+                    postfix: None
+                },
+                fin_checkout = MultilineFormatString{
+                    strings: &self.generate_checkout_steps("main", &None, &Some(hashmap!{
+                        "fetch-depth".to_string() => "2".to_string(),
+                        "ref".to_string() => "${{ github.event.client_payload.commit }}".to_string(),
+                        "lfs".to_string() => lfs.to_string()
                     })),
                     postfix: None
                 },
@@ -485,12 +509,6 @@ impl<S: shell::Shell> ci::CI for GhAction<S> {
         });
     }
     fn kick(&self) -> Result<(), Box<dyn Error>> {
-        match std::env::var("DEPLO_OVERWRITE_COMMIT") {
-            Ok(c) => if !c.is_empty() {
-                println!("::set-output name=DEPLO_OUTPUT_OVERWRITE_COMMIT::{}", c);
-            },
-            Err(_) => {}
-        };
         Ok(())
     }
     fn overwrite_commit(&self, commit: &str) -> Result<String, Box<dyn Error>> {
@@ -641,45 +659,69 @@ impl<S: shell::Shell> ci::CI for GhAction<S> {
         }
         Ok(())
     }
-    fn process_env(&self, local: bool) -> HashMap<&str, String> {
+    fn process_env(&self, _local: bool) -> Result<HashMap<&str, String>, Box<dyn Error>> {
+        let config = self.config.borrow();
+        let vcs = config.vcs_service()?;
         let mut envs = hashmap!{
             "DEPLO_CI_TYPE" => "GhAction".to_string()
         };
         // get from env
         for (src, target) in hashmap!{
             "DEPLO_GHACTION_CI_ID" => "DEPLO_CI_ID",
-            "DEPLO_GHACTION_PR_URL" => "DEPLO_CI_PULL_REQUEST_URL",
-            "GITHUB_SHA" => "DEPLO_CI_CURRENT_SHA",
+            "DEPLO_GHACTION_PR_URL" => "DEPLO_CI_PULL_REQUEST_URL"
         } {
             match std::env::var(src) {
                 Ok(v) => {
                     envs.insert(target, v);
                 },
-                Err(_) => if !local {
-                    panic!("{} should set on CI service", src);
-                }
+                Err(_) => {}
             }
         };
-        match std::env::var("GITHUB_REF_TYPE") {
-            Ok(ref_type) => {
-                match std::env::var("GITHUB_REF") {
-                    Ok(ref_name) => {
-                        match ref_type.as_str() {
-                            "branch" => envs.insert(
-                                "DEPLO_CI_BRANCH_NAME", ref_name.replace("refs/heads/", "")
-                            ),
-                            "tag" => envs.insert(
-                                "DEPLO_CI_TAG_NAME", ref_name.replace("refs/tags/", "")
-                            ),
-                            v => panic!("invalid ref_type {}", v),
-                        };
+        match std::env::var("GITHUB_SHA") {
+            Ok(v) => envs.insert(
+                "DEPLO_CI_CURRENT_SHA", 
+                match vcs.current_ref()? {
+                    (vcs::RefType::Pull, _) => {
+                        let output = vcs.commit_hash(Some(&format!("{}^@", v)))?;
+                        let commits = output.split("\n").collect::<Vec<&str>>();
+                        if commits.len() > 1 {
+                            commits[1].to_string()
+                        } else {
+                            commits[0].to_string()
+                        }
                     },
-                    Err(_) => panic!("GITHUB_REF_TYPE is set but GITHUB_REF is not set"),
+                    (_, _) => v
                 }
+            ),
+            Err(_) => None
+        };
+        match std::env::var("GITHUB_HEAD_REF") {
+            Ok(v) => if !v.is_empty() {
+                envs.insert("DEPLO_CI_BRANCH_NAME", v);
+            } else {
+                log::error!("GITHUB_HEAD_REF is set but empty");
             },
-            Err(_) => {}
-        };        
-        envs
+            Err(_) => match std::env::var("GITHUB_REF_TYPE") {
+                Ok(ref_type) => {
+                    match std::env::var("GITHUB_REF") {
+                        Ok(ref_name) => {
+                            match ref_type.as_str() {
+                                "branch" => envs.insert(
+                                    "DEPLO_CI_BRANCH_NAME", ref_name.replace("refs/heads/", "")
+                                ),
+                                "tag" => envs.insert(
+                                    "DEPLO_CI_TAG_NAME", ref_name.replace("refs/tags/", "")
+                                ),
+                                v => { log::error!("invalid ref_type {}", v); None },
+                            };
+                        },
+                        Err(_) => { log::error!("GITHUB_REF_TYPE is set but GITHUB_REF is not set"); },
+                    }
+                },
+                Err(_) => {}
+            }
+        };
+        Ok(envs)
     }
     fn job_env(&self) -> HashMap<&str, String> {
         hashmap!{}
