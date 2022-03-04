@@ -29,8 +29,8 @@ impl<S: shell::Shell, A: args::Args> command::Command<A> for Init<S> {
         config::Config::prepare_ci(&self.config, reinit == "all" || reinit == "ci")?;
         config::Config::prepare_vcs(&self.config, reinit == "all" || reinit == "vcs")?;
         let config = self.config.borrow();
-        let data_path = config.deplo_data_path()?;
-        rm(&path_join(vec![data_path.to_str().unwrap(), "..", "deplow"]));
+        let data_path = path_join(vec![config.deplo_data_path()?.to_str().unwrap(), "..", "deplow"]);
+        rm(&data_path);
         fs::write(&data_path, config.generate_wrapper_script())?;
         self.shell.exec(&vec!["chmod", "+x", data_path.to_str().unwrap()], shell::no_env(), shell::no_cwd(), &shell::no_capture())?;
         return Ok(())

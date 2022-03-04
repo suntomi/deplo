@@ -764,8 +764,8 @@ impl Config {
         Ok(path)
     }
     pub fn deplo_cli_download(&self, os: RunnerOS, shell: &impl shell::Shell) -> Result<PathBuf, Box<dyn Error>> {
-        let base = self.deplo_data_path()?;
-        let file_path = path_join(vec![base.to_str().unwrap(), "cli", DEPLO_VERSION, os.uname(), "deplo"]);
+        let base_path = path_join(vec![self.deplo_data_path()?.to_str().unwrap(), "cli", DEPLO_VERSION, os.uname()]);
+        let file_path = path_join(vec![base_path.to_str().unwrap(), "deplow"]);
         match fs::metadata(&file_path) {
             Ok(mata) => {
                 if mata.is_dir() {
@@ -778,7 +778,7 @@ impl Config {
             },
             Err(_) => {}
         };
-        fs::create_dir_all(&base)?;
+        fs::create_dir_all(&base_path)?;
         shell.download(&cli_download_url(os, DEPLO_VERSION), &file_path.to_str().unwrap(), true)?;
         return Ok(file_path);
     }
