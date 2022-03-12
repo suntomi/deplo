@@ -71,7 +71,7 @@ done
 test = "echo 'suntomi-bot'"
 
 [jobs.integrate.src]
-patterns = [".*/src/.*", "Cargo.*"]
+patterns = ["*/src/*", "Cargo.*"]
 runner = { type = "Machine", os = "Linux", local_fallback = { image = "ghcr.io/suntomi/deplo:builder" } }
 command = "cargo build"
 tasks = { test = "cargo test", home = "echo ${HOME}" }
@@ -116,7 +116,7 @@ docker push ghcr.io/suntomi/deplo:builder
 [jobs.deploy.product]
 # job dependencies. deploy.product only starts to run after deploy.builder finished.
 depends = ["builder"]
-patterns = [".*/src/.*", "Cargo.*"]
+patterns = ["*/src/*", "Cargo.*"]
 runner = { type = "Machine", os = "Linux", local_fallback = { path = "tools/docker/Dockerfile.vmfb", shell = "sh" } }
 command = """
 set -e
@@ -140,7 +140,7 @@ fi
 depends = ["product"]
 # latest tag of docker image is only updated when production release is created.
 for_targets = ["prod"]
-patterns = [".*/src/.*", "Cargo.*"]
+patterns = ["*/src/*", "Cargo.*"]
 runner = { type = "Machine", os = "Linux", local_fallback = { image = "docker:20.10", shell = "sh" } }
 command = """
 . tools/scripts/setup_release_env.sh
@@ -152,7 +152,7 @@ docker push ghcr.io/suntomi/deplo:latest
 
 [jobs.deploy.mac]
 depends = ["product"]
-patterns = [".*/src/.*", "Cargo.*"]
+patterns = ["*/src/*", "Cargo.*"]
 runner = { type = "Machine", os = "MacOS" }
 command = """
 set -e
@@ -170,7 +170,8 @@ paths = ["target", "~/.cargo/bin", "~/.cargo/registry/cache", "~/.cargo/registry
 
 [jobs.deploy.win]
 depends = ["product"]
-patterns = [".*/src/.*", "Cargo.*"]
+patterns = [".*/src/.*", 'Cargo\.*']
+options = { diff_matcher = "regex" }
 runner = { type = "Machine", os = "Windows" }
 command = """
 set -e
