@@ -78,17 +78,25 @@ tasks = { test = "cargo test", home = "echo ${HOME}" }
 # cache settings. file paths that is listed in paths will be preserved with tha key `keys[0]`.
 # if you specify multiple keys, `keys[1..]` are used as fallback keys to search similar caches 
 # that is craeted by other branches.
-[jobs.integrate.src.caches.cargo]
-# way to use variable like ${{ runner.os }} in the keys, is CI service specific. please consult each CI service's
-# document for detail.
-keys = ["integrate-build-${{ runner.os }}-v1-${{ hashFiles('**/Cargo.lock') }}"]
-paths = ["target", "~/.cargo/bin", "~/.cargo/registry/cache", "~/.cargo/registry/index", "~/.cargo/git/db"]
+caches = {
+    # one table entry defines a set of cache operation
+    cargo = {
+        # way to use variable like ${{ runner.os }} in the keys, is CI service specific. please consult each CI service's document for detail.
+        keys = ["integrate-build-${{ runner.os }}-v1-${{ hashFiles('**/Cargo.lock') }}"], # each os and Cargo.lock definition
+        # paths root are also CI specific
+        paths = ["target", "~/.cargo/bin", "~/.cargo/registry/cache", "~/.cargo/registry/index", "~/.cargo/git/db"] # all possible cargo cache paths
+    }
+}
 
 [jobs.integrate.config]
 patterns = ["Deplo.toml"]
 runner = { type = "Machine", os = "Linux", local_fallback = { path = "tools/docker/Dockerfile.vmfb", shell = "sh" } }
 command = "deplo init"
-commits = [{ patterns = [".github/*"], for_targets = ["nightly"], push_opts = { type = "Push" } }, { patterns = [".github/*"], for_targets = ["prod"], push_opts = { type = "PullRequest" } }, { patterns = ["docs/*"], for_targets = ["lab"], push_opts = { type = "Push" } }]
+commits = [
+    { patterns = [".github/*"], for_targets = ["nightly"], push_opts = { type = "Push" } },
+    { patterns = [".github/*"], for_targets = ["prod"], push_opts = { type = "PullRequest" } },
+    { patterns = ["docs/*"], for_targets = ["lab"], push_opts = { type = "Push" } }
+]
 
 
 
@@ -164,9 +172,12 @@ if [ $(deplo d product output foo) != "bar" ]; then
     exit 1
 fi
 """
-[jobs.deploy.mac.caches.cargo]
-keys = ["integrate-build-${{ runner.os }}-v1-${{ hashFiles('**/Cargo.lock') }}"]
-paths = ["target", "~/.cargo/bin", "~/.cargo/registry/cache", "~/.cargo/registry/index", "~/.cargo/git/db"]
+caches = {
+    cargo = {
+        keys = ["integrate-build-${{ runner.os }}-v1-${{ hashFiles('**/Cargo.lock') }}"],
+        paths = ["target", "~/.cargo/bin", "~/.cargo/registry/cache", "~/.cargo/registry/index", "~/.cargo/git/db"]
+    }
+}
 
 [jobs.deploy.win]
 depends = ["product"]
@@ -184,6 +195,9 @@ if [ $(deplo d product output fuga) != "hoge" ]; then
     exit 1
 fi
 """
-[jobs.deploy.win.caches.cargo]
-keys = ["integrate-build-${{ runner.os }}-v1-${{ hashFiles('**/Cargo.lock') }}"]
-paths = ["target", "~/.cargo/bin", "~/.cargo/registry/cache", "~/.cargo/registry/index", "~/.cargo/git/db"]
+caches = {
+    cargo = {
+        keys = ["integrate-build-${{ runner.os }}-v1-${{ hashFiles('**/Cargo.lock') }}"],
+        paths = ["target", "~/.cargo/bin", "~/.cargo/registry/cache", "~/.cargo/registry/index", "~/.cargo/git/db"]
+    }
+}
