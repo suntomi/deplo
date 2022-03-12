@@ -7,7 +7,7 @@
         "request": "launch",
         "program": "${workspaceFolder}/target/debug/cli",
         "args": [
-            "-v=3", "-r=prod", "i", "config"
+            "-v=3", "-r=prod", "i", "src"
         ]
     },    
     {
@@ -43,7 +43,7 @@
         "request": "launch",
         "program": "${workspaceFolder}/target/debug/cli",
         "args": [
-            "-v=3", "d", "src"
+            "-v=3", "d", "mac"
         ]
     },
     {
