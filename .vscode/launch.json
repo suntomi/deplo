@@ -43,7 +43,11 @@
         "request": "launch",
         "program": "${workspaceFolder}/target/debug/cli",
         "args": [
+<<<<<<< HEAD
             "-v=3", "stop", "-r=nightly", "-w=integrate"
+=======
+            "-v=3", "d", "mac"
+>>>>>>> 0722dba (using homebrew version of toml-rs to enable multiline inline table)
         ]
     },
     {
