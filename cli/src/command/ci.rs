@@ -66,7 +66,7 @@ impl<S: shell::Shell> CI<S> {
         };
         for (name, job) in jobs_and_kind.0 {
             let full_name = &format!("{}-{}", jobs_and_kind.1.as_str(), name);
-            if vcs.changed(&job.patterns.iter().map(|p| p.as_ref()).collect()) &&
+            if vcs.changed(&job.diff_matcher()) &&
                 job.matches_current_release_target(&config.runtime.release_target) {
                 if config.runtime.dryrun {
                     log::info!("dryrun mode, skip running job {}", full_name);

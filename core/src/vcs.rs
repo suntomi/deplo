@@ -2,11 +2,17 @@ use std::error::Error;
 use std::collections::HashMap;
 use std::fmt;
 
+use glob::Pattern;
 use regex::Regex;
 use serde_json::{Value as JsonValue};
 
 use super::config;
 use crate::module;
+
+pub enum DiffMatcher<'a> {
+    Glob(Vec<&'a str>),
+    Regex(Vec<&'a str>)
+}
 
 #[derive(Eq, PartialEq, Clone, Copy, Debug)]
 pub enum RefType {
@@ -60,21 +66,39 @@ pub trait VCS : module::Module {
         &self, remote_branch: &str, msg: &str, patterns: &Vec<&str>, option: &HashMap<&str, &str>
     ) -> Result<bool, Box<dyn Error>>;
     fn diff<'b>(&'b self) -> &'b Vec<String>;
-    fn changed<'b>(&'b self, patterns: &Vec<&str>) -> bool {
+    fn changed<'b, 'c>(&'b self, matcher: &DiffMatcher<'c>) -> bool {
         let difflines = self.diff();
         if difflines.len() == 1 && difflines[0] == "*" {
             // this specifal pattern indicates everything changed
             return true;
         }
-        for pattern in patterns {
-            match Regex::new(pattern) {
-                Ok(re) => for diff in difflines {
-                    if re.is_match(diff) {
-                        return true
+        match matcher {
+            DiffMatcher::Glob(patterns) => {
+                for pattern in patterns {
+                    match Pattern::new(pattern){
+                        Ok(gp) => for diff in difflines {
+                            if gp.matches(diff) {
+                                return true
+                            }
+                        },
+                        Err(err) => {
+                            panic!("glob pattern[{}] is invalid expression err:{:?}", pattern, err);
+                        }
                     }
-                },
-                Err(err) => {
-                    panic!("pattern[{}] is invalid regular expression err:{:?}", pattern, err);
+                }
+            },
+            DiffMatcher::Regex(patterns) => {
+                for pattern in patterns {
+                    match Regex::new(pattern) {
+                        Ok(re) => for diff in difflines {
+                            if re.is_match(diff) {
+                                return true
+                            }
+                        },
+                        Err(err) => {
+                            panic!("regex pattern[{}] is invalid expression err:{:?}", pattern, err);
+                        }
+                    }
                 }
             }
         }
