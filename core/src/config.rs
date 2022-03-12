@@ -295,6 +295,13 @@ impl Job {
             None => return None
         }
     }
+    pub fn diff_matcher<'a>(&'a self) -> vcs::DiffMatcher<'a> {
+        match self.options.as_ref().map_or_else(|| "glob", |v| v.get("diff_matcher").map_or_else(|| "glob", |v| v.as_str())) {
+            "regex" => vcs::DiffMatcher::Regex(self.patterns.iter().map(|v| v.as_str()).collect()),
+            "glob" => vcs::DiffMatcher::Glob(self.patterns.iter().map(|v| v.as_str()).collect()),
+            others => panic!("unsupported diff matcher {}", others)
+        }
+    }
 }
 #[derive(Serialize, Deserialize, Clone, Copy, Eq, PartialEq)]
 pub enum WorkflowType {
