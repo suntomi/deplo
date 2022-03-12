@@ -145,12 +145,13 @@ pub enum PushOptions {
     }
 }
 #[derive(Serialize, Deserialize)]
-pub struct Commits {
+pub struct Commit {
     pub patterns: Vec<String>,
+    pub for_targets: Option<Vec<String>>,
     pub log_format: Option<String>,
     pub push_opts: Option<PushOptions>,
 }
-impl Commits {
+impl Commit {
     fn generate_commit_log(&self, name: &str, _: &Job) -> String {
         self.log_format.as_ref().unwrap_or(
             &format!("[deplo] update by job {job_name}", job_name = name)
@@ -180,7 +181,7 @@ pub struct Job {
     pub checkout: Option<HashMap<String, String>>,
     pub caches: Option<HashMap<String, Cache>>,
     pub depends: Option<Vec<String>>,
-    pub commits: Option<Commits>,
+    pub commits: Option<Vec<Commit>>,
     pub options: Option<HashMap<String, String>>,
     pub tasks: Option<HashMap<String, String>>,
 }
@@ -261,6 +262,37 @@ impl Job {
                 // target exists, but for_targets is empty, always ok
                 return true;
             }
+        }
+    }
+    pub fn commit_setting_from_release_target(&self, target: &Option<String>) -> Option<&Commit> {
+        match &self.commits {
+            Some(ref v) => {
+                for commit in v {
+                    match commit.for_targets {
+                        // first only matches commit entry that has valid for_targets and target
+                        Some(ref ts) => {
+                            for t in ts {
+                                if target.is_some() && t == target.as_ref().unwrap() {
+                                    return Some(commit);
+                                }
+                            }
+                        },
+                        None => {}
+                    }                    
+                }
+                // if no matches for all for_targets of Some, find first for_targets of None
+                for commit in v {
+                    match commit.for_targets {
+                        // first only matches some for_targets and target
+                        Some(_) => {},
+                        None => return Some(commit)
+                    }
+                }
+                // if no none, and matches for_targets, return none
+                return None;
+            },
+            // if no commits setting, return none
+            None => return None
         }
     }
 }
@@ -765,7 +797,7 @@ impl Config {
     }
     pub fn deplo_cli_download(&self, os: RunnerOS, shell: &impl shell::Shell) -> Result<PathBuf, Box<dyn Error>> {
         let base_path = path_join(vec![self.deplo_data_path()?.to_str().unwrap(), "cli", DEPLO_VERSION, os.uname()]);
-        let file_path = path_join(vec![base_path.to_str().unwrap(), "deplow"]);
+        let file_path = path_join(vec![base_path.to_str().unwrap(), "deplo"]);
         match fs::metadata(&file_path) {
             Ok(mata) => {
                 if mata.is_dir() {
@@ -1213,8 +1245,8 @@ impl Config {
     }
     pub fn post_run_job(&self, job_name: &str, job: &Job) -> Result<(), Box<dyn Error>> {
         let mut system_job_outputs = hashmap!{};
-        match job.commits {
-            Some(ref commits) => {
+        match job.commit_setting_from_release_target(&self.runtime.release_target) {
+            Some(commit) => {
                 let vcs = self.vcs_service()?;
                 match vcs.current_ref()? {
                     (vcs::RefType::Branch|vcs::RefType::Pull, _) => {
@@ -1227,8 +1259,8 @@ impl Config {
                             // basically the branch_name does not exists in remote,
                             // we need to add refs/heads to create it automatically
                             &format!("refs/heads/{}", branch_name), 
-                            &commits.generate_commit_log(job_name, &job),
-                            &commits.patterns.iter().map(AsRef::as_ref).collect::<Vec<&str>>(),
+                            &commit.generate_commit_log(job_name, &job),
+                            &commit.patterns.iter().map(AsRef::as_ref).collect::<Vec<&str>>(),
                             &hashmap!{}
                         )? {
                             system_job_outputs.insert(DEPLO_SYSTEM_OUTPUT_COMMIT_BRANCH_NAME, branch_name);
@@ -1239,7 +1271,12 @@ impl Config {
                     }
                 }
             },
-            None => {}
+            None => { 
+                log::debug!(
+                    "no commit settings for release target {}", 
+                    self.runtime.release_target.as_ref().map_or_else(|| "none", |v| v.as_str())
+                );
+            }
         };
         let ci = self.ci_service_by_job_name(job_name)?;
         if system_job_outputs.len() > 0 {

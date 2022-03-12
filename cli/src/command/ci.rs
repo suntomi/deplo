@@ -274,8 +274,9 @@ impl<S: shell::Shell> CI<S> {
             let job_name = format!("{}-{}", name.0, name.1);
             match config.system_job_output(&job_name, config::DEPLO_SYSTEM_OUTPUT_COMMIT_BRANCH_NAME)? {
                 Some(v) => {
-                    log::info!("ci fin: find commit from job {} at {}", job_name, v);
-                    match job.commits.as_ref().unwrap().push_opts {
+                    log::info!("ci fin: find commit from job {} at {} for target {}", 
+                        job_name, v, config.runtime.release_target.as_ref().map_or_else(|| "none", |v| v.as_str()));
+                    match job.commit_setting_from_release_target(&config.runtime.release_target).unwrap().push_opts {
                         Some(ref options) => match options {
                             config::PushOptions::Push{squash} => {
                                 if squash.unwrap_or(true) {
