@@ -1,3 +1,4 @@
+version = 1
 # ---------------
 # common settings
 # ---------------
@@ -9,10 +10,10 @@ debug = { ghaction_deplo_debugger = "on", ghaction_job_debugger = "on" }
 # release target branch settings
 [common.release_targets]
 # main branch will be released as nightly
-nightly = { type = "Branch", paths = ["main"] }
-lab = { type = "Branch", paths = ["lab"] }
+nightly = { type = "Branch", patterns = ["main"] }
+lab = { type = "Branch", patterns = ["lab"] }
 # tag which name is started with numerals treated as release (eg. 0.1.10)
-prod = { type = "Tag", paths = ["[0-9]*"] }
+prod = { type = "Tag", patterns = ["[0-9]*"] }
 
 # ------------
 # vcs settings
