@@ -387,7 +387,7 @@ impl fmt::Display for VCSConfig {
     }    
 }
 #[derive(Serialize, Deserialize)]
-#[serde(tag = "type", content = "paths")]
+#[serde(tag = "type", content = "patterns")]
 pub enum ReleaseTarget {
     Branch(Vec<String>),
     Tag(Vec<String>),
@@ -599,6 +599,10 @@ impl RuntimeConfig {
     }
 }
 
+pub type ConfigVersion = u64;
+fn default_resource() -> ConfigVersion {
+    1
+}
 pub enum ConfigSource<'a> {
     File(&'a str),
     Memory(&'a str),
@@ -619,6 +623,8 @@ pub struct Config {
     pub vcs_cache: Vec<Box<dyn vcs::VCS>>,
 
     // config that loads from config file
+    #[serde(default = "default_resource")]
+    pub version: ConfigVersion,
     pub common: CommonConfig,
     pub vcs: VCSConfig,
     pub ci: CIConfig,
