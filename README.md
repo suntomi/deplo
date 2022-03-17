@@ -51,9 +51,9 @@ Deplo will (instroduced 0.3.0) provide new module system which has same function
 
 - `development branch` branches that each developper add actual commits as the output of their daily development. it should be merged into one of the `release target` by creating pull request for it. by default, deplo only runs jobs when pull request from `development branch` to `release target` is created.
 
-- `changeset` actual changes for the repository that `release target` or `development branch` made. deplo detect paths of changeset for filtering which `jobs` need to run for this change. see below `jobs` section for example.
+- `changeset` actual changes for the repository that `release target` or `development branch` made. deplo detect paths of changeset for filtering which `job`s need to run for this change. see below `job` section for example.
 
-- `jobs` shell scripts that runs when `release target` or `development branch` is created or updated. jobs are grouped into `deploy jobs` and `integrate jobs` according to whether they are invoked when a `release target` or a `development branch` is updated, and filtered with changeset contents. for example, in this repository, `deploy.builder` job will run only when `tools/docker/Dockerfile.builder` is updated for one of the `release target`.
+- `job` shell scripts that runs when `release target` or `development branch` is created or updated. jobs are grouped into `deploy job`s and `integrate job`s according to whether they are invoked when a `release target` or a `development branch` is updated, and filtered with changeset contents. for example, in this repository, `deploy.builder` job will run only when `tools/docker/Dockerfile.builder` is updated for one of the `release target`.
 
 - `deploy workflow` set of jobs which runs when `release target` is updated. usually we also call the workflow as `CD(Continuous Delivery)`.
 - `deploy job` job related with `deploy workflow`. defined section like `[jobs.deploy.$name]` in Deplo.toml
@@ -129,7 +129,7 @@ there is 3 way to run Deplo jobs.
 
 #### from CI
 this is probably most familiar for you. if push or pull request is made for your `release target`, github actions or circle ci starts their workflow.
-in the workflow, it runs `deplo ci kick` and `jobs` defined in Deplo.toml will be executed according to the `changeset` that push or pull request contains.
+in the workflow, it runs `deplo ci kick` and `job`s defined in Deplo.toml will be executed according to the `changeset` that push or pull request contains.
 
 you can also run `deplo ci kick` in your local environment, please don't forget to specify `-r` option like `deplo -r nightly ci kick`, if you are not on `release target branch`.
 
@@ -138,14 +138,14 @@ each job defined in Deplo.toml can be run separately by using `deplo i $job_name
 also you can interact with the environment that executes corresponding job in various way.
 
 log in to the shell: `deplo i $job_name sh`
+
 running adhoc comman: `deplo i $job_name sh ${adhoc command args}`
+
 running pre-defined command line args: `deplo i $job_name sh @task_anme`
 
-you can set adhoc environment variable too. 
-`deplo i $job_name -e ENV1=VAR1`
+you can set adhoc environment variable too: `deplo i $job_name -e ENV1=VAR1`
 
-or specify commit SHA to run job.
-`deplo i $job_name --ref efc6d3e2c1a1d875517bf81fb3ac193541050398`
+or specify commit SHA to run job: `deplo i $job_name --ref efc6d3e2c1a1d875517bf81fb3ac193541050398`
 
 
 #### from command line (Remote)

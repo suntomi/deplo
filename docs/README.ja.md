@@ -39,7 +39,7 @@ Deploは[toml](https://github.com/alexcrichton/toml-rs)という、簡潔で現�
 
 しかし、これらのモジュールを使い始めると、ジョブがローカルなテスト性を失ってしまうという大きな欠点があります。なぜなら、これらのモジュールは自社サービス以外の環境で動作するように設計されていないからです。すでに説明したように、ローカルテストの可能性を失うと、CI/CD開発の反復期間が大幅に遅くなってしまいます。
 
-Deploは、サークルCIやgithubアクションと同じ機能を持ちながら、各CIサービスにロックされず、ローカルに実行できる新しいモジュールシステムを提供し、CI/CD開発に必要なローカルなテスト容易性を失わずに再利用性を確保します。
+Deplo(0.3.0で提供予定)は、サークルCIやgithubアクションと同じ機能を持ちながら、各CIサービスにロックされず、ローカルに実行できる新しいモジュールシステムを提供し、CI/CD開発に必要なローカルなテスト容易性を失わずに再利用性を確保します。
 
 
 
@@ -126,24 +126,24 @@ deploは、環境変数として機密性の高い値を注入するための.en
 3. from command line (Remote)
 
 #### from CI
-おそらく皆さんにとって最も身近なものでしょう。リリース対象ブランチ」に対して push または pull リクエストがあると、github actions または circle ci がワークフローを開始します。
-ワークフローでは、 `deplo ci kick` が実行され、Deplo.toml で定義された `jobs` が、push または pull request に含まれる `changeset` に従って実行されます。
+おそらく皆さんにとって最も身近なものでしょう。`リリース対象`に対して push または pull リクエストがあると、github actions または circle ci がワークフローを開始します。
+ワークフローでは、 `deplo ci kick` が実行され、Deplo.toml で定義された `ジョブ` が、push または pull request に含まれる `変更セット` に従って実行されます。
 
-ローカル環境でも `deplo ci kick` を実行することができますが、`release target` にいない場合は、`deplo -r nightly ci kick` のように `-r` オプションを指定することを忘れないようにしてください。
+ローカル環境でも `deplo ci kick` を実行することができますが、`リリースターゲット` にいない場合は、`deplo -r nightly ci kick` のように `-r` オプションを指定することを忘れないようにしてください。
 
 #### from command line (Local)
-Deplo.tomlで定義された各ジョブは、 `deplo i $job_name` (`integrate job`) または `deplo d $job_name` (`deploy job`) を使用して個別に実行することができます。
+Deplo.tomlで定義された各ジョブは、 `deplo i $job_name` (`統合ジョブ`) または `deplo d $job_name` (`デプロイジョブ`) を使用して個別に実行することができます。
 また、対応するジョブを実行する環境と様々なやりとりをすることができます。
 
 シェルにログイン: `deplo i $job_name sh`
+
 任意のコマンドの実行: `deplo i $job_name sh ${adhoc command args}`
+
 あらかじめ定義されたコマンドライン引数の実行: `deplo i $job_name sh @task_anme`
 
-任意の環境変数も追加で設定できます。
-`deplo i $job_name -e ENV1=VAR1`。
+任意の環境変数も追加で設定できます: `deplo i $job_name -e ENV1=VAR1`。
 
-またはコミットSHAを指定してジョブを実行します。
-`deplo i $job_name --ref efc6d3e2c1a1d875517bf81fb3ac193541050398`
+またはコミットSHAを指定してジョブを実行します: `deplo i $job_name --ref efc6d3e2c1a1d875517bf81fb3ac193541050398`
 
 #### from command line (Remote)
 __実際のCIサービス環境__でジョブを実行するには、`--remote`を使用します。
