@@ -11,6 +11,7 @@ debug = { ghaction_deplo_debugger = "on", ghaction_job_debugger = "on" }
 [common.release_targets]
 # main branch will be released as nightly
 nightly = { type = "Branch", patterns = ["main"] }
+# branch which name is 'lab' will be released as lab
 lab = { type = "Branch", patterns = ["lab"] }
 # tag which name is started with numerals treated as release (eg. 0.1.10)
 prod = { type = "Tag", patterns = ["[0-9]*"] }
@@ -31,7 +32,8 @@ key = "${SUNTOMI_VCS_ACCOUNT_KEY}"
 # ci settings
 # ------------
 
-# ci account setting, default should always be set
+# ci account setting, mutiple ci service can be used by creating mutiple [ci.accounts.$name] sections.
+# [ci.accounts.default] should always be set.
 [ci.accounts.default]
 type = "GhAction"
 account = "${SUNTOMI_VCS_ACCOUNT}"
@@ -62,14 +64,17 @@ command = """
 sh tools/scripts/copy_manifests.sh
 docker build -t ghcr.io/suntomi/deplo:builder -f tools/docker/Dockerfile.builder tools/docker
 """
-[jobs.integrate.builder.tasks]
-long_running = """
+# tasks. task is a pre-defined command to be executed in same environment as job.
+# you can use tasks to use deplo like repository of utility command, like make or rake.
+tasks = {
+    long_running = """
 for i in `seq 1 ${COUNT:-10}`; do
     echo $i
     sleep 1
 done
-"""
-test = "echo 'suntomi-bot'"
+""",
+    test = "echo 'suntomi-bot'"
+}
 
 [jobs.integrate.src]
 patterns = ["*/src/*", "Cargo.*"]
@@ -91,8 +96,12 @@ caches = {
 
 [jobs.integrate.config]
 patterns = ["Deplo.toml"]
+# local_fallback can be path to docker file. if you specify docker file path, deplo automatically build corresponding image
+# and use it as local fallback container image.
 runner = { type = "Machine", os = "Linux", local_fallback = { path = "tools/docker/Dockerfile.vmfb", shell = "sh" } }
 command = "deplo init"
+# commits settings. if path of files that changed after the job finish running, matched patterns, 
+# deplo push or made pull request such a changes to repoisitory, after all jobs finish running.
 commits = [
     { patterns = [".github/*"], for_targets = ["nightly"], push_opts = { type = "Push" } },
     { patterns = [".github/*"], for_targets = ["prod"], push_opts = { type = "PullRequest" } },
@@ -135,10 +144,18 @@ sh tools/scripts/build_linux.sh
 docker build -t ghcr.io/suntomi/deplo:${DEPLO_RELEASE_VERSION} -f tools/docker/Dockerfile tools/docker
 echo ${SUNTOMI_VCS_ACCOUNT_KEY} | docker login ghcr.io -u ${SUNTOMI_VCS_ACCOUNT} --password-stdin
 docker push ghcr.io/suntomi/deplo:${DEPLO_RELEASE_VERSION}
+
+# deplo provides unified command for controlling vcs. 
+# `deplo vcs release` and `deplo vcs release-assets` are used for creating release of vcs like github/gitlab
+# with unified interface.
 deplo vcs release ${DEPLO_RELEASE_TAG} -o name=${DEPLO_RELEASE_NAME}
 deplo vcs release-assets ${DEPLO_RELEASE_TAG} tools/docker/bin/cli --replace -o name=deplo-Linux
+
+# deplo provides dyanamically generated job output. you can use value for 'foo' and 'fuga' in jobs that depends on the job. 
 deplo ci set-output foo bar
 deplo ci set-output fuga hoge
+
+# job output can be used in the job that originally create output.
 if [ $(deplo d product output foo) != "bar" ]; then
     echo "failed to get output from deploy-product locally"
     exit 1
@@ -168,6 +185,7 @@ set -e
 . tools/scripts/setup_release_env.sh
 cargo build --release
 deplo vcs release-assets ${DEPLO_RELEASE_TAG} target/release/cli --replace -o name=deplo-Darwin
+# deploy-mac depends on deploy-product, so can use its output
 if [ $(deplo d product output foo) != "bar" ]; then
     echo "failed to get output from deploy-product"
     exit 1
@@ -191,6 +209,7 @@ set -e
 cargo build --release
 deplo vcs release-assets ${DEPLO_RELEASE_TAG} target/release/cli.exe --replace -o name=deplo-Windows.exe
 deplo vcs release-assets ${DEPLO_RELEASE_TAG} target/release/cli.pdb --replace -o name=deplo-Windows.pdb
+# deploy-win depends on deploy-product, so can use its output
 if [ $(deplo d product output fuga) != "hoge" ]; then
     echo "failed to get output from deploy-product"
     exit 1
