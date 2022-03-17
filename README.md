@@ -14,29 +14,31 @@ Deplo gives it a shot for current development method of CI/CD itself, by solving
 3. Reusability
 
 #### Iteration
-Iteration is largest problem of CI/CD development because of its time consuming nature. even at 2022, we still have to push dummy fix to test your new deployment workflow and (often) need to wait so long time because many dependent workflow need to run before your job starts, again and again.
+Iteration is still largest problem of CI/CD development because of its time consuming nature. even at 2022, we still have to push dummy fix to test your new deployment workflow and (often) need to wait so long time because many dependent jobs need to run before your job starts, again and again.
 
-through Deplo already has builtin support for filtering jobs that be going to run by which files are changed by target commit, that is not enough.
+through Deplo already has builtin support for filtering jobs that be going to run by which files are changed by target commit, that is not enough for reducing iteration duration.
 
-we solve this problem by allowing to run CI/CD job in your local environment, which is configured by deplo as if it runs on target CI/CD service. it seems to be similar approach that [Bitrise CLI](https://app.bitrise.io/cli) does, but does not lock in any single CI/CD service.
+we solve this problem by allowing to run single CI/CD job separately in your local environment, which is configured by deplo as if it runs on target CI/CD service. it seems to be similar approach that [Bitrise CLI](https://app.bitrise.io/cli) does, but deplo is not locked in any single CI/CD service.
 
-I have to admit that deplo's local emuration is not 100% complete, to test such small difference between local environment and actual CI/CD service, deplo allows you to run your single CI/CD job on target CI/CD service separately (we call it remote job execution), which is useful for final test.
+of course I have to admit that deplo's local emuration is not 100% complete yet, to test such small difference between local environment and actual CI/CD service, deplo allows you to run your single CI/CD job on target CI/CD service separately (we call it remote job execution)
 
-Deplo also provides ssh session for CI/CD service to "investigate immediately after failure". unlike circle CI's built in feature, you make Deplo to create ssh session when CI/CD job failed, with only single line of configuration.
+Deplo also provides ssh session for CI/CD service to "investigate immediately after failure". unlike circle CI's built in feature, you make Deplo to create ssh session right after CI/CD job failed, with only single line of configuration.
 
-These features are drastically reduce the try-and-error iteration span for CI/CD development. bonus, in my experience, run any CI/CD jobs in project from your local environment helps emerged (and often adhoc) trouble shooting so much. in such a situation, using normal release flow (create PR/review/merge/make tag/etc...) to fix problem, is likely to be waste of time or source of another mistake.
+These features are drastically reduce the try-and-error iteration duration for CI/CD development. 
+
+bonus, running any CI/CD jobs in project from your local environment helps you so much, when emerged (and often adhoc) trouble shooting of your service required. because in such a situation, using normal release flow (create PR/review/merge/make tag/etc...) to fix problem, is likely to be waste of time or source of another mistake.
 
 #### Configuration
 most of CI services use yaml for their configuration format. the format is handy when project remain small and simple. but for large one, it turns to be nightmare. 
 
-Deplo uses [toml](https://github.com/alexcrichton/toml-rs), consise, modern and better structured text format for config files, with extended support of multiline inline table. so no more need to write your settings by error-prune yaml format, because it is auto genrated by Deplo from its Deplo.toml.
+Deplo uses [toml](https://github.com/alexcrichton/toml-rs), consise, modern and better structured text format for config files, with original support of multiline inline table. so no more need to write your settings by error-prune yaml format, because it is auto genrated by Deplo from its Deplo.toml.
 
-see [Deplo.toml](https://github.com/suntomi/deplo/blob/main/Deplo.toml) and [.github/workflows/deplo-main.yaml](https://github.com/suntomi/deplo/blob/main/.github/workflows/deplo-main.yml) of the repository to know how its improved.
+Compare [Deplo.toml](https://github.com/suntomi/deplo/blob/main/Deplo.toml) and [.github/workflows/deplo-main.yaml](https://github.com/suntomi/deplo/blob/main/.github/workflows/deplo-main.yml) of the repository to know how its improved.
 
 #### Reusability
-To avoid to write routine job step (eg. checkout code from repository, send image to container repository) repeatedly, most of CI service have its own module system, like actions for Github Action, orbs for Circle CI. 
+most of CI service have its own module system, like actions for Github Action, orbs for Circle CI, to avoid to write routine job step (eg. checkout code from repository, send image to container repository) repeatedly, 
 
-these modules will reduce an amount of development of your CI/CD workflow. but it has significant drawback. that is, once you start to use them, your jobs lose local testability, because these modules do not designed to run other environment than theirs service. already explained above, losing local testability significantly slows down CI/CD development iteration span.
+these modules will reduce an amount of development of your CI/CD workflow. but it has significant drawback. that is, once you start to use them, your jobs lose local testability, because these modules do not designed to run other environment than theirs service. already explained above, losing local testability significantly slows down CI/CD development iteration duration.
 
 Deplo will (instroduced 0.3.0) provide new module system which has same functionality that circle CI orbs or github actions provides but will not be locked in each CI service and can be run locally, to archive good reusability without losing local testability, which both are essential for better CI/CD development experience.
 
@@ -45,9 +47,9 @@ Deplo will (instroduced 0.3.0) provide new module system which has same function
 ### Glossary
 - `release environment` A name given to a group of resources (server infrastructures, binary download paths, etc) that are prepared to provide different revisions of the software that you are developing. eg. dev/staging/production
 
-- `release target` a branch or tag which is synchronized with some `release environment`. for example, if your project updates `release environment` called `dev` when branch `main` is updated, we call `main` is `release target` for `release environment` `dev` and all changes to `main` will be synchornized with `release target` `dev`.
+- `release target` a branch or tag which is synchronized with some `release environment`. for example, if your project configured to update `release environment` called `dev` when branch `main` is updated, we call `main` is `release target` for `release environment` `dev` and all changes to `main` will be synchornized with `release environment ` `dev`.
 
-- `development branch` branches that each developper add actual commits as the output of their daily development. it should be merged into one of the `release target` by creating pull request for it.
+- `development branch` branches that each developper add actual commits as the output of their daily development. it should be merged into one of the `release target` by creating pull request for it. by default, deplo only runs jobs when pull request from `development branch` to `release target` is created.
 
 - `changeset` actual changes for the repository that `release target` or `development branch` made. deplo detect paths of changeset for filtering which `jobs` need to run for this change. see below `jobs` section for example.
 
@@ -62,7 +64,7 @@ Deplo will (instroduced 0.3.0) provide new module system which has same function
 
 
 ### Install Deplo
-#### prerequisite OS
+#### supported OS
 - Linux
 - MacOS
 - Windows
@@ -110,7 +112,7 @@ deplo supports .env file to inject sensitive values as environment variable. we 
   docker run --rm -ti -v $(pwd):/workdir -w /workdir ghcr.io/suntomi/deplo:latest init
   ```
 
-- then script called `deplow` will be created on root of repository, your team member can use `deplow` to invoke deplo without being deplo globally installed.
+- then script called `deplow` will be created on root of repository, your team member can use `deplow` to invoke deplo without being deplo globally installed. to avoid version skew, we recommend to use ./deplow if it exists.
   ``` bash
   ./deplow info version
   # should prints its version code
@@ -126,10 +128,10 @@ there is 3 way to run Deplo jobs.
 3. from command line (Remote)
 
 #### from CI
-this is probably most familiar for you. if push or pull request is made for your `release target branch`, github actions or circle ci starts their workflow.
+this is probably most familiar for you. if push or pull request is made for your `release target`, github actions or circle ci starts their workflow.
 in the workflow, it runs `deplo ci kick` and `jobs` defined in Deplo.toml will be executed according to the `changeset` that push or pull request contains.
 
-you can also run `deplo ci kick` in your local environment, don't forget to specify `-r` option like `deplo -r nightly ci kick`, if you are not on `release target branch`.
+you can also run `deplo ci kick` in your local environment, please don't forget to specify `-r` option like `deplo -r nightly ci kick`, if you are not on `release target branch`.
 
 #### from command line (Local)
 each job defined in Deplo.toml can be run separately by using `deplo i $job_name`(for `integrate job`) or `deplo d $job_name`(for `deploy job`).
@@ -147,9 +149,8 @@ or specify commit SHA to run job.
 
 
 #### from command line (Remote)
-you can run your job separately __on actual CI service environment__ with `--remote` 
-run command `${adhoc command args}` remotely on CI service environment: `deplo i $job_name --remote sh ${adhoc command args}`
-
+you can run your job __on actual CI service environment__ with `--remote`
+run command `${adhoc command args}` remotely on CI service environment of `$job_name`: `deplo i $job_name --remote sh ${adhoc command args}`
 
 
 ### Roadmap
