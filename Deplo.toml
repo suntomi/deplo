@@ -77,7 +77,7 @@ done
 }
 
 [jobs.integrate.src]
-patterns = ["*/src/*", "Cargo.*"]
+patterns = ["*/src/*", "Cargo.*",]
 runner = { type = "Machine", os = "Linux", local_fallback = { image = "ghcr.io/suntomi/deplo:builder" } }
 command = "cargo build"
 tasks = { test = "cargo test", home = "echo ${HOME}" }
@@ -91,7 +91,7 @@ caches = {
         keys = ["integrate-build-${{ runner.os }}-v1-${{ hashFiles('**/Cargo.lock') }}"], # each os and Cargo.lock definition
         # paths root are also CI specific
         paths = ["target", "~/.cargo/bin", "~/.cargo/registry/cache", "~/.cargo/registry/index", "~/.cargo/git/db"] # all possible cargo cache paths
-    }
+    }, # last comma also valid
 }
 
 [jobs.integrate.config]
@@ -191,11 +191,9 @@ if [ $(deplo d product output foo) != "bar" ]; then
     exit 1
 fi
 """
-caches = {
-    cargo = {
-        keys = ["integrate-build-${{ runner.os }}-v1-${{ hashFiles('**/Cargo.lock') }}"],
-        paths = ["target", "~/.cargo/bin", "~/.cargo/registry/cache", "~/.cargo/registry/index", "~/.cargo/git/db"]
-    }
+caches.cargo = {
+    keys = ["integrate-build-${{ runner.os }}-v1-${{ hashFiles('**/Cargo.lock') }}"],
+    paths = ["target", "~/.cargo/bin", "~/.cargo/registry/cache", "~/.cargo/registry/index", "~/.cargo/git/db"]
 }
 
 [jobs.deploy.win]
