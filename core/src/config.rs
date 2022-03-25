@@ -13,18 +13,20 @@ use serde::{Deserialize, Serialize};
 use dotenv::dotenv;
 use maplit::hashmap;
 use regex::Regex;
+use toml::value::Value as TomlValue;
 
 use crate::args;
 use crate::vcs;
 use crate::ci;
 use crate::shell;
 use crate::util::{
+    defer,
     escalate,envsubst,
     make_absolute,
-    defer,
+    merge_hashmap,
+    path_join,
     randombytes_as_string,
-    rm,
-    path_join
+    rm
 };
 
 pub const DEPLO_GIT_HASH: &'static str = env!("GIT_HASH");
@@ -168,6 +170,48 @@ pub struct SystemJobEnvOptions {
     pub paths: Option<Vec<String>>,
     pub job_name: String,
 }
+#[derive(Serialize, Deserialize, Clone)]
+pub enum Step {
+    Command {
+        command: String,
+        env: Option<HashMap<String, String>>,
+        shell: Option<String>,
+        workdir: Option<String>,
+    },
+    Module {
+        uses: String,
+        with: Option<HashMap<String, TomlValue>>
+    }
+}
+impl fmt::Display for Step {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Step::Command{
+                command, env, shell, workdir
+            } => write!(f, 
+                "Step::Command{{cmd:{}, env:{}, shell:{}, workdir:{}}}", 
+                command, 
+                env.as_ref().map_or_else(|| "None".to_string(), |e| format!("{:?}", e)),
+                shell.as_ref().map_or_else(|| "None".to_string(), |e| format!("{:?}", e)),
+                workdir.as_ref().map_or_else(|| "None".to_string(), |e| format!("{:?}", e)),
+            ),
+            Step::Module{
+                uses, with
+            } => write!(f, 
+                "Step::Module{{uses:{}, with:{}", 
+                uses, with.as_ref().map_or_else(|| "None".to_string(), |e| format!("{:?}", e))
+            )
+        }
+    }
+}
+pub struct StepsDumper<'a> {
+    steps: &'a Vec<Step>,
+}
+impl<'a> fmt::Display for StepsDumper<'a> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "[{}]", self.steps.iter().map(|v| format!("{}", v)).collect::<Vec<_>>().join(","))
+    }
+}
 #[derive(Serialize, Deserialize)]
 pub struct Job {
     pub account: Option<String>,
@@ -175,7 +219,8 @@ pub struct Job {
     pub patterns: Vec<String>,
     pub runner: Runner,
     pub shell: Option<String>,
-    pub command: String,
+    pub command: Option<String>,
+    pub steps: Option<Vec<Step>>,
     pub env: Option<HashMap<String, String>>,
     pub workdir: Option<String>,
     pub checkout: Option<HashMap<String, String>>,
@@ -600,7 +645,7 @@ impl RuntimeConfig {
 }
 
 pub type ConfigVersion = u64;
-fn default_resource() -> ConfigVersion {
+fn default_config_version() -> ConfigVersion {
     1
 }
 pub enum ConfigSource<'a> {
@@ -623,7 +668,7 @@ pub struct Config {
     pub vcs_cache: Vec<Box<dyn vcs::VCS>>,
 
     // config that loads from config file
-    #[serde(default = "default_resource")]
+    #[serde(default = "default_config_version")]
     pub version: ConfigVersion,
     pub common: CommonConfig,
     pub vcs: VCSConfig,
@@ -1114,21 +1159,65 @@ impl Config {
             )),
         }
     }
+    fn create_steps<'a>(&self, job: &'a Job, command: &'a Command) -> (Vec<Step>, Option<&'a str>){   
+        match command {
+            Command::Adhoc(ref c) => {
+                (vec![Step::Command{ command: c.to_string(), env: None, workdir: None, shell: job.shell.clone() }], Some(c.as_str()))
+            },
+            Command::Job => if let Some(steps) = &job.steps {
+                (steps.to_vec(), None)
+            } else if let Some(c) = &job.command {
+                (vec![Step::Command{ command: c.to_string(), env: None, workdir: None, shell: job.shell.clone() }], Some(c.as_str()))
+            } else {
+                panic!("neither job.command nor job.steps specified");
+            },
+            Command::Shell => {
+                let c = job.shell.as_ref().map_or_else(|| "bash", |v| v.as_str());
+                (vec![Step::Command{ command: c.to_string(), env: None, workdir: None, shell: job.shell.clone()}], Some(c))
+            }
+        }
+    }
+    pub fn run_job_steps(
+        &self, shell: &impl shell::Shell, shell_settings: &shell::Settings, job: &Job
+    ) -> Result<Option<String>, Box<dyn Error>> {
+        let (steps, _) = self.create_steps(job, &Command::Job);
+        self.run_steps(shell, shell_settings, &shell::inherit_env(), job, &steps)
+    }
+    fn step_runner_command(name: &str) -> String {
+        format!("deplo ci {} steps", name.replacen("-", " ", 1))
+    }
+    fn run_steps(
+        &self, shell: &impl shell::Shell, shell_settings: &shell::Settings,
+        base_envs: &HashMap<String, String>, job: &Job, steps: &Vec<Step>
+    ) -> Result<Option<String>, Box<dyn Error>> {
+        let empty_envs = hashmap!{};
+        for step in steps {
+            match step {
+                Step::Command{shell: sh, command, env, workdir} => {
+                    shell.eval(
+                        command, sh, 
+                        merge_hashmap(base_envs, &env.as_ref().map_or_else(|| &empty_envs, |v| v)),
+                        &workdir.as_ref().map_or_else(|| job.workdir.as_ref(), |v| Some(v)), shell_settings
+                    )?;
+                },
+                Step::Module{uses, with} => {
+                    panic!("TODO: running step by module {} with {:?}", uses, with)
+                }
+            }
+        };
+        Ok(None)
+    }
     pub fn run_job(
         &self, shell: &impl shell::Shell, name: &str, job: &Job, 
         command: Command, options: &JobRunningOptions
     ) -> Result<Option<String>, Box<dyn Error>> {
-        let mut cmd = match command {
-            Command::Adhoc(ref c) => c,
-            Command::Job => &job.command,
-            Command::Shell => job.shell.as_ref().map_or_else(|| "bash", |v| v.as_str())
-        };
+        let (steps, main_command) = self.create_steps(job, &command);
         // if current commit is modified, rollback after all operation is done.
         defer!{self.recover_branch().unwrap();};
         if options.remote {
             log::debug!(
-                "force running job {} on remote with command {} at {}", 
-                name, cmd, options.commit.unwrap_or("")
+                "force running job {} on remote with steps {} at {}", 
+                name, StepsDumper{steps: &steps}, options.commit.unwrap_or("")
             );
             let ci = self.ci_service_by_job(job)?;
             let vcs = self.vcs_service()?;
@@ -1138,7 +1227,7 @@ impl Config {
             };
             return Ok(Some(ci.run_job(&ci::RemoteJob{
                 name: name.to_string(),
-                command: cmd.to_string(),
+                command: main_command.map(|v| v.to_string()),
                 commit: Some(commit),
                 envs: options.adhoc_envs.to_owned(),
                 verbosity: self.runtime.verbosity,
@@ -1151,7 +1240,7 @@ impl Config {
             job_name: name.to_string(),
         };
         match job.runner {
-            Runner::Machine{image:_, os, ref local_fallback, class:_} => {
+            Runner::Machine{os, ref local_fallback, ..} => {
                 let current_os = shell.detect_os()?;
                 if os == current_os {
                     system.paths = if !Self::is_running_on_ci() {
@@ -1164,18 +1253,15 @@ impl Config {
                     };
                     self.adjust_commit_hash(&options.commit)?;
                     // run command directly here, add path to locally downloaded cli.
-                    shell.eval(
-                        cmd, &job.shell, self.job_env(&job, &system, &options.adhoc_envs)?, 
-                        &job.workdir, &options.shell_settings
-                    )?;
+                    self.run_steps(shell, &options.shell_settings, &self.job_env(&job, &system, &options.adhoc_envs)?, job, &steps)?;
                     self.post_run_job(name, &job)?;
                 } else {
                     log::debug!("runner os is different from current os {} {}", os, current_os);
                     match local_fallback {
                         Some(f) => {
-                            let (image, shell_cmd) = match f {
-                                FallbackContainer::ImageUrl{ image, shell: shell_cmd } => (image.clone(), shell_cmd),
-                                FallbackContainer::DockerFile{ path, shell: shell_cmd, repo_name } => {
+                            let (image, sh) = match f {
+                                FallbackContainer::ImageUrl{ image, shell: sh } => (image.clone(), sh),
+                                FallbackContainer::DockerFile{ path, shell: sh, repo_name } => {
                                     let local_image = match repo_name.as_ref() {
                                         Some(n) => format!("{}:{}", n, name),
                                         None => format!("{}-deplo-local-fallback:{}", self.common.project_name, name)
@@ -1192,22 +1278,21 @@ impl Config {
                                         &Some(p.parent().unwrap().to_string_lossy().to_string()),
                                         &shell::capture()
                                     )?;
-                                    (local_image, shell_cmd)
+                                    (local_image, sh)
                                 },
                             };
-                            if command == Command::Shell && shell_cmd.is_some() {
-                                cmd = shell_cmd.as_ref().unwrap();
-                            }
                             let path = &self.deplo_cli_download(os, shell)?.to_string_lossy().to_string();
                             self.adjust_commit_hash(&options.commit)?;
-                            // running on host. run command in container `image` with docker
                             shell.eval_on_container(
-                                &image, cmd, &shell_cmd, 
-                                self.job_env(&job, &system, &options.adhoc_envs)?, 
+                                &image,
+                                // if main_command is none, we need to run steps in single container. 
+                                // so we execute `deplo ci steps $job_name` to run steps of $job_name.
+                                &main_command.map_or_else(|| Self::step_runner_command(name), |v| v.to_string()), 
+                                &sh, self.job_env(&job, &system, &options.adhoc_envs)?, 
                                 &job.workdir, &hashmap!{
                                     path.as_str() => "/usr/local/bin/deplo"
                                 }, &options.shell_settings
-                            )?;
+                            )?; 
                             self.post_run_job(name, &job)?;
                             return Ok(None);
                         },
@@ -1223,7 +1308,7 @@ impl Config {
                     };        
                     return Ok(Some(ci.run_job(&ci::RemoteJob{
                         name: name.to_string(),
-                        command: cmd.to_string(),
+                        command: main_command.map(|v| v.to_string()),
                         commit: Some(commit),
                         envs: hashmap!{},
                         verbosity: self.runtime.verbosity,
@@ -1236,16 +1321,17 @@ impl Config {
                 self.adjust_commit_hash(&options.commit)?;
                 if Self::is_running_on_ci() {
                     // already run inside container `image`, run command directly here
-                    shell.eval(
-                        cmd, &job.shell, self.job_env(&job, &system, &options.adhoc_envs)?,
-                        &job.workdir, &options.shell_settings
-                    )?;
+                    self.run_steps(shell, &options.shell_settings, &self.job_env(&job, &system, &options.adhoc_envs)?, job, &steps)?;
                 } else {
                     let os = RunnerOS::Linux;
                     let path = &self.deplo_cli_download(os, shell)?.to_string_lossy().to_string();
                     // running on host. run command in container `image` with docker
                     shell.eval_on_container(
-                        image, cmd, &job.shell, self.job_env(&job, &system, &options.adhoc_envs)?,
+                        image,
+                        // if main_command is none, we need to run steps in single container. 
+                        // so we execute `deplo ci steps $job_name` to run steps of $job_name.
+                        &main_command.map_or_else(|| Self::step_runner_command(name), |v| v.to_string()),
+                        &job.shell, self.job_env(&job, &system, &options.adhoc_envs)?,
                         &job.workdir, &hashmap!{
                             path.as_str() => "/usr/local/bin/deplo"
                         }, &options.shell_settings

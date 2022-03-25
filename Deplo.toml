@@ -180,6 +180,7 @@ docker push ghcr.io/suntomi/deplo:latest
 depends = ["product"]
 patterns = ["*/src/*", "Cargo.*"]
 runner = { type = "Machine", os = "MacOS" }
+steps = [{
 command = """
 set -e
 . tools/scripts/setup_release_env.sh
@@ -191,6 +192,7 @@ if [ $(deplo d product output foo) != "bar" ]; then
     exit 1
 fi
 """
+}]
 caches.cargo = {
     keys = ["integrate-build-${{ runner.os }}-v1-${{ hashFiles('**/Cargo.lock') }}"],
     paths = ["target", "~/.cargo/bin", "~/.cargo/registry/cache", "~/.cargo/registry/index", "~/.cargo/git/db"]

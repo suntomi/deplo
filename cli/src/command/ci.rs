@@ -147,13 +147,17 @@ impl<S: shell::Shell> CI<S> {
         // if reach here by remote execution, adopt the settings, otherwise using cli options if any.
         let (commit, remote, command, adhoc_envs) = match remote_job {
             // because this process already run in remote environment, remote is always false.
-            Some(ref job) => (job.commit.as_ref().map(|s| s.as_str()), false, Some(job.command.clone()), job.envs.clone()),
+            Some(ref rj) => (rj.commit.as_ref().map(|s| s.as_str()), false, rj.command.clone(), rj.envs.clone()),
             None => (args.value_of("ref"), args.occurence_of("remote") > 0, None, Self::adhoc_envs(args))
         };
         let non_interactive_shell_opts = if args.occurence_of("silent") > 0 {
             shell::silent()
         } else {
             shell::no_capture()
+        };
+        let job = match config.find_job(&job_name) {
+            Some(job) => job,
+            None => return escalate!(args.error(&format!("no such job: [{}]", job_name))),
         };
         match args.subcommand() {
             Some(("sh", subargs)) => {
@@ -164,10 +168,6 @@ impl<S: shell::Shell> CI<S> {
                 match subargs.values_of("task") {
                     None => {
                         log::debug!("running interactive shell");
-                        let job = match config.find_job(&job_name) {
-                            Some(job) => job,
-                            None => return escalate!(args.error(&format!("no such job: [{}]", job_name))),
-                        };
                         config.run_job(
                             &self.shell, &job_name, &job, config::Command::Shell, &config::JobRunningOptions {
                                 commit, remote, shell_settings: shell::interactive(), adhoc_envs
@@ -176,10 +176,6 @@ impl<S: shell::Shell> CI<S> {
                     },
                     Some(task_args) => if task_args[0].starts_with("@") {
                         log::debug!("running shell task [{}] with args [{}]", task_args[0], task_args[1..].join(" "));
-                        let job = match config.find_job(&job_name) {
-                            Some(job) => job,
-                            None => return escalate!(args.error(&format!("no such job: [{}]", job_name))),
-                        };
                         let task_name = task_args[0].trim_start_matches("@");
                         let task = match &job.tasks {
                             Some(tasks) => match tasks.get(task_name) {
@@ -204,6 +200,10 @@ impl<S: shell::Shell> CI<S> {
                         )
                     }
                 }
+            },
+            Some(("steps", _)) => {
+                config.run_job_steps(&self.shell, &non_interactive_shell_opts, &job)?;
+                Ok(None)
             },
             Some(("wait", subargs)) => Ok(Some(subargs.value_of("job_id").unwrap().to_string())),
             Some(("output", subargs)) => {
