@@ -171,6 +171,7 @@ pub struct SystemJobEnvOptions {
     pub job_name: String,
 }
 #[derive(Serialize, Deserialize, Clone)]
+#[serde(untagged)]
 pub enum Step {
     Command {
         command: String,
