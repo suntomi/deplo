@@ -99,7 +99,47 @@ patterns = ["Deplo.toml"]
 # local_fallback can be path to docker file. if you specify docker file path, deplo automatically build corresponding image
 # and use it as local fallback container image.
 runner = { type = "Machine", os = "Linux", local_fallback = { path = "tools/docker/Dockerfile.vmfb", shell = "sh" } }
-command = "deplo init"
+steps = [{
+    command = """
+if [ "$(echo $HOGE)" = "hoge" ]; then
+    echo "env does not work"
+    exit 1
+fi
+if [ ! -z "$(ls -al envs.md)" ]; then
+    ls -al
+    echo "workdir does not work"
+    exit 1
+fi
+if [ "$(echo $0)" = "sh" ]; then
+    echo "shell does not work"
+    exit 1
+fi
+""",
+    env = { HOGE = "hoge" },
+    shell = "sh",
+    workdir = "docs"
+}, {
+    command = "deplo init"
+}, {
+    command = """
+if [ "$(echo $FUGA)" = "fuga" ]; then
+    echo "env does not work"
+    exit 1
+fi
+if [ 1 -z "$(ls -al launch.json)" ]; then
+    ls -al
+    echo "workdir does not work"
+    exit 1
+fi
+if [ "$(echo $0)" = "bash" ]; then
+    echo "shell does not work"
+    exit 1
+fi
+""",    
+    env = { FUGA = "fuga" },
+    shell = "bash",
+    workdir = ".vscode"
+}]
 # commits settings. if path of files that changed after the job finish running, matched patterns, 
 # deplo push or made pull request such a changes to repoisitory, after all jobs finish running.
 commits = [
