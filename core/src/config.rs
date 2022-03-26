@@ -175,12 +175,14 @@ pub struct SystemJobEnvOptions {
 pub enum Step {
     Command {
         command: String,
+        name: Option<String>,
         env: Option<HashMap<String, String>>,
         shell: Option<String>,
         workdir: Option<String>,
     },
     Module {
         uses: String,
+        name: Option<String>,
         with: Option<HashMap<String, TomlValue>>
     }
 }
@@ -188,18 +190,20 @@ impl fmt::Display for Step {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Step::Command{
-                command, env, shell, workdir
+                command, env, shell, workdir, name
             } => write!(f, 
-                "Step::Command{{cmd:{}, env:{}, shell:{}, workdir:{}}}", 
+                "Step::Command{{name:{}, cmd:{}, env:{}, shell:{}, workdir:{}}}", 
+                name.as_ref().map_or_else(|| "".to_string(), |s| s.to_string()),
                 command, 
                 env.as_ref().map_or_else(|| "None".to_string(), |e| format!("{:?}", e)),
                 shell.as_ref().map_or_else(|| "None".to_string(), |e| format!("{:?}", e)),
                 workdir.as_ref().map_or_else(|| "None".to_string(), |e| format!("{:?}", e)),
             ),
             Step::Module{
-                uses, with
+                uses, with, name
             } => write!(f, 
-                "Step::Module{{uses:{}, with:{}", 
+                "Step::Module{{name:{}, uses:{}, with:{}", 
+                name.as_ref().map_or_else(|| "".to_string(), |s| s.to_string()),
                 uses, with.as_ref().map_or_else(|| "None".to_string(), |e| format!("{:?}", e))
             )
         }
@@ -1163,18 +1167,18 @@ impl Config {
     fn create_steps<'a>(&self, job: &'a Job, command: &'a Command) -> (Vec<Step>, Option<&'a str>){   
         match command {
             Command::Adhoc(ref c) => {
-                (vec![Step::Command{ command: c.to_string(), env: None, workdir: None, shell: job.shell.clone() }], Some(c.as_str()))
+                (vec![Step::Command{ name: None, command: c.to_string(), env: None, workdir: None, shell: job.shell.clone() }], Some(c.as_str()))
             },
             Command::Job => if let Some(steps) = &job.steps {
                 (steps.to_vec(), None)
             } else if let Some(c) = &job.command {
-                (vec![Step::Command{ command: c.to_string(), env: None, workdir: None, shell: job.shell.clone() }], Some(c.as_str()))
+                (vec![Step::Command{ name: None, command: c.to_string(), env: None, workdir: None, shell: job.shell.clone() }], Some(c.as_str()))
             } else {
                 panic!("neither job.command nor job.steps specified");
             },
             Command::Shell => {
                 let c = job.shell.as_ref().map_or_else(|| "bash", |v| v.as_str());
-                (vec![Step::Command{ command: c.to_string(), env: None, workdir: None, shell: job.shell.clone()}], Some(c))
+                (vec![Step::Command{ name: None, command: c.to_string(), env: None, workdir: None, shell: job.shell.clone()}], Some(c))
             }
         }
     }
@@ -1194,14 +1198,14 @@ impl Config {
         let empty_envs = hashmap!{};
         for step in steps {
             match step {
-                Step::Command{shell: sh, command, env, workdir} => {
+                Step::Command{shell: sh, command, env, workdir, name:_} => {
                     shell.eval(
                         command, sh, 
                         merge_hashmap(base_envs, &env.as_ref().map_or_else(|| &empty_envs, |v| v)),
                         &workdir.as_ref().map_or_else(|| job.workdir.as_ref(), |v| Some(v)), shell_settings
                     )?;
                 },
-                Step::Module{uses, with} => {
+                Step::Module{uses, with, name:_} => {
                     panic!("TODO: running step by module {} with {:?}", uses, with)
                 }
             }
