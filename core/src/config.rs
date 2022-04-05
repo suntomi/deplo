@@ -859,6 +859,25 @@ impl Config {
         Ok(path)
     }
     pub fn deplo_cli_download(&self, os: RunnerOS, shell: &impl shell::Shell) -> Result<PathBuf, Box<dyn Error>> {
+        match std::env::var("DEPLO_DEBUG_CLI_BIN_PATHS") {
+            Ok(p) => {
+                match serde_json::from_str::<HashMap<String, String>>(&p) {
+                    Ok(m) => {
+                        if let Some(v) = m.get(&os.to_string()) {
+                            let path = make_absolute(v, self.vcs_service()?.repository_root()?);
+                            log::debug!("deplo_cli_download: use debug cli bin for {}: {}", os, path.to_string_lossy().to_string());
+                            return Ok(path);
+                        }
+                    },
+                    Err(e) => {
+                        return escalate!(Box::new(ConfigError{ 
+                            cause: format!("DEPLO_DEBUG_CLI_BIN_PATHS contains invalid json: {}", e)
+                        }))
+                    }
+                }
+            },
+            Err(_) => {}
+        };
         let base_path = path_join(vec![self.deplo_data_path()?.to_str().unwrap(), "cli", DEPLO_VERSION, os.uname()]);
         let file_path = path_join(vec![base_path.to_str().unwrap(), "deplo"]);
         match fs::metadata(&file_path) {
@@ -1290,14 +1309,14 @@ impl Config {
                             self.adjust_commit_hash(&options.commit)?;
                             shell.eval_on_container(
                                 &image,
-                                // if main_command is none, we need to run steps in single container. 
+                                // if main_command is none, we need to run steps in single container.
                                 // so we execute `deplo ci steps $job_name` to run steps of $job_name.
-                                &main_command.map_or_else(|| Self::step_runner_command(name), |v| v.to_string()), 
-                                &sh, self.job_env(&job, &system, &options.adhoc_envs)?, 
+                                &main_command.map_or_else(|| Self::step_runner_command(name), |v| v.to_string()),
+                                &sh, self.job_env(&job, &system, &options.adhoc_envs)?,
                                 &job.workdir, &hashmap!{
                                     path.as_str() => "/usr/local/bin/deplo"
                                 }, &options.shell_settings
-                            )?; 
+                            )?;
                             self.post_run_job(name, &job)?;
                             return Ok(None);
                         },
