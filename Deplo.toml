@@ -161,6 +161,14 @@ if [ $(deplo d product output foo) != "bar" ]; then
     exit 1
 fi
 """
+tasks = {
+    build = """
+set -e
+mkdir -p tools/docker/bin
+. tools/scripts/setup_release_env.sh
+sh tools/scripts/build_linux.sh
+"""
+}
 
 [jobs.deploy.latest]
 depends = ["product"]
