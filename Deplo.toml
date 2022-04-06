@@ -194,16 +194,16 @@ steps = [{
     workdir = "docs",
     shell = "sh",
     command = """
-    if [ "$(echo $HOGE)" = "hoge" ]; then
+    if [ "$(echo $HOGE)" != "hoge" ]; then
         echo "env does not work"
         exit 1
     fi
-    if [ ! -z "$(ls -al envs.md)" ]; then
+    if [ -z "$(ls -al ./envs.md)" ]; then
         ls -al
         echo "workdir does not work"
         exit 1
     fi
-    if [ "$(echo $0)" = "sh" ]; then
+    if [ "$(echo $0)" != "sh" ]; then
         echo "shell does not work"
         exit 1
     fi
@@ -215,7 +215,7 @@ steps = [{
     cargo build --release
     deplo vcs release-assets ${DEPLO_RELEASE_TAG} target/release/cli --replace -o name=deplo-Darwin
     # deploy-mac depends on deploy-product, so can use its output
-    if [ $(deplo d product output foo) != "bar" ]; then
+    if [ "$(deplo d product output foo)" != "bar" ]; then
         echo "failed to get output from deploy-product"
         exit 1
     fi
@@ -226,16 +226,16 @@ steps = [{
     shell = "bash",
     workdir = ".vscode",
     command = """
-    if [ "$(echo $FUGA)" = "fuga" ]; then
+    if [ "$(echo $FUGA)" != "fuga" ]; then
         echo "env does not work"
         exit 1
     fi
-    if [ 1 -z "$(ls -al launch.json)" ]; then
+    if [ -z "$(ls -al launch.json)" ]; then
         ls -al
         echo "workdir does not work"
         exit 1
     fi
-    if [ "$(echo $0)" = "bash" ]; then
+    if [ "$(echo $0)" != "bash" ]; then
         echo "shell does not work"
         exit 1
     fi
