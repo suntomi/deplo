@@ -91,7 +91,10 @@ impl<S: shell::Shell> CI<S> {
         let config = self.config.borrow();
         let (account_name, _) = config.ci_config_by_env_or_default();
         let ci = config.ci_service(account_name)?;
-        config.parse_dotenv(|k,v| ci.set_secret(k, v))
+        config.parse_dotenv(|k,v| {
+            println!("set secret {}", k);
+            ci.set_secret(k, v)
+        })
     }
     fn set_output<A: args::Args>(&self, args: &A) -> Result<(), Box<dyn Error>> {
         let config = self.config.borrow();
