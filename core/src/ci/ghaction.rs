@@ -690,12 +690,10 @@ impl<S: shell::Shell> ci::CI for GhAction<S> {
             Err(_) => None
         };
         match std::env::var("GITHUB_HEAD_REF") {
-            Ok(v) => if !v.is_empty() {
+            Ok(v) if !v.is_empty() => {
                 envs.insert("DEPLO_CI_BRANCH_NAME", v);
-            } else {
-                log::error!("GITHUB_HEAD_REF is set but empty");
             },
-            Err(_) => match std::env::var("GITHUB_REF_TYPE") {
+            _ => match std::env::var("GITHUB_REF_TYPE") {
                 Ok(ref_type) => {
                     match std::env::var("GITHUB_REF") {
                         Ok(ref_name) => {
