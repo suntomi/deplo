@@ -11,7 +11,7 @@ use crate::module;
 pub struct RemoteJob {
     pub name: String,
     pub commit: Option<String>,
-    pub command: String,
+    pub command: Option<String>,
     pub envs: HashMap<String, String>,
     pub verbosity: u64,
     pub release_target: Option<String>,

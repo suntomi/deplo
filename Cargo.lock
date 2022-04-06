@@ -692,7 +692,7 @@ checksum = "cda74da7e1a664f795bb1f8a87ec406fb89a02522cf6e50620d016add6dbbf5c"
 [[package]]
 name = "toml"
 version = "0.5.8"
-source = "git+https://github.com/umegaya/toml-rs?rev=ee539d1#ee539d1a5a15ec49d4602d5654c1512875242d52"
+source = "git+https://github.com/umegaya/toml-rs?rev=93292f8#93292f8dcabddabb70cee9cc3bd22064c5bd40f5"
 dependencies = [
  "serde",
 ]

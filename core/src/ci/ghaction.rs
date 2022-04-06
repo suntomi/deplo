@@ -28,7 +28,7 @@ use crate::util::{
 pub struct ClientPayload {
     pub name: String,
     pub commit: Option<String>,
-    pub command: String,
+    pub command: Option<String>,
     pub envs: HashMap<String, String>,
     pub verbosity: u64,
     pub job_id: String,
@@ -216,22 +216,16 @@ impl<S: shell::Shell> GhAction<S> {
         }.concat()
     }
     fn generate_command<'a>(&self, names: &(&str, &str), job: &'a config::Job) -> Vec<String> {
+        let cmd = format!("run: deplo ci {} {}", names.0, names.1);
         match job.runner {
             config::Runner::Machine{os, ..} => {
-                let cmd = format!("run: deplo ci {} {}", names.0, names.1);
                 match os {
-                    config::RunnerOS::Windows => return vec![cmd, "shell: bash".to_string()],
-                    _ => return vec![cmd],
+                    config::RunnerOS::Windows => vec![cmd, "shell: bash".to_string()],
+                    _ => vec![cmd],
                 }
             },
-            config::Runner::Container{image:_} => (),
-        };
-        format!(include_str!("../../res/ci/ghaction/rawexec.yml.tmpl"),
-            scripts = MultilineFormatString{
-                strings: &job.command.split("\n").map(|s| s.to_string()).collect(),
-                postfix: None
-            }
-        ).split("\n").map(|s| s.to_string()).collect()
+            config::Runner::Container{image:_} =>vec![cmd],
+        }
     }
     fn generate_job_envs<'a>(&self, names: &(&str, &str), job: &'a config::Job) -> Vec<String> {
         let lines = match job.depends {

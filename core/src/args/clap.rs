@@ -113,6 +113,9 @@ fn job_running_command_options(
             .required(true)
             .takes_value(true)))
     .subcommand(
+        App::new("steps")
+        .about("run all steps of the job. designed to be used by deplo itself, you seldom can utilize this command"))
+    .subcommand(
         App::new("output")
         .about("get output, data passed between jobs, of specified job")
         .arg(Arg::new("key")
