@@ -77,7 +77,7 @@ done
 }
 
 [jobs.integrate.src]
-patterns = ["*/src/*", "Cargo.*",]
+patterns = ["*/src/*", "Cargo.*"]
 runner = { type = "Machine", os = "Linux", local_fallback = { image = "ghcr.io/suntomi/deplo:builder" } }
 command = "cargo build"
 tasks = { test = "cargo test", home = "echo ${HOME}" }
@@ -91,7 +91,7 @@ caches = {
         keys = ["integrate-build-${{ runner.os }}-v1-${{ hashFiles('**/Cargo.lock') }}"], # each os and Cargo.lock definition
         # paths root are also CI specific
         paths = ["target", "~/.cargo/bin", "~/.cargo/registry/cache", "~/.cargo/registry/index", "~/.cargo/git/db"] # all possible cargo cache paths
-    }, # last comma also valid
+    }
 }
 
 [jobs.integrate.config]
@@ -161,14 +161,6 @@ if [ $(deplo d product output foo) != "bar" ]; then
     exit 1
 fi
 """
-tasks = {
-    build = """
-set -e
-mkdir -p tools/docker/bin
-. tools/scripts/setup_release_env.sh
-sh tools/scripts/build_linux.sh
-"""
-}
 
 [jobs.deploy.latest]
 depends = ["product"]
@@ -188,62 +180,22 @@ docker push ghcr.io/suntomi/deplo:latest
 depends = ["product"]
 patterns = ["*/src/*", "Cargo.*"]
 runner = { type = "Machine", os = "MacOS" }
-steps = [{
-    name = "before test"
-    env = { HOGE = "hoge" },
-    workdir = "docs",
-    shell = "sh",
-    command = """
-    if [ "$(echo $HOGE)" != "hoge" ]; then
-        echo "env does not work"
-        exit 1
-    fi
-    if [ -z "$(ls -al ./envs.md)" ]; then
-        ls -al
-        echo "workdir does not work"
-        exit 1
-    fi
-    if [ "$(echo $0)" != "sh" ]; then
-        echo "shell does not work"
-        exit 1
-    fi
-    """
-}, {
-    command = """
-    set -e
-    . tools/scripts/setup_release_env.sh
-    cargo build --release
-    deplo vcs release-assets ${DEPLO_RELEASE_TAG} target/release/cli --replace -o name=deplo-Darwin
-    # deploy-mac depends on deploy-product, so can use its output
-    if [ "$(deplo d product output foo)" != "bar" ]; then
-        echo "failed to get output from deploy-product"
-        exit 1
-    fi
-    """
-}, {
-    name = "after test"
-    env = { FUGA = "fuga" },
-    shell = "bash",
-    workdir = ".vscode",
-    command = """
-    if [ "$(echo $FUGA)" != "fuga" ]; then
-        echo "env does not work"
-        exit 1
-    fi
-    if [ -z "$(ls -al launch.json)" ]; then
-        ls -al
-        echo "workdir does not work"
-        exit 1
-    fi
-    if [ "$(echo $0)" != "bash" ]; then
-        echo "shell does not work"
-        exit 1
-    fi
-    """,
-}]
-caches.cargo = {
-    keys = ["integrate-build-${{ runner.os }}-v1-${{ hashFiles('**/Cargo.lock') }}"],
-    paths = ["target", "~/.cargo/bin", "~/.cargo/registry/cache", "~/.cargo/registry/index", "~/.cargo/git/db"]
+command = """
+set -e
+. tools/scripts/setup_release_env.sh
+cargo build --release
+deplo vcs release-assets ${DEPLO_RELEASE_TAG} target/release/cli --replace -o name=deplo-Darwin
+# deploy-mac depends on deploy-product, so can use its output
+if [ $(deplo d product output foo) != "bar" ]; then
+    echo "failed to get output from deploy-product"
+    exit 1
+fi
+"""
+caches = {
+    cargo = {
+        keys = ["integrate-build-${{ runner.os }}-v1-${{ hashFiles('**/Cargo.lock') }}"],
+        paths = ["target", "~/.cargo/bin", "~/.cargo/registry/cache", "~/.cargo/registry/index", "~/.cargo/git/db"]
+    }
 }
 
 [jobs.deploy.win]
