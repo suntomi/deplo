@@ -27,8 +27,9 @@ impl StubRemote {
 use base64;
 use maplit::hashmap;
 
+use crate::config;
 use crate::shell;
-use crate::util::{defer, escalate};
+use crate::util::{defer, escalate, join_vector};
 use crate::vcs;
 
 
@@ -36,12 +37,12 @@ use crate::vcs;
 // because defer uses Drop trait behaviour, this cannot be de-duped as function
 macro_rules! setup_remote {
     ($git:expr, $url:expr) => {
-        $git.shell.exec(&vec!(
+        $git.shell.exec(&shell::args!(
             "git", "remote", "add", "latest", $url
         ), shell::no_env(), shell::no_cwd(), &shell::no_capture())?;
         // defered removal of latest
         defer! {
-            $git.shell.exec(&vec!(
+            $git.shell.exec(&shell::args!(
                 "git", "remote", "remove", "latest"
             ), shell::no_env(), shell::no_cwd(), &shell::no_capture()).unwrap();
         };
@@ -58,12 +59,14 @@ pub struct Git<S: shell::Shell = shell::Default> {
 }
 
 pub struct RemoteCredential {
-    pub username: String,
-    pub email: String,
-    pub key: String,
+    pub username: config::Value,
+    pub email: config::Value,
+    pub key: config::Value,
 }
 impl RemoteCredential {
-    pub fn authorize<'a>(&'a self, command: Vec<&'a str>, target_url: &str) -> Result<Vec<String>, Box<dyn Error>> {
+    pub fn authorize<'a>(
+        &'a self, command: Vec<&'a str>, target_url: &str
+    ) -> Result<Vec<shell::Arg>, Box<dyn Error>> {
         let mut authorized = vec![];
         if command[0] != "git" {
             return escalate!(Box::new(vcs::VCSError {
@@ -75,7 +78,7 @@ impl RemoteCredential {
                 cause: format!("RemoteCredential::authorize only authorizes access to https url. ssh support is not yet. {}", target_url)
             }));
         }
-        authorized.push(vec![command[0].to_string()]);
+        authorized.push(shell::args![command[0]]);
         // add option like
         // -c "http.https://github.com/.extraheader=" 
         // -c "http.https://github.com/<owner>/<repo>/.extraheader=AUTHORIZATION: Basic <base64 encoded user and pass>"
@@ -92,25 +95,25 @@ impl RemoteCredential {
             }))
         };
         // by regex, base_url contains last /
-        authorized.push(vec!["-c".to_string(), format!("http.{}.extraheader=", base_url)]);
-        authorized.push(vec!["-c".to_string(), format!(
-                "http.{}/.extraheader=AUTHORIZATION: Basic {}", 
-                if target_url.ends_with("/") { &target_url[0..target_url.len()-1] } else { target_url },
-                base64::encode(&format!("{}:{}" , self.username, self.key))
-            )
-        ]);
+        authorized.push(shell::args!["-c", &format!("http.{}.extraheader=", base_url)]);
+        authorized.push(shell::args!["-c"]);
+        authorized.push(vec![shell::protected_arg!(&format!(
+            "http.{}/.extraheader=AUTHORIZATION: Basic {}", 
+            if target_url.ends_with("/") { &target_url[0..target_url.len()-1] } else { target_url },
+            base64::encode(&format!("{}:{}" , self.username, self.key))
+        ))]);
         authorized.push(
             command.iter().enumerate()
                 .filter(|(idx, _)| *idx > 0)
-                .map(|(_, v)| v.to_string())
-                .collect::<Vec<String>>()
+                .map(|(_, v)| shell::arg!(v))
+                .collect::<Vec<shell::Arg>>()
         );
-        Ok(authorized.concat())
+        Ok(join_vector(authorized))
     }
 }
 
 pub trait GitFeatures<S: shell::Shell> {
-    fn new(username: &str, email: &str, key: &str, shell: S) -> Self;
+    fn new(username: &config::Value, email: &config::Value, key: &config::Value, shell: S) -> Self;
     fn current_ref(&self) -> Result<(vcs::RefType, String), Box<dyn Error>>;
     fn delete_branch(&self, remote_url: &str, ref_type: vcs::RefType, ref_path: &str) -> Result<(), Box<dyn Error>>;
     fn fetch_branch(&self, remote_url: &str, branch_name: &str) -> Result<(), Box<dyn Error>>;
@@ -170,14 +173,12 @@ impl<S: shell::Shell> Git<S> {
 }
 
 impl<S: shell::Shell> GitFeatures<S> for Git<S> {
-    fn new(username: &str, email: &str, key: &str, shell: S) -> Git<S> {
+    fn new(username: &config::Value, email: &config::Value, key: &config::Value, shell: S) -> Git<S> {
         #[cfg(feature="git2")]
         let cwd = std::env::current_dir().unwrap();
         return Git::<S> {
             credential: RemoteCredential {
-                username: username.to_string(),
-                email: email.to_string(),
-                key: key.to_string(),
+                username: *username, email: *email, key: *key
             },
             shell,
             #[cfg(feature="git2")]
@@ -194,7 +195,7 @@ impl<S: shell::Shell> GitFeatures<S> for Git<S> {
         }
     }
     fn current_ref(&self) -> Result<(vcs::RefType, String), Box<dyn Error>> {
-        match self.shell.output_of(&vec!(
+        match self.shell.output_of(&shell::args!(
             "git", "describe" , "--all"
         ), shell::no_env(), shell::no_cwd()) {
             Ok(ref_path) => {
@@ -208,14 +209,14 @@ impl<S: shell::Shell> GitFeatures<S> for Git<S> {
     fn delete_branch(&self, remote_url: &str, ref_type: vcs::RefType, ref_path: &str) -> Result<(), Box<dyn Error>> {
         match ref_type {
             vcs::RefType::Branch => {
-                self.shell.exec(&vec![
+                self.shell.exec(&shell::args![
                     "git", "branch", "-D", ref_path
                 ], shell::no_env(), shell::no_cwd(), &shell::no_capture())?;
             },
             vcs::RefType::Remote => {
-                self.shell.exec(&Self::to_str_vec(&self.credential.authorize(vec![
+                self.shell.exec(&self.credential.authorize(vec![
                     "git", "push", remote_url, "--delete", ref_path
-                ], remote_url)?), shell::no_env(), shell::no_cwd(), &shell::no_capture())?;
+                ], remote_url)?, shell::no_env(), shell::no_cwd(), &shell::no_capture())?;
             }
             _ => {
                 return escalate!(Box::new(vcs::VCSError {
@@ -226,30 +227,30 @@ impl<S: shell::Shell> GitFeatures<S> for Git<S> {
         Ok(())
     }
     fn fetch_branch(&self, remote_url: &str, branch_name: &str) -> Result<(), Box<dyn Error>> {
-        self.shell.exec(&Self::to_str_vec(&self.credential.authorize(vec![
+        self.shell.exec(&self.credential.authorize(vec![
             "git", "fetch", remote_url, branch_name
-        ], remote_url)?), shell::no_env(), shell::no_cwd(), &shell::no_capture())?;
+        ], remote_url)?, shell::no_env(), shell::no_cwd(), &shell::no_capture())?;
         Ok(())
     }
     fn squash_branch(&self, n: usize) -> Result<(), Box<dyn Error>> {
-        self.shell.exec(&vec!(
+        self.shell.exec(&shell::args!(
             "git", "rebase", "-i", &format!("HEAD~{}", n)
         ), shell::no_env(), shell::no_cwd(), &shell::no_capture())?;
         Ok(())
     }
     fn checkout(&self, commit: &str, branch_name: Option<&str>) -> Result<(), Box<dyn Error>> {
         match branch_name {
-            Some(b) => self.shell.output_of(&vec!(
+            Some(b) => self.shell.output_of(&shell::args!(
                 "git", "checkout" , "-B", b, commit
             ), shell::no_env(), shell::no_cwd())?,
-            None => self.shell.output_of(&vec!(
+            None => self.shell.output_of(&shell::args!(
                 "git", "checkout", commit
             ), shell::no_env(), shell::no_cwd())?
         };
         Ok(())
     }
     fn commit_hash(&self, expr: Option<&str>) -> Result<String, Box<dyn Error>> {
-        Ok(self.shell.output_of(&vec!(
+        Ok(self.shell.output_of(&shell::args!(
             "git", "rev-parse" , expr.unwrap_or("HEAD")
         ), shell::no_env(), shell::no_cwd())?)
     }
@@ -259,32 +260,32 @@ impl<S: shell::Shell> GitFeatures<S> for Git<S> {
             let origin = self.repo.find_remote(remote)?;
             Ok(origin.url().unwrap().to_string())
         } else {
-            Ok(self.shell.output_of(&vec!(
+            Ok(self.shell.output_of(&shell::args!(
                 "git", "config", "--get", &format!("remote.{}.url", remote)
             ), shell::no_env(), shell::no_cwd())?)
         }
     }
     fn repository_root(&self) -> Result<String, Box<dyn Error>> {
-        Ok(self.shell.output_of(&vec!(
+        Ok(self.shell.output_of(&shell::args!(
             "git", "rev-parse", "--show-toplevel"
         ), shell::no_env(), shell::no_cwd())?)
     }
     fn diff_paths(&self, expression: &str) -> Result<String, Box<dyn Error>> {
         Ok(self.shell.output_of(
-            &vec!("git", "--no-pager", "diff", "--name-only", expression),
+            &shell::args!("git", "--no-pager", "diff", "--name-only", expression),
             shell::no_env(), shell::no_cwd()
         )?)
     }
     fn tags(&self) -> Result<Vec<String>, Box<dyn Error>> {
-        self.shell.exec(&vec!(
+        self.shell.exec(&shell::args!(
             "git", "fetch", "--tags"
         ), shell::no_env(), shell::no_cwd(), &shell::capture())?;
-        Ok(self.shell.output_of(&vec!(
+        Ok(self.shell.output_of(&shell::args!(
             "git", "tag"
         ), shell::no_env(), shell::no_cwd())?.split('\n').map(|s| s.to_string()).collect())
     }
     fn cherry_pick(&self, target: &str) -> Result<(), Box<dyn Error>> {
-        self.shell.exec(&vec!(
+        self.shell.exec(&shell::args!(
             "git", "cherry-pick", &target
         ), self.commit_env(), shell::no_cwd(), &shell::capture())?;
         Ok(())        
@@ -306,16 +307,16 @@ impl<S: shell::Shell> GitFeatures<S> for Git<S> {
         }
         if explicit_lfs {
             self.shell.exec(
-                &vec!["git", "lfs", "fetch"], shell::no_env(), shell::no_cwd(), &shell::no_capture()
+                &shell::args!["git", "lfs", "fetch"], shell::no_env(), shell::no_cwd(), &shell::no_capture()
             )?;
             self.shell.exec(
-                &Self::to_str_vec(&self.credential.authorize(vec!["git", "lfs", "push", remote_url], remote_url)?),
+                &self.credential.authorize(vec!["git", "lfs", "push", remote_url], remote_url)?,
                 self.commit_env(), shell::no_cwd(), &shell::no_capture()
             )?;
         }
-        self.shell.exec(&Self::to_str_vec(&self.credential.authorize(vec![
+        self.shell.exec(&self.credential.authorize(vec![
             "git", "push", "--no-verify", remote_url, &format!("{}:{}", local_ref, remote_branch)
-        ], remote_url)?), self.commit_env(), shell::no_cwd(), &shell::no_capture())?;
+        ], remote_url)?, self.commit_env(), shell::no_cwd(), &shell::no_capture())?;
         Ok(())
     }
     fn push_diff(
@@ -329,7 +330,7 @@ impl<S: shell::Shell> GitFeatures<S> for Git<S> {
         let original_ref = self.commit_hash(None)?;
         defer! {
             self.shell.exec(
-                &vec!["git", "reset", "--hard", &original_ref],
+                &shell::args!["git", "reset", "--hard", &original_ref],
                 shell::no_env(), shell::no_cwd(), &shell::capture()
             ).unwrap();
         };
@@ -337,16 +338,16 @@ impl<S: shell::Shell> GitFeatures<S> for Git<S> {
             // this useless diffing is for making lfs tracked files refreshed.
             // otherwise if lfs tracked file is written, codes below seems to treat these write as git diff.
             // even if actually no change.
-		    self.shell.exec(&vec!["git", "--no-pager", "diff"], shell::no_env(), shell::no_cwd(), &shell::capture())?;
+		    self.shell.exec(&shell::args!["git", "--no-pager", "diff"], shell::no_env(), shell::no_cwd(), &shell::capture())?;
         }
 		let mut changed = false;
 
 		for pattern in patterns {
-            self.shell.exec(&vec!("git", "add", "-N", pattern), shell::no_env(), shell::no_cwd(), &shell::no_capture())?;
-            let diff = self.shell.exec(&vec!("git", "add", "-n", pattern), shell::no_env(), shell::no_cwd(), &shell::capture())?;
+            self.shell.exec(&shell::args!("git", "add", "-N", pattern), shell::no_env(), shell::no_cwd(), &shell::no_capture())?;
+            let diff = self.shell.exec(&shell::args!("git", "add", "-n", pattern), shell::no_env(), shell::no_cwd(), &shell::capture())?;
 			if !diff.is_empty() {
                 log::debug!("diff found for {} [{}]", pattern, diff);
-                self.shell.exec(&vec!("git", "add", pattern), shell::no_env(), shell::no_cwd(), &shell::no_capture())?;
+                self.shell.exec(&shell::args!("git", "add", pattern), shell::no_env(), shell::no_cwd(), &shell::no_capture())?;
 				changed = true
             }
         }
@@ -356,20 +357,20 @@ impl<S: shell::Shell> GitFeatures<S> for Git<S> {
         } else {
 			if explicit_lfs {
 				self.shell.exec(
-                    &vec!["git", "lfs", "fetch"], shell::no_env(), shell::no_cwd(), &shell::no_capture()
+                    &shell::args!["git", "lfs", "fetch"], shell::no_env(), shell::no_cwd(), &shell::no_capture()
                 )?;
             }
-			self.shell.exec(&vec!("git", "commit", "-m", msg), self.commit_env(), shell::no_cwd(), &shell::no_capture())?;
+			self.shell.exec(&shell::args!("git", "commit", "-m", msg), self.commit_env(), shell::no_cwd(), &shell::no_capture())?;
 			log::debug!("commit done: [{}]", msg);
 			if explicit_lfs {
                 self.shell.exec(
-                    &Self::to_str_vec(&self.credential.authorize(vec!["git", "lfs", "push", remote_url], remote_url)?), 
+                    &self.credential.authorize(vec!["git", "lfs", "push", remote_url], remote_url)?,
                     self.commit_env(), shell::no_cwd(), &shell::no_capture()
                 )?;
             }
-            self.shell.exec(&Self::to_str_vec(&self.credential.authorize(vec![
+            self.shell.exec(&self.credential.authorize(vec![
                 "git", "push", "--no-verify", remote_url, &format!("HEAD:{}", remote_branch)
-            ], remote_url)?),  self.commit_env(), shell::no_cwd(), &shell::no_capture())?;
+            ], remote_url)?,  self.commit_env(), shell::no_cwd(), &shell::no_capture())?;
 			return Ok(true)
         }
     }
@@ -382,12 +383,12 @@ impl<S: shell::Shell> GitFeatures<S> for Git<S> {
 
         // here, remote_branch before colon means branch which name is $remote_branch at remote `latest`
         // fetch remote counter part of the branch to temporary remote 'latest' for rebasing.
-        self.shell.exec(&vec!(
+        self.shell.exec(&shell::args!(
             "git", "fetch", "--force", "latest", 
             &format!("{}:remotes/latest/{}", remote_branch, remote_branch)
         ), self.commit_env(), shell::no_cwd(), &shell::no_capture())?;
         // rebase with fetched remote latest branch. it may change HEAD.
-        self.shell.exec(&vec!(
+        self.shell.exec(&shell::args!(
             "git", "rebase", &format!("remotes/latest/{}", remote_branch)
         ), self.commit_env(), shell::no_cwd(), &shell::no_capture())?;
         Ok(())
@@ -401,9 +402,12 @@ mod tests {
 
     #[test]
     fn parse_ref_path_test() {
-        let config = config::Config::dummy(None).unwrap();
+        let config = config::Config::with(None).unwrap();
         let git = Git::<shell::Default>::new(
-            "umegaya", "mail@address.com", "key", shell::new_default(&config)
+            &config::value::Value::new("umegaya"),
+            &config::value::Value::new("mail@address.com"),
+            &config::value::Value::new("key"),
+            shell::new_default(&config)
         );
         let path = "heads/main";
         let (ref_type, ref_name) = git.parse_ref_path(path).unwrap();

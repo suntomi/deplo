@@ -387,6 +387,17 @@ pub fn merge_hashmap<K: std::cmp::Eq + std::hash::Hash + Clone, V: Clone>(h1: &H
     return ret;
 }
 
+// vec
+pub fn join_vector<T>(src: Vec<Vec<T>>) -> Vec<T> {
+    let r = vec![];
+    for v in src {
+        for e in v {
+            r.push(e)
+        }
+    }
+    r
+}
+
 // json
 // same as serde_json::from_str, but support the case that s represents single number/boolean/null.
 // serde_json::from_str does not seem to support them.

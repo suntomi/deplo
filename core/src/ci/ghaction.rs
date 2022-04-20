@@ -129,17 +129,17 @@ impl<S: shell::Shell> GhAction<S> {
             },
         ).split("\n").map(|s| s.to_string()).collect()
     }
-    fn generate_outputs<'a>(&self, jobs: &HashMap<(&'a str, &'a str), &'a config::Job>) -> Vec<String> {
+    fn generate_outputs<'a>(&self, jobs: &HashMap<(&'a str, &'a str), &'a config::job::Job>) -> Vec<String> {
         sorted_key_iter(jobs).map(|(v,_)| {
             format!("{kind}-{name}: ${{{{ steps.deplo-ci-kick.outputs.{kind}-{name} }}}}", kind = v.0, name = v.1)
         }).collect()
     }
-    fn generate_need_cleanups<'a>(&self, jobs: &HashMap<(&'a str, &'a str), &'a config::Job>) -> String {
+    fn generate_need_cleanups<'a>(&self, jobs: &HashMap<(&'a str, &'a str), &'a config::job::Job>) -> String {
         sorted_key_iter(jobs).map(|(v,_)| {
             format!("needs.{kind}-{name}.outputs.need-cleanup", kind = v.0, name = v.1)
         }).collect::<Vec<String>>().join(" || ")
     }
-    fn generate_cleanup_envs<'a>(&self, jobs: &HashMap<(&'a str, &'a str), &'a config::Job>) -> Vec<String> {
+    fn generate_cleanup_envs<'a>(&self, jobs: &HashMap<(&'a str, &'a str), &'a config::job::Job>) -> Vec<String> {
         let envs = sorted_key_iter(jobs).map(|(v,_)| {
             let job_name = format!("{kind}-{name}", kind = v.0, name = v.1);
             format!("{env_name}: ${{{{ needs.{job_name}.outputs.system }}}}",
@@ -158,7 +158,7 @@ impl<S: shell::Shell> GhAction<S> {
             vec![]
         }
     }
-    fn generate_debugger(&self, job: Option<&config::Job>, config: &config::Config) -> Vec<String> {
+    fn generate_debugger(&self, job: Option<&config::job::Job>, config: &config::Config) -> Vec<String> {
         let sudo = match job {
             Some(ref j) => {
                 if !config.common.debug.as_ref().map_or_else(|| false, |v| v.get("ghaction_job_debugger").is_some()) &&
@@ -167,8 +167,8 @@ impl<S: shell::Shell> GhAction<S> {
                 }
                 // if in container, sudo does not required to install debug instrument
                 match j.runner {
-                    config::Runner::Machine{..} => true,
-                    config::Runner::Container{..} => false,        
+                    config::job::Runner::Machine{..} => true,
+                    config::job::Runner::Container{..} => false,        
                 }
             },
             None => {
@@ -184,7 +184,7 @@ impl<S: shell::Shell> GhAction<S> {
             sudo = sudo
         ).split("\n").map(|s| s.to_string()).collect()        
     }
-    fn generate_restore_keys(&self, cache: &config::Cache) -> Vec<String> {
+    fn generate_restore_keys(&self, cache: &config::job::Cache) -> Vec<String> {
         if cache.keys.len() > 1 {
             format!(
                 include_str!("../../res/ci/ghaction/restore_keys.yml.tmpl"),
@@ -196,7 +196,7 @@ impl<S: shell::Shell> GhAction<S> {
             vec![]
         }
     }
-    fn generate_caches(&self, job: &config::Job) -> Vec<String> {
+    fn generate_caches(&self, job: &config::job::Job) -> Vec<String> {
         match job.caches {
             Some(ref c) => sorted_key_iter(c).map(|(name,cache)| {
                 format!(
@@ -215,19 +215,19 @@ impl<S: shell::Shell> GhAction<S> {
             None => vec![]
         }.concat()
     }
-    fn generate_command<'a>(&self, names: &(&str, &str), job: &'a config::Job) -> Vec<String> {
+    fn generate_command<'a>(&self, names: &(&str, &str), job: &'a config::job::Job) -> Vec<String> {
         let cmd = format!("run: deplo ci {} {}", names.0, names.1);
         match job.runner {
-            config::Runner::Machine{os, ..} => {
+            config::job::Runner::Machine{os, ..} => {
                 match os {
-                    config::RunnerOS::Windows => vec![cmd, "shell: bash".to_string()],
+                    config::job::RunnerOS::Windows => vec![cmd, "shell: bash".to_string()],
                     _ => vec![cmd],
                 }
             },
-            config::Runner::Container{image:_} =>vec![cmd],
+            config::job::Runner::Container{image:_} =>vec![cmd],
         }
     }
-    fn generate_job_envs<'a>(&self, names: &(&str, &str), job: &'a config::Job) -> Vec<String> {
+    fn generate_job_envs<'a>(&self, names: &(&str, &str), job: &'a config::job::Job) -> Vec<String> {
         let lines = match job.depends {
             Some(ref depends) => {
                 let mut envs = vec![];
@@ -260,19 +260,19 @@ impl<S: shell::Shell> GhAction<S> {
                 format!("\"{}\"", vs.join("\",\""))
             })
     }
-    fn generate_container_setting<'a>(&self, runner: &'a config::Runner) -> Vec<String> {
+    fn generate_container_setting<'a>(&self, runner: &'a config::job::Runner) -> Vec<String> {
         match runner {
-            config::Runner::Machine{ .. } => vec![],
-            config::Runner::Container{ image } => vec![format!("container: {}", image)]
+            config::job::Runner::Machine{ .. } => vec![],
+            config::job::Runner::Container{ image } => vec![format!("container: {}", image)]
         }
     }
-    fn generate_fetchcli_steps<'a>(&self, runner: &'a config::Runner) ->Vec<String> {
+    fn generate_fetchcli_steps<'a>(&self, runner: &'a config::job::Runner) ->Vec<String> {
         let (path, uname, ext, shell) = match runner {
-            config::Runner::Machine{ref os, ..} => match os {
-                config::RunnerOS::Windows => ("/usr/bin/deplo", "Windows", ".exe", "shell: bash"),
+            config::job::Runner::Machine{ref os, ..} => match os {
+                config::job::RunnerOS::Windows => ("/usr/bin/deplo", "Windows", ".exe", "shell: bash"),
                 v => ("/usr/local/bin/deplo", v.uname(), "", "")
             },
-            config::Runner::Container{image:_} => ("/usr/local/bin/deplo", "Linux", "", "")
+            config::job::Runner::Container{image:_} => ("/usr/local/bin/deplo", "Linux", "", "")
         };
         let mut lines = format!(include_str!("../../res/ci/ghaction/fetchcli.yml.tmpl"),
             deplo_cli_path = path,
@@ -337,8 +337,8 @@ impl<S: shell::Shell> GhAction<S> {
     fn get_token(&self) -> Result<String, Box<dyn Error>> {
         let config = self.config.borrow();
         Ok(match &config.ci_config(&self.account_name) {
-            config::CIAccount::GhAction { key, .. } => { key.to_string() },
-            config::CIAccount::CircleCI{..} => { 
+            config::ci::Account::GhAction { key, .. } => { key.to_string() },
+            config::ci::Account::CircleCI{..} => { 
                 return escalate!(Box::new(ci::CIError {
                     cause: "should have ghaction CI config but circleci config provided".to_string()
                 }));
@@ -378,15 +378,15 @@ impl<'a, S: shell::Shell> module::Module for GhAction<S> {
                 full_name = name, kind = names.0, name = names.1,
                 needs = self.generate_job_dependencies(names.0, &job.depends),
                 machine = match job.runner {
-                    config::Runner::Machine{ref image, ref os, ..} => match image {
+                    config::job::Runner::Machine{ref image, ref os, ..} => match image {
                         Some(v) => v.as_str(),
                         None => match os {
-                            config::RunnerOS::Linux => "ubuntu-latest",
-                            config::RunnerOS::Windows => "windows-latest",
-                            config::RunnerOS::MacOS => "macos-latest",
+                            config::job::RunnerOS::Linux => "ubuntu-latest",
+                            config::job::RunnerOS::Windows => "windows-latest",
+                            config::job::RunnerOS::MacOS => "macos-latest",
                         }
                     },
-                    config::Runner::Container{image:_} => "ubuntu-latest",
+                    config::job::Runner::Container{image:_} => "ubuntu-latest",
                 },
                 caches = MultilineFormatString{
                     strings: &self.generate_caches(&job),
@@ -454,8 +454,8 @@ impl<'a, S: shell::Shell> module::Module for GhAction<S> {
                     postfix: None
                 },
                 fetchcli = MultilineFormatString{
-                    strings: &self.generate_fetchcli_steps(&config::Runner::Machine{
-                        os: config::RunnerOS::Linux, image: None, class: None, local_fallback: None }
+                    strings: &self.generate_fetchcli_steps(&config::job::Runner::Machine{
+                        os: config::job::RunnerOS::Linux, image: None, class: None, local_fallback: None }
                     ),
                     postfix: None
                 },
@@ -527,7 +527,7 @@ impl<S: shell::Shell> ci::CI for GhAction<S> {
             Ok(None)
         } else {
             self.config.borrow().run_job_by_name(
-                &self.shell, job_name, config::Command::Job, &config::JobRunningOptions {
+                &self.shell, job_name, config::job::Command::Job, &config::job::RunningOptions {
                     commit: None, remote: false, shell_settings: shell::no_capture(),
                     adhoc_envs: hashmap!{},
                 }
@@ -555,7 +555,7 @@ impl<S: shell::Shell> ci::CI for GhAction<S> {
         let token = self.get_token()?;
         let user_and_repo = config.vcs_service()?.user_and_repo()?;
         let payload = ClientPayload::new(job);
-        self.shell.exec(&vec![
+        self.shell.exec(&shell::args![
             "curl", "-H", &format!("Authorization: token {}", token), 
             "-H", "Accept: application/vnd.github.v3+json", 
             &format!(
@@ -576,7 +576,7 @@ impl<S: shell::Shell> ci::CI for GhAction<S> {
         // to be tolerant of clock skew
         let start = Utc::now().checked_sub_signed(Duration::minutes(1)).unwrap();
         loop {
-            let response = self.shell.exec(&vec![
+            let response = self.shell.exec(&shell::args![
                 "curl", "-H", &format!("Authorization: token {}", token), 
                 "-H", "Accept: application/vnd.github.v3+json", 
                 &format!(
@@ -589,7 +589,7 @@ impl<S: shell::Shell> ci::CI for GhAction<S> {
             let workflows = serde_json::from_str::<PartialWorkflows>(&response)?;
             if workflows.workflow_runs.len() > 0 {
                 for wf in workflows.workflow_runs {
-                    let response = self.shell.exec(&vec![
+                    let response = self.shell.exec(&shell::args![
                         "curl", "-H", &format!("Authorization: token {}", token), 
                         "-H", "Accept: application/vnd.github.v3+json", &wf.jobs_url
                     ], shell::no_env(), shell::no_cwd(), &shell::capture())?;
@@ -616,7 +616,7 @@ impl<S: shell::Shell> ci::CI for GhAction<S> {
         let config = self.config.borrow();
         let token = self.get_token()?;
         let user_and_repo = config.vcs_service()?.user_and_repo()?;
-        let response = self.shell.exec(&vec![
+        let response = self.shell.exec(&shell::args![
             "curl", "-H", &format!("Authorization: token {}", token),
             "-H", "Accept: application/vnd.github.v3+json",
             &format!(
@@ -723,7 +723,7 @@ impl<S: shell::Shell> ci::CI for GhAction<S> {
         let config = self.config.borrow();
         let user_and_repo = config.vcs_service()?.user_and_repo()?;
         let response = match serde_json::from_str::<RepositorySecretsResponse>(
-            &self.shell.exec(&vec![
+            &self.shell.exec(&shell::args![
             "curl", &format!(
                 "https://api.github.com/repos/{}/{}/actions/secrets",
                 user_and_repo.0, user_and_repo.1
@@ -743,7 +743,7 @@ impl<S: shell::Shell> ci::CI for GhAction<S> {
         let config = self.config.borrow();
         let user_and_repo = config.vcs_service()?.user_and_repo()?;
         let public_key_info = match serde_json::from_str::<RepositoryPublicKeyResponse>(
-            &self.shell.exec(&vec![
+            &self.shell.exec(&shell::args![
                 "curl", &format!("https://api.github.com/repos/{}/{}/actions/secrets/public-key", user_and_repo.0, user_and_repo.1),
                 "-H", &format!("Authorization: token {}", token)
             ], shell::no_env(), shell::no_cwd(), &shell::capture()
@@ -757,7 +757,7 @@ impl<S: shell::Shell> ci::CI for GhAction<S> {
             public_key_info.key_id
         );
         // TODO_PATH: use Path to generate path of /dev/null
-        let status = self.shell.exec(&vec!(
+        let status = self.shell.exec(&shell::args!(
             "curl", "-X", "PUT",
             &format!(
                 "https://api.github.com/repos/{}/{}/actions/secrets/{}",

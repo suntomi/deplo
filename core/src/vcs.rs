@@ -6,7 +6,7 @@ use glob::Pattern;
 use regex::Regex;
 use serde_json::{Value as JsonValue};
 
-use super::config;
+use crate::config;
 use crate::module;
 
 pub enum DiffMatcher<'a> {
@@ -105,6 +105,10 @@ pub trait VCS : module::Module {
         false
     }
 }
+pub struct Manifest;
+impl module::Manifest for Manifest {
+    fn ty() -> config::module::Type { return config::module::Type::Vcs; }
+}
 
 #[derive(Debug)]
 pub struct VCSError {
@@ -137,7 +141,7 @@ pub fn factory<'a>(
     config: &config::Container
 ) -> Result<Box<dyn VCS + 'a>, Box<dyn Error>> {
     match &config.borrow().vcs {
-        config::VCSConfig::Github {..} => {
+        config::vcs::Account::Github {..} => {
             return factory_by::<github::Github>(config);
         },
         _ => return Err(Box::new(VCSError {

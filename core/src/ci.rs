@@ -50,6 +50,10 @@ pub trait CI : module::Module {
     fn set_job_output(&self, job_name: &str, kind: OutputKind, outputs: HashMap<&str, &str>) -> Result<(), Box<dyn Error>>;
     fn job_output(&self, job_name: &str, kind: OutputKind, key: &str) -> Result<Option<String>, Box<dyn Error>>;
 }
+pub struct Manifest;
+impl module::Manifest for Manifest {
+    fn ty() -> config::module::Type { return config::module::Type::Ci; }
+}
 
 #[derive(Debug)]
 pub struct CIError {
@@ -66,7 +70,6 @@ impl Error for CIError {
     }
 }
 
-// subcommands
 pub mod ghaction;
 pub mod circleci;
 
@@ -83,11 +86,11 @@ pub fn factory<'a>(
     config: &config::Container,
     account_name: &str
 ) -> Result<Box<dyn CI + 'a>, Box<dyn Error>> {
-    match &config.borrow().ci_config(account_name) {
-        config::CIAccount::GhAction {..} => {
+    match &config.borrow().ci.get(account_name).unwrap() {
+        config::ci::Account::GhAction {..} => {
             return factory_by::<ghaction::GhAction>(config, account_name);
         },
-        config::CIAccount::CircleCI {..} => {
+        config::ci::Account::CircleCI {..} => {
             return factory_by::<circleci::CircleCI>(config, account_name);
         }
     };

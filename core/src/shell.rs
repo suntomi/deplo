@@ -6,9 +6,39 @@ use std::ffi::OsStr;
 use std::convert::AsRef;
 
 use crate::config;
-use crate::util::{escalate,make_absolute,docker_mount_path};
+use crate::util::{escalate,make_absolute,docker_mount_path,join_vector};
 
 pub mod native;
+
+pub type Arg<'a> = Box<dyn AsRef<OsStr> + 'a>;
+
+#[macro_export]
+macro_rules! arg {
+    ($x:expr) => {
+        Box::new(std::ffi::OsStr::new($x)) as crate::shell::Arg
+    }
+}
+
+#[macro_export]
+macro_rules! args {
+    () => (
+        std::vec::Vec::new()
+    );
+    ($($x:expr),+) => (
+        vec![$(Box::new(std::ffi::OsStr::new($x)) as crate::shell::Arg),+]
+    );
+}
+
+#[macro_export]
+macro_rules! protected_arg {
+    ($x:expr) => {
+        Box::new(crate::config::value::Sensitive::new($x)) as crate::shell::Arg
+    };
+}
+
+pub use arg;
+pub use args;
+pub use protected_arg;
 
 pub struct Settings {
     capture: bool,
@@ -21,71 +51,82 @@ pub trait Shell {
     fn set_cwd<P: AsRef<Path>>(&mut self, dir: &Option<P>) -> Result<(), Box<dyn Error>>;
     fn set_env(&mut self, key: &str, val: String) -> Result<(), Box<dyn Error>>;
     fn config(&self) -> &config::Container;
-    fn output_of<I, K, V, P>(
-        &self, args: &Vec<&str>, envs: I, cwd: &Option<P>
+    fn output_of<'a, I, K, V, P>(
+        &self, args: &Vec<Arg>, envs: I, cwd: &Option<P>
     ) -> Result<String, ShellError>
     where I: IntoIterator<Item = (K, V)>, K: AsRef<OsStr>, V: AsRef<OsStr>, P: AsRef<Path>;
     fn exec<I, K, V, P>(
-        &self, args: &Vec<&str>, envs: I, cwd: &Option<P>, settings: &Settings
+        &self, args: &Vec<Arg>, envs: I, cwd: &Option<P>, settings: &Settings
     ) -> Result<String, ShellError>
     where I: IntoIterator<Item = (K, V)>, K: AsRef<OsStr>, V: AsRef<OsStr>, P: AsRef<Path>;
     fn eval<I, K, V, P>(
         &self, code: &str, shell: &Option<String>, envs: I, cwd: &Option<P>, settings: &Settings
     ) -> Result<String, ShellError> 
     where I: IntoIterator<Item = (K, V)>, K: AsRef<OsStr>, V: AsRef<OsStr>, P: AsRef<Path> {
-        return self.exec(&vec!(shell.as_ref().map_or_else(|| "bash", |v| v.as_str()), "-c", code), envs, cwd, settings);
+        let sh = shell.as_ref().map_or_else(|| "bash", |v| v.as_str());
+        return self.exec(&args!(sh, "-c", code), envs, cwd, settings);
     }
     fn eval_on_container<I, K, V, P>(
-        &self, image: &str, code: &str, shell: &Option<String>, envs: I, cwd: &Option<P>, 
-        mounts: &HashMap<&str, &str>, settings: &Settings
+        &self, image: &str, code: &str, shell: &Option<String>, envs: I,
+        cwd: &Option<P>, mounts: I, settings: &Settings
     ) -> Result<String, Box<dyn Error>>
     where I: IntoIterator<Item = (K, V)> + Clone, K: AsRef<OsStr>, V: AsRef<OsStr>, P: AsRef<Path> {
         let config = self.config().borrow();
-        let envs_vec: Vec<String> = envs.clone().into_iter().map(|(k,v)| {
+        let mut envs_vec: Vec<Arg> = vec![];
+        for (k, v) in envs {
             let key = k.as_ref().to_string_lossy();
             let val = v.as_ref().to_string_lossy();
-            return vec!["-e".to_string(), format!("{k}={v}", k = key, v = val)]
-        }).collect::<Vec<Vec<String>>>().concat();
-        let mounts_vec: Vec<String> = mounts.iter().map(|(k,v)| {
-            return vec!["-v".to_string(), format!("{k}:{v}", k = docker_mount_path(k), v = v)]
-        }).collect::<Vec<Vec<String>>>().concat();
-        let repository_mount_path = config.vcs_service()?.repository_root()?;
+            envs_vec.push(arg!("-e"));
+            envs_vec.push(protected_arg!(format!("{k}={v}", k = key, v = val).as_str()));
+        }
+        let mounts_vec: Vec<Arg> = vec![];
+        for (k, v) in mounts {
+            let key = k.as_ref().to_string_lossy();
+            let val = v.as_ref().to_string_lossy();
+            mounts_vec.push(arg!("-e"));
+            mounts_vec.push(protected_arg!(format!(
+                "{k}:{v}", k = docker_mount_path(&key), v = val
+            ).as_str()));
+        }
+        let repository_mount_path = config.modules.vcs.unwrap().repository_root()?;
         let workdir = match cwd {
-            Some(dir) => make_absolute(dir.as_ref(), &repository_mount_path.clone()).to_string_lossy().to_string(),
+            Some(dir) => make_absolute(
+                    dir.as_ref(), 
+                    &repository_mount_path.clone()
+                ).to_string_lossy().to_string(),
             None => repository_mount_path.clone()
         };
-        let result = self.exec(&vec![
-            vec!["docker", "run", "--init", "--rm"],
-            if settings.interactive { vec!["-it"] } else { vec![] },
-            vec!["--workdir", &docker_mount_path(&workdir)],
-            envs_vec.iter().map(|s| s.as_ref()).collect::<Vec<&str>>(),
-            mounts_vec.iter().map(|s| s.as_ref()).collect::<Vec<&str>>(),
+        let result = self.exec(&join_vector(vec![
+            args!["docker", "run", "--init", "--rm"],
+            if settings.interactive { args!["-it"] } else { args![] },
+            args!["--workdir", &docker_mount_path(&workdir)],
+            envs_vec, mounts_vec,
             // TODO_PATH: use Path to generate path of /var/run/docker.sock (left(host) side)
-            vec!["-v", &format!("{}:/var/run/docker.sock", docker_mount_path("/var/run/docker.sock"))],
-            vec!["-v", &format!("{}:{}", docker_mount_path(&repository_mount_path), docker_mount_path(&repository_mount_path))],
-            vec!["--entrypoint", shell.as_ref().map_or_else(|| "bash", |v| v.as_str())],
-            vec![image, "-c", code]
-        ].concat(), envs, cwd, &settings)?;
+            args!["-v", &format!("{}:/var/run/docker.sock", docker_mount_path("/var/run/docker.sock"))],
+            args!["-v", &format!("{}:{}", docker_mount_path(&repository_mount_path), docker_mount_path(&repository_mount_path))],
+            args!["--entrypoint", shell.as_ref().map_or_else(|| "bash", |v| v.as_str())],
+            args![image, "-c", code]
+        ]), HashMap::<K,V>::new(), &None as &Option<std::path::PathBuf>, &settings)?;
         return Ok(result);
     }
     fn eval_output_of<I, K, V, P>(
         &self, code: &str, shell: &Option<String>, envs: I, cwd: &Option<P>
     ) -> Result<String, ShellError>
     where I: IntoIterator<Item = (K, V)>, K: AsRef<OsStr>, V: AsRef<OsStr>, P: AsRef<Path> {
-        return self.output_of(&vec!(shell.as_ref().map_or_else(|| "bash", |v| v.as_str()), "-c", code), envs, cwd);
+        return self.output_of(&args!(shell.as_ref().map_or_else(|| "bash", |v| v.as_str()), "-c", code), envs, cwd);
     }
-    fn detect_os(&self) -> Result<config::RunnerOS, Box<dyn Error>> {
-        match self.output_of(&vec!["uname"], no_env(), no_cwd()) {
+    fn detect_os(&self) -> Result<config::job::RunnerOS, Box<dyn Error>> {
+        match self.output_of(&args!["uname"], no_env(), no_cwd()) {
             Ok(output) => {
                 if output.contains("Darwin") {
-                    Ok(config::RunnerOS::MacOS)
+                    Ok(config::job::RunnerOS::MacOS)
                 } else if output.contains("Linux") {
-                    Ok(config::RunnerOS::Linux)
+                    Ok(config::job::RunnerOS::Linux)
                 } else if output.contains("Windows") || 
                     output.starts_with("MINGW") || 
                     output.starts_with("MSYS") || 
                     output.starts_with("CYGWIN") {
-                    Ok(config::RunnerOS::Windows)
+                    Ok(config::job::RunnerOS::Windows)
                 } else {
                     escalate!(Box::new(ShellError::OtherFailure{ 
                         cmd: "uname".to_string(), 
@@ -97,11 +138,11 @@ pub trait Shell {
         }
     }
     fn download(&self, url: &str, output_path: &str, executable: bool) -> Result<(), Box<dyn Error>> {
-        self.exec(&vec![
+        self.exec(&args![
             "curl", "-L", url, "-o", output_path
         ], no_env(), no_cwd(), &no_capture())?;
         if executable {
-            self.exec(&vec![
+            self.exec(&args![
                 "chmod", "+x", output_path
             ], no_env(), no_cwd(), &no_capture())?;
         }

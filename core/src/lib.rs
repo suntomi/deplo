@@ -3,9 +3,12 @@ extern crate lazy_static;
 
 pub mod args;
 pub mod config;
+pub mod secret;
 pub mod shell;
 pub mod util;
+pub mod step;
 pub mod vcs;
+pub mod workflow;
 
 mod ci;
 mod module;

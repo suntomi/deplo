@@ -22,16 +22,16 @@ impl<S: shell::Shell> CircleCI<S> {
         include_str!("../../res/ci/circleci/entrypoint.yml.tmpl")
             .to_string().split("\n").map(|s| s.to_string()).collect()
     }
-    fn generate_executor_setting<'a>(&self, runner: &'a config::Runner) -> String {
+    fn generate_executor_setting<'a>(&self, runner: &'a config::job::Runner) -> String {
         return match runner {
-            config::Runner::Machine{ os, image, class, .. } => format!(
+            config::job::Runner::Machine{ os, image, class, .. } => format!(
                 include_str!("../../res/ci/circleci/machine.yml.tmpl"), 
                 image = match image {
                     Some(v) => v,
                     None => match os {
-                        config::RunnerOS::Linux => "ubuntu-latest",
-                        config::RunnerOS::Windows => "macos-latest",
-                        config::RunnerOS::MacOS => "windows-latest",
+                        config::job::RunnerOS::Linux => "ubuntu-latest",
+                        config::job::RunnerOS::Windows => "macos-latest",
+                        config::job::RunnerOS::MacOS => "windows-latest",
                     },
                 },
                 class = match class {
@@ -39,10 +39,10 @@ impl<S: shell::Shell> CircleCI<S> {
                     None => "".to_string(),
                 }
             ),
-            config::Runner::Container{ image } => format!("image: {}", image),
+            config::job::Runner::Container{ image } => format!("image: {}", image),
         }
     }
-    fn generate_workdir_setting<'a>(&self, job: &'a config::Job) -> String {
+    fn generate_workdir_setting<'a>(&self, job: &'a config::job::Job) -> String {
         return job.workdir.as_ref().map_or_else(|| "".to_string(), |wd| format!("workdir: {}", wd));
     }
     fn generate_checkout_steps(&self, _: &str, options: &Option<HashMap<String, String>>) -> String {
@@ -152,7 +152,7 @@ impl<'a, S: shell::Shell> ci::CI for CircleCI<S> {
             Ok(None)
         } else {
             self.config.borrow().run_job_by_name(
-                &self.shell, job_name, config::Command::Job, &config::JobRunningOptions {
+                &self.shell, job_name, config::job::Command::Job, &config::job::RunningOptions {
                     commit: None, remote: false, shell_settings: shell::no_capture(),
                     adhoc_envs: hashmap!{},
                 }
@@ -216,8 +216,8 @@ impl<'a, S: shell::Shell> ci::CI for CircleCI<S> {
     fn set_secret(&self, key: &str, val: &str) -> Result<(), Box<dyn Error>> {
         let config = self.config.borrow();
         let token = match &config.ci_config(&self.account_name) {
-            config::CIAccount::CircleCI { key, .. } => { key },
-            config::CIAccount::GhAction{..} => { 
+            config::ci::Account::CircleCI { key, .. } => { key },
+            config::ci::Account::GhAction{..} => { 
                 return escalate!(Box::new(ci::CIError {
                     cause: "should have circleci CI config but ghaction config provided".to_string()
                 }));
@@ -225,7 +225,7 @@ impl<'a, S: shell::Shell> ci::CI for CircleCI<S> {
         };
         let json = format!("{{\"name\":\"{}\",\"value\":\"{}\"}}", key, val);
         let user_and_repo = config.vcs_service()?.user_and_repo()?;
-        let status = self.shell.exec(&vec!(
+        let status = self.shell.exec(&shell::args!(
             "curl", "-X", "POST", "-u", &format!("{}:", token),
             &format!(
                 "https://circleci.com/api/v2/project/gh/{}/{}/envvar",

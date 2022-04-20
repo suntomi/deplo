@@ -18,7 +18,7 @@ pub struct Native {
     pub cwd: Option<String>,
     pub envs: HashMap<String, String>,
 }
-pub struct CaptureTarget {
+struct CaptureTarget {
     pub stdout: File,
     pub stderr: File,
 }
@@ -69,11 +69,7 @@ impl<'a> shell::Shell for Native {
     ) -> Result<String, shell::ShellError> 
     where I: IntoIterator<Item = (K, V)>, K: AsRef<OsStr>, V: AsRef<OsStr>, P: AsRef<Path> {
         let config = self.config.borrow();
-        if config.runtime.dryrun {
-            let cmd = args.join(" ");
-            println!("dryrun: {}", cmd);
-            return Ok(cmd);
-        } else if !settings.interactive && settings.silent {
+        if !settings.interactive && settings.silent {
             // regardless for the value of `capture`, always capture value
             let (mut cmd, mut ct) = self.create_command(
                 args, envs, cwd, &shell::Settings { capture: true, interactive: false, silent: false }
