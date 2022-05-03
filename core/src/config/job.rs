@@ -4,6 +4,7 @@ use std::fmt;
 use maplit::hashmap;
 use serde::{Deserialize, Serialize};
 
+use crate::ci;
 use crate::config;
 use crate::shell;
 use crate::vcs;
@@ -167,6 +168,10 @@ pub struct SystemJobEnvOptions {
     pub job_name: String,
 }
 #[derive(Serialize, Deserialize)]
+pub struct StepExtension {
+    pub name: String,
+}
+#[derive(Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum Step {
     Command {
@@ -176,7 +181,7 @@ pub enum Step {
         shell: Option<config::Value>,
         workdir: Option<config::Value>,
     },
-    Module(config::module::ConfigFor<crate::step::Manifest>)
+    Module(config::module::ConfigFor<crate::step::Manifest, StepExtension>)
 }
 impl fmt::Display for Step {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -254,11 +259,15 @@ impl Job {
     pub fn runs_on_machine(&self) -> bool {
         match &self.runner {
             Runner::Machine{ .. } => true,
-            Runner::Container{ image: _ } => false
+            Runner::Container{ .. } => false
         }
     }
+    pub fn ci<'a>(&self, config: &'a super::Config) -> &Box<dyn ci::CI + 'a> {
+        let account: &str = self.account.as_ref().map_or_else(|| "default", |v| v.as_ref());
+        return config.modules.ci.get(account).unwrap();
+    }
     pub fn job_env<'a>(&'a self, config: &'a super::Config, system: &SystemJobEnvOptions) -> HashMap<&'a str, String> {
-        let ci = config.ci_service_by_job(&self).unwrap();
+        let ci = self.ci(config);
         let env = ci.job_env();
         let mut common_envs = hashmap!{
             "DEPLO_JOB_CURRENT_NAME" => system.job_name.clone()
@@ -362,3 +371,5 @@ impl Job {
         }
     }
 }
+
+type JobMap = HashMap<String, Job>;

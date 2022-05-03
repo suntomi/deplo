@@ -2,7 +2,7 @@ use std::collections::{HashMap};
 use std::sync::RwLock;
 
 use maplit::hashmap;
-use serde::{de, Deserialize, Serialize, Deserializer};
+use serde::{Deserialize, de::DeserializeOwned, Serialize, Deserializer};
 
 use crate::config;
 use crate::module;
@@ -27,23 +27,31 @@ pub struct Config {
     pub uses: config::Value,
     pub with: Option<HashMap<String, config::AnyValue>>,
 }
+#[derive(Serialize, Deserialize)]
+pub struct EmptyExtension {}
 #[derive(Serialize)]
-pub struct ConfigFor<T: module::Manifest> {
+pub struct ConfigFor<T: module::Manifest, E: DeserializeOwned = EmptyExtension> {
     index: usize,
+    ext: E,
     anchor: std::marker::PhantomData<T>,
 }
-impl<T: module::Manifest> ConfigFor<T> {
-    pub fn value<'a>(&self) -> &'a Config {
+impl<'de, T: module::Manifest, E: DeserializeOwned> ConfigFor<T,E> {
+    pub fn value(&self) -> &'static Config {
         &config_for::<T>()[self.index]
     }
+    pub fn ext(&self) -> &E {
+        &self.ext
+    }
 }
-impl<'de, T: module::Manifest> Deserialize<'de> for ConfigFor<T> {
+impl<'de, T: module::Manifest, E: DeserializeOwned> Deserialize<'de> for ConfigFor<T,E> {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where D: Deserializer<'de> {
         let v = Config::deserialize(deserializer)?;
+        let e = E::deserialize(deserializer)?;
         set_config_for::<T>(v);
-        Ok(ConfigFor::<T> { 
+        Ok(ConfigFor::<T,E> { 
             index: config_for::<T>().len() - 1,
+            ext: e,
             anchor: std::marker::PhantomData
         })
     }
@@ -51,6 +59,6 @@ impl<'de, T: module::Manifest> Deserialize<'de> for ConfigFor<T> {
 pub fn set_config_for<T: module::Manifest>(config: Config) {
     G_MODULE_CONFIG_REF.write().unwrap().entry(T::ty()).or_insert(vec![]).push(config);
 }
-pub fn config_for<'a, T: module::Manifest>() -> &'a Vec<Config> {
+pub fn config_for< T: module::Manifest>() -> &'static Vec<Config> {
     return G_MODULE_CONFIG_REF.read().unwrap().get(&T::ty()).unwrap_or(&vec![]);
 }

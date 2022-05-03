@@ -7,7 +7,7 @@ use crate::config;
 /// runtime configuration for job execution commands
 /// only `deplo run` contains this configuration
 #[derive(Default)]
-pub struct WorkflowConfig {
+pub struct JobConfig {
     pub workflow: String,
     pub wofkflow_params: HashMap<String, config::AnyValue>,
     pub release_target: Option<String>,
