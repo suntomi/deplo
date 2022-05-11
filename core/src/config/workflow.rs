@@ -85,8 +85,9 @@ impl Workflow {
                 None
             },
             Self::Module(c) if event == "module" => {
-                let v = c.value();
-                panic!("TODO: implement module workflow with {}, {:?}", v.uses, v.with)
+                c.value(|v| {
+                    panic!("TODO: implement module workflow with {}, {:?}", v.uses, v.with)
+                })
             },
             _ => None
         }

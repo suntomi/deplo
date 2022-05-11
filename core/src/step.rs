@@ -15,8 +15,8 @@ impl module::Manifest for Manifest {
 
 pub fn factory<'a>(
     config: &config::Container,
-    uses: config::Value,
-    with: HashMap<String, config::AnyValue>
+    uses: &config::Value,
+    with: &Option<HashMap<String, config::AnyValue>>
 ) -> Result<Box<dyn Step + 'a>, Box<dyn Error>> {
     panic!("Not implemented yet");
 }

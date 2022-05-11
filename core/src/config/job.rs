@@ -1,4 +1,5 @@
 use std::collections::{HashMap};
+use std::error::Error;
 use std::fmt;
 
 use maplit::hashmap;
@@ -145,16 +146,17 @@ pub enum CommitMethod {
 #[derive(Serialize, Deserialize)]
 pub struct Commit {
     pub changed: Vec<config::Value>,
-    pub targets: Option<Vec<config::Value>>,
+    pub on: Option<Trigger>,
     pub log_format: Option<config::Value>,
     pub method: Option<CommitMethod>,
 }
 impl Commit {
     fn generate_commit_log(&self, name: &str, _: &Job) -> String {
         //TODO: pass variable to log_format
-        self.log_format.as_ref().unwrap_or(
-            &format!("[deplo] update by job {job_name}", job_name = name)
-        ).to_string()
+        self.log_format.as_ref().map_or_else(
+            || format!("[deplo] update by job {job_name}", job_name = name),
+            |v| v.resolve().to_string()
+        )
     }
 }
 pub struct RunningOptions<'a> {
@@ -167,9 +169,9 @@ pub struct SystemJobEnvOptions {
     pub paths: Option<Vec<String>>,
     pub job_name: String,
 }
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Clone)]
 pub struct StepExtension {
-    pub name: String,
+    pub name: Option<String>,
 }
 #[derive(Serialize, Deserialize)]
 #[serde(untagged)]
@@ -196,12 +198,12 @@ impl fmt::Display for Step {
                 shell.as_ref().map_or_else(|| "None".to_string(), |e| format!("{:?}", e)),
                 workdir.as_ref().map_or_else(|| "None".to_string(), |e| format!("{:?}", e)),
             ),
-            Step::Module(c) => write!(f, 
-                "Step::Module{{uses:{}, with:{}", 
-                //name.as_ref().map_or_else(|| "".to_string(), |s| s.to_string()),
-                c.value().uses,
-                c.value().with.as_ref().map_or_else(|| "None".to_string(), |e| format!("{:?}", e))
-            )
+            Step::Module(c) => c.value(|v| write!(f, 
+                "Step::Module{{name:{}, uses:{}, with:{}", 
+                c.ext().name.as_ref().map_or_else(|| "".to_string(), |s| s.to_string()),
+                v.uses,
+                v.with.as_ref().map_or_else(|| "None".to_string(), |e| format!("{:?}", e))
+            ))
         }
     }
 }
@@ -217,7 +219,7 @@ impl<'a> fmt::Display for StepsDumper<'a> {
 pub enum Trigger {
     Commit {
         workflows: Option<Vec<config::Value>>,
-        targets: Option<Vec<config::Value>>,
+        release_targets: Option<Vec<config::Value>>,
         changed: Vec<config::Value>,
         diff_matcher: Option<config::Value>
     },
@@ -228,8 +230,62 @@ pub enum Trigger {
         events: Vec<config::Value>
     },
     Module {
-        workflows: Option<Vec<config::Value>>,
+        workflow: Option<Vec<config::Value>>,
         when: HashMap<String, config::AnyValue>
+    }
+}
+impl Trigger {
+    pub fn diff_matcher(
+        matcher: &Option<config::Value>, 
+        patterns: &Vec<config::Value>
+    ) -> vcs::DiffMatcher {
+        let matcher_type = matcher.as_ref().map_or_else(|| "glob".to_string(), |v| v.resolve());
+        match matcher_type.as_str() {
+            "regex" => vcs::DiffMatcher::Regex(patterns.iter().map(config::Value::resolve_to_string).collect()),
+            "glob" => vcs::DiffMatcher::Glob(patterns.iter().map(config::Value::resolve_to_string).collect()),
+            others => panic!("unsupported diff matcher {}", others)
+        }
+    }    
+    pub fn matches(
+        &self,
+        config: &super::Config,
+        runtime: &super::runtime::JobConfig
+    ) -> bool {
+        match &self {
+            Self::Commit{ workflows, release_targets, changed, diff_matcher } => {
+                if workflows.as_ref().map_or_else(
+                    // when no workflow specified for condition, always pass
+                    || false,
+                    // if more than 1 workflows specified, runtime.workflow should match any of them
+                    |v| v.iter().find(|v| { let s: &str = &v.resolve(); s == runtime.workflow }).is_none()
+                ) {
+                    return false;
+                }
+                if release_targets.as_ref().map_or_else(
+                    // no job.release_targets restriction. always ok
+                    || false,
+                    |v| match &runtime.release_target {
+                        // both runtime.release_target and job.release_targets exists, compare matches
+                        Some(rt) => v.iter().find(|v| { let s: &str = &v.resolve(); s == rt }).is_none(),
+                        // runtime.release_target exists, but job.release_targets is empty, always ok
+                        None => false
+                    }
+                ) {
+                    return false;
+                }
+                let dm = Self::diff_matcher(diff_matcher, changed);
+                if !config.modules.vcs().changed(&dm) {
+                    return false;
+                }
+            },
+            Self::Cron{ schedule } => {
+            },
+            Self::Repository{ events } => {
+            },
+            Self::Module{ workflow, when } => {
+            }
+        }
+        return true
     }
 }
 #[derive(Serialize, Deserialize)]
@@ -263,24 +319,84 @@ impl Job {
         }
     }
     pub fn ci<'a>(&self, config: &'a super::Config) -> &Box<dyn ci::CI + 'a> {
-        let account: &str = self.account.as_ref().map_or_else(|| "default", |v| v.as_ref());
-        return config.modules.ci.get(account).unwrap();
+        let account = self.account.as_ref().map_or_else(
+            || "default".to_string(), config::Value::resolve_to_string
+        );
+        return config.modules.ci.get(&account).unwrap();
     }
-    pub fn job_env<'a>(&'a self, config: &'a super::Config, system: &SystemJobEnvOptions) -> HashMap<&'a str, String> {
+    pub fn job_env<'a>(&'a self, config: &'a super::Config, rtconfig: &super::runtime::JobConfig) -> HashMap<&'a str, String> {
         let ci = self.ci(config);
         let env = ci.job_env();
         let mut common_envs = hashmap!{
-            "DEPLO_JOB_CURRENT_NAME" => system.job_name.clone()
+            "DEPLO_JOB_CURRENT_NAME" => rtconfig.job_name.clone()
         };
-        match config.runtime.release_target {
+        match rtconfig.release_target {
             Some(ref v) => {
                 log::info!("job_env: release target: {}", v);
             },
             None => {
-                let (ref_type, ref_path) = config.vcs_service().unwrap().current_ref().unwrap();
+                let (ref_type, ref_path) = config.modules.vcs().current_ref().unwrap();
                 log::info!("job_env: no release target: {}/{}", ref_type, ref_path);
             }
         };
+        let mut h = env.clone();
+        return match &self.env {
+            Some(v) => {
+                h.extend(common_envs);
+                h.extend(v.iter().map(|(k,v)| (k.as_str(), v.to_string())));
+                h
+            },
+            None => {
+                h.extend(common_envs);
+                h
+            }
+        };
+    }
+    pub fn matches_current_trigger(
+        &self,
+        config: &super::Config,
+        rtconfig: &super::runtime::JobConfig
+    ) -> bool {
+        for t in &self.on {
+            if t.matches(config, rtconfig) {
+                return true
+            }
+        }
+        return false
+    }
+    pub fn commit_setting_from_config(
+        &self,
+        config: &super::Config,
+        rtconfig: &super::runtime::JobConfig
+    ) -> Option<&Commit> {
+        match &self.commits {
+            Some(ref v) => {
+                for commit in v {
+                    match commit.on {
+                        // first only matches commit entry that has valid for_targets and target
+                        Some(ref t) => if t.matches(config, rtconfig) {
+                            return Some(commit)
+                        },
+                        None => {}
+                    }
+                }
+                // if no matches for all for_targets of Some, find first for_targets of None
+                for commit in v {
+                    match commit.on {
+                        // first only matches some for_targets and target
+                        Some(_) => {},
+                        None => return Some(commit)
+                    }
+                }
+                return None;
+            },
+            // if no commits setting, return none
+            None => return None
+        }
+    }
+}
+
+/*
         match system.paths {
             Some(ref paths) => {
                 // modify path
@@ -297,79 +413,18 @@ impl Job {
             },
             None => {}
         };
-        let mut h = env.clone();
-        return match &self.env {
-            Some(v) => {
-                h.extend(common_envs);
-                h.extend(v.iter().map(|(k,v)| (k.as_str(), v.to_string())));
-                h
-            },
-            None => {
-                h.extend(common_envs);
-                h
-            }
-        };
+
+ */
+
+#[derive(Serialize, Deserialize)]
+pub struct Jobs(HashMap<String, Job>);
+impl Jobs {
+    pub fn as_map(&self) -> &HashMap<String, Job> {
+        &self.0
     }
-    pub fn matches_current_release_target(&self, target: &Option<String>) -> bool {
-        let t = match target {
-            Some(ref v) => v,
-            // if no target, always ok if for_targets is empty, otherwise not ok
-            None => return self.for_targets.is_none()
-        };
-        match &self.for_targets {
-            Some(ref v) => {
-                // here, both target and for_targets exists, compare matches
-                for target in v {
-                    if target == t {
-                        return true;
-                    }
-                }
-                return false;
-            },
-            None => {
-                // target exists, but for_targets is empty, always ok
-                return true;
-            }
-        }
-    }
-    pub fn commit_setting_from_release_target(&self, target: &Option<String>) -> Option<&Commit> {
-        match &self.commits {
-            Some(ref v) => {
-                for commit in v {
-                    match commit.for_targets {
-                        // first only matches commit entry that has valid for_targets and target
-                        Some(ref ts) => {
-                            for t in ts {
-                                if target.is_some() && t == target.as_ref().unwrap() {
-                                    return Some(commit);
-                                }
-                            }
-                        },
-                        None => {}
-                    }                    
-                }
-                // if no matches for all for_targets of Some, find first for_targets of None
-                for commit in v {
-                    match commit.for_targets {
-                        // first only matches some for_targets and target
-                        Some(_) => {},
-                        None => return Some(commit)
-                    }
-                }
-                // if no none, and matches for_targets, return none
-                return None;
-            },
-            // if no commits setting, return none
-            None => return None
-        }
-    }
-    pub fn diff_matcher<'a>(&'a self) -> vcs::DiffMatcher<'a> {
-        match self.options.as_ref().map_or_else(|| "glob", |v| v.get("diff_matcher").map_or_else(|| "glob", |v| v.as_str())) {
-            "regex" => vcs::DiffMatcher::Regex(self.patterns.iter().map(|v| v.as_str()).collect()),
-            "glob" => vcs::DiffMatcher::Glob(self.patterns.iter().map(|v| v.as_str()).collect()),
-            others => panic!("unsupported diff matcher {}", others)
-        }
+    pub fn run<S>(
+        &self, job_name: &str, shell: &S, cmd: &Command, options: &RunningOptions
+    ) -> Result<Option<String>, Box<dyn Error>> where S: shell::Shell {
+        panic!("TODO: implement Jobs.run")
     }
 }
-
-type JobMap = HashMap<String, Job>;

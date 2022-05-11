@@ -7,10 +7,10 @@ use crate::config;
 pub trait Accessor {
     fn var(
         &self, key: &str
-    ) -> Option<String>;
+    ) -> Result<Option<String>, Box<dyn Error>>;
     fn vars(
         &self
-    ) -> HashMap<String, String>;
+    ) -> Result<HashMap<String, String>, Box<dyn Error>>;
 }
 pub trait Factory {
     fn new(
@@ -38,16 +38,16 @@ impl Error for SecretError {
 mod dotenv;
 
 // factorys
-fn factory_by<'a, T: Accessor + Factory + 'a>(
+fn factory_by<'a, T: Accessor + Factory + Send + Sync + 'a>(
     secret: &config::secret::Secret
-) -> Result<Box<dyn Accessor + 'a>, Box<dyn Error>> {
+) -> Result<Box<dyn Accessor + Send + Sync + 'a>, Box<dyn Error>> {
     let cmd = T::new(secret)?;
-    return Ok(Box::new(cmd) as Box<dyn Accessor + 'a>);
+    return Ok(Box::new(cmd) as Box<dyn Accessor + Send + Sync + 'a>);
 }
 
 pub fn factory<'a>(
     secret: &config::secret::Secret
-) -> Result<Box<dyn Accessor + 'a>, Box<dyn Error>> {
+) -> Result<Box<dyn Accessor + Send + Sync + 'a>, Box<dyn Error>> {
     match secret {
         config::secret::Secret::Dotenv {..} => {
             return factory_by::<dotenv::Dotenv>(secret);
@@ -58,13 +58,13 @@ pub fn factory<'a>(
 
 struct Nop {}
 impl Accessor for Nop {
-    fn var(&self, _key: &str) -> Option<String> {
+    fn var(&self, _key: &str) -> Result<Option<String>, Box<dyn Error>> {
         panic!("nop secret driver should not be called");
     }
-    fn vars(&self) -> HashMap<String, String> {
+    fn vars(&self) -> Result<HashMap<String, String>, Box<dyn Error>> {
         panic!("nop secret driver should not be called");
     }
 }
-pub fn nop() -> Box<dyn Accessor> {
+pub fn nop() -> Box<dyn Accessor + Send + Sync> {
     Box::new(Nop{})
 }

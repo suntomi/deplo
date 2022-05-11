@@ -194,27 +194,46 @@ pub fn to_kv_ref<'a>(h: &'a HashMap<String, String>) -> HashMap<&'a str, &'a str
 
 // multiline string which can specify indentation of each line
 // from width format specifier. useful for print multiline element in yaml
-pub struct MultilineFormatString<'a> {
-    pub strings: &'a Vec<String>,
+pub trait Iterable<'a> {
+    type Item: 'a;
+    type Iter: Iterator<Item = Self::Item>;
+    fn iterator(&'a self) -> Self::Iter;
+}
+impl<'a, T> Iterable<'a> for Vec<T> where T: 'a {
+    type Item = &'a T;
+    type Iter = std::slice::Iter<'a,T>;
+    fn iterator(&'a self) -> Self::Iter {
+        self.iter()
+    }
+}
+pub struct MultilineFormatString<'a, I, V>
+where I: Iterable<'a, Item = V>, V: AsRef<str> {
+    pub strings: &'a I,
     pub postfix: Option<&'a str>
 }
-impl<'a> fmt::Display for MultilineFormatString<'a> {
+impl<'a, I, V> fmt::Display for MultilineFormatString<'a, I, V> 
+where I: Iterable<'a, Item = V>, V: AsRef<str> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let indent = f.width().unwrap_or(0);
+        let mut it = self.strings.iterator();
         // iterate over element and index
-        for (i, s) in self.strings.iter().enumerate() {
-            for _ in 0..indent {
-                write!(f, " ")?;
-            }
-            f.write_str(s)?;
-            // because template usually contains newline after {value:>2},
-            // last linefeed is not needed
-            if i == self.strings.len() - 1 {
-                continue;
-            }
-            match self.postfix {
-                Some(v) => f.write_str(&format!("{}\n", v))?,
-                None => f.write_str("\n")?
+        let mut v = it.next();
+        loop {
+            match v {
+                Some(s) => {
+                    for _ in 0..indent {
+                        write!(f, " ")?;
+                    }
+                    f.write_str(s.as_ref())?;
+                    v = it.next();
+                    if v.is_some() {
+                        match self.postfix {
+                            Some(v) => f.write_str(&format!("{}\n", v))?,
+                            None => f.write_str("\n")?
+                        }
+                    }
+                },
+                None => break
             }
         }
         //TODO: if strings has no element, we cannot cancel linefeed in template.
@@ -361,7 +380,7 @@ use crc::{Crc, CRC_64_ECMA_182};
 
 const CRC_64: Crc<u64> = Crc::<u64>::new(&CRC_64_ECMA_182);
 
-pub fn maphash(h: &HashMap<String, String>) -> String {
+pub fn maphash(h: &HashMap<String, crate::config::Value>) -> String {
     // hash value for separating repository cache according to checkout options
     let mut v: Vec<_> = h.into_iter().collect();
     let mut digest = CRC_64.digest();
@@ -389,7 +408,7 @@ pub fn merge_hashmap<K: std::cmp::Eq + std::hash::Hash + Clone, V: Clone>(h1: &H
 
 // vec
 pub fn join_vector<T>(src: Vec<Vec<T>>) -> Vec<T> {
-    let r = vec![];
+    let mut r = vec![];
     for v in src {
         for e in v {
             r.push(e)

@@ -32,7 +32,7 @@ impl<S: shell::Shell, A: args::Args> command::Command<A> for Init<S> {
         let data_path = path_join(vec![config.deplo_data_path()?.to_str().unwrap(), "..", "deplow"]);
         rm(&data_path);
         fs::write(&data_path, config.generate_wrapper_script())?;
-        self.shell.exec(&shell::args!["chmod", "+x", data_path.to_str().unwrap()], shell::no_env(), shell::no_cwd(), &shell::no_capture())?;
+        self.shell.exec(shell::args!["chmod", "+x", data_path.to_str().unwrap()], shell::no_env(), shell::no_cwd(), &shell::no_capture())?;
         return Ok(())
     }
 }

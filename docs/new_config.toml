@@ -17,13 +17,23 @@ prod = { tag = true, patterns = ["[0-9]*"] }
 # ------------
 # secret settings
 # ------------
-[secrets]
+[secrets.env]
 type = "dotenv"
+path = ".env"
 keys = [
     "SUNTOMI_VCS_ACCOUNT",
     "SUNTOMI_VCS_ACCOUNT_EMAIL",
-    "SUNTOMI_VCS_ACCOUNT_KEY"
+    "SUNTOMI_VCS_ACCOUNT_KEY",
+    "SUNTOMI_VCS_APP_ID"
 ]
+[secrets.app]
+type = "file"
+key_and_paths = {
+    SUNTOMI_VCS_APP_PKEY = "./secrets/github_app.pem"
+}
+[secrets.oidc_aws]
+type = "oidc_aws"
+assume_role = ""
 
 # ------------
 # vcs settings
@@ -45,6 +55,12 @@ key = "${SUNTOMI_VCS_ACCOUNT_KEY}"
 type = "ghaction"
 account = "${SUNTOMI_VCS_ACCOUNT}"
 key = "${SUNTOMI_VCS_ACCOUNT_KEY}"
+oidc = true
+
+[ci.by_app]
+type = "ghaction"
+app_id = "${SUNTOMI_VCS_APP_ID}"
+pem = "${SUNTOMI_VCS_APP_PKEY}"
 
 
 # ------------
@@ -273,11 +289,11 @@ secret::dotenv::Dotenv
 bootstrap flow 
 1. create config::runtime::Config
   - and apply 1st priority config like log level
-2. load Deplo.toml
+2. allow secret module to load and inject secret into config::Config
+3. load Deplo.toml
   - config::Config is created
-3. load modules 
+4. load modules 
   - download or use cache 
-4. allow secret module to load and inject secret into config::Config
 5. allow module to modify config
 6. invoke actual command 
 

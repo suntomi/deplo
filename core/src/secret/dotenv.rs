@@ -18,9 +18,9 @@ pub struct Dotenv {
 }
 
 impl Dotenv {
-    pub fn parse_dotenv<F>(&self, mut cb: F) -> Result<(), Box<dyn Error>>
+    pub fn parse_dotenv<F>(path: &Option<String>, mut cb: F) -> Result<(), Box<dyn Error>>
     where F: FnMut (&str, &str) -> Result<(), Box<dyn Error>> {
-        let dotenv_file_content = match &self.path {
+        let dotenv_file_content = match path {
             Some(dotenv_path) => match fs::metadata(dotenv_path) {
                 Ok(_) => match fs::read_to_string(dotenv_path) {
                     Ok(content) => content,
@@ -61,17 +61,15 @@ impl secret::Factory for Dotenv {
         secret_config: &config::secret::Secret
     ) -> Result<Dotenv, Box<dyn Error>> {
         return Ok(match secret_config {
-            config::secret::Secret::Dotenv { keys, path } => {
-                let r = Dotenv{
+            config::secret::Secret::Dotenv { path, .. } => {
+                let mut r = Dotenv{
                     secrets: hashmap!{},
                     path: path.clone()
                 };
-                let mut secrets = hashmap!{};
-                r.parse_dotenv(|k,v| {
-                    secrets.insert(k.to_string(), v.to_string());
+                Self::parse_dotenv(&r.path, |k,v| {
+                    r.secrets.insert(k.to_string(), v.to_string());
                     Ok(())
                 })?;
-                
                 r
             },
             _ => panic!("unexpected secret type")
@@ -80,7 +78,7 @@ impl secret::Factory for Dotenv {
 }
 impl secret::Accessor for Dotenv {
     fn var(&self, key: &str) -> Result<Option<String>, Box<dyn Error>> {
-        Ok(None)
+        Ok(self.secrets.get(key).map_or_else(|| None, |v| Some(v.clone())))
     }
     fn vars(&self) -> Result<HashMap<String, String>, Box<dyn Error>> {
         Ok(hashmap!{})

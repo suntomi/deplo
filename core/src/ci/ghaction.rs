@@ -107,14 +107,14 @@ impl<S: shell::Shell> GhAction<S> {
     }
     fn generate_entrypoint<'a>(&self, config: &'a config::Config) -> Vec<String> {
         // get target branch
-        let target_branches = sorted_key_iter(&config.common.release_targets)
+        let target_branches = sorted_key_iter(&config.release_targets)
             .filter(|v| v.1.is_branch())
-            .map(|(_,v)| v.paths().iter().map(|p| p.as_str()).collect::<Vec<_>>())
-            .collect::<Vec<Vec<&str>>>().concat();
-        let target_tags = sorted_key_iter(&config.common.release_targets)
+            .map(|(_,v)| v.paths().iter().map(|p| p.resolve()).collect::<Vec<_>>())
+            .collect::<Vec<_>>().concat();
+        let target_tags = sorted_key_iter(&config.release_targets)
             .filter(|v| v.1.is_tag())
-            .map(|(_,v)| v.paths().iter().map(|p| p.as_str()).collect::<Vec<_>>())
-            .collect::<Vec<Vec<&str>>>().concat();
+            .map(|(_,v)| v.paths().iter().map(|p| p.resolve()).collect::<Vec<_>>())
+            .collect::<Vec<_>>().concat();
         let branches = if target_branches.len() > 0 { vec![format!("branches: [\"{}\"]", target_branches.join("\",\""))] } else { vec![] };
         let tags = if target_tags.len() > 0 { vec![format!("tags: [\"{}\"]", target_tags.join("\",\""))] } else { vec![] };
         format!(
@@ -129,22 +129,21 @@ impl<S: shell::Shell> GhAction<S> {
             },
         ).split("\n").map(|s| s.to_string()).collect()
     }
-    fn generate_outputs<'a>(&self, jobs: &HashMap<(&'a str, &'a str), &'a config::job::Job>) -> Vec<String> {
+    fn generate_outputs(&self, jobs: &HashMap<String, config::job::Job>) -> Vec<String> {
         sorted_key_iter(jobs).map(|(v,_)| {
-            format!("{kind}-{name}: ${{{{ steps.deplo-ci-kick.outputs.{kind}-{name} }}}}", kind = v.0, name = v.1)
+            format!("{name}: ${{{{ steps.deplo-ci-kick.outputs.{name} }}}}", name = v)
         }).collect()
     }
-    fn generate_need_cleanups<'a>(&self, jobs: &HashMap<(&'a str, &'a str), &'a config::job::Job>) -> String {
+    fn generate_need_cleanups<'a>(&self, jobs: &HashMap<String, config::job::Job>) -> String {
         sorted_key_iter(jobs).map(|(v,_)| {
-            format!("needs.{kind}-{name}.outputs.need-cleanup", kind = v.0, name = v.1)
+            format!("needs.{name}.outputs.need-cleanup", name = v)
         }).collect::<Vec<String>>().join(" || ")
     }
-    fn generate_cleanup_envs<'a>(&self, jobs: &HashMap<(&'a str, &'a str), &'a config::job::Job>) -> Vec<String> {
+    fn generate_cleanup_envs<'a>(&self, jobs: &HashMap<String, config::job::Job>) -> Vec<String> {
         let envs = sorted_key_iter(jobs).map(|(v,_)| {
-            let job_name = format!("{kind}-{name}", kind = v.0, name = v.1);
             format!("{env_name}: ${{{{ needs.{job_name}.outputs.system }}}}",
-                env_name = Self::job_output_env_name(ci::OutputKind::System, &job_name),
-                job_name = job_name
+                env_name = Self::job_output_env_name(ci::OutputKind::System, &v),
+                job_name = v
             )
         }).collect::<Vec<String>>();
         if envs.len() > 0 {
@@ -161,7 +160,7 @@ impl<S: shell::Shell> GhAction<S> {
     fn generate_debugger(&self, job: Option<&config::job::Job>, config: &config::Config) -> Vec<String> {
         let sudo = match job {
             Some(ref j) => {
-                if !config.common.debug.as_ref().map_or_else(|| false, |v| v.get("ghaction_job_debugger").is_some()) &&
+                if !config.debug.as_ref().map_or_else(|| false, |v| v.get("ghaction_job_debugger").is_some()) &&
                     !j.options.as_ref().map_or_else(|| false, |v| v.get("debugger").is_some()) {
                     return vec![];
                 }
@@ -173,7 +172,7 @@ impl<S: shell::Shell> GhAction<S> {
             },
             None => {
                 // deplo kick/finish
-                if !config.common.debug.as_ref().map_or_else(|| false, |v| v.get("ghaction_deplo_debugger").is_some()) {
+                if !config.debug.as_ref().map_or_else(|| false, |v| v.get("ghaction_deplo_debugger").is_some()) {
                     return vec![]
                 }
                 true
@@ -188,8 +187,10 @@ impl<S: shell::Shell> GhAction<S> {
         if cache.keys.len() > 1 {
             format!(
                 include_str!("../../res/ci/ghaction/restore_keys.yml.tmpl"),
-                keys = MultilineFormatString{ 
-                    strings: &cache.keys[1..].to_vec(), postfix: None
+                keys = MultilineFormatString{
+                    strings: &cache.keys[1..].iter().map(
+                        config::Value::resolve_to_string
+                    ).collect::<Vec<_>>(), postfix: None
                 }
             ).split("\n").map(|s| s.to_string()).collect::<Vec<String>>()
         } else {
@@ -207,7 +208,9 @@ impl<S: shell::Shell> GhAction<S> {
                         postfix: None
                     },
                     paths = MultilineFormatString{
-                        strings: &cache.paths, postfix: None
+                        strings: &cache.paths.iter().map(
+                            config::Value::resolve_to_string
+                        ).collect::<Vec<_>>(), postfix: None
                     },
                     env_key = format!("DEPLO_CACHE_{}_HIT", name.to_uppercase())
                 ).split("\n").map(|s| s.to_string()).collect::<Vec<String>>()
@@ -215,8 +218,8 @@ impl<S: shell::Shell> GhAction<S> {
             None => vec![]
         }.concat()
     }
-    fn generate_command<'a>(&self, names: &(&str, &str), job: &'a config::job::Job) -> Vec<String> {
-        let cmd = format!("run: deplo ci {} {}", names.0, names.1);
+    fn generate_command<'a>(&self, name: &str, job: &'a config::job::Job) -> Vec<String> {
+        let cmd = format!("run: deplo run {}", name);
         match job.runner {
             config::job::Runner::Machine{os, ..} => {
                 match os {
@@ -224,18 +227,18 @@ impl<S: shell::Shell> GhAction<S> {
                     _ => vec![cmd],
                 }
             },
-            config::job::Runner::Container{image:_} =>vec![cmd],
+            config::job::Runner::Container{image:_} => vec![cmd],
         }
     }
-    fn generate_job_envs<'a>(&self, names: &(&str, &str), job: &'a config::job::Job) -> Vec<String> {
+    fn generate_job_envs<'a>(&self, job: &'a config::job::Job) -> Vec<String> {
         let lines = match job.depends {
             Some(ref depends) => {
                 let mut envs = vec![];
                 for d in depends {
                     envs.push(format!(
-                        "{}: ${{{{ needs.{}-{}.outputs.user }}}}",
-                        Self::job_output_env_name(ci::OutputKind::User, &format!("{}-{}", names.0, d)),
-                        names.0, d
+                        "{}: ${{{{ needs.{}.outputs.user }}}}",
+                        Self::job_output_env_name(ci::OutputKind::User, &d.resolve()),
+                        d
                     ));
                 }
                 envs
@@ -249,13 +252,13 @@ impl<S: shell::Shell> GhAction<S> {
             }
         ).split("\n").map(|s| s.to_string()).collect()
     }
-    fn generate_job_dependencies<'a>(&self, kind: &'a str, depends: &'a Option<Vec<String>>) -> String {
+    fn generate_job_dependencies<'a>(&self, depends: &'a Option<Vec<config::Value>>) -> String {
         depends.as_ref().map_or_else(
             || "deplo-main".to_string(),
             |v| {
-                let mut vs = v.iter().map(|d| {
-                    format!("{}-{}", kind, d)
-                }).collect::<Vec<String>>();
+                let mut vs = v.iter().map(
+                    config::Value::resolve_to_string
+                ).collect::<Vec<_>>();
                 vs.push("deplo-main".to_string());
                 format!("\"{}\"", vs.join("\",\""))
             })
@@ -298,11 +301,11 @@ impl<S: shell::Shell> GhAction<S> {
         ).split("\n").map(|s| s.to_string()).collect()
     }
     fn generate_checkout_steps<'a>(
-        &self, _: &'a str, options: &'a Option<HashMap<String, String>>, defaults: &Option<HashMap<String, String>>
+        &self, _: &'a str, options: &'a Option<HashMap<String, config::Value>>, defaults: &Option<HashMap<String, config::Value>>
     ) -> Vec<String> {
-        let merged_opts = options.as_ref().map_or_else(
+        let merged_opts: HashMap<String, config::Value> = options.as_ref().map_or_else(
             || defaults.clone().unwrap_or(HashMap::new()),
-            |v| merge_hashmap(&defaults.clone().unwrap_or(HashMap::new()), v)
+            |v| merge_hashmap(v, &defaults.clone().unwrap_or(HashMap::new()))
         );
         let checkout_opts = sorted_key_iter(&merged_opts).map(|(k,v)| {
             return if vec!["fetch-depth", "lfs", "ref", "token"].contains(&k.as_str()) {
@@ -316,7 +319,7 @@ impl<S: shell::Shell> GhAction<S> {
             || "".to_string(), 
             |v| { format!("-{}", maphash(v)) }
         );
-        if merged_opts.get("fetch-depth").map_or_else(|| false, |v| v.parse::<i32>().unwrap_or(-1) == 0) {
+        if merged_opts.get("fetch-depth").map_or_else(|| false, |v| v.resolve().parse::<i32>().unwrap_or(-1) == 0) {
             format!(
                 include_str!("../../res/ci/ghaction/cached_checkout.yml.tmpl"),
                 checkout_opts = MultilineFormatString{
@@ -336,13 +339,11 @@ impl<S: shell::Shell> GhAction<S> {
     }
     fn get_token(&self) -> Result<String, Box<dyn Error>> {
         let config = self.config.borrow();
-        Ok(match &config.ci_config(&self.account_name) {
+        Ok(match &config.ci.get(&self.account_name).unwrap() {
             config::ci::Account::GhAction { key, .. } => { key.to_string() },
-            config::ci::Account::CircleCI{..} => { 
-                return escalate!(Box::new(ci::CIError {
-                    cause: "should have ghaction CI config but circleci config provided".to_string()
-                }));
-            }
+            _ => return escalate!(Box::new(ci::CIError {
+                cause: "should have ghaction CI config but other config provided".to_string()
+            }))
         })
     }
 }
@@ -350,54 +351,53 @@ impl<S: shell::Shell> GhAction<S> {
 impl<'a, S: shell::Shell> module::Module for GhAction<S> {
     fn prepare(&self, reinit: bool) -> Result<(), Box<dyn Error>> {
         let config = self.config.borrow();
-        let repository_root = config.vcs_service()?.repository_root()?;
+        let repository_root = config.modules.vcs().repository_root()?;
         // TODO_PATH: use Path to generate path of /.github/...
         let workflow_yml_path = format!("{}/.github/workflows/deplo-main.yml", repository_root);
-        let create_main = config.is_main_ci("GhAction");
+        let create_main = config.ci.is_main("GhAction");
         fs::create_dir_all(&format!("{}/.github/workflows", repository_root))?;
         let previously_no_file = !rm(&workflow_yml_path);
         // inject secrets from dotenv file
         let mut secrets = vec!();
-        config.parse_dotenv(|k,v| {
+        for (k, v) in &config::secret::vars() {
             if previously_no_file || reinit {
                 (self as &dyn ci::CI).set_secret(k, v)?;
                 log::debug!("set secret value of {}", k);
             }
-            Ok(secrets.push(format!("{}: ${{{{ secrets.{} }}}}", k, k)))
-        })?;
+            secrets.push(format!("{}: ${{{{ secrets.{} }}}}", k, k));
+        }
         // generate job entries
         let mut job_descs = Vec::new();
         let mut all_job_names = vec!["deplo-main".to_string()];
         let mut lfs = false;
-        let jobs = config.enumerate_jobs();
-        for (names, job) in sorted_key_iter(&jobs) {
-            let name = format!("{}-{}", names.0, names.1);
+        let jobs = config.jobs.as_map();
+        for (name, job) in sorted_key_iter(&jobs) {
             all_job_names.push(name.clone());
             let lines = format!(
                 include_str!("../../res/ci/ghaction/job.yml.tmpl"), 
-                full_name = name, kind = names.0, name = names.1,
-                needs = self.generate_job_dependencies(names.0, &job.depends),
+                name = name,
+                needs = self.generate_job_dependencies(&job.depends),
                 machine = match job.runner {
                     config::job::Runner::Machine{ref image, ref os, ..} => match image {
-                        Some(v) => v.as_str(),
-                        None => match os {
+                        Some(v) => v.resolve(),
+                        None => (match os {
                             config::job::RunnerOS::Linux => "ubuntu-latest",
                             config::job::RunnerOS::Windows => "windows-latest",
                             config::job::RunnerOS::MacOS => "macos-latest",
-                        }
+                        }).to_string()
                     },
-                    config::job::Runner::Container{image:_} => "ubuntu-latest",
+                    config::job::Runner::Container{image:_} => "ubuntu-latest".to_string(),
                 },
                 caches = MultilineFormatString{
                     strings: &self.generate_caches(&job),
                     postfix: None
                 },
                 command = MultilineFormatString{
-                    strings: &self.generate_command(&names, &job),
+                    strings: &self.generate_command(name, &job),
                     postfix: None
                 },
                 job_envs = MultilineFormatString{
-                    strings: &self.generate_job_envs(&names, &job),
+                    strings: &self.generate_job_envs(&job),
                     postfix: None
                 },
                 container = MultilineFormatString{
@@ -411,16 +411,16 @@ impl<'a, S: shell::Shell> module::Module for GhAction<S> {
                 checkout = MultilineFormatString{
                     strings: &self.generate_checkout_steps(&name, &job.checkout, &Some(merge_hashmap(
                         &hashmap!{
-                            "ref".to_string() => "${{ github.event.client_payload.commit }}".to_string(),
-                            "fetch-depth".to_string() => "2".to_string()
+                            "ref".to_string() => config::Value::new("${{ github.event.client_payload.commit }}"),
+                            "fetch-depth".to_string() => config::Value::new("2")
                         }, &job.checkout.as_ref().map_or_else(
                             || if job.commits.is_some() {
-                                hashmap!{ "fetch-depth".to_string() => "0".to_string() }
+                                hashmap!{ "fetch-depth".to_string() => config::Value::new("0") }
                             } else {
                                 hashmap!{}
                             },
                             |v| if v.get("lfs").is_some() || job.commits.is_some() {
-                                hashmap!{ "fetch-depth".to_string() => "0".to_string() }
+                                hashmap!{ "fetch-depth".to_string() => config::Value::new("0") }
                             } else {
                                 hashmap!{}
                             }
@@ -450,7 +450,7 @@ impl<'a, S: shell::Shell> module::Module for GhAction<S> {
                 },
                 secrets = MultilineFormatString{ strings: &secrets, postfix: None },
                 outputs = MultilineFormatString{ 
-                    strings: &self.generate_outputs(&jobs),
+                    strings: &self.generate_outputs(jobs),
                     postfix: None
                 },
                 fetchcli = MultilineFormatString{
@@ -461,16 +461,16 @@ impl<'a, S: shell::Shell> module::Module for GhAction<S> {
                 },
                 kick_checkout = MultilineFormatString{
                     strings: &self.generate_checkout_steps("main", &None, &Some(hashmap!{
-                        "fetch-depth".to_string() => "2".to_string(),
-                        "ref".to_string() => "${{ github.event.client_payload.commit }}".to_string()
+                        "fetch-depth".to_string() => config::Value::new("2"),
+                        "ref".to_string() => config::Value::new("${{ github.event.client_payload.commit }}")
                     })),
                     postfix: None
                 },
                 fin_checkout = MultilineFormatString{
                     strings: &self.generate_checkout_steps("main", &None, &Some(hashmap!{
-                        "fetch-depth".to_string() => "2".to_string(),
-                        "ref".to_string() => "${{ github.event.client_payload.commit }}".to_string(),
-                        "lfs".to_string() => lfs.to_string()
+                        "fetch-depth".to_string() => config::Value::new("2"),
+                        "ref".to_string() => config::Value::new("${{ github.event.client_payload.commit }}"),
+                        "lfs".to_string() => config::Value::new(&lfs.to_string())
                     })),
                     postfix: None
                 },
@@ -482,9 +482,9 @@ impl<'a, S: shell::Shell> module::Module for GhAction<S> {
                     strings: &self.generate_debugger(None, &config),
                     postfix: None
                 },
-                need_cleanups = &self.generate_need_cleanups(&jobs),
+                need_cleanups = &self.generate_need_cleanups(jobs),
                 cleanup_envs = MultilineFormatString{
-                    strings: &self.generate_cleanup_envs(&jobs),
+                    strings: &self.generate_cleanup_envs(jobs),
                     postfix: None
                 },
                 needs = format!("\"{}\"", all_job_names.join("\",\""))
@@ -526,8 +526,8 @@ impl<S: shell::Shell> ci::CI for GhAction<S> {
             println!("::set-output name={}::true", job_name);
             Ok(None)
         } else {
-            self.config.borrow().run_job_by_name(
-                &self.shell, job_name, config::job::Command::Job, &config::job::RunningOptions {
+            self.config.borrow().jobs.run(
+                job_name, &self.shell, &config::job::Command::Job, &config::job::RunningOptions {
                     commit: None, remote: false, shell_settings: shell::no_capture(),
                     adhoc_envs: hashmap!{},
                 }
@@ -553,16 +553,16 @@ impl<S: shell::Shell> ci::CI for GhAction<S> {
     fn run_job(&self, job: &ci::RemoteJob) -> Result<String, Box<dyn Error>> {
         let config = self.config.borrow();
         let token = self.get_token()?;
-        let user_and_repo = config.vcs_service()?.user_and_repo()?;
+        let user_and_repo = config.modules.vcs().user_and_repo()?;
         let payload = ClientPayload::new(job);
-        self.shell.exec(&shell::args![
-            "curl", "-H", &format!("Authorization: token {}", token), 
+        self.shell.exec(shell::args![
+            "curl", "-H", format!("Authorization: token {}", token), 
             "-H", "Accept: application/vnd.github.v3+json", 
-            &format!(
+            format!(
                 "https://api.github.com/repos/{}/{}/dispatches", 
                 user_and_repo.0, user_and_repo.1
             ),
-            "-d", &format!(r#"{{
+            "-d", format!(r#"{{
                 "event_type": "{job_name}",
                 "client_payload": {client_payload}
             }}"#, 
@@ -576,22 +576,22 @@ impl<S: shell::Shell> ci::CI for GhAction<S> {
         // to be tolerant of clock skew
         let start = Utc::now().checked_sub_signed(Duration::minutes(1)).unwrap();
         loop {
-            let response = self.shell.exec(&shell::args![
-                "curl", "-H", &format!("Authorization: token {}", token), 
+            let response = self.shell.exec(shell::args![
+                "curl", "-H", format!("Authorization: token {}", token), 
                 "-H", "Accept: application/vnd.github.v3+json", 
-                &format!(
+                format!(
                     "https://api.github.com/repos/{}/{}/actions/runs?event=repository_dispatch&created={}",
                     user_and_repo.0, user_and_repo.1,
-                    &format!(">{}", start.to_rfc3339())
+                    format!(">{}", start.to_rfc3339())
                 )
             ], shell::no_env(), shell::no_cwd(), &shell::capture())?;
             log::trace!("current workflows by remote execution: {}", response);
             let workflows = serde_json::from_str::<PartialWorkflows>(&response)?;
             if workflows.workflow_runs.len() > 0 {
                 for wf in workflows.workflow_runs {
-                    let response = self.shell.exec(&shell::args![
-                        "curl", "-H", &format!("Authorization: token {}", token), 
-                        "-H", "Accept: application/vnd.github.v3+json", &wf.jobs_url
+                    let response = self.shell.exec(shell::args![
+                        "curl", "-H", format!("Authorization: token {}", token), 
+                        "-H", "Accept: application/vnd.github.v3+json", wf.jobs_url
                     ], shell::no_env(), shell::no_cwd(), &shell::capture())?;
                     let parsed = serde_json::from_str::<PartialJobs>(&response)?;
                     if parsed.jobs.len() > 0 && parsed.jobs[0].name.contains(&payload.job_id) {
@@ -615,11 +615,11 @@ impl<S: shell::Shell> ci::CI for GhAction<S> {
     fn check_job_finished(&self, job_id: &str) -> Result<Option<String>, Box<dyn Error>> {
         let config = self.config.borrow();
         let token = self.get_token()?;
-        let user_and_repo = config.vcs_service()?.user_and_repo()?;
-        let response = self.shell.exec(&shell::args![
-            "curl", "-H", &format!("Authorization: token {}", token),
+        let user_and_repo = config.modules.vcs().user_and_repo()?;
+        let response = self.shell.exec(shell::args![
+            "curl", "-H", format!("Authorization: token {}", token),
             "-H", "Accept: application/vnd.github.v3+json",
-            &format!(
+            format!(
                 "https://api.github.com/repos/{}/{}/actions/runs/{}",
                 user_and_repo.0, user_and_repo.1, job_id
             )
@@ -655,7 +655,7 @@ impl<S: shell::Shell> ci::CI for GhAction<S> {
     }
     fn process_env(&self, _local: bool) -> Result<HashMap<&str, String>, Box<dyn Error>> {
         let config = self.config.borrow();
-        let vcs = config.vcs_service()?;
+        let vcs = config.modules.vcs();
         let mut envs = hashmap!{
             "DEPLO_CI_TYPE" => "GhAction".to_string()
         };
@@ -721,14 +721,14 @@ impl<S: shell::Shell> ci::CI for GhAction<S> {
     fn list_secret_name(&self) -> Result<Vec<String>, Box<dyn Error>> {
         let token = self.get_token()?;
         let config = self.config.borrow();
-        let user_and_repo = config.vcs_service()?.user_and_repo()?;
+        let user_and_repo = config.modules.vcs().user_and_repo()?;
         let response = match serde_json::from_str::<RepositorySecretsResponse>(
-            &self.shell.exec(&shell::args![
-            "curl", &format!(
+            &self.shell.exec(shell::args![
+            "curl", format!(
                 "https://api.github.com/repos/{}/{}/actions/secrets",
                 user_and_repo.0, user_and_repo.1
             ),
-            "-H", &format!("Authorization: token {}", token),
+            "-H", format!("Authorization: token {}", token),
             "-H", "Accept: application/json"
         ], shell::no_env(), shell::no_cwd(), &shell::capture())?) {
             Ok(v) => v,
@@ -741,11 +741,11 @@ impl<S: shell::Shell> ci::CI for GhAction<S> {
     fn set_secret(&self, key: &str, _: &str) -> Result<(), Box<dyn Error>> {
         let token = self.get_token()?;
         let config = self.config.borrow();
-        let user_and_repo = config.vcs_service()?.user_and_repo()?;
+        let user_and_repo = config.modules.vcs().user_and_repo()?;
         let public_key_info = match serde_json::from_str::<RepositoryPublicKeyResponse>(
-            &self.shell.exec(&shell::args![
-                "curl", &format!("https://api.github.com/repos/{}/{}/actions/secrets/public-key", user_and_repo.0, user_and_repo.1),
-                "-H", &format!("Authorization: token {}", token)
+            &self.shell.exec(shell::args![
+                "curl", format!("https://api.github.com/repos/{}/{}/actions/secrets/public-key", user_and_repo.0, user_and_repo.1),
+                "-H", format!("Authorization: token {}", token)
             ], shell::no_env(), shell::no_cwd(), &shell::capture()
         )?) {
             Ok(v) => v,
@@ -757,16 +757,16 @@ impl<S: shell::Shell> ci::CI for GhAction<S> {
             public_key_info.key_id
         );
         // TODO_PATH: use Path to generate path of /dev/null
-        let status = self.shell.exec(&shell::args!(
+        let status = self.shell.exec(shell::args!(
             "curl", "-X", "PUT",
-            &format!(
+            format!(
                 "https://api.github.com/repos/{}/{}/actions/secrets/{}",
                 user_and_repo.0, user_and_repo.1, key
             ),
             "-H", "Content-Type: application/json",
             "-H", "Accept: application/json",
-            "-H", &format!("Authorization: token {}", token),
-            "-d", &json, "-w", "%{http_code}", "-o", "/dev/null"
+            "-H", format!("Authorization: token {}", token),
+            "-d", json, "-w", "%{http_code}", "-o", "/dev/null"
         ), shell::no_env(), shell::no_cwd(), &shell::capture())?.parse::<u32>()?;
         if status >= 200 && status < 300 {
             Ok(())

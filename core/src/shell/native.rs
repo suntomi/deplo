@@ -1,5 +1,6 @@
 use std::process::{Command, Stdio, ChildStdout};
 use std::collections::HashMap;
+use std::borrow::Cow;
 use std::error::Error;
 use std::io::{Read, Seek};
 use std::path::{Path};
@@ -55,20 +56,27 @@ impl<'a> shell::Shell for Native {
     fn config(&self) -> &config::Container {
         return &self.config;
     }
-    fn output_of<I, K, V, P>(
-        &self, args: &Vec<&str>, envs: I, cwd: &Option<P>
+    fn output_of<'b, I, J, K, P>(
+        &self, args: I, envs: J, cwd: &Option<P>
     ) -> Result<String, shell::ShellError> 
-    where I: IntoIterator<Item = (K, V)>, K: AsRef<OsStr>, V: AsRef<OsStr>, P: AsRef<Path> {
+    where 
+    I: IntoIterator<Item = shell::Arg<'b>>,
+    J: IntoIterator<Item = (K, shell::Arg<'b>)>,
+    K: AsRef<OsStr>, P: AsRef<Path>
+    {
         let (mut cmd, mut ct) = self.create_command(
             args, envs, cwd, &shell::Settings { capture: true, interactive: false, silent: false}
         );
         return Native::get_output(&mut cmd, &mut ct);
     }
-    fn exec<I, K, V, P>(
-        &self, args: &Vec<&str>, envs: I, cwd: &Option<P>, settings: &shell::Settings
+    fn exec<'b, I, J, K, P>(
+        &self, args: I, envs: J, cwd: &Option<P>, settings: &shell::Settings
     ) -> Result<String, shell::ShellError> 
-    where I: IntoIterator<Item = (K, V)>, K: AsRef<OsStr>, V: AsRef<OsStr>, P: AsRef<Path> {
-        let config = self.config.borrow();
+    where 
+        I: IntoIterator<Item = shell::Arg<'b>>,
+        J: IntoIterator<Item = (K, shell::Arg<'b>)>,
+        K: AsRef<OsStr>, P: AsRef<Path>
+    {
         if !settings.interactive && settings.silent {
             // regardless for the value of `capture`, always capture value
             let (mut cmd, mut ct) = self.create_command(
@@ -82,13 +90,28 @@ impl<'a> shell::Shell for Native {
     }
 }
 impl Native {
-    fn create_command<I, K, V, P>(
-        &self, args: &Vec<&str>, envs: I, cwd: &Option<P>, settings: &shell::Settings
+    fn create_command<'a, I, J, K, P>(
+        &self, args: I, envs: J, cwd: &Option<P>, settings: &shell::Settings
     ) -> (Command, Option<CaptureTarget>)
-    where I: IntoIterator<Item = (K, V)>, K: AsRef<OsStr>, V: AsRef<OsStr>, P: AsRef<Path> {
-        let mut c = Command::new(args[0]);
-        c.args(&args[1..]);
-        c.envs(envs);
+    where
+        I: IntoIterator<Item = shell::Arg<'a>>,
+        J: IntoIterator<Item = (K, shell::Arg<'a>)>,
+        K: AsRef<OsStr>, P: AsRef<Path>
+    {
+        let mut args_vec = vec![];
+        let mut raw_args = vec![];
+        for a in args.into_iter() {
+            raw_args.push(a.value());
+            args_vec.push(a);
+        }
+        let mut envs_map = hashmap!{};
+        for (k,v) in envs.into_iter() {
+            let key = k.as_ref().to_string_lossy().to_string();
+            envs_map.insert(key, v);
+        }
+        let mut c = Command::new(&raw_args[0]);
+        c.args(&raw_args[1..]);
+        c.envs(envs_map.iter().map(|(k,v)| (k, v.value())));
         let cwd_used = match cwd {
             Some(d) => {
                 c.current_dir(d.as_ref()); 
@@ -105,13 +128,8 @@ impl Native {
         c.envs(&self.envs);
         log::trace!(
             "create_command:[{}]@[{}] envs[{}]", 
-            args.join(" "), cwd_used,
-            c.get_envs().collect::<Vec<(&OsStr, Option<&OsStr>)>>().iter().map(
-                |(k,v)| format!(
-                    "{}={}", k.to_string_lossy(), 
-                    v.map(|s| s.to_string_lossy().to_string()).unwrap_or("".to_string())
-                )
-            ).collect::<Vec<String>>().join(",")
+            args_vec.iter().map(|a| a.view()).collect::<Vec<Cow<'_, str>>>().join(" "), cwd_used,
+            envs_map.iter().map(|(k,v)| format!("{}={}", k, v.view())).collect::<Vec<String>>().join(",")
         );
         let ct = if settings.capture {
             // windows std::process::Command does not work well with huge (>1kb) output piping.

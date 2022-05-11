@@ -9,9 +9,9 @@ use serde_json::{Value as JsonValue};
 use crate::config;
 use crate::module;
 
-pub enum DiffMatcher<'a> {
-    Glob(Vec<&'a str>),
-    Regex(Vec<&'a str>)
+pub enum DiffMatcher {
+    Glob(Vec<String>),
+    Regex(Vec<String>)
 }
 
 #[derive(Eq, PartialEq, Clone, Copy, Debug)]
@@ -66,7 +66,7 @@ pub trait VCS : module::Module {
         &self, remote_branch: &str, msg: &str, patterns: &Vec<&str>, option: &HashMap<&str, &str>
     ) -> Result<bool, Box<dyn Error>>;
     fn diff<'b>(&'b self) -> &'b Vec<String>;
-    fn changed<'b, 'c>(&'b self, matcher: &DiffMatcher<'c>) -> bool {
+    fn changed<'b>(&'b self, matcher: &DiffMatcher) -> bool {
         let difflines = self.diff();
         if difflines.len() == 1 && difflines[0] == "*" {
             // this specifal pattern indicates everything changed

@@ -45,16 +45,24 @@ impl Error for ConfigError {
         None
     }
 }
-pub type ConfigVersion = u64;
-fn default_config_version() -> ConfigVersion { 1 }
 #[derive(Default)]
 pub struct Modules {
-    pub ci: HashMap<String, Box<dyn crate::ci::CI>>,
+    ci: HashMap<String, Box<dyn crate::ci::CI>>,
     // TODO: better way to have uninitialized box variables?
-    pub vcs: Option<Box<dyn crate::vcs::VCS>>,
-    pub steps: HashMap<String, Box<dyn crate::step::Step>>,
-    pub workflows: HashMap<String, Box<dyn crate::workflow::Workflow>>,
+    vcs: Option<Box<dyn crate::vcs::VCS>>,
+    steps: HashMap<String, Box<dyn crate::step::Step>>,
+    workflows: HashMap<String, Box<dyn crate::workflow::Workflow>>,
 }
+impl Modules {
+    pub fn vcs(&self) -> &Box<dyn crate::vcs::VCS> {
+        self.vcs.as_ref().unwrap()
+    }
+    pub fn ci(&self, account_name: &str) -> &Box<dyn crate::ci::CI> {
+        self.ci.get(account_name).unwrap()
+    }
+}
+pub type ConfigVersion = u64;
+fn default_config_version() -> ConfigVersion { 1 }
 #[derive(Serialize, Deserialize)]
 pub struct Config {
     // config that loads from config file
@@ -65,9 +73,9 @@ pub struct Config {
     pub debug: Option<HashMap<String, Value>>,
     pub release_targets: HashMap<String, release_target::ReleaseTarget>,
     pub vcs: vcs::Account,
-    pub ci: HashMap<String, ci::Account>,
+    pub ci: ci::Accounts,
     pub workflows: HashMap<String, workflow::Workflow>,
-    pub jobs: HashMap<String, job::Job>,
+    pub jobs: job::Jobs,
 
     // config that get from args
     #[serde(skip)]
@@ -95,15 +103,25 @@ impl Container {
         let vcs = crate::vcs::factory(self)?;
         // load ci modules
         let mut ci = hashmap!{};
-        for (k, _) in &self.borrow().ci {
-            ci.insert(k.to_string(), crate::ci::factory(self, k)?);
+        for (k, _) in self.borrow().ci.as_map() {
+            ci.insert(k.to_string(), crate::ci::factory(self, &k)?);
         }
         // load step modules
         let mut steps = hashmap!{};
-
+        module::config_for::<crate::step::Manifest, _, (), Box<dyn Error>>(|configs| {
+            for c in configs {
+                steps.insert(c.uses.resolve().to_string(), crate::step::factory(self, &c.uses, &c.with)?);
+            }
+            Ok(())
+        })?;
         // load workflow modules
         let mut workflows = hashmap!{};
-
+        module::config_for::<crate::workflow::Manifest, _, (), Box<dyn Error>>(|configs| {
+            for c in configs {
+                workflows.insert(c.uses.resolve().to_string(), crate::workflow::factory(self, &c.uses, &c.with)?);
+            }
+            Ok(())
+        })?;
         // store modules
         let mut c = self.borrow_mut();
         c.modules.vcs = Some(vcs);
@@ -143,5 +161,11 @@ impl Config {
         // 3. load modules
         c.load_modules()?;
         return Ok(c);
+    }
+    pub fn is_running_on_ci() -> bool {
+        match std::env::var("CI") {
+            Ok(v) => !v.is_empty(),
+            Err(_) => false
+        }
     }
 }

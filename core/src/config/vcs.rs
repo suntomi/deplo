@@ -27,7 +27,7 @@ impl fmt::Display for Account {
         match self {
             Self::Github{..} => write!(f, "github"),
             Self::Gitlab{..} => write!(f, "gitlab"),
-            Self::Module{..} => write!(f, format!("module {}", self.uses)),
+            Self::Module(c) => c.value(|v| write!(f, "module {}", v.uses)),
         }
     }    
 }

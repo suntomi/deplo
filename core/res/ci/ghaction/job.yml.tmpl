@@ -1,19 +1,19 @@
-{full_name}:
+{name}:
   needs: [{needs}]
-  if: ${{{{ needs.deplo-main.outputs.{full_name} && !failure() }}}}
-  name: Running job {full_name}
+  if: ${{{{ needs.deplo-main.outputs.{name} && !failure() }}}}
+  name: Running job {name}
   runs-on: {machine}
 {job_envs:>2}
 {container:>2}
   outputs:
-    need-cleanup: ${{{{ steps.deplo-{kind}-{name}.outputs.need-cleanup }}}}
-    system: ${{{{ steps.deplo-{kind}-{name}.outputs.system }}}}
-    user: ${{{{ steps.deplo-{kind}-{name}.outputs.user }}}}
+    need-cleanup: ${{{{ steps.deplo-{name}.outputs.need-cleanup }}}}
+    system: ${{{{ steps.deplo-{name}.outputs.system }}}}
+    user: ${{{{ steps.deplo-{name}.outputs.user }}}}
   steps:
 {fetchcli:>4}
 {checkout:>4}
 {caches:>4}
-    - name: {kind} {name}
-      id: deplo-{kind}-{name}
+    - name: {name}
+      id: deplo-{name}
 {command:>6}
 {debugger:>4}

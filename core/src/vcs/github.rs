@@ -46,11 +46,11 @@ impl<GIT: git::GitFeatures<S>, S: shell::Shell> Github<GIT, S> {
             _ => panic!("vcs account is not for github but {}", &config.vcs)
         };
         let user_and_repo = (self as &dyn vcs::VCS).user_and_repo()?;
-        let response = self.shell.exec(&shell::args![
-            "curl", "--fail", "-sS", &format!(
+        let response = self.shell.exec(shell::args![
+            "curl", "--fail", "-sS", format!(
                 "https://api.github.com/repos/{}/{}/releases/tags/{}",
                 user_and_repo.0, user_and_repo.1, target_ref.0
-            ), "-H", &format!("Authorization: token {}", token)
+            ), "-H", format!("Authorization: token {}", token)
         ], shell::no_env(), shell::no_cwd(), &shell::capture())?;
         return Ok(response);
     }
@@ -85,7 +85,7 @@ impl<GIT: git::GitFeatures<S>, S: shell::Shell> Github<GIT, S> {
                 continue;
             }
             for path in v.paths() {
-                let re = Pattern::new(path.as_ref()).unwrap();
+                let re = Pattern::new(&path.resolve()).unwrap();
                 match re.matches(&ref_name) {
                     true => return Some(k.to_string()),
                     false => {}, 
@@ -105,9 +105,9 @@ impl<GIT: git::GitFeatures<S>, S: shell::Shell> Github<GIT, S> {
                 "https://api.github.com/repos/{pr_part}",
                 pr_part = &pr_url[19..].replace("/pull/", "/pulls/")
             );
-            let output = self.shell.exec(&shell::args![
-                "curl", "-s", "-H", &format!("Authorization: token {}", key), 
-                "-H", "Accept: application/vnd.github.v3+json", &api_url
+            let output = self.shell.exec(shell::args![
+                "curl", "-s", "-H", format!("Authorization: token {}", key), 
+                "-H", "Accept: application/vnd.github.v3+json", api_url
             ], shell::no_env(), shell::no_cwd(), &shell::capture())?;
             Ok(jsonpath(&output, json_path)?.unwrap_or("".to_string()))    
         } else {
@@ -172,13 +172,13 @@ impl<GIT: git::GitFeatures<S>, S: shell::Shell> vcs::VCS for Github<GIT, S> {
                     }))
                 };
                 options.insert("tag_name".to_string(), str_to_json(target_ref.0));
-                self.shell.exec(&shell::args![
-                    "curl", "-sS", &format!(
+                self.shell.exec(shell::args![
+                    "curl", "-sS", format!(
                         "https://api.github.com/repos/{}/{}/releases", 
                         user_and_repo.0, user_and_repo.1
                     ), 
-                    "-H", &format!("Authorization: token {}", token), 
-                    "-d", &serde_json::to_string(&options)?
+                    "-H", format!("Authorization: token {}", token), 
+                    "-d", serde_json::to_string(&options)?
                 ], shell::no_env(), shell::no_cwd(), &shell::no_capture())?             
             }
         };
@@ -209,17 +209,17 @@ impl<GIT: git::GitFeatures<S>, S: shell::Shell> vcs::VCS for Github<GIT, S> {
             Some(v) => v.as_str().unwrap_or("application/octet-stream").to_string(),
             None => "application/octet-stream".to_string()
         };
-        let response = self.shell.exec(&shell::args![
-            "curl", "-sS", &upload_url_base.replace("uploads.github.com", "api.github.com"),
-            "-H", &format!("Authorization: token {}", token)
+        let response = self.shell.exec(shell::args![
+            "curl", "-sS", upload_url_base.replace("uploads.github.com", "api.github.com"),
+            "-H", format!("Authorization: token {}", token)
         ], shell::no_env(), shell::no_cwd(), &shell::capture())?;
         match jsonpath(&response, &format!("$.[?(@.name=='{}')]", asset_name))? {
             Some(v) => match opts.get("replace") {
                 Some(_) => {
                     // delete old asset
                     let delete_url = self.get_value_from_json_object(&v, "url")?;
-                    self.shell.exec(&shell::args![
-                        "curl", &delete_url, "-X", "DELETE", "-H", &format!("Authorization: token {}", token)
+                    self.shell.exec(shell::args![
+                        "curl", delete_url, "-X", "DELETE", "-H", format!("Authorization: token {}", token)
                     ], shell::no_env(), shell::no_cwd(), &shell::no_capture())?;
                 },
                 // nothing to do, return browser_download_url
@@ -227,10 +227,10 @@ impl<GIT: git::GitFeatures<S>, S: shell::Shell> vcs::VCS for Github<GIT, S> {
             },
             None => log::debug!("no asset with name {}, proceed to upload", asset_name),
         };
-        let response = self.shell.exec(&shell::args![
-            "curl", "-sS", &upload_url, "-H", &format!("Authorization: token {}", token),
-            "-H", &format!("Content-Type: {}", content_type),
-            "--data-binary", &format!("@{}", asset_file_path)
+        let response = self.shell.exec(shell::args![
+            "curl", "-sS", upload_url, "-H", format!("Authorization: token {}", token),
+            "-H", format!("Content-Type: {}", content_type),
+            "--data-binary", format!("@{}", asset_file_path)
         ], shell::no_env(), shell::no_cwd(), &shell::capture())?;
         self.get_value_from_json_object(&response, "browser_download_url")
     }
@@ -277,24 +277,24 @@ impl<GIT: git::GitFeatures<S>, S: shell::Shell> vcs::VCS for Github<GIT, S> {
                     body.insert(k, v);
                 }
             }
-            let response = self.shell.exec(&shell::args![
-                "curl", "-H", &format!("Authorization: token {}", key), 
+            let response = self.shell.exec(shell::args![
+                "curl", "-H", format!("Authorization: token {}", key), 
                 "-H", "Accept: application/vnd.github.v3+json", 
-                &format!(
+                format!(
                     "https://api.github.com/repos/{}/{}/pulls", 
                     user_and_repo.0, user_and_repo.1
                 ),
-                "-d", &serde_json::to_string(&body)?
+                "-d", serde_json::to_string(&body)?
                 ], shell::no_env(), shell::no_cwd(), &shell::capture()
             )?;
             let issues_api_url = jsonpath(&response, "$.issue_url")?.unwrap();
             match options.get("labels") {
                 Some(labels) => {
                     log::debug!("attach labels({}) to PR via {}", labels, issues_api_url);
-                    self.shell.exec(&shell::args![
-                        "curl", "-H", &format!("Authorization: token {}", key), 
-                        "-H", "Accept: application/vnd.github.v3+json", &format!("{}/labels", issues_api_url),
-                        "-d", &format!(r#"{{"labels":{}}}"#, labels)
+                    self.shell.exec(shell::args![
+                        "curl", "-H", format!("Authorization: token {}", key), 
+                        "-H", "Accept: application/vnd.github.v3+json", format!("{}/labels", issues_api_url),
+                        "-d", format!(r#"{{"labels":{}}}"#, labels)
                     ], shell::no_env(), shell::no_cwd(), &shell::capture())?;
                 },
                 None => {}
@@ -302,10 +302,10 @@ impl<GIT: git::GitFeatures<S>, S: shell::Shell> vcs::VCS for Github<GIT, S> {
             match options.get("assignees") {
                 Some(assignees) => {
                     log::debug!("assign accounts({}) to PR via {}", assignees, issues_api_url);
-                    self.shell.exec(&shell::args![
-                        "curl", "-H", &format!("Authorization: token {}", key), 
-                        "-H", "Accept: application/vnd.github.v3+json", &format!("{}/assignees", issues_api_url),
-                        "-d", &format!(r#"{{"assignees":{}}}"#, assignees)
+                    self.shell.exec(shell::args![
+                        "curl", "-H", format!("Authorization: token {}", key), 
+                        "-H", "Accept: application/vnd.github.v3+json", format!("{}/assignees", issues_api_url),
+                        "-d", format!(r#"{{"assignees":{}}}"#, assignees)
                     ], shell::no_env(), shell::no_cwd(), &shell::capture())?;
                 },
                 None => {}

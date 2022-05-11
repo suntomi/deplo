@@ -34,16 +34,16 @@ impl Config {
 }
 
 lazy_static! {
-    static ref G_SECRET_REF: RwLock<Box<dyn crate::secret::Accessor>> = {
+    static ref G_SECRET_REF: RwLock<Box<dyn crate::secret::Accessor + Send + Sync>> = {
         RwLock::new(crate::secret::nop())
     };
 }
-fn set_secret_ref(secret_ref: Box<dyn crate::secret::Accessor>) {
+fn set_secret_ref(secret_ref: Box<dyn crate::secret::Accessor + Send + Sync>) {
     *G_SECRET_REF.write().unwrap() = secret_ref;
 }
 pub fn var(key: &str) -> Option<String> {
-    return G_SECRET_REF.read().unwrap().var(key);
+    return G_SECRET_REF.read().unwrap().var(key).unwrap();
 }
 pub fn vars() -> HashMap<String, String> {
-    return G_SECRET_REF.read().unwrap().vars();
+    return G_SECRET_REF.read().unwrap().vars().unwrap();
 }

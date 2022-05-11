@@ -50,6 +50,7 @@ pub trait CI : module::Module {
     fn set_job_output(&self, job_name: &str, kind: OutputKind, outputs: HashMap<&str, &str>) -> Result<(), Box<dyn Error>>;
     fn job_output(&self, job_name: &str, kind: OutputKind, key: &str) -> Result<Option<String>, Box<dyn Error>>;
 }
+#[derive(Clone)]
 pub struct Manifest;
 impl module::Manifest for Manifest {
     fn ty() -> config::module::Type { return config::module::Type::Ci; }
@@ -92,6 +93,7 @@ pub fn factory<'a>(
         },
         config::ci::Account::CircleCI {..} => {
             return factory_by::<circleci::CircleCI>(config, account_name);
-        }
+        },
+        _ => panic!("unsupported ci account type {}", account_name)
     };
 }

@@ -18,7 +18,7 @@ impl<'a> Source<'a> {
         }
     }
     pub fn load_as<'de, C>(&self) -> Result<C, Box<dyn Error>> 
-    where C: serde::Deserialize<'de> {
+    where C: serde::de::DeserializeOwned {
         match toml::from_str::<C>(&self.to_string()) {
             Ok(c) => Ok(c),
             Err(err) => escalate!(Box::new(err))

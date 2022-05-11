@@ -1,24 +1,23 @@
-use std::collections::{HashMap};
 use std::ffi::OsStr;
 use std::fmt;
 use std::cmp::PartialEq;
+use std::borrow::Cow;
 
-use maplit::hashmap;
 use regex::{Regex};
 use serde::{de, Deserialize, Serialize, Deserializer};
 
 type AnyValue = toml::value::Value;
-type ValueResolver = fn(&str) -> &str;
+type ValueResolver = fn(&str) -> String;
 
 const SECRET_NAME_REGEX: &str = r"^[[:alpha:]_][[:alpha:]_0-9]*$";
 pub fn is_secret_name(s: &str) -> bool {
     let re = Regex::new(SECRET_NAME_REGEX).unwrap();
     re.is_match(s)
 }
-fn secret_resolver(s: &str) -> &str {
+fn secret_resolver(s: &str) -> String {
     match super::secret::var(s) {
-        Some(ref r) => r,
-        None => &format!("${{{}}}", s),
+        Some(r) => r,
+        None => format!("${{{}}}", s),
     }
 }
 fn detect_value_ref(s: &str) -> (&str, Option<ValueResolver>) {
@@ -35,12 +34,14 @@ fn detect_value_ref(s: &str) -> (&str, Option<ValueResolver>) {
         None => (s, None)
     }
 }
-const RESOLVER_NAME_MAP: HashMap<usize, &'static str> = hashmap! {
-    // function pointer to usize value
-    secret_resolver as usize => "secret",
-};
 
-#[derive(Serialize)]
+fn resolver_to_name(resolver: ValueResolver) -> &'static str {
+    let sz = resolver as usize;
+    if sz == (secret_resolver as usize) { "secret" }
+    else { panic!("unknown resolver {}", sz) }
+}
+
+#[derive(Serialize, Clone)]
 pub struct Value {
     pub value: String,
     #[serde(skip)]
@@ -52,6 +53,27 @@ impl Value {
             value: value.to_string(),
             resolver: None,
         }
+    }
+    pub fn resolve(&self) -> String {
+        if self.resolver.is_some() {
+            self.resolver.unwrap()(&self.value)
+        } else {
+            self.value.clone()
+        }
+    }
+    pub fn to_arg<'a>(&self) -> crate::shell::Arg<'a> {
+        Box::new(self.clone())
+    }
+    // for map operation
+    pub fn resolve_to_string(value: &Self) -> String {
+        value.resolve()
+    }
+}
+impl PartialEq for Value {
+    fn eq(&self, other: &Self) -> bool {
+        return self.value == other.value && 
+            self.resolver.map_or_else(|| 0, |r| r as usize) == 
+            other.resolver.map_or_else(|| 0, |r| r as usize)
     }
 }
 struct Visitor;
@@ -74,28 +96,10 @@ impl<'de> Deserialize<'de> for Value {
         deserializer.deserialize_str(Visitor{})
     }
 }
-impl AsRef<str> for Value {
-    fn as_ref(&self) -> &str {
-        if self.resolver.is_some() {
-            self.resolver.unwrap()(&self.value)
-        } else {
-            self.value.as_ref()
-        }
-    }
-}
-impl AsRef<OsStr> for Value {
-    fn as_ref(&self) -> &OsStr {
-        let s: &str = self.as_ref();
-        OsStr::new(s)
-    }
-}
 impl fmt::Display for Value {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         if self.resolver.is_some() {
-            write!(f, "<{}:{}>", 
-                RESOLVER_NAME_MAP.get(&(self.resolver.unwrap() as usize)).unwrap(), 
-                self.value
-            )
+            write!(f, "<{}:{}>", resolver_to_name(self.resolver.unwrap()), self.value)
         } else {
             write!(f, "{}", self.value)
         }
@@ -105,9 +109,7 @@ impl fmt::Debug for Value {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         if self.resolver.is_some() {
             f.debug_struct("Value")
-                .field("value", &format!("<{}:{}>", 
-                    RESOLVER_NAME_MAP.get(&(self.resolver.unwrap() as usize)).unwrap(), 
-                    self.value))
+                .field("value", &format!("<{}:{}>", resolver_to_name(self.resolver.unwrap()), self.value))
                 .finish()
         } else {
             f.debug_struct("Value")
@@ -118,14 +120,22 @@ impl fmt::Debug for Value {
 }
 impl PartialEq<String> for Value {
     fn eq(&self, other: &String) -> bool {
-        let s: &str = self.as_ref();
+        let s: &str = &self.resolve();
         s == other.as_str()
     }
 }
 impl PartialEq<String> for &Value {
     fn eq(&self, other: &String) -> bool {
-        let s: &str = self.as_ref();
+        let s: &str = &self.resolve();
         s == other.as_str()
+    }
+}
+impl crate::shell::ArgTrait for Value {
+    fn value(&self) -> String {
+        self.resolve()
+    }
+    fn view(&self) -> Cow<'_, str> {
+        Cow::Owned(format!("{}", self))
     }
 }
 
@@ -149,34 +159,28 @@ impl<'de> Deserialize<'de> for Any {
         }
     }
 }
-impl AsRef<str> for Any {
-    fn as_ref(&self) -> &str {
+impl Any {
+    pub fn resolve(&self) -> String {
         if self.resolver.is_some() {
             // should always be string (see initialization code above)
             self.resolver.unwrap()(&self.value.as_str().unwrap())
         } else {
             match self.value {
-                AnyValue::String(ref s) => s,
-                AnyValue::Integer(i) =>&i.to_string(),
-                AnyValue::Float(f) => &f.to_string(),
-                AnyValue::Boolean(b) => if b { "true" } else { "false" },
-                AnyValue::Datetime(ref s) => &s.to_string(),
-                _ => serde_json::to_string(&self.value).unwrap().as_ref()
+                AnyValue::String(ref s) => s.clone(),
+                AnyValue::Integer(i) => i.to_string(),
+                AnyValue::Float(f) => f.to_string(),
+                AnyValue::Boolean(b) => (if b { "true" } else { "false" }).to_string(),
+                AnyValue::Datetime(ref s) => s.to_string(),
+                _ => serde_json::to_string(&self.value).unwrap()
             }
         }
-    }
-}
-impl AsRef<OsStr> for Any {
-    fn as_ref(&self) -> &OsStr {
-        let s: &str = self.as_ref();
-        OsStr::new(s)
     }
 }
 impl fmt::Display for Any {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         if self.resolver.is_some() {
             write!(f, "<{}:{}>", 
-                RESOLVER_NAME_MAP.get(&(self.resolver.unwrap() as usize)).unwrap(), 
+                resolver_to_name(self.resolver.unwrap()), 
                 self.value.as_str().unwrap()
             )
         } else {
@@ -190,7 +194,7 @@ impl fmt::Debug for Any {
             f.debug_struct("Any")
                 .field("type", &self.value.type_str().to_string())
                 .field("value", &format!("<{}:{}>", 
-                    RESOLVER_NAME_MAP.get(&(self.resolver.unwrap() as usize)).unwrap(), 
+                    resolver_to_name(self.resolver.unwrap()), 
                     self.value))
                 .finish()
         } else {
@@ -212,17 +216,8 @@ impl Sensitive {
             value: value.to_string()
         }
     }
-}
-
-impl AsRef<str> for Sensitive {
-    fn as_ref(&self) -> &str {
-        self.value.as_str()
-    }
-}
-impl AsRef<OsStr> for Sensitive {
-    fn as_ref(&self) -> &OsStr {
-        let s: &str = self.as_ref();
-        OsStr::new(s)
+    fn resolve(&self) -> String {
+        self.value.clone()
     }
 }
 impl fmt::Display for Sensitive {
@@ -235,5 +230,13 @@ impl fmt::Debug for Sensitive {
         f.debug_struct("Sensitive")
             .field("value", &"<sensitive>".to_string())
             .finish()
+    }
+}
+impl crate::shell::ArgTrait for Sensitive {
+    fn value(&self) -> String {
+        self.resolve()
+    }
+    fn view(&self) -> Cow<'_, str> {
+        Cow::Borrowed("<sensitive>")
     }
 }
