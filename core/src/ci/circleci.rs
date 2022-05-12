@@ -71,8 +71,15 @@ impl<S: shell::Shell> CircleCI<S> {
     }
 }
 
-impl<'a, S: shell::Shell> module::Module for CircleCI<S> {
-    fn prepare(&self, reinit: bool) -> Result<(), Box<dyn Error>> {
+impl<'a, S: shell::Shell> ci::CI for CircleCI<S> {
+    fn new(config: &config::Container, account_name: &str) -> Result<CircleCI<S>, Box<dyn Error>> {
+        return Ok(CircleCI::<S> {
+            config: config.clone(),
+            account_name: account_name.to_string(),
+            shell: S::new(config),
+        });
+    }
+    fn generate_config(&self, reinit: bool) -> Result<(), Box<dyn Error>> {
         let config = self.config.borrow();
         let repository_root = config.modules.vcs().repository_root()?;
         let jobs = config.jobs.as_map();
@@ -113,17 +120,7 @@ impl<'a, S: shell::Shell> module::Module for CircleCI<S> {
         ))?;
         //TODO: we need to provide the way to embed user defined circle ci configuration with our generated config.yml
         Ok(())
-    }
-}
-
-impl<'a, S: shell::Shell> ci::CI for CircleCI<S> {
-    fn new(config: &config::Container, account_name: &str) -> Result<CircleCI<S>, Box<dyn Error>> {
-        return Ok(CircleCI::<S> {
-            config: config.clone(),
-            account_name: account_name.to_string(),
-            shell: S::new(config),
-        });
-    }
+    }    
     fn kick(&self) -> Result<(), Box<dyn Error>> {
         Ok(())
     }

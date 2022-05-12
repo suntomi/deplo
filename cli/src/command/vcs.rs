@@ -14,7 +14,7 @@ pub struct VCS<S: shell::Shell = shell::Default> {
 impl<S: shell::Shell> VCS<S> {
     fn release<A: args::Args>(&self, args: &A) -> Result<(), Box<dyn Error>> {
         let config = self.config.borrow();
-        let vcs = config.vcs_service()?;
+        let vcs = config.modules.vcs();
         vcs.release(
             (args.value_of("tag_name").unwrap(), false),
             &args.json_value_of("option")?
@@ -23,7 +23,7 @@ impl<S: shell::Shell> VCS<S> {
     }
     fn release_assets<A: args::Args>(&self, args: &A) -> Result<(), Box<dyn Error>> {
         let config = self.config.borrow();
-        let vcs = config.vcs_service()?;
+        let vcs = config.modules.vcs();
         let mut options = args.json_value_of("option")?;
         if args.occurence_of("replace") > 0 {
             options.as_object_mut().unwrap().insert("replace".to_string(), serde_json::json!(true));

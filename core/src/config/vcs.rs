@@ -20,7 +20,7 @@ pub enum Account {
         key: config::Value
     },
     #[serde(rename = "module")]
-    Module(config::module::ConfigFor<crate::vcs::Manifest>)
+    Module(config::module::ConfigFor<crate::vcs::Module>)
 }
 impl fmt::Display for Account {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {

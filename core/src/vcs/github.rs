@@ -116,12 +116,6 @@ impl<GIT: git::GitFeatures<S>, S: shell::Shell> Github<GIT, S> {
     }
 }
 
-impl<GIT: git::GitFeatures<S>, S: shell::Shell> module::Module for Github<GIT, S> {
-    fn prepare(&self, _:bool) -> Result<(), Box<dyn Error>> {
-        Ok(())
-    }
-}
-
 impl<GIT: git::GitFeatures<S>, S: shell::Shell> vcs::VCS for Github<GIT, S> {
     fn new(config: &config::Container) -> Result<Github<GIT,S>, Box<dyn Error>> {
         if let config::vcs::Account::Github{ account, key, email } = &config.borrow().vcs {

@@ -16,7 +16,7 @@ pub enum Workflow {
     Repository {
         events: HashMap<String, Vec<config::Value>>
     },
-    Module(config::module::ConfigFor<crate::workflow::Manifest>)
+    Module(config::module::ConfigFor<crate::workflow::Module>)
 }
 #[derive(Deserialize)]
 struct CronFilter {

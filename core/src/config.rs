@@ -1,5 +1,7 @@
-use std::fmt;
 use std::error::Error;
+use std::fmt;
+use std::fs;
+use std::path::{PathBuf};
 use std::rc::Rc;
 use std::cell::{RefCell};
 use std::collections::{HashMap};
@@ -8,6 +10,8 @@ use serde::{Deserialize, Serialize};
 use maplit::hashmap;
 
 use crate::args;
+use crate::shell;
+use crate::util::{make_absolute, escalate};
 
 pub mod ci;
 pub mod job;
@@ -25,8 +29,6 @@ pub const DEPLO_VERSION: &'static str = env!("DEPLO_RELEASE_VERSION");
 pub const DEPLO_RELEASE_URL_BASE: &'static str = "https://github.com/suntomi/deplo/releases/download";
 pub const DEPLO_REMOTE_JOB_EVENT_TYPE: &'static str = "deplo-run-remote-job";
 pub const DEPLO_VCS_TEMPORARY_WORKSPACE_NAME: &'static str = "deplo-tmp-workspace";
-pub const DEPLO_JOB_OUTPUT_TEMPORARY_FILE: &'static str = "deplo-tmp-job-output.json";
-pub const DEPLO_SYSTEM_OUTPUT_COMMIT_BRANCH_NAME: &'static str = "COMMIT_BRANCH";
 
 pub type Value = value::Value;
 pub type AnyValue = value::Any;
@@ -57,7 +59,13 @@ impl Modules {
     pub fn vcs(&self) -> &Box<dyn crate::vcs::VCS> {
         self.vcs.as_ref().unwrap()
     }
-    pub fn ci(&self, account_name: &str) -> &Box<dyn crate::ci::CI> {
+    pub fn ci(&self) -> &HashMap<String, Box<dyn crate::ci::CI>> {
+        &self.ci
+    }
+    pub fn default_ci(&self) -> &Box<dyn crate::ci::CI> {
+        self.ci_for("default")
+    }
+    pub fn ci_for(&self, account_name: &str) -> &Box<dyn crate::ci::CI> {
         self.ci.get(account_name).unwrap()
     }
 }
@@ -108,7 +116,7 @@ impl Container {
         }
         // load step modules
         let mut steps = hashmap!{};
-        module::config_for::<crate::step::Manifest, _, (), Box<dyn Error>>(|configs| {
+        module::config_for::<crate::step::Module, _, (), Box<dyn Error>>(|configs| {
             for c in configs {
                 steps.insert(c.uses.resolve().to_string(), crate::step::factory(self, &c.uses, &c.with)?);
             }
@@ -116,7 +124,7 @@ impl Container {
         })?;
         // load workflow modules
         let mut workflows = hashmap!{};
-        module::config_for::<crate::workflow::Manifest, _, (), Box<dyn Error>>(|configs| {
+        module::config_for::<crate::workflow::Module, _, (), Box<dyn Error>>(|configs| {
             for c in configs {
                 workflows.insert(c.uses.resolve().to_string(), crate::workflow::factory(self, &c.uses, &c.with)?);
             }
@@ -167,5 +175,45 @@ impl Config {
             Ok(v) => !v.is_empty(),
             Err(_) => false
         }
+    }
+    pub fn data_dir(&self) -> String {
+        return match self.data_dir {
+            Some(ref v) => v.resolve(),
+            None => ".deplo".to_string()
+        };
+    }
+    pub fn project_name(&self) -> String {
+        self.project_name.resolve()
+    }
+    pub fn deplo_data_path(&self) -> Result<PathBuf, Box<dyn Error>> {
+        let base = self.data_dir();
+        let path = make_absolute(base, self.modules.vcs().repository_root()?);
+        match fs::metadata(&path) {
+            Ok(mata) => {
+                if !mata.is_dir() {
+                    return escalate!(Box::new(ConfigError{ 
+                        cause: format!("{} exists but not directory", path.to_string_lossy().to_string())
+                    }))
+                }
+            },
+            Err(_) => {
+                fs::create_dir_all(&path)?;
+            }
+        };
+        Ok(path)
+    }
+    pub fn generate_wrapper_script<S: shell::Shell>(
+        &self, shell: &S, data_path: &PathBuf
+    ) -> Result<(), Box<dyn Error>> {
+        let content = format!(
+            include_str!("../res/cli/deplow.sh.tmpl"),
+            version = DEPLO_VERSION,
+            data_dir = self.data_dir()
+        );
+        fs::write(data_path, content)?;
+        shell.exec(
+            shell::args!["chmod", "+x", data_path.to_str().unwrap()], shell::no_env(), shell::no_cwd(), &shell::no_capture()
+        )?;
+        Ok(())
     }
 }

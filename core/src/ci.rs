@@ -31,10 +31,11 @@ impl OutputKind {
     }
 }
 
-pub trait CI : module::Module {
+pub trait CI {
     fn new(
         config: &config::Container, account_name: &str
     ) -> Result<Self, Box<dyn Error>> where Self : Sized;
+    fn generate_config(&self, reinit: bool) -> Result<(), Box<dyn Error>>;
     fn kick(&self) -> Result<(), Box<dyn Error>>;
     fn overwrite_commit(&self, commit: &str) -> Result<String, Box<dyn Error>>;
     fn pr_url_from_env(&self) -> Result<Option<String>, Box<dyn Error>>;
@@ -51,8 +52,8 @@ pub trait CI : module::Module {
     fn job_output(&self, job_name: &str, kind: OutputKind, key: &str) -> Result<Option<String>, Box<dyn Error>>;
 }
 #[derive(Clone)]
-pub struct Manifest;
-impl module::Manifest for Manifest {
+pub struct Module;
+impl module::Module for Module {
     fn ty() -> config::module::Type { return config::module::Type::Ci; }
 }
 

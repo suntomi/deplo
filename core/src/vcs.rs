@@ -34,7 +34,7 @@ impl fmt::Display for RefType {
     }
 }
 
-pub trait VCS : module::Module {
+pub trait VCS {
     fn new(config: &config::Container) -> Result<Self, Box<dyn Error>> where Self : Sized;
     fn release_target(&self) -> Option<String>;
     fn current_ref(&self) -> Result<(RefType, String), Box<dyn Error>>;
@@ -105,8 +105,8 @@ pub trait VCS : module::Module {
         false
     }
 }
-pub struct Manifest;
-impl module::Manifest for Manifest {
+pub struct Module;
+impl module::Module for Module {
     fn ty() -> config::module::Type { return config::module::Type::Vcs; }
 }
 

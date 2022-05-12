@@ -18,7 +18,7 @@ pub enum Account {
         key: config::Value,
     },
     #[serde(rename = "module")]
-    Module(config::module::ConfigFor<crate::ci::Manifest>)
+    Module(config::module::ConfigFor<crate::ci::Module>)
 }
 impl Account {
     pub fn type_matched(&self, t: &str) -> bool {

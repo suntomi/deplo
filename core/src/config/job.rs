@@ -1,6 +1,8 @@
 use std::collections::{HashMap};
 use std::error::Error;
 use std::fmt;
+use std::fs;
+use std::path::{Path};
 
 use maplit::hashmap;
 use serde::{Deserialize, Serialize};
@@ -8,7 +10,11 @@ use serde::{Deserialize, Serialize};
 use crate::ci;
 use crate::config;
 use crate::shell;
+use crate::util::{escalate};
 use crate::vcs;
+
+pub const DEPLO_JOB_OUTPUT_TEMPORARY_FILE: &'static str = "deplo-tmp-job-output.json";
+pub const DEPLO_SYSTEM_OUTPUT_COMMIT_BRANCH_NAME: &'static str = "COMMIT_BRANCH";
 
 /// represents single cache setting of CI service.
 #[derive(Serialize, Deserialize)]
@@ -183,7 +189,7 @@ pub enum Step {
         shell: Option<config::Value>,
         workdir: Option<config::Value>,
     },
-    Module(config::module::ConfigFor<crate::step::Manifest, StepExtension>)
+    Module(config::module::ConfigFor<crate::step::Module, StepExtension>)
 }
 impl fmt::Display for Step {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -322,12 +328,12 @@ impl Job {
         let account = self.account.as_ref().map_or_else(
             || "default".to_string(), config::Value::resolve_to_string
         );
-        return config.modules.ci.get(&account).unwrap();
+        return config.modules.ci_for(&account);
     }
     pub fn job_env<'a>(&'a self, config: &'a super::Config, rtconfig: &super::runtime::JobConfig) -> HashMap<&'a str, String> {
         let ci = self.ci(config);
         let env = ci.job_env();
-        let mut common_envs = hashmap!{
+        let common_envs = hashmap!{
             "DEPLO_JOB_CURRENT_NAME" => rtconfig.job_name.clone()
         };
         match rtconfig.release_target {
@@ -394,6 +400,34 @@ impl Job {
             None => return None
         }
     }
+    pub fn user_output(
+        &self, config: &config::Config, job_name: &str, key: &str
+    ) -> Result<Option<String>, Box<dyn Error>> {
+        let ci = self.ci(config);
+        match std::env::var("DEPLO_JOB_CURRENT_NAME") {
+            Ok(n) => {
+                if n == job_name {
+                    // get output of current job. read from temporary file
+                    match fs::read(Path::new(DEPLO_JOB_OUTPUT_TEMPORARY_FILE)) {
+                        Ok(b) => {
+                            let outputs = serde_json::from_slice::<HashMap<&str, &str>>(&b)?;
+                            Ok(outputs.get(key).map(|v| v.to_string()))
+                        },
+                        Err(e) => escalate!(Box::new(e))
+                    }
+                } else {
+                    ci.job_output(job_name, ci::OutputKind::User, key)
+                }
+            },
+            Err(_) => ci.job_output(job_name, ci::OutputKind::User, key)
+        }
+    }
+    pub fn system_output(
+        &self, config: &config::Config, job_name: &str, key: &str
+    ) -> Result<Option<String>, Box<dyn Error>> {
+        let ci = self.ci(config);
+        ci.job_output(job_name, ci::OutputKind::System, key)
+    }    
 }
 
 /*
@@ -426,5 +460,20 @@ impl Jobs {
         &self, job_name: &str, shell: &S, cmd: &Command, options: &RunningOptions
     ) -> Result<Option<String>, Box<dyn Error>> where S: shell::Shell {
         panic!("TODO: implement Jobs.run")
+    }
+    pub fn set_user_output(
+        &self, _: &config::Config, key: &str, value: &str
+    ) -> Result<(), Box<dyn Error>> {
+        match fs::read(Path::new(DEPLO_JOB_OUTPUT_TEMPORARY_FILE)) {
+            Ok(b) => {
+                let mut outputs = serde_json::from_slice::<HashMap<&str, &str>>(&b)?;
+                outputs.insert(key, value);
+                fs::write(DEPLO_JOB_OUTPUT_TEMPORARY_FILE, serde_json::to_string(&outputs)?)?;
+            },
+            Err(_) => {
+                fs::write(DEPLO_JOB_OUTPUT_TEMPORARY_FILE, serde_json::to_string(&hashmap!{ key => value })?)?;
+            }
+        };
+        Ok(())
     }
 }

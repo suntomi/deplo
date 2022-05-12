@@ -348,8 +348,15 @@ impl<S: shell::Shell> GhAction<S> {
     }
 }
 
-impl<'a, S: shell::Shell> module::Module for GhAction<S> {
-    fn prepare(&self, reinit: bool) -> Result<(), Box<dyn Error>> {
+impl<S: shell::Shell> ci::CI for GhAction<S> {
+    fn new(config: &config::Container, account_name: &str) -> Result<GhAction<S>, Box<dyn Error>> {
+        return Ok(GhAction::<S> {
+            config: config.clone(),
+            account_name: account_name.to_string(),
+            shell: S::new(config)
+        });
+    }
+    fn generate_config(&self, reinit: bool) -> Result<(), Box<dyn Error>> {
         let config = self.config.borrow();
         let repository_root = config.modules.vcs().repository_root()?;
         // TODO_PATH: use Path to generate path of /.github/...
@@ -491,17 +498,7 @@ impl<'a, S: shell::Shell> module::Module for GhAction<S> {
             )
         )?;
         Ok(())
-    }
-}
-
-impl<S: shell::Shell> ci::CI for GhAction<S> {
-    fn new(config: &config::Container, account_name: &str) -> Result<GhAction<S>, Box<dyn Error>> {
-        return Ok(GhAction::<S> {
-            config: config.clone(),
-            account_name: account_name.to_string(),
-            shell: S::new(config)
-        });
-    }
+    }    
     fn kick(&self) -> Result<(), Box<dyn Error>> {
         Ok(())
     }
