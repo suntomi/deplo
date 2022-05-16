@@ -17,23 +17,13 @@ prod = { tag = true, patterns = ["[0-9]*"] }
 # ------------
 # secret settings
 # ------------
-[secrets.env]
-type = "dotenv"
-path = ".env"
-keys = [
-    "SUNTOMI_VCS_ACCOUNT",
-    "SUNTOMI_VCS_ACCOUNT_EMAIL",
-    "SUNTOMI_VCS_ACCOUNT_KEY",
-    "SUNTOMI_VCS_APP_ID"
-]
-[secrets.app]
-type = "file"
-key_and_paths = {
-    SUNTOMI_VCS_APP_PKEY = "./secrets/github_app.pem"
-}
-[secrets.oidc_aws]
-type = "oidc_aws"
-assume_role = ""
+[secrets]
+SUNTOMI_VCS_ACCOUNT = { type = "env", key = "SUNTOMI_VCS_ACCOUNT" }
+SUNTOMI_VCS_ACCOUNT_EMAIL = { type = "env", key = "SUNTOMI_VCS_ACCOUNT_EMAIL" }
+SUNTOMI_VCS_ACCOUNT_KEY = { type = "env", key = "SUNTOMI_VCS_ACCOUNT_KEY" }
+SUNTOMI_VCS_APP_ID = { type = "env", key = "SUNTOMI_VCS_APP_ID" }
+SUNTOMI_VCS_APP_PKEY = { type = "file", path = "./secrets/ghapp.pem" }
+
 
 # ------------
 # vcs settings
@@ -57,7 +47,7 @@ account = "${SUNTOMI_VCS_ACCOUNT}"
 key = "${SUNTOMI_VCS_ACCOUNT_KEY}"
 oidc = true
 
-[ci.by_app]
+[ci.gh_app]
 type = "ghaction"
 app_id = "${SUNTOMI_VCS_APP_ID}"
 pem = "${SUNTOMI_VCS_APP_PKEY}"
@@ -93,7 +83,6 @@ slack = {
     }
 }
 discord = {
-    type = "Custom",
     uses = "suntomi/discord@0.3.0",
     with = {
         key = "${SUNTOMI_DISCORD_KEY}",

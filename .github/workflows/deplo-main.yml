@@ -8,7 +8,7 @@ on:
   pull_request:
     branches: ["lab","main"]
   repository_dispatch:
-    types: [deplo-run-remote-job, deplo-event-dispatch]
+    types: [deplo-run-remote-job]
 
 env:
   DEPLO_GHACTION_CI_ID: ${{ github.run_id }}-${{ github.run_attempt }}
