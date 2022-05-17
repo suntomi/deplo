@@ -6,11 +6,8 @@ use crate::config;
 
 pub trait Accessor {
     fn var(
-        &self, key: &str
-    ) -> Result<Option<String>, Box<dyn Error>>;
-    fn vars(
         &self
-    ) -> Result<HashMap<String, String>, Box<dyn Error>>;
+    ) -> Result<Option<String>, Box<dyn Error>>;
 }
 pub trait Factory {
     fn new(
@@ -35,7 +32,8 @@ impl Error for SecretError {
     }
 }
 
-mod dotenv;
+mod env;
+mod file;
 
 // factorys
 fn factory_by<'a, T: Accessor + Factory + Send + Sync + 'a>(
@@ -49,8 +47,11 @@ pub fn factory<'a>(
     secret: &config::secret::Secret
 ) -> Result<Box<dyn Accessor + Send + Sync + 'a>, Box<dyn Error>> {
     match secret {
-        config::secret::Secret::Dotenv {..} => {
-            return factory_by::<dotenv::Dotenv>(secret);
+        config::secret::Secret::Env {..} => {
+            return factory_by::<env::Env>(secret);
+        },
+        config::secret::Secret::File {..} => {
+            return factory_by::<file::File>(secret);
         },
         _ => panic!("unsupported secret type")
     };
@@ -58,10 +59,7 @@ pub fn factory<'a>(
 
 struct Nop {}
 impl Accessor for Nop {
-    fn var(&self, _key: &str) -> Result<Option<String>, Box<dyn Error>> {
-        panic!("nop secret driver should not be called");
-    }
-    fn vars(&self) -> Result<HashMap<String, String>, Box<dyn Error>> {
+    fn var(&self) -> Result<Option<String>, Box<dyn Error>> {
         panic!("nop secret driver should not be called");
     }
 }

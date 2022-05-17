@@ -366,7 +366,7 @@ impl<S: shell::Shell> ci::CI for GhAction<S> {
         let previously_no_file = !rm(&workflow_yml_path);
         // inject secrets from dotenv file
         let mut secrets = vec!();
-        for (k, v) in &config::secret::vars() {
+        for (k, v) in &config::secret::vars()? {
             if previously_no_file || reinit {
                 (self as &dyn ci::CI).set_secret(k, v)?;
                 log::debug!("set secret value of {}", k);

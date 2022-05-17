@@ -19,11 +19,11 @@ prod = { tag = true, patterns = ["[0-9]*"] }
 # secret settings
 # ------------
 [secrets]
-SUNTOMI_VCS_ACCOUNT = { type = "env", key = "SUNTOMI_VCS_ACCOUNT" }
-SUNTOMI_VCS_ACCOUNT_EMAIL = { type = "env", key = "SUNTOMI_VCS_ACCOUNT_EMAIL" }
-SUNTOMI_VCS_ACCOUNT_KEY = { type = "env", key = "SUNTOMI_VCS_ACCOUNT_KEY" }
-SUNTOMI_VCS_APP_ID = { type = "env", key = "SUNTOMI_VCS_APP_ID" }
-SUNTOMI_VCS_APP_PKEY = { type = "file", path = "./secrets/ghapp.pem" }
+SUNTOMI_VCS_ACCOUNT = { key = "SUNTOMI_VCS_ACCOUNT" }
+SUNTOMI_VCS_ACCOUNT_EMAIL = { key = "SUNTOMI_VCS_ACCOUNT_EMAIL" }
+SUNTOMI_VCS_ACCOUNT_KEY = { key = "SUNTOMI_VCS_ACCOUNT_KEY" }
+SUNTOMI_VCS_APP_ID = { key = "SUNTOMI_VCS_APP_ID" }
+SUNTOMI_VCS_APP_PKEY = { path = "./secrets/ghapp.pem" }
 
 
 # ------------
@@ -135,9 +135,9 @@ done
 [jobs.test]
 on = [
     { workflows = ["integrate"], changed = ["*/src/*", "Cargo.*"] },
-    { workflows = ["cron"], schedules = ["daily"] } },
+    { workflows = ["cron"], schedules = ["daily"] },
     { workflows = ["repository"], events = ["manual"] },
-    { workflows = ["slack"], when = { message = { matches = [".*test\sit.*"] } } }
+    { workflows = ["slack"], when = { message = { matches = ['.*test\sit.*'] } } }
 ]
 runner = { type = "machine", os = "Linux", local_fallback = { image = "ghcr.io/suntomi/deplo:builder" } }
 command = "cargo test"

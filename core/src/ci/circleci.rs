@@ -102,7 +102,7 @@ impl<'a, S: shell::Shell> ci::CI for CircleCI<S> {
         }
         if previously_no_file || reinit {
             // sync dotenv secrets with ci system
-            for (k, v) in &config::secret::vars() {
+            for (k, v) in &config::secret::vars()? {
                 (self as &dyn ci::CI).set_secret(k, v)?;
                 log::debug!("set secret value of {}", k);
             }

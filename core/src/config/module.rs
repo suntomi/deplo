@@ -1,5 +1,4 @@
 use std::collections::{HashMap};
-use std::error::Error;
 use std::sync::RwLock;
 
 use maplit::hashmap;

@@ -90,7 +90,7 @@ impl<S: shell::Shell> CI<S> {
     fn setenv<A: args::Args>(&self, _: &A) -> Result<(), Box<dyn Error>> {
         let config = self.config.borrow();
         let ci = config.modules.default_ci();
-        for (k,v) in config::secret::vars() {
+        for (k,v) in config::secret::vars()? {
             println!("set secret {}", k);
             ci.set_secret(&k, &v)?;
         }

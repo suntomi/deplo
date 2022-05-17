@@ -1,0 +1,38 @@
+use std::error::Error;
+use std::fs;
+use std::path::{PathBuf};
+use std::result::Result;
+
+use crate::config;
+use crate::secret;
+use crate::util::{escalate};
+
+pub struct File {
+    pub path: String,
+    pub val: String,
+}
+
+impl secret::Factory for File {
+    fn new(
+        secret_config: &config::secret::Secret
+    ) -> Result<Self, Box<dyn Error>> {
+        return Ok(match secret_config {
+            config::secret::Secret::File { path } => Self{
+                path: path.clone(), val: match fs::read_to_string(PathBuf::from(path)) {
+                    Ok(val) => val,
+                    Err(e) => return escalate!(Box::new(secret::SecretError{
+                        cause: format!("file load error {:?} path={}", e, path)
+                    }))
+                }
+            },
+            _ => panic!("unexpected secret type")
+        });
+    }
+}
+impl secret::Accessor for File {
+    fn var(&self) -> Result<Option<String>, Box<dyn Error>> {
+        Ok(Some(self.val.clone()))
+    }
+}
+impl secret::Secret for File {
+}

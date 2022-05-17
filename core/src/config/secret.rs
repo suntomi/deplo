@@ -2,48 +2,65 @@ use std::collections::{HashMap};
 use std::error::Error;
 use std::sync::RwLock;
 
+use maplit::hashmap;
+
 use serde::{Deserialize, Serialize};
 
+type SecretAccessors = HashMap<String, Box<dyn crate::secret::Accessor + Send + Sync>>;
+
 #[derive(Serialize, Deserialize)]
-#[serde(tag = "type")]
 pub enum Secret {
-    #[serde(rename = "nop")]
     Nop,
-    #[serde(rename = "dotenv")]
-    Dotenv {
-        path: Option<String>,
-        keys: Vec<String>
+    Env {
+        key: String
     },
-    #[serde(rename = "module")]
-    Module { //eg. aws ssm
+    File {
+        path: String
+    },
+    Module {
         uses: String,
-        with: Option<HashMap<String, String>>
-    },
+        with: String
+    }    
 }
 
 #[derive(Deserialize)]
 pub struct Config {
-    pub secrets: Secret
+    pub secrets: HashMap<String, Secret>
 }
 impl Config {
     pub fn apply(&self) -> Result<(), Box<dyn Error>> {
-        let s = crate::secret::factory(&self.secrets)?;
-        set_secret_ref(s);
+        let mut secrets = hashmap!{};
+        for (k, secret) in &self.secrets {
+            let s = crate::secret::factory(secret)?;
+            secrets.insert(k.clone(), s);
+        }
+        set_secret_ref(secrets);
         Ok(())
     }
 }
 
 lazy_static! {
-    static ref G_SECRET_REF: RwLock<Box<dyn crate::secret::Accessor + Send + Sync>> = {
-        RwLock::new(crate::secret::nop())
+    static ref G_SECRET_REF: RwLock<SecretAccessors> = {
+        RwLock::new(hashmap!{})
     };
 }
-fn set_secret_ref(secret_ref: Box<dyn crate::secret::Accessor + Send + Sync>) {
-    *G_SECRET_REF.write().unwrap() = secret_ref;
+fn set_secret_ref(secrets_ref: SecretAccessors) {
+    *G_SECRET_REF.write().unwrap() = secrets_ref;
 }
 pub fn var(key: &str) -> Option<String> {
-    return G_SECRET_REF.read().unwrap().var(key).unwrap();
+    return match G_SECRET_REF.read().unwrap().get(key) {
+        Some(accessor) => accessor.var().unwrap(),
+        None => None
+    };
 }
-pub fn vars() -> HashMap<String, String> {
-    return G_SECRET_REF.read().unwrap().vars().unwrap();
+pub fn vars() -> Result<HashMap<String, String>, Box<dyn Error>> {
+    let reader = G_SECRET_REF.read().unwrap();
+    let mut result = hashmap!{};
+    for (k, v) in &*reader {
+        match v.var()? {
+            Some(value) => result.insert(k.clone(), value),
+            None => continue
+        };
+    }
+    return Ok(result);
 }
