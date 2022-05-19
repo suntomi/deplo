@@ -14,14 +14,19 @@ pub struct File {
 
 impl secret::Factory for File {
     fn new(
+        runtime_config: &config::runtime::Config,
         secret_config: &config::secret::Secret
     ) -> Result<Self, Box<dyn Error>> {
+        let cwd = match runtime_config.workdir.as_ref() {
+            Some(wd) => PathBuf::from(wd),
+            None => std::env::current_dir()?
+        };
         return Ok(match secret_config {
             config::secret::Secret::File { path } => Self{
-                path: path.clone(), val: match fs::read_to_string(PathBuf::from(path)) {
+                path: path.clone(), val: match fs::read_to_string(cwd.join(&path)) {
                     Ok(val) => val,
                     Err(e) => return escalate!(Box::new(secret::SecretError{
-                        cause: format!("file load error {:?} path={}", e, path)
+                        cause: format!("file load error {:?} path={}", e, cwd.join(&path).display())
                     }))
                 }
             },

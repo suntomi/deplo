@@ -10,8 +10,9 @@ use crate::config;
 pub enum Account {
     #[serde(rename = "ghaction")]
     GhAction {
-        account: config::Value,
-        key: config::Value,
+        account: config::Value, // if kind is 'app', github app id. for 'user', github account name 
+        key: config::Value, // if kind is 'app', github app private key. for 'user', github personal access token of account
+        kind: Option<config::Value>, // either string value of 'user' or 'app'
     },
     #[serde(rename = "circleci")]
     CircleCI {

@@ -82,7 +82,7 @@ pub struct Config {
     pub release_targets: HashMap<String, release_target::ReleaseTarget>,
     pub vcs: vcs::Account,
     pub ci: ci::Accounts,
-    pub workflows: HashMap<String, workflow::Workflow>,
+    pub workflows: workflow::Workflows,
     pub jobs: job::Jobs,
 
     // config that get from args
@@ -159,7 +159,7 @@ impl Config {
         let src = runtime_config.config_source();
         // 1. load secret config and setup
         let secret_config = src.load_as::<secret::Config>()?;
-        secret_config.apply()?; // after here, all secrets in Deplo.toml will be resolvable
+        secret_config.apply_with(&runtime_config)?; // after here, all secrets in Deplo.toml will be resolvable
         // 2. create deplo config
         let c = {
             let mut config = src.load_as::<Config>()?;

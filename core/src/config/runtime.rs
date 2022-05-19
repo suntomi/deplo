@@ -18,6 +18,7 @@ pub struct JobConfig {
 #[derive(Default)]
 pub struct Config {
     pub verbosity: u64,
+    pub dotenv_path: Option<String>,
     pub config_path: String,
     pub workdir: Option<String>,
 }
@@ -28,11 +29,13 @@ impl Config {
                 Some(o) => o.parse().unwrap_or(0),
                 None => 0
             },
+            dotenv_path: args.value_of("dotenv").map(|o| o.to_string()),
             config_path: args.value_of("config").unwrap_or("Deplo.toml").to_string(),
             workdir: args.value_of("workdir").map_or_else(|| None, |v| Some(v.to_string())),
         }
     }
     pub fn apply(&self) -> Result<(), Box<dyn Error>> {
+        self.load_dotenv()?;
         Self::setup_logger(self.verbosity);
         match self.workdir {
             Some(ref wd) => { 
@@ -44,6 +47,17 @@ impl Config {
     }
     pub fn config_source<'a>(&'a self) -> config::source::Source<'a> {
         config::source::Source::File(self.config_path.as_str())
+    }
+    fn load_dotenv(&self) -> Result<(), Box<dyn Error>> {
+        match self.dotenv_path {
+            Some(ref path) => {
+                dotenv::from_path(path)?;
+            },
+            None => {
+                dotenv::dotenv().ok();
+            }
+        };
+        Ok(())
     }
     fn setup_logger(verbosity: u64) {
         // apply verbosity

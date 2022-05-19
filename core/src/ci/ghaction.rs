@@ -14,7 +14,6 @@ use crate::config;
 use crate::ci;
 use crate::shell;
 use crate::vcs;
-use crate::module;
 use crate::util::{
     escalate,seal,
     MultilineFormatString,rm,
@@ -340,7 +339,24 @@ impl<S: shell::Shell> GhAction<S> {
     fn get_token(&self) -> Result<String, Box<dyn Error>> {
         let config = self.config.borrow();
         Ok(match &config.ci.get(&self.account_name).unwrap() {
-            config::ci::Account::GhAction { key, .. } => { key.to_string() },
+            config::ci::Account::GhAction { account, key, kind } => {
+                let kind_resolved = match kind.as_ref() {
+                    Some(v) => v.resolve(),
+                    None => "user".to_string()
+                };
+                match kind_resolved.as_str() {
+                    "user" => key.to_string(),
+                    "app" => return escalate!(Box::new(ci::CIError {
+                        cause: format!(
+                            "TODO: generate jwt with account {} as sub and encrypt with key",
+                            account
+                        ),
+                    })),
+                    v => return escalate!(Box::new(ci::CIError {
+                        cause: format!("unsupported account kind {}", v),
+                    })),
+                }
+            },
             _ => return escalate!(Box::new(ci::CIError {
                 cause: "should have ghaction CI config but other config provided".to_string()
             }))
@@ -421,12 +437,12 @@ impl<S: shell::Shell> ci::CI for GhAction<S> {
                             "ref".to_string() => config::Value::new("${{ github.event.client_payload.commit }}"),
                             "fetch-depth".to_string() => config::Value::new("2")
                         }, &job.checkout.as_ref().map_or_else(
-                            || if job.commits.is_some() {
+                            || if job.commit.is_some() {
                                 hashmap!{ "fetch-depth".to_string() => config::Value::new("0") }
                             } else {
                                 hashmap!{}
                             },
-                            |v| if v.get("lfs").is_some() || job.commits.is_some() {
+                            |v| if v.get("lfs").is_some() || job.commit.is_some() {
                                 hashmap!{ "fetch-depth".to_string() => config::Value::new("0") }
                             } else {
                                 hashmap!{}
@@ -443,7 +459,7 @@ impl<S: shell::Shell> ci::CI for GhAction<S> {
             job_descs = job_descs.into_iter().chain(lines.into_iter()).collect();
             // check if lfs is enabled
             if !lfs {
-                lfs = job.checkout.as_ref().map_or_else(|| false, |v| v.get("lfs").is_some() && job.commits.is_some());
+                lfs = job.checkout.as_ref().map_or_else(|| false, |v| v.get("lfs").is_some() && job.commit.is_some());
                 log::debug!("there is an job {}, that has commits option and does lfs checkout. enable lfs for deplo fin", name)
             }
         }

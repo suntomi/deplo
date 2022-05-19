@@ -27,35 +27,35 @@ struct RepositortFilter {
     pub trigger: String,
     pub action: Option<String>
 }
-pub struct MatchedWorkflow {
+pub struct Match {
     pub workflow: String,
-    pub workflow_params: HashMap<String, String>
+    pub contexts: HashMap<String, String>
 }
 
 impl Workflow {
-    fn matches(&self, event: &str, params: &str) -> Option<MatchedWorkflow> {
+    fn matches(&self, event: &str, params: &str) -> Option<Match> {
         match &self {
             Self::Deploy if event == "deploy" => {
-                Some(MatchedWorkflow {
+                Some(Match {
                     workflow: event.to_string(),
                     // deploy and integrate matches changed with its changeset
-                    workflow_params: hashmap!{},
+                    contexts: hashmap!{},
                 })
             },
             Self::Integrate if event == "integrate" => {
-                Some(MatchedWorkflow {
+                Some(Match {
                     workflow: event.to_string(),
                     // deploy and integrate matches changed with its changeset
-                    workflow_params: hashmap!{},
+                    contexts: hashmap!{},
                 })
             },
             Self::Cron{schedules} if event == "cron" => {
                 let filter = serde_json::from_str::<CronFilter>(params).unwrap();
                 for (schedule, cron_pattern) in schedules {
                     if cron_pattern == &filter.schedule {
-                        return Some(MatchedWorkflow {
+                        return Some(Match {
                             workflow: event.to_string(),
-                            workflow_params: hashmap!{
+                            contexts: hashmap!{
                                 "schedule".to_string() => schedule.to_string()
                             }
                         })
@@ -74,9 +74,9 @@ impl Workflow {
                 };
                 for (event, triggers) in events {
                     if triggers.iter().find(|t| t == &key).is_some() {
-                        return Some(MatchedWorkflow {
+                        return Some(Match {
                             workflow: event.to_string(),
-                            workflow_params: hashmap!{
+                            contexts: hashmap!{
                                 "event".to_string() => event.to_string(),
                             },
                         })
@@ -91,5 +91,16 @@ impl Workflow {
             },
             _ => None
         }
+    }
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct Workflows(HashMap<String, Workflow>);
+impl Workflows {
+    pub fn as_map(&self) -> &HashMap<String, Workflow> {
+        &self.0
+    }
+    pub fn get<'a>(&'a self, name: &str) -> Option<&'a Workflow> {
+        self.0.get(name)
     }
 }

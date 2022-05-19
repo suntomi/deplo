@@ -99,6 +99,25 @@ pub fn envsubst(src: &str) -> String {
     return content.to_string()
 }
 
+// serde
+use serde::{Deserialize, Serialize};
+#[derive(Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum UnitOrListOf<T> {
+    Unit(T),
+    List(Vec<T>)
+}
+impl<'a, T> IntoIterator for &'a UnitOrListOf<T> {
+    type Item = &'a T;
+    type IntoIter = std::vec::IntoIter<Self::Item>;
+    fn into_iter(self) -> Self::IntoIter {
+        match self {
+            UnitOrListOf::Unit(v) => vec![v].into_iter(),
+            UnitOrListOf::List(v) => v.iter().map(|v| v).collect::<Vec<Self::Item>>().into_iter()
+        }
+    }
+}
+
 // seal
 use rand;
 use base64;

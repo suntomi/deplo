@@ -10,7 +10,7 @@ use serde::{Deserialize, Serialize};
 use crate::ci;
 use crate::config;
 use crate::shell;
-use crate::util::{escalate};
+use crate::util::{escalate,UnitOrListOf};
 use crate::vcs;
 
 pub const DEPLO_JOB_OUTPUT_TEMPORARY_FILE: &'static str = "deplo-tmp-job-output.json";
@@ -85,7 +85,7 @@ impl fmt::Display for RunnerOS {
 /// container runner is use exactly same container for local execution as CI service. 
 /// maximum compability of local execution but additional time to invoke job on CI service (for pulling image).
 #[derive(Serialize, Deserialize)]
-#[serde(tag = "type")]
+#[serde(untagged)]
 pub enum Runner {
     #[serde(rename = "machine")]
     Machine {
@@ -132,7 +132,7 @@ impl fmt::Display for Command {
 /// 3. Pull request & aggregate = true => all commits are pushed to single working branch and pull request is made to built branch
 /// 4. Pull request & aggregate = false => each commits are pushed to seprated working branch and separated pull request is made to built branch
 #[derive(Serialize, Deserialize)]
-#[serde(tag = "type")]
+#[serde(tag = "with")]
 pub enum CommitMethod {
     #[serde(rename = "push")]
     Push {
@@ -151,9 +151,10 @@ pub enum CommitMethod {
 }
 #[derive(Serialize, Deserialize)]
 pub struct Commit {
-    pub changed: Vec<config::Value>,
+    pub files: Vec<config::Value>,
     pub on: Option<Trigger>,
     pub log_format: Option<config::Value>,
+    #[serde(flatten)]
     pub method: Option<CommitMethod>,
 }
 impl Commit {
@@ -222,23 +223,29 @@ impl<'a> fmt::Display for StepsDumper<'a> {
     }
 }
 #[derive(Serialize, Deserialize)]
-pub enum Trigger {
+#[serde(untagged)]
+pub enum TriggerCondition {
     Commit {
-        workflows: Option<Vec<config::Value>>,
         release_targets: Option<Vec<config::Value>>,
-        changed: Vec<config::Value>,
-        diff_matcher: Option<config::Value>
+        changed: Option<Vec<config::Value>>,
+        diff_matcher: Option<config::Value>,
     },
     Cron {
-        schedule: config::Value
+        schedules: Vec<config::Value>,
     },
     Repository {
-        events: Vec<config::Value>
+        events: Vec<config::Value>,
     },
     Module {
-        workflow: Option<Vec<config::Value>>,
-        when: HashMap<String, config::AnyValue>
-    }
+        when: HashMap<String, config::AnyValue>,
+    },
+    Nop
+}
+#[derive(Serialize, Deserialize)]
+pub struct Trigger {
+    workflows: Option<Vec<config::Value>>,
+    #[serde(flatten)]
+    condition: TriggerCondition,
 }
 impl Trigger {
     pub fn diff_matcher(
@@ -257,39 +264,50 @@ impl Trigger {
         config: &super::Config,
         runtime: &super::runtime::JobConfig
     ) -> bool {
-        match &self {
-            Self::Commit{ workflows, release_targets, changed, diff_matcher } => {
-                if workflows.as_ref().map_or_else(
-                    // when no workflow specified for condition, always pass
-                    || false,
-                    // if more than 1 workflows specified, runtime.workflow should match any of them
-                    |v| v.iter().find(|v| { let s: &str = &v.resolve(); s == runtime.workflow }).is_none()
-                ) {
-                    return false;
-                }
-                if release_targets.as_ref().map_or_else(
+        // workflows match?
+        if !self.workflows.as_ref().map_or_else(
+            // when no workflow specified for condition, always pass
+            || true,
+            // if more than 1 workflows specified, runtime.workflow should match any of them
+            |v| v.iter().find(|v| { let s: &str = &v.resolve(); s == runtime.workflow }).is_some()
+        ) {
+            log::debug!("workflow {} does not match", runtime.workflow);
+            return false;
+        }
+        match &self.condition {
+            TriggerCondition::Commit{ release_targets, changed, diff_matcher } => {
+                if !release_targets.as_ref().map_or_else(
                     // no job.release_targets restriction. always ok
-                    || false,
+                    || true,
                     |v| match &runtime.release_target {
                         // both runtime.release_target and job.release_targets exists, compare matches
-                        Some(rt) => v.iter().find(|v| { let s: &str = &v.resolve(); s == rt }).is_none(),
+                        Some(rt) => v.iter().find(|v| { let s: &str = &v.resolve(); s == rt }).is_some(),
                         // runtime.release_target exists, but job.release_targets is empty, always ok
-                        None => false
+                        None => true
                     }
                 ) {
                     return false;
                 }
-                let dm = Self::diff_matcher(diff_matcher, changed);
-                if !config.modules.vcs().changed(&dm) {
-                    return false;
+                if let Some(ch) = changed {
+                    // diff pattern matches
+                    let dm = Self::diff_matcher(diff_matcher, ch);
+                    if !config.modules.vcs().changed(&dm) {
+                        return false;
+                    }
                 }
             },
-            Self::Cron{ schedule } => {
+            TriggerCondition::Cron{ schedules } => {
+                panic!("TODO: implement match logic for Cron condition")
             },
-            Self::Repository{ events } => {
+            TriggerCondition::Repository{ events } => {
+                panic!("TODO: implement match logic for Repository condition")
             },
-            Self::Module{ workflow, when } => {
-            }
+            TriggerCondition::Module{ when } => {
+                let _wf = config.workflows.get(&runtime.workflow).unwrap();
+                // use module method like _wf.matches(when) to determine.
+                panic!("TODO: implement match logic for Module condition")
+            },
+            TriggerCondition::Nop => {},
         }
         return true
     }
@@ -297,7 +315,7 @@ impl Trigger {
 #[derive(Serialize, Deserialize)]
 pub struct Job {
     pub account: Option<config::Value>,
-    pub on: Vec<Trigger>,
+    pub on: UnitOrListOf<Trigger>,
     pub runner: Runner,
     pub shell: Option<config::Value>,
     pub command: Option<config::Value>,
@@ -307,7 +325,7 @@ pub struct Job {
     pub checkout: Option<HashMap<String, config::Value>>,
     pub caches: Option<HashMap<String, Cache>>,
     pub depends: Option<Vec<config::Value>>,
-    pub commits: Option<Vec<Commit>>,
+    pub commit: Option<UnitOrListOf<Commit>>,
     pub options: Option<HashMap<String, config::AnyValue>>,
     pub tasks: Option<HashMap<String, config::Value>>,
 }
@@ -375,7 +393,7 @@ impl Job {
         config: &super::Config,
         rtconfig: &super::runtime::JobConfig
     ) -> Option<&Commit> {
-        match &self.commits {
+        match &self.commit {
             Some(ref v) => {
                 for commit in v {
                     match commit.on {

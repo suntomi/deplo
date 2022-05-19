@@ -47,18 +47,22 @@ impl<'de, T: module::Module, E: DeserializeOwned> ConfigFor<T,E> {
         &self.ext
     }
 }
+#[derive(Deserialize)]
+struct DeserializeWrapper<T> {
+    value: T,
+}
 impl<'de, T: module::Module, E: DeserializeOwned + Clone> Deserialize<'de> for ConfigFor<T,E> {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where D: Deserializer<'de> {
         let v = config::AnyValue::deserialize(deserializer)?;
         let src = toml::to_string(&v).unwrap();
-        let c = toml::from_str::<Config>(&src).unwrap();
-        let e = toml::from_str::<E>(&src).unwrap();
-        set_config_for::<T>(c);
+        let c = toml::from_str::<DeserializeWrapper<Config>>(&src).unwrap();
+        let e = toml::from_str::<DeserializeWrapper<E>>(&src).unwrap();
+        set_config_for::<T>(c.value);
         config_for::<T, _, Self, D::Error>(|v| {
             Ok(Self { 
                 index: v.len() - 1,
-                ext: e.clone(),
+                ext: e.value.clone(),
                 anchor: std::marker::PhantomData
             })
         })

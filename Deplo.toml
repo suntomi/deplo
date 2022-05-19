@@ -23,7 +23,7 @@ SUNTOMI_VCS_ACCOUNT = { key = "SUNTOMI_VCS_ACCOUNT" }
 SUNTOMI_VCS_ACCOUNT_EMAIL = { key = "SUNTOMI_VCS_ACCOUNT_EMAIL" }
 SUNTOMI_VCS_ACCOUNT_KEY = { key = "SUNTOMI_VCS_ACCOUNT_KEY" }
 SUNTOMI_VCS_APP_ID = { key = "SUNTOMI_VCS_APP_ID" }
-SUNTOMI_VCS_APP_PKEY = { path = "./secrets/ghapp.pem" }
+SUNTOMI_VCS_APP_PKEY = { path = "./.secrets/ghapp.pem" }
 
 
 # ------------
@@ -31,7 +31,7 @@ SUNTOMI_VCS_APP_PKEY = { path = "./secrets/ghapp.pem" }
 # ------------
 # version control system account settings
 [vcs]
-type = "Github"
+type = "github"
 email = "${SUNTOMI_VCS_ACCOUNT_EMAIL}"
 account = "${SUNTOMI_VCS_ACCOUNT}"
 key = "${SUNTOMI_VCS_ACCOUNT_KEY}"
@@ -49,8 +49,8 @@ key = "${SUNTOMI_VCS_ACCOUNT_KEY}"
 
 [ci.gh_app]
 type = "ghaction"
-app_id = "${SUNTOMI_VCS_APP_ID}"
-pem = "${SUNTOMI_VCS_APP_PKEY}"
+account = "${SUNTOMI_VCS_APP_ID}"
+key = "${SUNTOMI_VCS_APP_PKEY}"
 
 
 # ------------
@@ -99,7 +99,7 @@ discord = {
 on = { workflows = ["deploy", "integrate"], changed = ["tools/docker/Dockerfile.base"] }
 # you can set local_fallback container image. if its set, command will be executed on container of `local_fallback.image`,
 # with using shell `local_fallback.shell`, if local machine's OS does not matched runner.os.
-runner = { type = "machine", os = "Linux", local_fallback = { image = "docker:20.10", shell = "sh" } }
+runner = { os = "linux", local_fallback = { image = "docker:20.10", shell = "sh" } }
 command = """
 docker build -t ghcr.io/suntomi/deplo:base -f tools/docker/Dockerfile.base tools/docker
 if [ "${DEPLO_CI_WORKFLOW_TYPE}" = "deploy" ]; then
@@ -111,7 +111,7 @@ fi
 [jobs.builder]
 # if workflows is opmitted, use ["deploy", "integrate"] by default.
 on = { changed = ["tools/docker/Dockerfile.builder", "Cargo.*"] }
-runner = { type = "machine", os = "Linux", local_fallback = { image = "docker:20.10", shell = "sh" } }
+runner = { os = "linux", local_fallback = { image = "docker:20.10", shell = "sh" } }
 command = """
 sh tools/scripts/copy_manifests.sh
 docker build -t ghcr.io/suntomi/deplo:builder -f tools/docker/Dockerfile.builder tools/docker
@@ -137,9 +137,9 @@ on = [
     { workflows = ["integrate"], changed = ["*/src/*", "Cargo.*"] },
     { workflows = ["cron"], schedules = ["daily"] },
     { workflows = ["repository"], events = ["manual"] },
-    { workflows = ["slack"], when = { message = { matches = ['.*test\sit.*'] } } }
+    { workflows = ["slack"], when = { message_matches = ['.*test\sit.*'] } }
 ]
-runner = { type = "machine", os = "Linux", local_fallback = { image = "ghcr.io/suntomi/deplo:builder" } }
+runner = { os = "linux", local_fallback = { image = "ghcr.io/suntomi/deplo:builder" } }
 command = "cargo test"
 tasks = { test = "cargo test", home = "echo ${HOME}" }
 # cache settings. file paths that is listed in paths will be preserved with tha key `keys[0]`.
@@ -159,21 +159,21 @@ caches = {
 on = { workflows = ["deploy"], changed = ["Deplo.toml"] }
 # local_fallback can be path to docker file. if you specify docker file path, deplo automatically build corresponding image
 # and use it as local fallback container image.
-runner = { type = "machine", os = "linux", local_fallback = { path = "tools/docker/Dockerfile.vmfb", shell = "sh" } }
+runner = { os = "linux", local_fallback = { path = "tools/docker/Dockerfile.vmfb", shell = "sh" } }
 command = "deplo init"
-# commits settings. if path of files that changed after the job finish running, matched patterns, 
+# commit settings. if path of files that changed after the job finish running, matched patterns, 
 # deplo push or made pull request such a changes to repoisitory, after all jobs finish running.
-commits = [
-    { patterns = [".github/*"], targets = ["nightly"], method = { type = "push" } },
-    { patterns = [".github/*"], targets = ["prod"], method = { type = "pull_request" } },
-    { patterns = ["docs/*"], targets = ["lab"], method = { type = "push" } }
+commit = [
+    { files = [".github/*"], on = { release_targets = ["nightly"] }, with = "push" },
+    { files = [".github/*"], on = { release_targets = ["prod"] }, with = "pull_request" },
+    { files = ["docs/*"], on = { release_targets = ["lab"] }, with = "push" }
 ]
 
 [jobs.product]
 on = { workflows = ["deploy"], changed = ["*/src/*", "Cargo.*"] }
 # job dependencies. deploy.product only starts to run after deploy.builder finished.
 depends = ["builder"]
-runner = { type = "machine", os = "linux", local_fallback = { path = "tools/docker/Dockerfile.vmfb", shell = "sh" } }
+runner = { os = "linux", local_fallback = { path = "tools/docker/Dockerfile.vmfb", shell = "sh" } }
 command = """
 set -e
 mkdir -p tools/docker/bin
@@ -206,7 +206,7 @@ on = { workflows = ["deploy"], targets = ["prod"], changed = ["*/src/*", "Cargo.
 # prohibit to run from cli
 options = { only_from_ci = true }
 depends = ["product"]
-runner = { os = "Linux", local_fallback = { image = "docker:20.10", shell = "sh" } }
+runner = { os = "linux", local_fallback = { image = "docker:20.10", shell = "sh" } }
 command = """
 . tools/scripts/setup_release_env.sh
 echo ${SUNTOMI_VCS_ACCOUNT_KEY} | docker login ghcr.io -u ${SUNTOMI_VCS_ACCOUNT} --password-stdin
@@ -215,10 +215,10 @@ docker tag ghcr.io/suntomi/deplo:${DEPLO_RELEASE_VERSION} ghcr.io/suntomi/deplo:
 docker push ghcr.io/suntomi/deplo:latest
 """
 
-[jobs.deploy.mac]
+[jobs.mac]
 on = { workflows = ["deploy"], changed = ["*/src/*", "Cargo.*"] }
 depends = ["product"]
-runner = { type = "machine", os = "macos" }
+runner = { os = "macos" }
 steps = [{
     name = "before test"
     env = { HOGE = "hoge" },

@@ -9,8 +9,8 @@ use serde::{Deserialize, Serialize};
 type SecretAccessors = HashMap<String, Box<dyn crate::secret::Accessor + Send + Sync>>;
 
 #[derive(Serialize, Deserialize)]
+#[serde(untagged)]
 pub enum Secret {
-    Nop,
     Env {
         key: String
     },
@@ -28,10 +28,13 @@ pub struct Config {
     pub secrets: HashMap<String, Secret>
 }
 impl Config {
-    pub fn apply(&self) -> Result<(), Box<dyn Error>> {
+    pub fn apply_with(
+        &self,
+        runtime_config: &crate::config::runtime::Config
+    ) -> Result<(), Box<dyn Error>> {
         let mut secrets = hashmap!{};
         for (k, secret) in &self.secrets {
-            let s = crate::secret::factory(secret)?;
+            let s = crate::secret::factory(runtime_config, secret)?;
             secrets.insert(k.clone(), s);
         }
         set_secret_ref(secrets);

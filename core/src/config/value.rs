@@ -21,7 +21,7 @@ fn secret_resolver(s: &str) -> String {
     }
 }
 fn detect_value_ref(s: &str) -> (&str, Option<ValueResolver>) {
-    let re = Regex::new(r"\$\{([^\}]+)\}").unwrap();
+    let re = Regex::new(r"^\$\{([^\}]+)\}$").unwrap();
     match re.captures(s) {
         Some(captures) => {
             let key = captures.get(1).unwrap().as_str();

@@ -12,6 +12,7 @@ pub struct Env {
 
 impl secret::Factory for Env {
     fn new(
+        runtime_config: &config::runtime::Config,
         secret_config: &config::secret::Secret
     ) -> Result<Self, Box<dyn Error>> {
         return Ok(match secret_config {
