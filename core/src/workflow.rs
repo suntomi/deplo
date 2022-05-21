@@ -14,10 +14,24 @@ impl module::Module for Module {
     fn ty() -> config::module::Type { return config::module::Type::Workflow; }
 }
 
+pub struct Dummy;
+impl Workflow for Dummy {
+    fn new(_: &config::Container, _: &HashMap<String, config::AnyValue>) -> Result<Self, Box<dyn Error>> {
+        return Ok(Dummy);
+    }
+    fn listen(&self) -> Result<(), Box<dyn Error>> {
+        return Ok(());
+    }
+    fn matches(&self, _: &str, _: &str) -> Result<bool, Box<dyn Error>> {
+        return Ok(false);
+    }
+}
+
 pub fn factory<'a>(
     config: &config::Container,
     uses: &config::Value,
     with: &Option<HashMap<String, config::AnyValue>>
 ) -> Result<Box<dyn Workflow + 'a>, Box<dyn Error>> {
-    panic!("Not implemented yet");
+    log::error!("Not implemented yet");
+    return Ok(Box::new(Dummy));
 }
