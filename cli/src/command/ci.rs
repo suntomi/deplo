@@ -98,14 +98,14 @@ impl<S: shell::Shell> CI<S> {
     }
     fn set_output<A: args::Args>(&self, args: &A) -> Result<(), Box<dyn Error>> {
         let config = self.config.borrow();
-        let key = args.value_of("key").unwrap();
-        let value = args.value_of("value").unwrap();
+        let key = args.value_or_die("key");
+        let value = args.value_or_die("value");
         config.jobs.set_user_output(&config, key, value)?;
         Ok(())
 }
     fn exec<A: args::Args>(&self, kind: &str, args: &A) -> Result<(), Box<dyn Error>> {
-        let job_name = &format!("{}-{}", kind, args.value_of("name").unwrap());
-        match self.exec_job(args, job_name)? {
+        let job_name = format!("{}-{}", kind, args.value_or_die("name"));
+        match self.exec_job(args, &job_name)? {
             Some(job_id) => {
                 log::info!("remote job {} id={} running", job_name, job_id);
                 if args.occurence_of("async") <= 0 {
@@ -136,7 +136,7 @@ impl<S: shell::Shell> CI<S> {
         match args.values_of("env") {
             Some(es) => for e in es {
                 let mut kv = e.split("=");
-                let k = kv.next().unwrap();
+                let k = kv.next().expect("env arg should be in key=value format");
                 let v = kv.next().unwrap_or("");
                 envs.insert(k.to_string(), v.to_string());
             },
@@ -209,9 +209,9 @@ impl<S: shell::Shell> CI<S> {
         //         config.run_job_steps(&self.shell, &non_interactive_shell_opts, &job)?;
         //         Ok(None)
         //     },
-        //     Some(("wait", subargs)) => Ok(Some(subargs.value_of("job_id").unwrap().to_string())),
+        //     Some(("wait", subargs)) => Ok(Some(subargs.value_of("job_id").expect("cli arg 'job_id' is required").to_string())),
         //     Some(("output", subargs)) => {
-        //         let key = subargs.value_of("key").unwrap();
+        //         let key = subargs.value_of("key").expect("cli arg 'key' is required");
         //         match config.user_job_output(job_name, key)? {
         //             Some(v) => println!("{}", v),
         //             None => {}
@@ -280,7 +280,8 @@ impl<S: shell::Shell> CI<S> {
         //         Some(v) => {
         //             log::info!("ci fin: find commit from job {} at {} for target {}", 
         //                 job_name, v, config.runtime.release_target.as_ref().map_or_else(|| "none", |v| v.as_str()));
-        //             match job.commit_setting_from_release_target(&config.runtime.release_target).unwrap().push_opts {
+        //             match job.commit_setting_from_release_target(&config.runtime.release_target)
+        //                      .expect("commit_setting_from_release_target should success").push_opts {
         //                 Some(ref options) => match options {
         //                     config::PushOptions::Push{squash} => {
         //                         if squash.unwrap_or(true) {

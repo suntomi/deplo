@@ -16,7 +16,7 @@ impl<S: shell::Shell> VCS<S> {
         let config = self.config.borrow();
         let vcs = config.modules.vcs();
         vcs.release(
-            (args.value_of("tag_name").unwrap(), false),
+            (args.value_or_die("tag_name"), false),
             &args.json_value_of("option")?
         )?;
         Ok(())
@@ -29,8 +29,8 @@ impl<S: shell::Shell> VCS<S> {
             options.as_object_mut().unwrap().insert("replace".to_string(), serde_json::json!(true));
         }
         vcs.release_assets(
-            (args.value_of("tag_name").unwrap(), false),
-            args.value_of("asset_file_path").unwrap(),
+            (args.value_or_die("tag_name"), false),
+            args.value_or_die("asset_file_path"),
             &options
         )?;
         Ok(())

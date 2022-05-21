@@ -1,4 +1,5 @@
 use std::collections::{HashMap};
+use std::fmt;
 use std::sync::RwLock;
 
 use maplit::hashmap;
@@ -14,6 +15,18 @@ pub enum Type {
     Step,
     Vcs,
     Workflow,
+}
+
+impl fmt::Debug for Type {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Ci => write!(f, "Ci"),
+            Self::Secret => write!(f, "Secret"),
+            Self::Step => write!(f, "Step"),
+            Self::Vcs => write!(f, "Vcs"),
+            Self::Workflow => write!(f, "Workflow"),
+        }
+    }
 }
 
 lazy_static! {
@@ -74,5 +87,8 @@ pub fn set_config_for<T: module::Module>(config: Config) {
 pub fn config_for<T, V, R, E>(mut visitor: V) -> Result<R, E>
 where T: module::Module, V: FnMut(&Vec<Config>) -> Result<R, E> {
     let state = G_MODULE_CONFIG_REF.read().unwrap();
-    visitor(state.get(&T::ty()).unwrap())
+    match state.get(&T::ty()) {
+        Some(v) => visitor(v),
+        None => visitor(&G_EMPTY_VEC),
+    }
 }

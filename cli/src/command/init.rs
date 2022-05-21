@@ -5,7 +5,7 @@ use log;
 use core::args;
 use core::config;
 use core::shell;
-use core::util::{rm, path_join};
+use core::util::{rm, path_join, escalate};
 
 use crate::command;
 

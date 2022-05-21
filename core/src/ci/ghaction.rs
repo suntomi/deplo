@@ -557,7 +557,7 @@ impl<S: shell::Shell> ci::CI for GhAction<S> {
     }
     fn dispatched_remote_job(&self) -> Result<Option<ci::RemoteJob>, Box<dyn Error>> {
         if std::env::var("DEPLO_GHACTION_EVENT_TYPE") == Ok(config::DEPLO_REMOTE_JOB_EVENT_TYPE.to_string()) {
-            let payload = std::env::var("DEPLO_GHACTION_EVENT_PAYLOAD").unwrap();
+            let payload = crate::util::env::var_or_die("DEPLO_GHACTION_EVENT_PAYLOAD");
             Ok(Some(serde_json::from_str::<ci::RemoteJob>(&payload)?))
         } else {
             Ok(None)
@@ -766,7 +766,7 @@ impl<S: shell::Shell> ci::CI for GhAction<S> {
         };
         let json = format!("{{\"encrypted_value\":\"{}\",\"key_id\":\"{}\"}}", 
             //get value from env to unescapse
-            seal(&std::env::var(key).unwrap(), &public_key_info.key)?,
+            seal(&crate::util::env::var_or_die(key), &public_key_info.key)?,
             public_key_info.key_id
         );
         // TODO_PATH: use Path to generate path of /dev/null

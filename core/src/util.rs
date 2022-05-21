@@ -4,7 +4,7 @@ pub struct ScopedCall<F: FnOnce()> {
 }
 impl<F: FnOnce()> Drop for ScopedCall<F> {
     fn drop(&mut self) {
-        self.c.take().unwrap()()
+        self.c.take().expect("ScopedCall have not initialized")()
     }
 }
 
@@ -114,6 +114,19 @@ impl<'a, T> IntoIterator for &'a UnitOrListOf<T> {
         match self {
             UnitOrListOf::Unit(v) => vec![v].into_iter(),
             UnitOrListOf::List(v) => v.iter().map(|v| v).collect::<Vec<Self::Item>>().into_iter()
+        }
+    }
+}
+
+// env
+pub mod env {
+    use std::env;
+    pub fn var_or_die(key: &str) -> String {
+        match env::var(key) {
+            Ok(v) => v,
+            Err(e) => {
+                panic!("env {} not found: {}", key, e);
+            }
         }
     }
 }

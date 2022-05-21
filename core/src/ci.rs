@@ -88,7 +88,7 @@ pub fn factory<'a>(
     config: &config::Container,
     account_name: &str
 ) -> Result<Box<dyn CI + 'a>, Box<dyn Error>> {
-    match &config.borrow().ci.get(account_name).unwrap() {
+    match &config.borrow().ci.get(account_name).expect(&format!("ci account {} should defined in Deplo.toml", account_name)) {
         config::ci::Account::GhAction {..} => {
             return factory_by::<ghaction::GhAction>(config, account_name);
         },

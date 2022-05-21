@@ -281,7 +281,7 @@ impl<GIT: git::GitFeatures<S>, S: shell::Shell> vcs::VCS for Github<GIT, S> {
                 "-d", serde_json::to_string(&body)?
                 ], shell::no_env(), shell::no_cwd(), &shell::capture()
             )?;
-            let issues_api_url = jsonpath(&response, "$.issue_url")?.unwrap();
+            let issues_api_url = jsonpath(&response, "$.issue_url")?.expect(&format!("no issue_url in response: {:?}", &response));
             match options.get("labels") {
                 Some(labels) => {
                     log::debug!("attach labels({}) to PR via {}", labels, issues_api_url);

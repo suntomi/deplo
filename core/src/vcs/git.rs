@@ -188,7 +188,7 @@ impl<S: shell::Shell> GitFeatures<S> for Git<S> {
                     None => cwd.as_path()
                 },
                 RepositoryOpenFlags::empty(), 
-                &[std::env::var("HOME").unwrap()]
+                &[crate::util::env::var_or_die("HOME")]
             ).unwrap(),
             #[cfg(not(feature="git2"))]
             repo: StubRepository {},

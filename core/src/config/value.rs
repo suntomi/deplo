@@ -1,4 +1,3 @@
-use std::ffi::OsStr;
 use std::fmt;
 use std::cmp::PartialEq;
 use std::borrow::Cow;

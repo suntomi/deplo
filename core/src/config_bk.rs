@@ -1375,7 +1375,7 @@ impl Config {
                     (vcs::RefType::Branch|vcs::RefType::Pull, _) => {
                         let branch_name = format!(
                             "deplo-auto-commits-{}-tmp-{}", 
-                            std::env::var("DEPLO_CI_ID").unwrap(),
+                            crate::util::env::var_or_die("DEPLO_CI_ID"),
                             job_name
                         );
                         if vcs.push_diff(

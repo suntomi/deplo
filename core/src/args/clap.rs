@@ -39,17 +39,17 @@ impl AliasCommands {
     fn create(&self, name: &'static str) -> App<'static> {
         match self.alias_map.get(name) {
             Some(body) => {
-                self.map.get(body).unwrap().1.create(name)
+                self.map.get(body).expect("alias does not have body").1.create(name)
             },
             None => match self.map.get(name) {
-                Some(ent) => ent.1.create(ent.0.last().unwrap()),
+                Some(ent) => ent.1.create(ent.0.last().expect("alias body has no element")),
                 None => panic!("no such aliased command [{}]", name)
             }
         }
     }
     fn find_path(&self, name: &str) -> Vec<&'static str> {
         match self.alias_map.get(name) {
-            Some(body) => self.map.get(body).unwrap().0.clone(),
+            Some(body) => self.map.get(body).expect("alias does not have body").0.clone(),
             None => vec![]
         }
     }

@@ -57,7 +57,7 @@ pub struct Modules {
 }
 impl Modules {
     pub fn vcs(&self) -> &Box<dyn crate::vcs::VCS> {
-        self.vcs.as_ref().unwrap()
+        self.vcs.as_ref().expect("vcs module should be loaded")
     }
     pub fn ci(&self) -> &HashMap<String, Box<dyn crate::ci::CI>> {
         &self.ci
@@ -66,7 +66,7 @@ impl Modules {
         self.ci_for("default")
     }
     pub fn ci_for(&self, account_name: &str) -> &Box<dyn crate::ci::CI> {
-        self.ci.get(account_name).unwrap()
+        self.ci.get(account_name).expect(&format!("missing ci module for account '{}'", account_name))
     }
 }
 pub type ConfigVersion = u64;
@@ -212,7 +212,11 @@ impl Config {
         );
         fs::write(data_path, content)?;
         shell.exec(
-            shell::args!["chmod", "+x", data_path.to_str().unwrap()], shell::no_env(), shell::no_cwd(), &shell::no_capture()
+            shell::args![
+                "chmod",
+                "+x",
+                data_path.to_str().expect(&format!("data_path {:?} should be convertable to &str", data_path))
+            ], shell::no_env(), shell::no_cwd(), &shell::no_capture()
         )?;
         Ok(())
     }

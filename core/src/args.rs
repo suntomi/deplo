@@ -20,13 +20,16 @@ pub trait Args : Sized {
             None => None
         }
     }
+    fn value_or_die(&self, name: &str) -> &str {
+        self.value_of(name).expect(&format!("missing cli arg '{}'", name))
+    }
     fn json_value_of(&self, name: &str) -> Result<JsonValue, Box<dyn Error>> {
         let mut map = JsonMap::new();  
         match self.values_of(name) {
             Some(v) => {
                 for value in v {
                     let mut parts = value.splitn(2, '=');
-                    let key = parts.next().unwrap();
+                    let key = parts.next().expect("value cli arg should have the form of $key=$value");
                     let value = parts.next().unwrap_or("true");
                     map.insert(key.to_string(), str_to_json(value));
                 }

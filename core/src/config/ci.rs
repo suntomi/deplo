@@ -56,7 +56,7 @@ impl Accounts {
         &self.0
     }
     pub fn is_main(&self, ty: &str) -> bool {
-        let d = self.0.get("default").unwrap();
+        let d = self.0.get("default").expect("default ci account should exist always");
         d.type_matched(ty)
     }
     pub fn get<'a>(&'a self, name: &str) -> Option<&'a Account> {

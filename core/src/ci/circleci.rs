@@ -210,7 +210,7 @@ impl<'a, S: shell::Shell> ci::CI for CircleCI<S> {
     }
     fn set_secret(&self, key: &str, val: &str) -> Result<(), Box<dyn Error>> {
         let config = self.config.borrow();
-        let token = match &config.ci.get(&self.account_name).unwrap() {
+        let token = match &config.ci.get(&self.account_name).expect(&format!("no ci config for {}", self.account_name)) {
             config::ci::Account::CircleCI { key, .. } => { key },
             _ => { 
                 return escalate!(Box::new(ci::CIError {
