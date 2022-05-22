@@ -43,9 +43,11 @@ pub trait VCS {
     fn squash_branch(&self, n: usize) -> Result<(), Box<dyn Error>>;
     fn commit_hash(&self, expr: Option<&str>) -> Result<String, Box<dyn Error>>;
     fn checkout(&self, commit: &str, branch_name: Option<&str>) -> Result<(), Box<dyn Error>>;
+    fn checkout_previous(&self) -> Result<(), Box<dyn Error>> { self.checkout("-", None) }
     fn repository_root(&self) -> Result<String, Box<dyn Error>>;
     fn rebase_with_remote_counterpart(&self, branch: &str) -> Result<(), Box<dyn Error>>;
     fn pick_ref(&self, target: &str) -> Result<(), Box<dyn Error>>;
+    fn pick_fetched_head(&self) -> Result<(), Box<dyn Error>> { self.pick_ref("FETCH_HEAD") }
     fn push_branch(
         &self, local_ref: &str, remote_branch: &str, option: &HashMap<&str, &str>
     ) -> Result<(), Box<dyn Error>>;
@@ -105,6 +107,7 @@ pub trait VCS {
         false
     }
 }
+#[derive(Clone)]
 pub struct Module;
 impl module::Module for Module {
     fn ty() -> config::module::Type { return config::module::Type::Vcs; }

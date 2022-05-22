@@ -1,5 +1,4 @@
 use std::fmt;
-use std::path::Path;
 use std::borrow::Cow;
 use std::collections::HashMap;
 use std::error::Error;
@@ -66,6 +65,14 @@ macro_rules! protected_arg {
     };
 }
 
+pub fn ctoa<'a, I, K, V: 'a>(collection: I) -> Vec<(K, Arg<'a>)>
+where 
+    I: IntoIterator<Item = (K, V)>, K: AsRef<OsStr>, V: ArgTrait {
+    let mut h = vec![];
+    collection.into_iter().map(|(k,v)| h.push((k, arg!(v))));
+    return h;
+}
+
 pub use arg;
 pub use args;
 pub use protected_arg;
@@ -74,11 +81,21 @@ pub struct Settings {
     capture: bool,
     interactive: bool,
     silent: bool,
+    paths: Option<Vec<String>>
+}
+impl Settings {
+    pub fn paths(&mut self, paths: Vec<String>) -> &mut Self {
+        match &mut self.paths {
+            Some(p) => p.extend(paths),
+            None => self.paths = Some(paths)
+        };
+        self
+    }
 }
 
 pub trait Shell {
     fn new(config: &config::Container) -> Self;
-    fn set_cwd<P: AsRef<Path>>(&mut self, dir: &Option<P>) -> Result<(), Box<dyn Error>>;
+    fn set_cwd<P: ArgTrait>(&mut self, dir: &Option<P>) -> Result<(), Box<dyn Error>>;
     fn set_env(&mut self, key: &str, val: String) -> Result<(), Box<dyn Error>>;
     fn config(&self) -> &config::Container;
 
@@ -88,7 +105,7 @@ pub trait Shell {
     where 
         I: IntoIterator<Item = Arg<'a>>,
         J: IntoIterator<Item = (K, Arg<'a>)>,
-        K: AsRef<OsStr>, P: AsRef<Path>;
+        K: AsRef<OsStr>, P: ArgTrait;
 
     fn exec<'a, I, J, K, P>(
         &self, args: I, envs: J, cwd: &Option<P>, settings: &Settings
@@ -96,25 +113,26 @@ pub trait Shell {
     where 
         I: IntoIterator<Item = Arg<'a>>,
         J: IntoIterator<Item = (K, Arg<'a>)>,
-        K: AsRef<OsStr>, P: AsRef<Path>;
+        K: AsRef<OsStr>, P: ArgTrait;
 
     fn eval<'a, I, K, P>(
         &self, code: &'a str, shell: &'a Option<String>, envs: I, cwd: &'a Option<P>, settings: &'a Settings
     ) -> Result<String, ShellError> 
     where 
         I: IntoIterator<Item = (K, Arg<'a>)>,
-        K: AsRef<OsStr>, P: AsRef<Path> 
+        K: AsRef<OsStr>, P: ArgTrait 
     {
         let sh = shell.as_ref().map_or_else(|| "bash", |v| v.as_str());
         return self.exec(args!(sh, "-c", code), envs, cwd, settings);
     }
-    fn eval_on_container<'a, I, K, P>(
+    fn eval_on_container<'a, I, J, K, L, P>(
         &self, image: &str, code: &str, shell: &Option<String>, envs: I,
-        cwd: &Option<P>, mounts: I, settings: &Settings
+        cwd: &Option<P>, mounts: J, settings: &Settings
     ) -> Result<String, Box<dyn Error>>
     where 
         I: IntoIterator<Item = (K, Arg<'a>)>,
-        K: AsRef<OsStr>, P: AsRef<Path> 
+        J: IntoIterator<Item = (L, Arg<'a>)>,
+        K: AsRef<OsStr>, L: AsRef<OsStr>, P: ArgTrait 
     {
         let config = self.config().borrow();
         let mut envs_vec: Vec<Arg> = vec![];
@@ -136,7 +154,7 @@ pub trait Shell {
         let repository_mount_path = config.modules.vcs().repository_root()?;
         let workdir = match cwd {
             Some(dir) => make_absolute(
-                    dir.as_ref(), 
+                    &dir.value(),
                     &repository_mount_path.clone()
                 ).to_string_lossy().to_string(),
             None => repository_mount_path.clone()
@@ -151,13 +169,13 @@ pub trait Shell {
             args!["-v", format!("{}:{}", docker_mount_path(&repository_mount_path), docker_mount_path(&repository_mount_path))],
             args!["--entrypoint", shell.as_ref().map_or_else(|| "bash", |v| v.as_str())],
             args![image, "-c", code]
-        ]), HashMap::<K,Arg<'a>>::new(), &None as &Option<std::path::PathBuf>, &settings)?;
+        ]), HashMap::<K,Arg<'a>>::new(), no_cwd(), &settings)?;
         return Ok(result);
     }
     fn eval_output_of<'a, I, K, P>(
         &self, code: &'a str, shell: &'a Option<String>, envs: I, cwd: &'a Option<P>
     ) -> Result<String, ShellError>
-    where I: IntoIterator<Item = (K, Arg<'a>)>, K: AsRef<OsStr>,P: AsRef<Path> {
+    where I: IntoIterator<Item = (K, Arg<'a>)>, K: AsRef<OsStr>,P: ArgTrait {
         return self.output_of(args![shell.as_ref().map_or_else(|| "bash", |v| v.as_str()), "-c", code], envs, cwd);
     }
     fn detect_os(&self) -> Result<config::job::RunnerOS, Box<dyn Error>> {
@@ -245,7 +263,7 @@ pub use macro_ignore_exit_code as ignore_exit_code;
 pub fn no_env<'a>() -> HashMap<String, Arg<'a>> {
     return HashMap::new()
 }
-pub fn no_cwd<'a>() -> &'a Option<Box<Path>> {
+pub fn no_cwd<'a>() -> &'a Option<String> {
     return &None;
 }
 pub fn default<'a>() -> &'a Option<String> {
@@ -255,14 +273,14 @@ pub fn inherit_env() -> HashMap<String, String> {
     return std::env::vars().collect();
 }
 pub fn capture() -> Settings {
-    return Settings{ capture: true, interactive: false, silent: false };
+    return Settings{ capture: true, interactive: false, silent: false, paths: None };
 }
 pub fn no_capture() -> Settings {
-    return Settings{ capture: false, interactive: false, silent: false };
+    return Settings{ capture: false, interactive: false, silent: false, paths: None };
 }
 pub fn interactive() -> Settings {
-    return Settings{ capture: false, interactive: true, silent: false };
+    return Settings{ capture: false, interactive: true, silent: false, paths: None };
 }
 pub fn silent() -> Settings {
-    return Settings{ capture: true, interactive: false, silent: true };
+    return Settings{ capture: true, interactive: false, silent: true, paths: None };
 }

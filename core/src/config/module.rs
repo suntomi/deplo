@@ -43,13 +43,13 @@ pub struct Config {
 }
 #[derive(Serialize, Deserialize, Clone)]
 pub struct EmptyExtension {}
-#[derive(Serialize)]
-pub struct ConfigFor<T: module::Module, E: DeserializeOwned = EmptyExtension> {
+#[derive(Serialize, Clone)]
+pub struct ConfigFor<T: module::Module + Clone, E: DeserializeOwned + Clone = EmptyExtension> {
     index: usize,
     ext: E,
     anchor: std::marker::PhantomData<T>,
 }
-impl<'de, T: module::Module, E: DeserializeOwned> ConfigFor<T,E> {
+impl<'de, T: module::Module + Clone, E: DeserializeOwned + Clone> ConfigFor<T,E> {
     pub fn value<R,V>(&self, mut visitor: V) -> R
     where V: FnMut(&Config) -> R {
         config_for::<T, _, R, ()>(|v| {
@@ -64,7 +64,7 @@ impl<'de, T: module::Module, E: DeserializeOwned> ConfigFor<T,E> {
 struct DeserializeWrapper<T> {
     value: T,
 }
-impl<'de, T: module::Module, E: DeserializeOwned + Clone> Deserialize<'de> for ConfigFor<T,E> {
+impl<'de, T: module::Module + Clone, E: DeserializeOwned + Clone> Deserialize<'de> for ConfigFor<T,E> {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where D: Deserializer<'de> {
         let v = config::AnyValue::deserialize(deserializer)?;

@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::error::Error;
 use std::fmt;
 use std::result::Result;
@@ -38,6 +39,19 @@ pub trait Args : Sized {
         };
         Ok(serde_json::Value::Object(map))
     }
+    fn map_of(&self, key: &str) -> HashMap<String, String> {
+        let mut envs = HashMap::<String, String>::new();
+        match self.values_of(key) {
+            Some(es) => for e in es {
+                let mut kv = e.split("=");
+                let k = kv.next().expect("env arg should be in key=value format");
+                let v = kv.next().unwrap_or("");
+                envs.insert(k.to_string(), v.to_string());
+            },
+            None => {}
+        };
+        envs
+    }    
     fn error(&self, msg: &str) -> Box<ArgsError> {
         Box::new(ArgsError {
             command_path: self.command_path().join(" "),

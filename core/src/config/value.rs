@@ -5,6 +5,8 @@ use std::borrow::Cow;
 use regex::{Regex};
 use serde::{de, Deserialize, Serialize, Deserializer};
 
+use crate::config;
+
 type AnyValue = toml::value::Value;
 type ValueResolver = fn(&str) -> String;
 
@@ -14,7 +16,7 @@ pub fn is_secret_name(s: &str) -> bool {
     re.is_match(s)
 }
 fn secret_resolver(s: &str) -> String {
-    match super::secret::var(s) {
+    match config::secret::var(s) {
         Some(r) => r,
         None => format!("${{{}}}", s),
     }
@@ -52,6 +54,9 @@ impl Value {
             value: value.to_string(),
             resolver: None,
         }
+    }
+    pub fn as_str(&self) -> &str {
+        self.value.as_str()
     }
     pub fn resolve(&self) -> String {
         if self.resolver.is_some() {
@@ -139,7 +144,7 @@ impl crate::shell::ArgTrait for Value {
 }
 
 
-#[derive(Serialize)]
+#[derive(Serialize, Clone)]
 pub struct Any {
     pub value: AnyValue,
     #[serde(skip)]
@@ -159,6 +164,12 @@ impl<'de> Deserialize<'de> for Any {
     }
 }
 impl Any {
+    pub fn new(value: &str) -> Self {
+        Self {
+            value: AnyValue::String(value.to_string()),
+            resolver: None,
+        }
+    }
     pub fn resolve(&self) -> String {
         if self.resolver.is_some() {
             // should always be string (see initialization code above)
@@ -172,6 +183,31 @@ impl Any {
                 AnyValue::Datetime(ref s) => s.to_string(),
                 _ => serde_json::to_string(&self.value).unwrap()
             }
+        }
+    }
+    pub fn as_str(&self) -> Option<&str> {
+        match self.value {
+            AnyValue::String(ref s) => Some(s),
+            _ => None
+        }
+    }
+    pub fn at(&self, i: usize) -> Option<Any> {
+        match &self.value {
+            AnyValue::Array(a) => if a.len() > i {
+                Some(Any{value: a[i].clone(), resolver: self.resolver})
+            } else {
+                None
+            },
+            _ => None
+        }
+    }
+    pub fn index(&self, k: &str) -> Option<Any> {
+        match &self.value {
+            AnyValue::Table(t) => match t.get(k) {
+                Some(v) => Some(Any{value: v.clone(), resolver: self.resolver}),
+                None => None,
+            }
+            _ => None
         }
     }
 }

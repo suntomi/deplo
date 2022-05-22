@@ -1,18 +1,138 @@
 use std::collections::{HashMap};
 use std::error::Error;
 
-use crate::args;
+use maplit::hashmap;
+use serde::{Deserialize, Serialize};
+
+use crate::args::{Args};
 use crate::config;
 
-/// runtime configuration for job execution commands
-/// only `deplo run` contains this configuration
-#[derive(Default)]
-pub struct JobConfig {
-    pub job_name: String,
-    pub workflow: String,
-    pub wofkflow_params: HashMap<String, config::AnyValue>,
-    pub release_target: Option<String>,
-    pub process_envs: HashMap<String, String>,
+/// runtime configuration for single job execution
+#[derive(Serialize, Deserialize, Clone)]
+pub struct ExecOptions {
+    pub envs: HashMap<String, String>,
+    pub revision: Option<String>,
+    pub verbosity: u64,
+    pub remote: bool,
+    pub silent: bool,
+    pub timeout: Option<u64>,
+}
+impl ExecOptions {
+    pub fn new<A: Args>(args: &A, config: &config::Container) -> Result<Self, Box<dyn Error>> {
+        Ok(Self {
+            envs: args.map_of("env"),
+            revision: args.value_of("ref").map(|v| v.to_string()),
+            verbosity: args.value_of("verbosity").unwrap_or("0").parse()?,
+            remote: args.occurence_of("remote") > 0,
+            silent: args.occurence_of("silent") > 0,
+            timeout: args.value_of("timeout").map(|v| v.parse().expect(
+                &format!("value of `timeout` should be a number but {}", v)
+            )),
+        })
+    }
+}
+
+#[derive(Serialize, Deserialize, Clone)]
+pub struct Command {
+    pub args: Option<Vec<String>>
+}
+impl Command {
+    pub fn new_or_none<A: Args>(args: &A) -> Option<Self> {
+        match args.subcommand() {
+            Some((name, args)) => match name {
+                "sh" => Some(Self {
+                    args: args.values_of("command").map(|v| v.iter().map(|vv| vv.to_string()).collect())
+                }),
+                _ => None
+            },
+            None => None
+        }
+    }
+}
+
+#[derive(Serialize, Deserialize, Clone)]
+pub struct Job {
+    pub name: String,
+    pub command: Option<Command>
+}
+impl Job {
+    pub fn new_or_none<A: Args>(
+        args: &A, config: &config::Container
+    ) -> Result<Option<Self>, Box<dyn Error>> {
+        match args.value_of("job").map(|v| v.to_string()) {
+            Some(name) => Ok(Some(Self {
+                name,
+                command: Command::new_or_none(args)
+            })),
+            None => Ok(None)
+        }
+    }
+}
+
+/// runtime configuration for workflow execution commands
+/// only `deplo start/stop` shold contains this configuration
+#[derive(Serialize, Deserialize, Clone)]
+pub struct Workflow {
+    /// key of config.workflows
+    pub name: String,
+    /// context of the workflow run. 
+    /// deplo uses the data to checks whether each job should be run with the workflow.
+    pub context: HashMap<String, config::AnyValue>,
+    /// job name to run. if omitted, run all job that inovked with the workflow run
+    pub job: Option<Job>,
+    /// common running cofiguration of each jobs invoked by the workflow run
+    pub exec: ExecOptions,
+}
+impl Workflow {
+    pub fn new<A: Args>(args: &A, config: &config::Container) -> Result<Self, Box<dyn Error>> {
+        let trigger = match args.value_of("workflow") {
+            Some(v) => Some(crate::ci::WorkflowTrigger::DirectInput{
+                name: v.to_string(),
+                context: match args.value_of("workflow_context") {
+                    Some(v) => serde_json::from_str(v)?,
+                    None => hashmap!{}
+                }
+            }),
+            None => match args.value_of("workflow_event_payload") {
+                Some(v) => Some(crate::ci::WorkflowTrigger::EventPayload(v.to_string())),
+                None => None
+            }
+        };
+        let matches = {
+            let config = config.borrow();
+            let ci = config.modules.ci_by_env();
+            ci.filter_workflows(trigger)?
+        };
+        let (workflow_name, context) = if matches.len() == 0 {
+            panic!("no workflow matches with trigger");
+        } else if matches.len() > 2 {
+            log::warn!(
+                "multiple workflow matches({})",
+                matches.iter().map(|(n,_)| {n.to_string()}).collect::<Vec<String>>().join(",")
+            );
+            &matches[0]
+        } else {
+            &matches[0]
+        };
+        Ok(Self {
+            name: workflow_name.to_string(),
+            job: Job::new_or_none(args, config)?,
+            context: context.clone(),
+            exec: ExecOptions::new(args, config)?
+        })
+    }
+    pub fn command(&self) -> config::job::Command {
+        match &self.job {
+            Some(job) => match &job.command {
+                Some(c) => match &c.args {
+                    Some(args) => config::job::Command::Adhoc(args.join(" ")),
+                    None => config::job::Command::Shell,
+                },
+                None => config::job::Command::Job
+            },
+            None => config::job::Command::Job
+        }
+    }
 }
 /// runtime configuration for all invocation of deplo cli.
 #[derive(Default)]
@@ -23,7 +143,7 @@ pub struct Config {
     pub workdir: Option<String>,
 }
 impl Config {
-    pub fn with_args<A: args::Args>(args: &A) -> Self {
+    pub fn with_args<A: Args>(args: &A) -> Self {
         Config {
             verbosity: match args.value_of("verbosity") {
                 Some(o) => o.parse().unwrap_or(0),
@@ -92,7 +212,7 @@ impl Config {
 
 /*
     fn post_apply<A: args::Args>(
-        config: &mut super::Container, args: &A
+        config: &mut config::Container, args: &A
     ) -> Result<(), Box<dyn Error>> {
         // set release target
 
@@ -105,7 +225,7 @@ impl Config {
             match args.value_of("release-target") {
                 Some(v) => match immc.common.release_targets.get(v) {
                     Some(_) => Some(v.to_string()),
-                    None => return escalate!(Box::new(super::ConfigError{ 
+                    None => return escalate!(Box::new(config::ConfigError{ 
                         cause: format!("undefined release target name: {}", v)
                     }))
                 },

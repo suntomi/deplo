@@ -1167,7 +1167,7 @@ impl Config {
             if ref_type == vcs::RefType::Branch &&
                 ref_path == DEPLO_VCS_TEMPORARY_WORKSPACE_NAME {
                 log::debug!("back to previous branch");
-                vcs.checkout("-", None)?;
+                vcs.checkout_previous()?;
             }
         }
         Ok(())

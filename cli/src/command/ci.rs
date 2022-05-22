@@ -5,91 +5,22 @@ use std::thread::sleep;
 use std::time::Duration;
 
 use log;
-use maplit::hashmap;
 
 use core::config;
 use core::shell;
-use core::vcs;
 
 use crate::args;
 use crate::command;
 use crate::util::{escalate};
 
-struct AggregatedPullRequestOptions {
-    labels: Vec<String>,
-    assignees: Vec<String>,
-}
 pub struct CI<S: shell::Shell = shell::Default> {
     pub config: config::Container,
     pub shell: S
 }
-impl<S: shell::Shell> CI<S> {    
-    fn kick<A: args::Args>(&self, args: &A) -> Result<(), Box<dyn Error>> {
-        // log::debug!("kick command invoked");
-        // // init diff data on the fly
-        // let diff = {
-        //     let config = self.config.borrow();
-        //     let vcs = config.vcs_service()?;
-        //     vcs.make_diff()?
-        // };
-        // {
-        //     let mut config_mut = self.config.borrow_mut();
-        //     let vcs_mut = config_mut.vcs_service_mut()?;
-        //     vcs_mut.init_diff(diff)?;
-        // }
-        // let config = self.config.borrow();
-        // let (account_name, _) = config.ci_config_by_env_or_default();
-        // let ci = config.ci_service(account_name)?;
-        // ci.kick()?;
-        // match ci.dispatched_remote_job()? {
-        //     Some(job) => {
-        //         ci.mark_job_executed(&job.name)?;
-        //         log::info!("remote job {} dispatched with payload '{}'", job.name, serde_json::to_string(&job)?);
-        //         return Ok(())
-        //     }
-        //     None => {}
-        // }
-        // let vcs = config.vcs_service()?;
-        // let jobs_and_kind = match config.runtime.workflow_type {
-        //     Some(v) => match v {
-        //         config::WorkflowType::Integrate => (&config.jobs.integrate, v),
-        //         config::WorkflowType::Deploy => (&config.jobs.deploy, v)
-        //     }
-        //     None => if config.ci.invoke_for_all_branches.unwrap_or(false) {
-        //         (&config.jobs.integrate, config::WorkflowType::Integrate)
-        //     } else if let Some(v) = ci.pr_url_from_env()? {
-        //         panic!("PR url is set by env {}, but workflow type is not set", v)
-        //     } else {
-        //         log::info!("deplo is configured as ignoring non-release-target, non-pull-requested branches");
-        //         return Ok(());
-        //     }
-        // };
-        // for (name, job) in jobs_and_kind.0 {
-        //     let full_name = &format!("{}-{}", jobs_and_kind.1.as_str(), name);
-        //     if vcs.changed(&job.diff_matcher()) &&
-        //         job.matches_current_release_target(&config.runtime.release_target) {
-        //         if config.runtime.dryrun {
-        //             log::info!("dryrun mode, skip running job {}", full_name);
-        //             continue;
-        //         }
-        //         log::debug!("========== invoking {}, pattern [{}] ==========", full_name, job.patterns.join(", "));
-        //         match ci.mark_job_executed(&full_name)? {
-        //             Some(job_id) => self.wait_job(args, full_name, &job_id)?,
-        //             None => {}
-        //         }
-        //     } else {
-        //         log::debug!("========== not invoking {}, pattern [{}] ==========", full_name, job.patterns.join(", "));
-        //     }
-        // }
-        // if !config::Config::is_running_on_ci() {
-        //     log::debug!("if not running on CI, all jobs should be finished");
-        //     self.cleanup_jobs()?;
-        // }
-        Ok(())
-    }
+impl<S: shell::Shell> CI<S> {
     fn setenv<A: args::Args>(&self, _: &A) -> Result<(), Box<dyn Error>> {
         let config = self.config.borrow();
-        let ci = config.modules.default_ci();
+        let ci = config.modules.ci_by_default();
         for (k,v) in config::secret::vars()? {
             println!("set secret {}", k);
             ci.set_secret(&k, &v)?;
@@ -102,7 +33,7 @@ impl<S: shell::Shell> CI<S> {
         let value = args.value_or_die("value");
         config.jobs.set_user_output(&config, key, value)?;
         Ok(())
-}
+    }
     fn exec<A: args::Args>(&self, kind: &str, args: &A) -> Result<(), Box<dyn Error>> {
         let job_name = format!("{}-{}", kind, args.value_or_die("name"));
         match self.exec_job(args, &job_name)? {
@@ -132,22 +63,12 @@ impl<S: shell::Shell> CI<S> {
         task.to_string()
     }
     fn adhoc_envs<A: args::Args>(args: &A) -> HashMap<String, String> {
-        let mut envs = HashMap::<String, String>::new();
-        match args.values_of("env") {
-            Some(es) => for e in es {
-                let mut kv = e.split("=");
-                let k = kv.next().expect("env arg should be in key=value format");
-                let v = kv.next().unwrap_or("");
-                envs.insert(k.to_string(), v.to_string());
-            },
-            None => {}
-        };
-        envs
+        args.map_of("env")
     }
     fn exec_job<A: args::Args>(&self, args: &A, job_name: &str) -> Result<Option<String>, Box<dyn Error>> {
         Ok(None)
         // let config = self.config.borrow();
-        // let remote_job = config.ci_service_by_job_name(job_name)?.dispatched_remote_job()?;
+        // let remote_job = config.ci_service_by_job_name(job_name)?.detect_workflow()?;
         // // if reach here by remote execution, adopt the settings, otherwise using cli options if any.
         // let (commit, remote, command, adhoc_envs) = match remote_job {
         //     // because this process already run in remote environment, remote is always false.
@@ -415,7 +336,6 @@ impl<S: shell::Shell, A: args::Args> command::Command<A> for CI<S> {
     }
     fn run(&self, args: &A) -> Result<(), Box<dyn Error>> {
         match args.subcommand() {
-            Some(("kick", subargs)) => return self.kick(&subargs),
             Some(("setenv", subargs)) => return self.setenv(&subargs),
             Some(("set-output", subargs)) => return self.set_output(&subargs),
             Some(("deploy", subargs)) => return self.exec("deploy", &subargs),

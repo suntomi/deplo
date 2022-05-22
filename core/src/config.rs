@@ -11,7 +11,7 @@ use maplit::hashmap;
 
 use crate::args;
 use crate::shell;
-use crate::util::{make_absolute, escalate};
+use crate::util::{make_absolute, escalate, path_join};
 
 pub mod ci;
 pub mod job;
@@ -28,6 +28,7 @@ pub const DEPLO_GIT_HASH: &'static str = env!("GIT_HASH");
 pub const DEPLO_VERSION: &'static str = env!("DEPLO_RELEASE_VERSION");
 pub const DEPLO_RELEASE_URL_BASE: &'static str = "https://github.com/suntomi/deplo/releases/download";
 pub const DEPLO_REMOTE_JOB_EVENT_TYPE: &'static str = "deplo-run-remote-job";
+pub const DEPLO_MODULE_EVENT_TYPE: &'static str = "deplo-send-module-payload";
 pub const DEPLO_VCS_TEMPORARY_WORKSPACE_NAME: &'static str = "deplo-tmp-workspace";
 
 pub type Value = value::Value;
@@ -59,14 +60,25 @@ impl Modules {
     pub fn vcs(&self) -> &Box<dyn crate::vcs::VCS> {
         self.vcs.as_ref().expect("vcs module should be loaded")
     }
+    pub fn vcs_mut(&mut self) -> &mut Box<dyn crate::vcs::VCS> {
+        self.vcs.as_mut().expect("vcs module should be loaded")
+    }
     pub fn ci(&self) -> &HashMap<String, Box<dyn crate::ci::CI>> {
         &self.ci
     }
-    pub fn default_ci(&self) -> &Box<dyn crate::ci::CI> {
-        self.ci_for("default")
-    }
     pub fn ci_for(&self, account_name: &str) -> &Box<dyn crate::ci::CI> {
         self.ci.get(account_name).expect(&format!("missing ci module for account '{}'", account_name))
+    }
+    pub fn ci_by_default(&self) -> &Box<dyn crate::ci::CI> {
+        self.ci_for("default")
+    }
+    pub fn ci_by_env(&self) -> &Box<dyn crate::ci::CI> {
+        for (k, v) in &self.ci {
+            if v.runs_on_service() {
+                return v;
+            }
+        }
+        return self.ci_by_default();
     }
 }
 pub type ConfigVersion = u64;
@@ -138,6 +150,20 @@ impl Container {
         c.modules.workflows = workflows;
         Ok(())
     }
+    pub fn prepare_workflow(&self) -> Result<(), Box<dyn Error>> {
+        // vcs: init diff data on the fly
+        let diff = {
+            let config = self.borrow();
+            let vcs = config.modules.vcs();
+            vcs.make_diff()?
+        };
+        {
+            let mut config_mut = self.borrow_mut();
+            let vcs = config_mut.modules.vcs_mut();
+            vcs.init_diff(diff)?;
+        };
+        Ok(())
+    }
 }
 
 impl Config {
@@ -150,6 +176,10 @@ impl Config {
         let mut c = src.load_as::<Config>()?;
         c.runtime = runtime::Config::default();
         return Ok(Self::containerize(c));
+    }
+    fn setup(&mut self) {
+        self.workflows.setup();
+        self.jobs.setup();
     }
     pub fn create<A: args::Args>(args: &A) -> Result<Container, Box<dyn Error>> {
         // generate runtime config
@@ -164,6 +194,7 @@ impl Config {
         let c = {
             let mut config = src.load_as::<Config>()?;
             config.runtime = runtime_config;
+            config.setup();
             Self::containerize(config)
         };
         // 3. load modules
@@ -219,5 +250,54 @@ impl Config {
             ], shell::no_env(), shell::no_cwd(), &shell::no_capture()
         )?;
         Ok(())
+    }
+    pub fn cli_download_url(os: job::RunnerOS, version: &str) -> String {
+        return format!("{}/{}/deplo-{}", DEPLO_RELEASE_URL_BASE, version, os.cli_download_postfix());
+    }    
+    pub fn download_deplo_cli(&self, os: job::RunnerOS, shell: &impl shell::Shell) -> Result<PathBuf, Box<dyn Error>> {
+        match std::env::var("DEPLO_DEBUG_CLI_BIN_PATHS") {
+            Ok(p) => {
+                match serde_json::from_str::<HashMap<String, String>>(&p) {
+                    Ok(m) => {
+                        if let Some(v) = m.get(&os.to_string()) {
+                            let path = make_absolute(v, self.modules.vcs().repository_root()?);
+                            log::debug!("deplo_cli_download: use debug cli bin for {}: {}", os, path.to_string_lossy().to_string());
+                            return Ok(path);
+                        }
+                    },
+                    Err(e) => {
+                        return escalate!(Box::new(ConfigError{ 
+                            cause: format!("DEPLO_DEBUG_CLI_BIN_PATHS contains invalid json: {}", e)
+                        }))
+                    }
+                }
+            },
+            Err(_) => {}
+        };
+        let base_path = path_join(vec![self.deplo_data_path()?.to_str().unwrap(), "cli", DEPLO_VERSION, os.uname()]);
+        let file_path = path_join(vec![base_path.to_str().unwrap(), "deplo"]);
+        match fs::metadata(&file_path) {
+            Ok(mata) => {
+                if mata.is_dir() {
+                    return escalate!(Box::new(ConfigError{ 
+                        cause: format!("{} exists but not file", file_path.to_string_lossy().to_string())
+                    }))
+                } else {
+                    return Ok(file_path);
+                }
+            },
+            Err(_) => {}
+        };
+        fs::create_dir_all(&base_path)?;
+        shell.download(&Self::cli_download_url(os, DEPLO_VERSION), &file_path.to_str().unwrap(), true)?;
+        return Ok(file_path);
+    }
+    pub fn setup_deplo_cli<S: shell::Shell>(&self, os: job::RunnerOS, shell: &S) -> Result<Option<PathBuf>, Box<dyn Error>> {
+        if !Self::is_running_on_ci() {
+            Ok(Some(self.download_deplo_cli(os, shell)?))
+        } else {
+            // on ci, deplo cli should have installed before invoking deplo (if not, how can we invoke deplo itself?)
+            Ok(None)
+        }
     }
 }

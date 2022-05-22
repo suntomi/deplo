@@ -1,4 +1,5 @@
 use std::fs;
+use std::fmt;
 use std::error::Error;
 use std::result::Result;
 use std::collections::{HashMap};
@@ -23,34 +24,49 @@ use crate::util::{
     randombytes_as_string
 };
 
+#[derive(Deserialize)]
+enum EventPayload {
+    Schedule {
+        schedule: String
+    },
+    Repository {
+        action: Option<String>
+    },
+    RepositoryDispatch {
+        action: String,
+        client_payload: config::AnyValue
+    }
+}
+impl fmt::Display for EventPayload {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Schedule{schedule} => write!(f, "schedule:{}", schedule),
+            Self::Repository{action} => {
+                let a = if action.is_none() { "None" } else { action.as_ref().unwrap().as_str() };          
+                write!(f, "repository:{}", a)
+            },
+            Self::RepositoryDispatch{action,..} => write!(f, "repository_dispatch:{}", action)
+        }
+    }
+}
+#[derive(Deserialize)]
+struct WorkflowEvent {
+    pub event_name: String,
+    pub event: EventPayload
+}
 #[derive(Serialize, Deserialize)]
 pub struct ClientPayload {
-    pub name: String,
-    pub commit: Option<String>,
-    pub command: Option<String>,
-    pub envs: HashMap<String, String>,
-    pub verbosity: u64,
     pub job_id: String,
-    pub release_target: Option<String>,
-    pub workflow: Option<String>,
+    #[serde(flatten)]
+    pub job_config: config::runtime::Workflow
 }
 impl ClientPayload {
     fn new(
-        src: &ci::RemoteJob,
+        job_config: &config::runtime::Workflow
     ) -> Self {
-        // dirty hack to detect mismatch ClientPayload and ci::RemoteJob at compile time
-        const CP_SIZE: usize = std::mem::size_of::<ClientPayload>();
-        const RJ_SIZE: usize = std::mem::size_of::<ci::RemoteJob>() + std::mem::size_of::<String>();
-        const ID_SIZE: usize = 16 / if (CP_SIZE - RJ_SIZE) == 0 { 1 } else { 0 };
         Self {
-            name: src.name.clone(),
-            commit: src.commit.clone(),
-            command: src.command.clone(),
-            envs: src.envs.clone(),
-            verbosity: src.verbosity,
-            job_id: randombytes_as_string!(ID_SIZE),
-            release_target: src.release_target.clone(),
-            workflow: src.workflow.clone(),
+            job_id: randombytes_as_string!(16),
+            job_config: job_config.clone()
         }
     }
 }
@@ -372,6 +388,9 @@ impl<S: shell::Shell> ci::CI for GhAction<S> {
             shell: S::new(config)
         });
     }
+    fn runs_on_service(&self) -> bool {
+        std::env::var("GITHUB_ACTION").is_ok()
+    }
     fn generate_config(&self, reinit: bool) -> Result<(), Box<dyn Error>> {
         let config = self.config.borrow();
         let repository_root = config.modules.vcs().repository_root()?;
@@ -514,9 +533,6 @@ impl<S: shell::Shell> ci::CI for GhAction<S> {
             )
         )?;
         Ok(())
-    }    
-    fn kick(&self) -> Result<(), Box<dyn Error>> {
-        Ok(())
     }
     fn overwrite_commit(&self, commit: &str) -> Result<String, Box<dyn Error>> {
         let prev = std::env::var("GITHUB_SHA")?;
@@ -534,18 +550,9 @@ impl<S: shell::Shell> ci::CI for GhAction<S> {
             }
         }
     }
-    fn mark_job_executed(&self, job_name: &str) -> Result<Option<String>, Box<dyn Error>> {
-        if config::Config::is_running_on_ci() {
-            println!("::set-output name={}::true", job_name);
-            Ok(None)
-        } else {
-            self.config.borrow().jobs.run(
-                job_name, &self.shell, &config::job::Command::Job, &config::job::RunningOptions {
-                    commit: None, remote: false, shell_settings: shell::no_capture(),
-                    adhoc_envs: hashmap!{},
-                }
-            )
-        }
+    fn schedule_job(&self, job_name: &str) -> Result<(), Box<dyn Error>> {
+        println!("::set-output name={}::true", job_name);
+        Ok(())
     }
     fn mark_need_cleanup(&self, job_name: &str) -> Result<(), Box<dyn Error>> {
         if config::Config::is_running_on_ci() {
@@ -555,19 +562,135 @@ impl<S: shell::Shell> ci::CI for GhAction<S> {
         }
         Ok(())
     }
-    fn dispatched_remote_job(&self) -> Result<Option<ci::RemoteJob>, Box<dyn Error>> {
-        if std::env::var("DEPLO_GHACTION_EVENT_TYPE") == Ok(config::DEPLO_REMOTE_JOB_EVENT_TYPE.to_string()) {
-            let payload = crate::util::env::var_or_die("DEPLO_GHACTION_EVENT_PAYLOAD");
-            Ok(Some(serde_json::from_str::<ci::RemoteJob>(&payload)?))
-        } else {
-            Ok(None)
+    fn filter_workflows(
+        &self, trigger: Option<ci::WorkflowTrigger>
+    ) -> Result<Vec<(String, HashMap<String, config::AnyValue>)>, Box<dyn Error>> {
+        // workflow.nameとworkflow.contextsを取得する
+        let resolved_trigger = match trigger {
+            Some(t) => t,
+            None => match std::env::var("DEPLO_GHACTION_EVENT_DATA") {
+                Ok(v) => ci::WorkflowTrigger::EventPayload(v),
+                Err(_) => panic!("DEPLO_GHACTION_EVENT_DATA should set if no argument for workflow passed")
+            }
+        };
+        let config = self.config.borrow();
+        match resolved_trigger {
+            ci::WorkflowTrigger::DirectInput{name,context} => return Ok(vec![(name.to_string(), context.clone())]),
+            ci::WorkflowTrigger::EventPayload(payload) => {
+                let mut matched_names = vec![];
+                let workflow_event = serde_json::from_str::<WorkflowEvent>(&payload)?;
+                for (k,v) in config.workflows.as_map() {
+                    let name = k.to_string();
+                    match workflow_event.event_name.as_str() {
+                        "push" => match v {
+                            config::workflow::Workflow::Deploy => matched_names.push(name),
+                            _ => {}
+                        },
+                        "pull_request" => match v {
+                            config::workflow::Workflow::Integrate => matched_names.push(name),
+                            _ => {}
+                        },
+                        "schedule" => match v {
+                            config::workflow::Workflow::Cron{..} => matched_names.push(name),
+                            _ => {}
+                        },
+                        // repository_dispatch has a few possibility.
+                        // config::DEPLO_REMOTE_JOB_EVENT_TYPE => should contain workflow_name in client_payload
+                        // config::DEPLO_MODULE_EVENT_TYPE => Module workflow invocation
+                        // others => Repository workflow invocation
+                        "repository_dispatch" => if let EventPayload::RepositoryDispatch{
+                            action,client_payload
+                        } = &workflow_event.event {
+                            if action == config::DEPLO_REMOTE_JOB_EVENT_TYPE {
+                                match client_payload.index("workflow_name") {
+                                    Some(n) => match n.as_str() {
+                                        Some(s) => matched_names.push(s.to_string()),
+                                        None => panic!(
+                                            "{}: event payload invalid {}", 
+                                            config::DEPLO_REMOTE_JOB_EVENT_TYPE, client_payload
+                                        )
+                                    },
+                                    None => panic!(
+                                        "{}: event payload invalid {}", 
+                                        config::DEPLO_REMOTE_JOB_EVENT_TYPE, client_payload
+                                    )
+                                }
+                            } else if action == config::DEPLO_MODULE_EVENT_TYPE {
+                                if let config::workflow::Workflow::Module(..) = v {
+                                    matched_names.push(name);
+                                }
+                            } else if let config::workflow::Workflow::Repository{..} = v {
+                                matched_names.push(name);
+                            }
+                        } else {
+                            panic!("event payload type does not match {}", workflow_event.event);
+                        },
+                        _ => match v {
+                            config::workflow::Workflow::Repository{..} => matched_names.push(name),
+                            _ => {}
+                        }
+                    }
+                }
+                let mut matches = vec![];
+                let vcs = config.modules.vcs();
+                for n in matched_names {
+                    let name = n.to_string();
+                    match config.workflows.get(&name).expect(&format!("workflow {} not found", name)) {
+                        config::workflow::Workflow::Deploy|config::workflow::Workflow::Integrate => {
+                            let target = vcs.release_target();
+                            matches.push((name, if target.is_none() { hashmap!{} } else { hashmap!{
+                                "release_target".to_string() => config::AnyValue::new(&target.unwrap())
+                            }}))
+                        },
+                        config::workflow::Workflow::Cron{schedules} => {
+                            if let EventPayload::Schedule{ref schedule} = workflow_event.event {
+                                match schedules.iter().find_map(|(k, v)| {
+                                    if v.resolve().as_str() == schedule.as_str() { Some(k) } else { None }
+                                }) {
+                                    Some(schedule_name) => matches.push((name, hashmap!{
+                                        "schedule".to_string() => config::AnyValue::new(schedule_name)
+                                    })),
+                                    None => {}
+                                }
+                            } else {
+                                panic!("event payload type does not match {}", workflow_event.event);
+                            }
+                        },
+                        config::workflow::Workflow::Repository{events,..} => {
+                            if let EventPayload::Repository{ref action} = workflow_event.event {
+                                let key = {
+                                    let mut v = vec![workflow_event.event_name.as_str()];
+                                    if let Some(action) = action {
+                                        v.push(action.as_str())
+                                    }
+                                    v.join(".")
+                                };
+                                match events.iter().find_map(|(k, vs)| {
+                                    if vs.iter().find(|t| t == &key).is_some() { Some(k) } else { None }
+                                }) {
+                                    Some(event_name) => matches.push((name, hashmap!{
+                                        "event".to_string() => config::AnyValue::new(event_name)
+                                    })),
+                                    None => {}
+                                }
+                            } else {
+                                panic!("event payload type does not match {}", workflow_event.event);
+                            }
+                        },
+                        config::workflow::Workflow::Module(c) => {
+                            panic!("not implemented yet")
+                        }
+                    }
+                }
+                Ok(matches)
+            }
         }
     }
-    fn run_job(&self, job: &ci::RemoteJob) -> Result<String, Box<dyn Error>> {
+    fn run_job(&self, job_config: &config::runtime::Workflow) -> Result<String, Box<dyn Error>> {
         let config = self.config.borrow();
         let token = self.get_token()?;
         let user_and_repo = config.modules.vcs().user_and_repo()?;
-        let payload = ClientPayload::new(job);
+        let payload = ClientPayload::new(job_config);
         self.shell.exec(shell::args![
             "curl", "-H", format!("Authorization: token {}", token), 
             "-H", "Accept: application/vnd.github.v3+json", 
@@ -728,7 +851,7 @@ impl<S: shell::Shell> ci::CI for GhAction<S> {
         };
         Ok(envs)
     }
-    fn job_env(&self) -> HashMap<&str, String> {
+    fn job_env(&self) -> HashMap<String, config::Value> {
         hashmap!{}
     }
     fn list_secret_name(&self) -> Result<Vec<String>, Box<dyn Error>> {

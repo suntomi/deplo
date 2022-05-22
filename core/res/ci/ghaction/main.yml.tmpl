@@ -9,8 +9,7 @@ on:
 env:
   DEPLO_GHACTION_CI_ID: ${{{{ github.run_id }}}}-${{{{ github.run_attempt }}}}
   DEPLO_GHACTION_PR_URL: ${{{{ github.event.pull_request.url }}}}
-  DEPLO_GHACTION_EVENT_TYPE: ${{{{ github.event.action }}}}
-  DEPLO_GHACTION_EVENT_PAYLOAD: ${{{{ toJSON(github.event.client_payload) }}}}
+  DEPLO_GHACTION_EVENT_DATA: ${{ toJson(github) }}
   DEPLO_OVERWRITE_COMMIT: ${{{{ github.event.client_payload.commit }}}}
   DEPLO_OVERWRITE_RELEASE_TARGET: ${{{{ github.event.client_payload.release_target }}}}
   DEPLO_OVERWRITE_VERBOSITY: ${{{{ github.event.client_payload.verbosity }}}}

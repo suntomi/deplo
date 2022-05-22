@@ -31,6 +31,8 @@ pub mod init;
 pub mod destroy;
 pub mod ci;
 pub mod info;
+pub mod start;
+pub mod stop;
 pub mod vcs;
 
 // factorys
@@ -48,6 +50,7 @@ pub fn factory<'a, S: args::Args>(
         "init" => factory_by::<S, init::Init>(config),
         "info" => factory_by::<S, info::Info>(config),
         "destroy" => factory_by::<S, destroy::Destroy>(config),
+        "start" => factory_by::<S, start::Start>(config),
         "ci" => factory_by::<S, ci::CI>(config),
         "vcs" => factory_by::<S, vcs::VCS>(config),
         _ => return Err(Box::new(CommandError {

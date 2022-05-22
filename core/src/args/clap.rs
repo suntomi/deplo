@@ -11,7 +11,7 @@ use crate::config;
 pub struct Clap<'a> {
     pub hierarchy: Vec<&'a str>,
     pub matches: &'a ArgMatches,
-    pub ailiased_path: Vec<&'a str>,
+    pub aliased_path: Vec<&'a str>,
 }
 
 struct CommandFactory {
@@ -153,12 +153,12 @@ lazy_static! {
     static ref G_ROOT_MATCH: ArgMatches = App::new("deplo")
         .version(config::DEPLO_VERSION)
         .author("umegaya <iyatomi@gmail.com>")
-        .about("write once, run anywhere for CI/CD")
+        .about("provide integrated develop/operation UX for any automation process")
         .arg(Arg::new("config")
             .short('c')
             .long("config")
             .value_name("FILE")
-            .help("Sets a custom config file")
+            .help("Sets a custom config file path")
             .takes_value(true))
         .arg(Arg::new("release-target")
             .help("force set release target")
@@ -228,7 +228,7 @@ lazy_static! {
         )
         .subcommand(
             App::new("destroy")
-                .about("destroy deplo project")
+                .about("destroy deplo configurations")
         )
         .subcommand(
             G_ALIASED_COMMANDS.create("d")
@@ -330,12 +330,12 @@ impl<'a> args::Args for Clap<'a> {
         return Ok(Clap::<'a> {
             hierarchy: vec!{},
             matches: &G_ROOT_MATCH,
-            ailiased_path: vec!{}
+            aliased_path: vec!{}
         })
     }
     fn subcommand(&self) -> Option<(&str, Self)> {
-        let (may_subcommand_name, aliased) = if self.ailiased_path.len() > 0 {
-            (Some(self.ailiased_path[0]), true)
+        let (may_subcommand_name, aliased) = if self.aliased_path.len() > 0 {
+            (Some(self.aliased_path[0]), true)
         } else {
             (self.matches.subcommand_name(), false)
         };
@@ -343,13 +343,13 @@ impl<'a> args::Args for Clap<'a> {
             Some(name) => {
                 if aliased {
                     let mut h = self.hierarchy.clone();
-                    let mut ap = self.ailiased_path.clone();
+                    let mut ap = self.aliased_path.clone();
                     h.push(name);
                     ap.pop();
                     Some((name, Clap::<'a>{
                         hierarchy: h,
                         matches: self.matches,
-                        ailiased_path: ap
+                        aliased_path: ap
                     }))
                 } else {
                     match self.matches.subcommand_matches(name) {
@@ -367,7 +367,7 @@ impl<'a> args::Args for Clap<'a> {
                             Some((may_aliased_name, Clap::<'a>{
                                 hierarchy: h,
                                 matches: m,
-                                ailiased_path: ap
+                                aliased_path: ap
                             }))
                         },
                         None => None

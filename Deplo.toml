@@ -202,7 +202,7 @@ fi
 
 [jobs.latest]
 # latest tag of docker image is only updated when production release is created.
-on = { workflows = ["deploy"], targets = ["prod"], changed = ["*/src/*", "Cargo.*"] }
+on = { workflows = ["deploy"], release_targets = ["prod"], changed = ["*/src/*", "Cargo.*"] }
 # prohibit to run from cli
 options = { only_from_ci = true }
 depends = ["product"]

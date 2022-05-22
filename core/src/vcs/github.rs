@@ -10,7 +10,6 @@ use serde_json::{Value as JsonValue};
 
 use crate::config;
 use crate::vcs;
-use crate::module;
 use crate::shell;
 use crate::util::{escalate,make_escalation,jsonpath,str_to_json};
 

@@ -55,8 +55,11 @@ impl Accounts {
     pub fn as_map(&self) -> &HashMap<String, Account> {
         &self.0
     }
+    pub fn default(&self) -> &Account {
+        self.as_map().get("default").expect("missing default account")
+    }
     pub fn is_main(&self, ty: &str) -> bool {
-        let d = self.0.get("default").expect("default ci account should exist always");
+        let d = self.default();
         d.type_matched(ty)
     }
     pub fn get<'a>(&'a self, name: &str) -> Option<&'a Account> {

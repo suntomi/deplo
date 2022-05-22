@@ -9,6 +9,7 @@ pub trait Workflow {
     fn listen(&self) -> Result<(), Box<dyn Error>>;
     fn matches(&self, event: &str, params: &str) -> Result<bool, Box<dyn Error>>;
 }
+#[derive(Clone)]
 pub struct Module;
 impl module::Module for Module {
     fn ty() -> config::module::Type { return config::module::Type::Workflow; }

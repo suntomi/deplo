@@ -3,6 +3,9 @@ use std::error::Error;
 use std::fmt;
 use std::fs;
 use std::path::{Path};
+use std::io::Write;
+use std::thread::sleep;
+use std::time::Duration;
 
 use maplit::hashmap;
 use serde::{Deserialize, Serialize};
@@ -12,6 +15,8 @@ use crate::config;
 use crate::shell;
 use crate::util::{escalate,UnitOrListOf};
 use crate::vcs;
+
+pub mod runner;
 
 pub const DEPLO_JOB_OUTPUT_TEMPORARY_FILE: &'static str = "deplo-tmp-job-output.json";
 pub const DEPLO_SYSTEM_OUTPUT_COMMIT_BRANCH_NAME: &'static str = "COMMIT_BRANCH";
@@ -180,7 +185,7 @@ pub struct SystemJobEnvOptions {
 pub struct StepExtension {
     pub name: Option<String>,
 }
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Clone)]
 #[serde(untagged)]
 pub enum Step {
     Command {
@@ -241,6 +246,36 @@ pub enum TriggerCondition {
     },
     Nop
 }
+impl TriggerCondition {
+    fn check_workflow_type(&self, w: &config::workflow::Workflow) -> bool {
+        match self {
+            Self::Commit{..} => if let config::workflow::Workflow::Deploy{..} = w {
+                true
+            } else if let config::workflow::Workflow::Integrate{..} = w {
+                true
+            } else {
+                false
+            },
+            Self::Cron {..} => if let config::workflow::Workflow::Cron{..} = w {
+                true
+            } else {
+                false
+            },
+            Self::Repository{..} => if let config::workflow::Workflow::Repository{..} = w {
+                true
+            } else {
+                false
+            },
+            Self::Module{..} => if let config::workflow::Workflow::Module{..} = w {
+                true
+            } else {
+                false
+            },
+            Self::Nop => false
+        
+        }
+    }
+}
 #[derive(Serialize, Deserialize)]
 pub struct Trigger {
     workflows: Option<Vec<config::Value>>,
@@ -258,31 +293,37 @@ impl Trigger {
             "glob" => vcs::DiffMatcher::Glob(patterns.iter().map(config::Value::resolve_to_string).collect()),
             others => panic!("unsupported diff matcher {}", others)
         }
-    }    
+    }
     pub fn matches(
         &self,
-        config: &super::Config,
-        runtime: &super::runtime::JobConfig
+        config: &config::Config,
+        runtime_workflow_config: &config::runtime::Workflow
     ) -> bool {
+        let workflow = config.workflows.as_map().get(&runtime_workflow_config.name).expect(
+            &format!("{} does not exist in workflows of Deplo.toml", runtime_workflow_config.name)
+        );
         // workflows match?
         if !self.workflows.as_ref().map_or_else(
             // when no workflow specified for condition, always pass
             || true,
-            // if more than 1 workflows specified, runtime.workflow should match any of them
-            |v| v.iter().find(|v| { let s: &str = &v.resolve(); s == runtime.workflow }).is_some()
+            // if more than 1 workflows specified, runtime_workflow_config.name should match any of them
+            |v| v.iter().find(|v| { let s: &str = &v.resolve(); s == runtime_workflow_config.name }).is_some()
         ) {
-            log::debug!("workflow {} does not match", runtime.workflow);
+            log::debug!("workflow {} does not match for trigger", runtime_workflow_config.name);
             return false;
+        }
+        if !self.condition.check_workflow_type(workflow) {
+            log::debug!("workflow {} does not match for trigger condition", workflow);
         }
         match &self.condition {
             TriggerCondition::Commit{ release_targets, changed, diff_matcher } => {
                 if !release_targets.as_ref().map_or_else(
                     // no job.release_targets restriction. always ok
                     || true,
-                    |v| match &runtime.release_target {
+                    |v| match &runtime_workflow_config.context.get("release_target") {
                         // both runtime.release_target and job.release_targets exists, compare matches
-                        Some(rt) => v.iter().find(|v| { let s: &str = &v.resolve(); s == rt }).is_some(),
-                        // runtime.release_target exists, but job.release_targets is empty, always ok
+                        Some(rt) => v.iter().find(|v| { v.resolve() == rt.resolve() }).is_some(),
+                        // job.release_target exists, but no runtime_workflow_config.context.release_target, always ng
                         None => true
                     }
                 ) {
@@ -297,13 +338,14 @@ impl Trigger {
                 }
             },
             TriggerCondition::Cron{ schedules } => {
-                panic!("TODO: implement match logic for Cron condition")
+                let schedule = runtime_workflow_config.context.get("schedule").unwrap();
+                return schedules.iter().find(|s| { s.resolve() == schedule.resolve() }).is_some();
             },
             TriggerCondition::Repository{ events } => {
-                panic!("TODO: implement match logic for Repository condition")
+                let event = runtime_workflow_config.context.get("event").unwrap();
+                return events.iter().find(|e| { e.resolve() == event.resolve() }).is_some();
             },
             TriggerCondition::Module{ when } => {
-                let _wf = config.workflows.get(&runtime.workflow).unwrap();
                 // use module method like _wf.matches(when) to determine.
                 panic!("TODO: implement match logic for Module condition")
             },
@@ -314,6 +356,8 @@ impl Trigger {
 }
 #[derive(Serialize, Deserialize)]
 pub struct Job {
+    #[serde(skip, default)]
+    pub name: String,
     pub account: Option<config::Value>,
     pub on: UnitOrListOf<Trigger>,
     pub runner: Runner,
@@ -342,44 +386,53 @@ impl Job {
             Runner::Container{ .. } => false
         }
     }
-    pub fn ci<'a>(&self, config: &'a super::Config) -> &Box<dyn ci::CI + 'a> {
+    pub fn ci<'a>(&self, config: &'a config::Config) -> &Box<dyn ci::CI + 'a> {
         let account = self.account.as_ref().map_or_else(
             || "default".to_string(), config::Value::resolve_to_string
         );
         return config.modules.ci_for(&account);
     }
-    pub fn job_env<'a>(&'a self, config: &'a super::Config, rtconfig: &super::runtime::JobConfig) -> HashMap<&'a str, String> {
+    pub fn run<S>(
+        &self,
+        shell: &S,
+        config: &config::Config,
+        runtime_workflow_config: &config::runtime::Workflow
+    ) -> Result<Option<String>, Box<dyn Error>> where S: shell::Shell {
+        panic!("TODO: implement Job.run")
+    }
+    pub fn env(
+        &self,
+        config: &config::Config,
+        runtime_workflow_config: &config::runtime::Workflow
+    ) -> HashMap<String, config::Value> {
         let ci = self.ci(config);
-        let env = ci.job_env();
+        let mut envs_list = vec![];
         let common_envs = hashmap!{
-            "DEPLO_JOB_CURRENT_NAME" => rtconfig.job_name.clone()
+            "DEPLO_JOB_CURRENT_NAME".to_string() => config::Value::new(&self.name)
         };
-        match rtconfig.release_target {
-            Some(ref v) => {
-                log::info!("job_env: release target: {}", v);
-            },
-            None => {
-                let (ref_type, ref_path) = config.modules.vcs().current_ref().unwrap();
-                log::info!("job_env: no release target: {}/{}", ref_type, ref_path);
+        envs_list.push(&common_envs);
+        let jenvs = ci.job_env();
+        envs_list.push(&jenvs);
+        match &self.env {
+            Some(v) => envs_list.push(v),
+            None => {}
+        };
+        let exec_envs = runtime_workflow_config.exec.envs.iter().map(
+            |(k,v)| (k.to_string(), config::Value::new(v))
+        ).collect();
+        envs_list.push(&exec_envs);
+        let mut h = hashmap!{};
+        for envs in envs_list {
+            for (k,v) in envs {
+                h.insert(k.clone(), v.clone());
             }
-        };
-        let mut h = env.clone();
-        return match &self.env {
-            Some(v) => {
-                h.extend(common_envs);
-                h.extend(v.iter().map(|(k,v)| (k.as_str(), v.to_string())));
-                h
-            },
-            None => {
-                h.extend(common_envs);
-                h
-            }
-        };
+        }
+        return h;
     }
     pub fn matches_current_trigger(
         &self,
-        config: &super::Config,
-        rtconfig: &super::runtime::JobConfig
+        config: &config::Config,
+        rtconfig: &config::runtime::Workflow
     ) -> bool {
         for t in &self.on {
             if t.matches(config, rtconfig) {
@@ -390,15 +443,15 @@ impl Job {
     }
     pub fn commit_setting_from_config(
         &self,
-        config: &super::Config,
-        rtconfig: &super::runtime::JobConfig
+        config: &config::Config,
+        runtime_workflow_config: &config::runtime::Workflow
     ) -> Option<&Commit> {
         match &self.commit {
             Some(ref v) => {
                 for commit in v {
                     match commit.on {
                         // first only matches commit entry that has valid for_targets and target
-                        Some(ref t) => if t.matches(config, rtconfig) {
+                        Some(ref t) => if t.matches(config, runtime_workflow_config) {
                             return Some(commit)
                         },
                         None => {}
@@ -445,7 +498,7 @@ impl Job {
     ) -> Result<Option<String>, Box<dyn Error>> {
         let ci = self.ci(config);
         ci.job_output(job_name, ci::OutputKind::System, key)
-    }    
+    }
 }
 
 /*
@@ -468,16 +521,47 @@ impl Job {
 
  */
 
+struct AggregatedPullRequestOptions {
+    labels: Vec<config::Value>,
+    assignees: Vec<config::Value>,
+}
+
 #[derive(Serialize, Deserialize)]
 pub struct Jobs(HashMap<String, Job>);
 impl Jobs {
+    pub fn setup(&mut self) {
+        let map = &mut self.0;
+        for (k, v) in map.iter_mut() {
+            let name = &mut v.name;
+            *name = k.to_string();
+        }
+    }
     pub fn as_map(&self) -> &HashMap<String, Job> {
         &self.0
     }
-    pub fn run<S>(
-        &self, job_name: &str, shell: &S, cmd: &Command, options: &RunningOptions
-    ) -> Result<Option<String>, Box<dyn Error>> where S: shell::Shell {
-        panic!("TODO: implement Jobs.run")
+    pub fn find(&self, name: &str) -> Option<&Job> {
+        self.as_map().get(name)
+    }
+    pub fn filter_as_map<'a>(
+        &'a self, config: &'a config::Config, runtime: &'a config::runtime::Workflow
+    ) -> HashMap<&'a str, &'a Job> {
+        let mut h = HashMap::new();
+        match runtime.job {
+            Some(ref job) => match self.0.get(&job.name) {
+                Some(j) => if j.matches_current_trigger(config, runtime) {
+                    h.insert(job.name.as_str(), j);
+                },
+                None => {}
+            },
+            None => {
+                for (k, v) in &self.0 {
+                    if v.matches_current_trigger(config, runtime) {
+                        h.insert(k.as_str(), v);
+                    }
+                }
+            }
+        }
+        return h;
     }
     pub fn set_user_output(
         &self, _: &config::Config, key: &str, value: &str
@@ -492,6 +576,201 @@ impl Jobs {
                 fs::write(DEPLO_JOB_OUTPUT_TEMPORARY_FILE, serde_json::to_string(&hashmap!{ key => value })?)?;
             }
         };
+        Ok(())
+    }
+    fn push_job_result_branches(
+        &self, config: &config::Config, branches_and_options: &(String, Vec<String>, CommitMethod)
+    ) -> Result<(), Box<dyn Error>> {
+        let vcs = config.modules.vcs();
+        let job_id = std::env::var("DEPLO_CI_ID").unwrap();
+        let current_branch = std::env::var("DEPLO_CI_BRANCH_NAME").unwrap();
+        let current_ref = std::env::var("DEPLO_CI_CURRENT_SHA").unwrap();
+        let (name, branches, options) = branches_and_options;
+        if branches.len() > 0 {
+            let working_branch = format!("deplo-auto-commits-{}-{}", job_id, name);
+            vcs.checkout(&current_ref, Some(&working_branch))?;
+            for b in branches {
+                vcs.fetch_branch(&b)?;
+                // fetched head will be picked
+                vcs.pick_fetched_head()?;
+            }
+            let result_head_ref = match options {
+                CommitMethod::PullRequest{labels,assignees,..} => {
+                    vcs.push_branch(&working_branch, &working_branch, &hashmap!{
+                        "new" => "true",
+                    })?;
+                    let mut pr_opts_for_vcs = hashmap!{};
+                    match labels {
+                        Some(v) => { pr_opts_for_vcs.insert("labels", serde_json::to_string(&v)?); },
+                        None => {}
+                    };
+                    match assignees {
+                        Some(v) => { pr_opts_for_vcs.insert("assignees", serde_json::to_string(&v)?); },
+                        None => {}
+                    };
+                    vcs.pr(
+                        &format!("[deplo] auto commit by job [{}]", job_id),
+                        &working_branch, &current_branch, 
+                        &pr_opts_for_vcs.iter().map(|(k,v)| (*k,v.as_str())).collect()
+                    )?;
+                    // if pushed successfully, back to original branch
+                    &current_ref
+                },
+                CommitMethod::Push{squash} => {
+                    if squash.unwrap_or(true) && branches.len() > 1 {
+                        vcs.squash_branch(branches.len())?;
+                    }
+                    vcs.push_branch(&working_branch, &current_branch, &hashmap!{})?;
+                    // if pushed successfully, move current branch HEAD to pushed HEAD
+                    &working_branch
+                }
+            };
+            // only local execution need to recover repository status
+            if !config::Config::is_running_on_ci() {
+                vcs.checkout(result_head_ref, Some(&current_branch))?;
+                vcs.delete_branch(vcs::RefType::Branch, &working_branch)?;
+                for b in branches {
+                    vcs.delete_branch(vcs::RefType::Remote, b)?;
+                }
+            }
+        }
+        Ok(())
+    }    
+    fn aggregate_commits(
+        &self, config: &config::Config, runtime_workflow_config: &config::runtime::Workflow
+    ) -> Result<Vec<(String, Vec<String>, CommitMethod)>, Box<dyn Error>> {
+        let mut commits: Vec<(String, Vec<String>, CommitMethod)> = vec![];
+        let mut aggregated_push_branches = vec![];
+        let mut aggregated_pr_branches = vec![];
+        let mut aggregated_pr_opts = AggregatedPullRequestOptions {
+            labels: vec![], assignees: vec![],
+        };
+        for (job_name, job) in self.as_map() {
+            match job.system_output(config, &job_name, DEPLO_SYSTEM_OUTPUT_COMMIT_BRANCH_NAME)? {
+                Some(v) => {
+                    log::info!("ci fin: find commit from job {} at {}", job_name, v);
+                    match job.commit_setting_from_config(config, runtime_workflow_config)
+                             .expect("commit_setting_from_release_target should success").method {
+                        Some(ref options) => match options {
+                            CommitMethod::Push{squash} => {
+                                if squash.unwrap_or(true) {
+                                    aggregated_push_branches.push(v);
+                                } else {
+                                    commits.push((format!("{}-push", job_name), vec![v], CommitMethod::Push{squash: Some(false)}));
+                                }
+                            },
+                            CommitMethod::PullRequest{labels, assignees, aggregate} => {
+                                if aggregate.unwrap_or(false) {
+                                    aggregated_pr_branches.push(v);
+                                    aggregated_pr_opts.labels = [aggregated_pr_opts.labels, labels.clone().unwrap_or(vec![])].concat();
+                                    aggregated_pr_opts.assignees = [aggregated_pr_opts.assignees, assignees.clone().unwrap_or(vec![])].concat();
+                                } else {
+                                    commits.push((format!("{}-pr", job_name), vec![v], CommitMethod::PullRequest{
+                                        labels: labels.as_ref().map(|v| v.clone()), assignees: assignees.as_ref().map(|v| v.clone()),
+                                        aggregate: Some(false)
+                                    }));
+                                }
+                            }
+                        },
+                        // if push option is not set, default behaviour is:
+                        // push to current branch for integrate jobs,
+                        // make pr to branch for deploy jobs.
+                        None => if runtime_workflow_config.name == "integrate" {
+                            // aggregated by default
+                            aggregated_push_branches.push(v);
+                        } else {
+                            // made single PR by default
+                            commits.push((format!("{}-pr", job_name), vec![v], CommitMethod::PullRequest{
+                                labels: None, assignees: None, aggregate: Some(false)
+                            }));
+                        }
+                    }
+                },
+                None => {}
+            };
+        }
+        commits.push(("aggregate-push".to_string(), aggregated_push_branches, CommitMethod::Push{squash: Some(true)}));
+        commits.push(("aggregate-pr".to_string(), aggregated_pr_branches, CommitMethod::PullRequest{
+            labels: if aggregated_pr_opts.labels.len() > 0 { Some(aggregated_pr_opts.labels) } else { None }, 
+            assignees: if aggregated_pr_opts.assignees.len() > 0 { Some(aggregated_pr_opts.assignees) } else { None }, 
+            aggregate: Some(true)
+        }));
+        Ok(commits)
+    }    
+    pub fn halt(
+        &self, config: &config::Config, runtime_workflow_config: &config::runtime::Workflow
+    ) -> Result<(), Box<dyn Error>> {
+        for branches_and_options in self.aggregate_commits(config, runtime_workflow_config)? {
+            match self.push_job_result_branches(config, &branches_and_options) {
+                Ok(_) => {},
+                Err(e) => {
+                    log::error!("push_job_result_branches fails: back to original branch");
+                    let vcs = config.modules.vcs();
+                    let current_branch = std::env::var("DEPLO_CI_BRANCH_NAME").unwrap();
+                    let current_ref = std::env::var("DEPLO_CI_CURRENT_SHA").unwrap();
+                    vcs.checkout(&current_ref, Some(&current_branch)).unwrap();
+                    return Err(e);
+                }
+            }
+        }
+        Ok(())
+    }    
+    fn wait_job(
+        &self, job_id: &str, job_name: &str, config: &config::Config, runtime_workflow_config: &config::runtime::Workflow
+    ) -> Result<(), Box<dyn Error>> {
+        log::info!("wait for finishing remote job {} id={}", job_name, job_id);
+        let job = match self.find(job_name) {
+            Some(job) => job,
+            None => return escalate!(Box::new(config::ConfigError{cause: format!("no such job: [{}]", job_name)})),
+        };
+        let ci = job.ci(config);
+        let progress = runtime_workflow_config.exec.silent;
+        let mut timeout = runtime_workflow_config.exec.timeout;
+        loop {
+            match ci.check_job_finished(&job_id)? {
+                Some(s) => if progress { 
+                    print!(".{}", s);
+                    std::io::stdout().flush().unwrap();
+                },
+                None => {
+                    println!(".done");
+                    break
+                },
+            }
+            sleep(Duration::from_secs(5));
+            match timeout {
+                Some(t) => if t > 5 {
+                    timeout = Some(t - 5);
+                } else {
+                    return escalate!(Box::new(config::ConfigError{
+                        cause: format!("remote job {} wait timeout {:?}", job_name, t)
+                    }));
+                },
+                None => {}
+            }
+        }
+        log::info!("remote job {} id={} finished", job_name, job_id);
+        Ok(())
+    }    
+    pub fn boot<S>(
+        &self, config: &config::Config, runtime_workflow_config: &config::runtime::Workflow, shell: &S
+    ) -> Result<(), Box<dyn Error>> where S: shell::Shell {
+        let modules = &config.modules;
+        let ci = modules.ci_by_env();
+        for (name, job) in self.filter_as_map(config, runtime_workflow_config) {
+            if config::Config::is_running_on_ci() {
+                ci.schedule_job(name)?;
+            } else {
+                match job.run(shell, config, runtime_workflow_config)? {
+                    Some(job_id) => self.wait_job(&job_id, name, config, runtime_workflow_config)?,
+                    None => {}
+                };
+            }
+        }
+        if !config::Config::is_running_on_ci() {
+            log::debug!("if not running on CI, all jobs should be finished");
+            self.halt(config, runtime_workflow_config)?;
+        }
         Ok(())
     }
 }

@@ -41,9 +41,9 @@ impl<'a> shell::Shell for Native {
             envs: hashmap!{}
         }
     }
-    fn set_cwd<P: AsRef<Path>>(&mut self, dir: &Option<P>) -> Result<(), Box<dyn Error>> {
+    fn set_cwd<P: shell::ArgTrait>(&mut self, dir: &Option<P>) -> Result<(), Box<dyn Error>> {
         self.cwd = match dir {
-            Some(d) => Some(d.as_ref().to_str().unwrap().to_string()),
+            Some(d) => Some(d.value()),
             None => None
         };
         Ok(())
@@ -62,10 +62,10 @@ impl<'a> shell::Shell for Native {
     where 
     I: IntoIterator<Item = shell::Arg<'b>>,
     J: IntoIterator<Item = (K, shell::Arg<'b>)>,
-    K: AsRef<OsStr>, P: AsRef<Path>
+    K: AsRef<OsStr>, P: shell::ArgTrait
     {
         let (mut cmd, mut ct) = self.create_command(
-            args, envs, cwd, &shell::Settings { capture: true, interactive: false, silent: false}
+            args, envs, cwd, &shell::Settings { capture: true, interactive: false, silent: false, paths: None}
         );
         return Native::get_output(&mut cmd, &mut ct);
     }
@@ -75,12 +75,14 @@ impl<'a> shell::Shell for Native {
     where 
         I: IntoIterator<Item = shell::Arg<'b>>,
         J: IntoIterator<Item = (K, shell::Arg<'b>)>,
-        K: AsRef<OsStr>, P: AsRef<Path>
+        K: AsRef<OsStr>, P: shell::ArgTrait
     {
         if !settings.interactive && settings.silent {
             // regardless for the value of `capture`, always capture value
             let (mut cmd, mut ct) = self.create_command(
-                args, envs, cwd, &shell::Settings { capture: true, interactive: false, silent: false }
+                args, envs, cwd, &shell::Settings { 
+                    capture: true, interactive: false, silent: false, paths: settings.paths.clone() 
+                }
             );
             return Native::run_as_child(&mut cmd, &mut ct);
         } else {
@@ -90,13 +92,22 @@ impl<'a> shell::Shell for Native {
     }
 }
 impl Native {
+    fn add_paths<'a>(envs: &mut HashMap<String, Box<dyn shell::ArgTrait + 'a>>, paths: &Vec<String>) {
+        envs.insert("PATH".to_string(), shell::arg!(format!("{}:{}", match envs.get("PATH") {
+            Some(v) => v.value(),
+            None => match std::env::var("PATH") {
+                Ok(v) => v,
+                Err(e) => panic!("fail to get system PATH by {:?}", e)
+            }
+        }, paths.join(":"))));
+    }
     fn create_command<'a, I, J, K, P>(
         &self, args: I, envs: J, cwd: &Option<P>, settings: &shell::Settings
     ) -> (Command, Option<CaptureTarget>)
     where
         I: IntoIterator<Item = shell::Arg<'a>>,
         J: IntoIterator<Item = (K, shell::Arg<'a>)>,
-        K: AsRef<OsStr>, P: AsRef<Path>
+        K: AsRef<OsStr>, P: shell::ArgTrait
     {
         let mut args_vec = vec![];
         let mut raw_args = vec![];
@@ -109,13 +120,17 @@ impl Native {
             let key = k.as_ref().to_string_lossy().to_string();
             envs_map.insert(key, v);
         }
+        match &settings.paths {
+            Some(p) => Self::add_paths(&mut envs_map, p),
+            None => {}
+        };
         let mut c = Command::new(&raw_args[0]);
         c.args(&raw_args[1..]);
         c.envs(envs_map.iter().map(|(k,v)| (k, v.value())));
         let cwd_used = match cwd {
             Some(d) => {
-                c.current_dir(d.as_ref()); 
-                d.as_ref().to_string_lossy().to_string()
+                c.current_dir(&Path::new(&d.value())); 
+                d.value()
             },
             None => match &self.cwd {
                 Some(cwd) => {

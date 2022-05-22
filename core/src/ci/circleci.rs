@@ -79,6 +79,9 @@ impl<'a, S: shell::Shell> ci::CI for CircleCI<S> {
             shell: S::new(config),
         });
     }
+    fn runs_on_service(&self) -> bool {
+        std::env::var("CIRCLE_SHA1").is_ok()
+    }    
     fn generate_config(&self, reinit: bool) -> Result<(), Box<dyn Error>> {
         let config = self.config.borrow();
         let repository_root = config.modules.vcs().repository_root()?;
@@ -120,9 +123,6 @@ impl<'a, S: shell::Shell> ci::CI for CircleCI<S> {
         ))?;
         //TODO: we need to provide the way to embed user defined circle ci configuration with our generated config.yml
         Ok(())
-    }    
-    fn kick(&self) -> Result<(), Box<dyn Error>> {
-        Ok(())
     }
     fn overwrite_commit(&self, commit: &str) -> Result<String, Box<dyn Error>> {
         let prev = std::env::var("CIRCLE_SHA1")?;
@@ -140,19 +140,10 @@ impl<'a, S: shell::Shell> ci::CI for CircleCI<S> {
             }
         }
     }
-    fn mark_job_executed(&self, job_name: &str) -> Result<Option<String>, Box<dyn Error>> {
-        if config::Config::is_running_on_ci() {
-            fs::create_dir_all("/tmp/deplo/marked_jobs")?;
-            fs::write(format!("/tmp/deplo/marked_jobs/{}", job_name), "")?;
-            Ok(None)
-        } else {
-            self.config.borrow().jobs.run(
-                job_name, &self.shell, &config::job::Command::Job, &config::job::RunningOptions {
-                    commit: None, remote: false, shell_settings: shell::no_capture(),
-                    adhoc_envs: hashmap!{},
-                }
-            )
-        }
+    fn schedule_job(&self, job_name: &str) -> Result<(), Box<dyn Error>> {
+        fs::create_dir_all("/tmp/deplo/marked_jobs")?;
+        fs::write(format!("/tmp/deplo/marked_jobs/{}", job_name), "")?;
+        Ok(())
     }
     fn mark_need_cleanup(&self, job_name: &str) -> Result<(), Box<dyn Error>> {
         if config::Config::is_running_on_ci() {
@@ -163,10 +154,13 @@ impl<'a, S: shell::Shell> ci::CI for CircleCI<S> {
         }
         Ok(())
     }
-    fn dispatched_remote_job(&self) -> Result<Option<ci::RemoteJob>, Box<dyn Error>> {
-        Ok(None)
+    fn filter_workflows(
+        &self, _trigger: Option<ci::WorkflowTrigger>
+    ) -> Result<Vec<(String, HashMap<String, config::AnyValue>)>, Box<dyn Error>> {
+        log::warn!("TODO: implement filter_workflows for circleci");
+        Ok(vec![])
     }
-    fn run_job(&self, _job: &ci::RemoteJob) -> Result<String, Box<dyn Error>> {
+    fn run_job(&self, _job_config: &config::runtime::Workflow) -> Result<String, Box<dyn Error>> {
         log::warn!("TODO: implement run_job for circleci");
         Ok("".to_string())
     }
@@ -201,7 +195,7 @@ impl<'a, S: shell::Shell> ci::CI for CircleCI<S> {
         };
         Ok(envs)
     }
-    fn job_env(&self) -> HashMap<&str, String> {
+    fn job_env(&self) -> HashMap<String, config::Value> {
         hashmap!{}
     }
     fn list_secret_name(&self) -> Result<Vec<String>, Box<dyn Error>> {
