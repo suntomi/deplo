@@ -1,10 +1,5 @@
 use std::collections::{HashMap};
 use std::error::Error;
-use std::io::Write;
-use std::thread::sleep;
-use std::time::Duration;
-
-use log;
 
 use core::config;
 use core::shell;
@@ -27,6 +22,13 @@ impl<S: shell::Shell> CI<S> {
         }
         Ok(())
     }
+    fn output<A: args::Args>(&self, args: &A) -> Result<(), Box<dyn Error>> {
+        let config = self.config.borrow();
+        let job = args.value_or_die("job");
+        let key = args.value_or_die("key");
+        config.jobs.user_output(&config, job, key)?;
+        Ok(())
+    }
     fn set_output<A: args::Args>(&self, args: &A) -> Result<(), Box<dyn Error>> {
         let config = self.config.borrow();
         let key = args.value_or_die("key");
@@ -34,29 +36,6 @@ impl<S: shell::Shell> CI<S> {
         config.jobs.set_user_output(&config, key, value)?;
         Ok(())
     }
-    fn exec<A: args::Args>(&self, kind: &str, args: &A) -> Result<(), Box<dyn Error>> {
-        let job_name = format!("{}-{}", kind, args.value_or_die("name"));
-        match self.exec_job(args, &job_name)? {
-            Some(job_id) => {
-                log::info!("remote job {} id={} running", job_name, job_id);
-                if args.occurence_of("async") <= 0 {
-                    self.wait_job(args, &job_name, &job_id)?;
-                } else {
-                    //output job_id to use in user script
-                    println!("{}", job_id);
-                }
-            },
-            None => if !config::Config::is_running_on_ci() {
-                log::debug!("the job {} should finish because no job_id. do cleanup", job_name);
-                self.cleanup_jobs()?;
-            }
-        };
-        return Ok(())
-    }
-    fn fin<A: args::Args>(&self, _: &A) -> Result<(), Box<dyn Error>> {
-        self.cleanup_jobs()
-    }
-
     // helpers
     fn make_task_command(task: &str, _: Vec<&str>) -> String {
         // TODO: embedding args into task
@@ -65,8 +44,8 @@ impl<S: shell::Shell> CI<S> {
     fn adhoc_envs<A: args::Args>(args: &A) -> HashMap<String, String> {
         args.map_of("env")
     }
-    fn exec_job<A: args::Args>(&self, args: &A, job_name: &str) -> Result<Option<String>, Box<dyn Error>> {
-        Ok(None)
+    // fn exec_job<A: args::Args>(&self, args: &A, job_name: &str) -> Result<Option<String>, Box<dyn Error>> {
+    //     Ok(None)
         // let config = self.config.borrow();
         // let remote_job = config.ci_service_by_job_name(job_name)?.detect_workflow()?;
         // // if reach here by remote execution, adopt the settings, otherwise using cli options if any.
@@ -149,9 +128,9 @@ impl<S: shell::Shell> CI<S> {
         //         })
         //     }
         // }
-    }
-    fn wait_job<A: args::Args>(&self, args: &A, job_name: &str, job_id: &str) -> Result<(), Box<dyn Error>> {
-        log::info!("wait for finishing remote job {} id={}", job_name, job_id);
+    // }
+    // fn wait_job<A: args::Args>(&self, args: &A, job_name: &str, job_id: &str) -> Result<(), Box<dyn Error>> {
+    //     log::info!("wait for finishing remote job {} id={}", job_name, job_id);
         // let config = self.config.borrow();
         // let job = match config.find_job(&job_name) {
         //     Some(job) => job,
@@ -185,11 +164,11 @@ impl<S: shell::Shell> CI<S> {
         //     }
         // }
         // log::info!("remote job {} id={} finished", job_name, job_id);
-        Ok(())
-    }
-    fn aggregate_commits(&self) -> Result<Vec<(String, Vec<String>, config::job::CommitMethod)>, Box<dyn Error>> {
-        let config = self.config.borrow();
-        let commits: Vec<(String, Vec<String>, config::job::CommitMethod)> = vec![];
+    //     Ok(())
+    // }
+    // fn aggregate_commits(&self) -> Result<Vec<(String, Vec<String>, config::job::CommitMethod)>, Box<dyn Error>> {
+    //     let config = self.config.borrow();
+    //     let commits: Vec<(String, Vec<String>, config::job::CommitMethod)> = vec![];
         // let mut aggregated_push_branches = vec![];
         // let mut aggregated_pr_branches = vec![];
         // let mut aggregated_pr_opts = AggregatedPullRequestOptions {
@@ -247,11 +226,11 @@ impl<S: shell::Shell> CI<S> {
         //     assignees: if aggregated_pr_opts.assignees.len() > 0 { Some(aggregated_pr_opts.assignees) } else { None }, 
         //     aggregate: Some(true)
         // }));
-        Ok(commits)
-    }
-    fn push_job_result_branches(
-        &self, branches_and_options: &(String, Vec<String>, config::job::CommitMethod)
-    ) -> Result<(), Box<dyn Error>> {
+    //     Ok(commits)
+    // }
+    // fn push_job_result_branches(
+    //     &self, branches_and_options: &(String, Vec<String>, config::job::CommitMethod)
+    // ) -> Result<(), Box<dyn Error>> {
         // let config = self.config.borrow();
         // let vcs = config.vcs_service()?;
         // let job_id = std::env::var("DEPLO_CI_ID").unwrap();
@@ -306,25 +285,25 @@ impl<S: shell::Shell> CI<S> {
         //         }
         //     }
         // }
-        Ok(())
-    }
-    fn cleanup_jobs(&self) -> Result<(), Box<dyn Error>> {
-        for branches_and_options in self.aggregate_commits()? {
-            match self.push_job_result_branches(&branches_and_options) {
-                Ok(_) => {},
-                Err(e) => {
-                    log::error!("push_job_result_branches fails: back to original branch");
-                    let config = self.config.borrow();
-                    let vcs = config.modules.vcs();
-                    let current_branch = std::env::var("DEPLO_CI_BRANCH_NAME").unwrap();
-                    let current_ref = std::env::var("DEPLO_CI_CURRENT_SHA").unwrap();
-                    vcs.checkout(&current_ref, Some(&current_branch)).unwrap();
-                    return Err(e);
-                }
-            }
-        }
-        Ok(())
-    }    
+    //     Ok(())
+    // }
+    // fn cleanup_jobs(&self) -> Result<(), Box<dyn Error>> {
+    //     for branches_and_options in self.aggregate_commits()? {
+    //         match self.push_job_result_branches(&branches_and_options) {
+    //             Ok(_) => {},
+    //             Err(e) => {
+    //                 log::error!("push_job_result_branches fails: back to original branch");
+    //                 let config = self.config.borrow();
+    //                 let vcs = config.modules.vcs();
+    //                 let current_branch = std::env::var("DEPLO_CI_BRANCH_NAME").unwrap();
+    //                 let current_ref = std::env::var("DEPLO_CI_CURRENT_SHA").unwrap();
+    //                 vcs.checkout(&current_ref, Some(&current_branch)).unwrap();
+    //                 return Err(e);
+    //             }
+    //         }
+    //     }
+    //     Ok(())
+    // }    
 }
 
 impl<S: shell::Shell, A: args::Args> command::Command<A> for CI<S> {
@@ -337,10 +316,8 @@ impl<S: shell::Shell, A: args::Args> command::Command<A> for CI<S> {
     fn run(&self, args: &A) -> Result<(), Box<dyn Error>> {
         match args.subcommand() {
             Some(("setenv", subargs)) => return self.setenv(&subargs),
+            Some(("output", subargs)) => return self.output(&subargs),
             Some(("set-output", subargs)) => return self.set_output(&subargs),
-            Some(("deploy", subargs)) => return self.exec("deploy", &subargs),
-            Some(("integrate", subargs)) => return self.exec("integrate", &subargs),
-            Some(("fin", subargs)) => return self.fin(&subargs),
             Some((name, _)) => return escalate!(args.error(
                 &format!("no such subcommand: [{}]", name) 
             )),

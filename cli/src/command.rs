@@ -51,6 +51,7 @@ pub fn factory<'a, S: args::Args>(
         "info" => factory_by::<S, info::Info>(config),
         "destroy" => factory_by::<S, destroy::Destroy>(config),
         "start" => factory_by::<S, start::Start>(config),
+        "stop" => factory_by::<S, stop::Stop>(config),
         "ci" => factory_by::<S, ci::CI>(config),
         "vcs" => factory_by::<S, vcs::VCS>(config),
         _ => return Err(Box::new(CommandError {

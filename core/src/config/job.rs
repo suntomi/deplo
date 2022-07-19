@@ -171,16 +171,6 @@ impl Commit {
         )
     }
 }
-pub struct RunningOptions<'a> {
-    pub remote: bool,
-    pub adhoc_envs: HashMap<String, String>,
-    pub shell_settings: shell::Settings,
-    pub commit: Option<&'a str>,
-}
-pub struct SystemJobEnvOptions {
-    pub paths: Option<Vec<String>>,
-    pub job_name: String,
-}
 #[derive(Serialize, Deserialize, Clone)]
 pub struct StepExtension {
     pub name: Option<String>,
@@ -471,55 +461,7 @@ impl Job {
             None => return None
         }
     }
-    pub fn user_output(
-        &self, config: &config::Config, job_name: &str, key: &str
-    ) -> Result<Option<String>, Box<dyn Error>> {
-        let ci = self.ci(config);
-        match std::env::var("DEPLO_JOB_CURRENT_NAME") {
-            Ok(n) => {
-                if n == job_name {
-                    // get output of current job. read from temporary file
-                    match fs::read(Path::new(DEPLO_JOB_OUTPUT_TEMPORARY_FILE)) {
-                        Ok(b) => {
-                            let outputs = serde_json::from_slice::<HashMap<&str, &str>>(&b)?;
-                            Ok(outputs.get(key).map(|v| v.to_string()))
-                        },
-                        Err(e) => escalate!(Box::new(e))
-                    }
-                } else {
-                    ci.job_output(job_name, ci::OutputKind::User, key)
-                }
-            },
-            Err(_) => ci.job_output(job_name, ci::OutputKind::User, key)
-        }
-    }
-    pub fn system_output(
-        &self, config: &config::Config, job_name: &str, key: &str
-    ) -> Result<Option<String>, Box<dyn Error>> {
-        let ci = self.ci(config);
-        ci.job_output(job_name, ci::OutputKind::System, key)
-    }
 }
-
-/*
-        match system.paths {
-            Some(ref paths) => {
-                // modify path
-                let mut paths = paths.clone();
-                let path = std::env::var("PATH");
-                match path {
-                    Ok(v) => {
-                        paths.push(v);
-                    },
-                    Err(_) => {}
-                };
-                common_envs.insert("PATH", paths.join(":"));
-                log::debug!("modified path: {}", paths.join(":"));
-            },
-            None => {}
-        };
-
- */
 
 struct AggregatedPullRequestOptions {
     labels: Vec<config::Value>,
@@ -563,6 +505,35 @@ impl Jobs {
         }
         return h;
     }
+    pub fn user_output(
+        &self, config: &config::Config, job_name: &str, key: &str
+    ) -> Result<Option<String>, Box<dyn Error>> {
+        let job = self.as_map().get(job_name).expect(&format!("job {} does not exist", job_name));
+        let ci = job.ci(config);
+        match std::env::var("DEPLO_JOB_CURRENT_NAME") {
+            Ok(n) => {
+                if n == job_name {
+                    // get output of current job. read from temporary file
+                    match fs::read(Path::new(DEPLO_JOB_OUTPUT_TEMPORARY_FILE)) {
+                        Ok(b) => {
+                            let outputs = serde_json::from_slice::<HashMap<&str, &str>>(&b)?;
+                            Ok(outputs.get(key).map(|v| v.to_string()))
+                        },
+                        Err(e) => escalate!(Box::new(e))
+                    }
+                } else {
+                    ci.job_output(job_name, ci::OutputKind::User, key)
+                }
+            },
+            Err(_) => ci.job_output(job_name, ci::OutputKind::User, key)
+        }
+    }
+    fn system_output(
+        &self, config: &config::Config, job: &Job, key: &str
+    ) -> Result<Option<String>, Box<dyn Error>> {
+        let ci = job.ci(config);
+        ci.job_output(&job.name, ci::OutputKind::System, key)
+    }    
     pub fn set_user_output(
         &self, _: &config::Config, key: &str, value: &str
     ) -> Result<(), Box<dyn Error>> {
@@ -646,7 +617,7 @@ impl Jobs {
             labels: vec![], assignees: vec![],
         };
         for (job_name, job) in self.as_map() {
-            match job.system_output(config, &job_name, DEPLO_SYSTEM_OUTPUT_COMMIT_BRANCH_NAME)? {
+            match self.system_output(config, &job, DEPLO_SYSTEM_OUTPUT_COMMIT_BRANCH_NAME)? {
                 Some(v) => {
                     log::info!("ci fin: find commit from job {} at {}", job_name, v);
                     match job.commit_setting_from_config(config, runtime_workflow_config)

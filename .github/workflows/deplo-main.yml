@@ -13,17 +13,16 @@ on:
 env:
   DEPLO_GHACTION_CI_ID: ${{ github.run_id }}-${{ github.run_attempt }}
   DEPLO_GHACTION_PR_URL: ${{ github.event.pull_request.url }}
-  DEPLO_GHACTION_EVENT_TYPE: ${{ github.event.action }}
-  DEPLO_GHACTION_EVENT_PAYLOAD: ${{ toJSON(github.event.client_payload) }}
+  DEPLO_GHACTION_EVENT_DATA: ${ toJson(github) }
   DEPLO_OVERWRITE_COMMIT: ${{ github.event.client_payload.commit }}
   DEPLO_OVERWRITE_RELEASE_TARGET: ${{ github.event.client_payload.release_target }}
   DEPLO_OVERWRITE_VERBOSITY: ${{ github.event.client_payload.verbosity }}
   DEPLO_OVERWRITE_WORKFLOW: ${{ github.event.client_payload.workflow }}
-  SUNTOMI_VCS_ACCOUNT: ${{ secrets.SUNTOMI_VCS_ACCOUNT }}
+  SUNTOMI_VCS_APP_PKEY: ${{ secrets.SUNTOMI_VCS_APP_PKEY }}
   SUNTOMI_VCS_ACCOUNT_EMAIL: ${{ secrets.SUNTOMI_VCS_ACCOUNT_EMAIL }}
   SUNTOMI_VCS_ACCOUNT_KEY: ${{ secrets.SUNTOMI_VCS_ACCOUNT_KEY }}
-  SUNTOMI_VCS_APP_PKEY: ${{ secrets.SUNTOMI_VCS_APP_PKEY }}
   SUNTOMI_VCS_APP_ID: ${{ secrets.SUNTOMI_VCS_APP_ID }}
+  SUNTOMI_VCS_ACCOUNT: ${{ secrets.SUNTOMI_VCS_ACCOUNT }}
 jobs:
   deplo-main:
     name: Start CI ${{ github.event.client_payload.job_id }}
@@ -96,9 +95,9 @@ jobs:
   
   
     outputs:
-      need-cleanup: ${{ steps.deplo-base.outputs.need-cleanup }}
-      system: ${{ steps.deplo-base.outputs.system }}
-      user: ${{ steps.deplo-base.outputs.user }}
+      need-cleanup: ${{ steps.deplo-job-base.outputs.need-cleanup }}
+      system: ${{ steps.deplo-job-base.outputs.system }}
+      user: ${{ steps.deplo-job-base.outputs.user }}
     steps:
       - name: Fetch deplo cli
         run: |
@@ -111,7 +110,7 @@ jobs:
           ref: ${{ github.event.client_payload.commit }}
   
       - name: base
-        id: deplo-base
+        id: deplo-job-base
         run: deplo run base
       - name: Setup ssh session to debug
         if: ${{ failure() }}
@@ -126,9 +125,9 @@ jobs:
   
   
     outputs:
-      need-cleanup: ${{ steps.deplo-builder.outputs.need-cleanup }}
-      system: ${{ steps.deplo-builder.outputs.system }}
-      user: ${{ steps.deplo-builder.outputs.user }}
+      need-cleanup: ${{ steps.deplo-job-builder.outputs.need-cleanup }}
+      system: ${{ steps.deplo-job-builder.outputs.system }}
+      user: ${{ steps.deplo-job-builder.outputs.user }}
     steps:
       - name: Fetch deplo cli
         run: |
@@ -141,7 +140,7 @@ jobs:
           ref: ${{ github.event.client_payload.commit }}
   
       - name: builder
-        id: deplo-builder
+        id: deplo-job-builder
         run: deplo run builder
       - name: Setup ssh session to debug
         if: ${{ failure() }}
@@ -156,9 +155,9 @@ jobs:
   
   
     outputs:
-      need-cleanup: ${{ steps.deplo-config.outputs.need-cleanup }}
-      system: ${{ steps.deplo-config.outputs.system }}
-      user: ${{ steps.deplo-config.outputs.user }}
+      need-cleanup: ${{ steps.deplo-job-config.outputs.need-cleanup }}
+      system: ${{ steps.deplo-job-config.outputs.system }}
+      user: ${{ steps.deplo-job-config.outputs.user }}
     steps:
       - name: Fetch deplo cli
         run: |
@@ -171,7 +170,7 @@ jobs:
           ref: ${{ github.event.client_payload.commit }}
   
       - name: config
-        id: deplo-config
+        id: deplo-job-config
         run: deplo run config
       - name: Setup ssh session to debug
         if: ${{ failure() }}
@@ -187,9 +186,9 @@ jobs:
       DEPLO_JOB_USER_OUTPUT_PRODUCT: ${{ needs.product.outputs.user }}
   
     outputs:
-      need-cleanup: ${{ steps.deplo-latest.outputs.need-cleanup }}
-      system: ${{ steps.deplo-latest.outputs.system }}
-      user: ${{ steps.deplo-latest.outputs.user }}
+      need-cleanup: ${{ steps.deplo-job-latest.outputs.need-cleanup }}
+      system: ${{ steps.deplo-job-latest.outputs.system }}
+      user: ${{ steps.deplo-job-latest.outputs.user }}
     steps:
       - name: Fetch deplo cli
         run: |
@@ -202,7 +201,7 @@ jobs:
           ref: ${{ github.event.client_payload.commit }}
   
       - name: latest
-        id: deplo-latest
+        id: deplo-job-latest
         run: deplo run latest
       - name: Setup ssh session to debug
         if: ${{ failure() }}
@@ -218,9 +217,9 @@ jobs:
       DEPLO_JOB_USER_OUTPUT_PRODUCT: ${{ needs.product.outputs.user }}
   
     outputs:
-      need-cleanup: ${{ steps.deplo-mac.outputs.need-cleanup }}
-      system: ${{ steps.deplo-mac.outputs.system }}
-      user: ${{ steps.deplo-mac.outputs.user }}
+      need-cleanup: ${{ steps.deplo-job-mac.outputs.need-cleanup }}
+      system: ${{ steps.deplo-job-mac.outputs.system }}
+      user: ${{ steps.deplo-job-mac.outputs.user }}
     steps:
       - name: Fetch deplo cli
         run: |
@@ -247,7 +246,7 @@ jobs:
         if: steps.deplo-cache-cargo.outputs.cache-hit == 'true'
         run: echo "DEPLO_CACHE_CARGO_HIT=true" >> $GITHUB_ENV
       - name: mac
-        id: deplo-mac
+        id: deplo-job-mac
         run: deplo run mac
       - name: Setup ssh session to debug
         if: ${{ failure() }}
@@ -263,9 +262,9 @@ jobs:
       DEPLO_JOB_USER_OUTPUT_BUILDER: ${{ needs.builder.outputs.user }}
   
     outputs:
-      need-cleanup: ${{ steps.deplo-product.outputs.need-cleanup }}
-      system: ${{ steps.deplo-product.outputs.system }}
-      user: ${{ steps.deplo-product.outputs.user }}
+      need-cleanup: ${{ steps.deplo-job-product.outputs.need-cleanup }}
+      system: ${{ steps.deplo-job-product.outputs.system }}
+      user: ${{ steps.deplo-job-product.outputs.user }}
     steps:
       - name: Fetch deplo cli
         run: |
@@ -278,7 +277,7 @@ jobs:
           ref: ${{ github.event.client_payload.commit }}
   
       - name: product
-        id: deplo-product
+        id: deplo-job-product
         run: deplo run product
       - name: Setup ssh session to debug
         if: ${{ failure() }}
@@ -293,9 +292,9 @@ jobs:
   
   
     outputs:
-      need-cleanup: ${{ steps.deplo-test.outputs.need-cleanup }}
-      system: ${{ steps.deplo-test.outputs.system }}
-      user: ${{ steps.deplo-test.outputs.user }}
+      need-cleanup: ${{ steps.deplo-job-test.outputs.need-cleanup }}
+      system: ${{ steps.deplo-job-test.outputs.system }}
+      user: ${{ steps.deplo-job-test.outputs.user }}
     steps:
       - name: Fetch deplo cli
         run: |
@@ -322,7 +321,7 @@ jobs:
         if: steps.deplo-cache-cargo.outputs.cache-hit == 'true'
         run: echo "DEPLO_CACHE_CARGO_HIT=true" >> $GITHUB_ENV
       - name: test
-        id: deplo-test
+        id: deplo-job-test
         run: deplo run test
       - name: Setup ssh session to debug
         if: ${{ failure() }}
@@ -338,9 +337,9 @@ jobs:
       DEPLO_JOB_USER_OUTPUT_PRODUCT: ${{ needs.product.outputs.user }}
   
     outputs:
-      need-cleanup: ${{ steps.deplo-win.outputs.need-cleanup }}
-      system: ${{ steps.deplo-win.outputs.system }}
-      user: ${{ steps.deplo-win.outputs.user }}
+      need-cleanup: ${{ steps.deplo-job-win.outputs.need-cleanup }}
+      system: ${{ steps.deplo-job-win.outputs.system }}
+      user: ${{ steps.deplo-job-win.outputs.user }}
     steps:
       - name: Fetch deplo cli
         run: |
@@ -368,7 +367,7 @@ jobs:
         if: steps.deplo-cache-cargo.outputs.cache-hit == 'true'
         run: echo "DEPLO_CACHE_CARGO_HIT=true" >> $GITHUB_ENV
       - name: win
-        id: deplo-win
+        id: deplo-job-win
         run: deplo run win
         shell: bash
       - name: Setup ssh session to debug

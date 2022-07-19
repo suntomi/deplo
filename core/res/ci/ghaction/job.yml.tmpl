@@ -6,14 +6,14 @@
 {job_envs:>2}
 {container:>2}
   outputs:
-    need-cleanup: ${{{{ steps.deplo-{name}.outputs.need-cleanup }}}}
-    system: ${{{{ steps.deplo-{name}.outputs.system }}}}
-    user: ${{{{ steps.deplo-{name}.outputs.user }}}}
+    need-cleanup: ${{{{ steps.deplo-job-{name}.outputs.need-cleanup }}}}
+    system: ${{{{ steps.deplo-job-{name}.outputs.system }}}}
+    user: ${{{{ steps.deplo-job-{name}.outputs.user }}}}
   steps:
 {fetchcli:>4}
 {checkout:>4}
 {caches:>4}
     - name: {name}
-      id: deplo-{name}
+      id: deplo-job-{name}
 {command:>6}
 {debugger:>4}
