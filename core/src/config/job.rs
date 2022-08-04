@@ -13,7 +13,7 @@ use serde::{Deserialize, Serialize};
 use crate::ci;
 use crate::config;
 use crate::shell;
-use crate::util::{escalate,UnitOrListOf};
+use crate::util::{escalate,UnitOrListOf,merge_hashmap};
 use crate::vcs;
 
 pub mod runner;
@@ -221,7 +221,6 @@ impl<'a> fmt::Display for StepsDumper<'a> {
 #[serde(untagged)]
 pub enum TriggerCondition {
     Commit {
-        release_targets: Option<Vec<config::Value>>,
         changed: Option<Vec<config::Value>>,
         diff_matcher: Option<config::Value>,
     },
@@ -269,6 +268,7 @@ impl TriggerCondition {
 #[derive(Serialize, Deserialize)]
 pub struct Trigger {
     workflows: Option<Vec<config::Value>>,
+    release_targets: Option<Vec<config::Value>>,
     #[serde(flatten)]
     condition: TriggerCondition,
 }
@@ -302,23 +302,23 @@ impl Trigger {
             log::debug!("workflow {} does not match for trigger", runtime_workflow_config.name);
             return false;
         }
+        if !self.release_targets.as_ref().map_or_else(
+            // no job.release_targets restriction. always ok
+            || true,
+            |v| match &runtime_workflow_config.exec.release_target {
+                // both runtime_workflow_config.exec.release_target and job.release_targets exists, compare matches
+                Some(rt) => v.iter().find(|v| { v.resolve() == *rt }).is_some(),
+                // job.release_target exists, but no runtime_workflow_config.exec.release_target, always ng
+                None => false
+            }
+        ) {
+            return false;
+        }        
         if !self.condition.check_workflow_type(workflow) {
             log::debug!("workflow {} does not match for trigger condition", workflow);
         }
         match &self.condition {
-            TriggerCondition::Commit{ release_targets, changed, diff_matcher } => {
-                if !release_targets.as_ref().map_or_else(
-                    // no job.release_targets restriction. always ok
-                    || true,
-                    |v| match &runtime_workflow_config.context.get("release_target") {
-                        // both runtime.release_target and job.release_targets exists, compare matches
-                        Some(rt) => v.iter().find(|v| { v.resolve() == rt.resolve() }).is_some(),
-                        // job.release_target exists, but no runtime_workflow_config.context.release_target, always ng
-                        None => true
-                    }
-                ) {
-                    return false;
-                }
+            TriggerCondition::Commit{ changed, diff_matcher } => {
                 if let Some(ch) = changed {
                     // diff pattern matches
                     let dm = Self::diff_matcher(diff_matcher, ch);
@@ -337,7 +337,7 @@ impl Trigger {
             },
             TriggerCondition::Module{ when } => {
                 // use module method like _wf.matches(when) to determine.
-                panic!("TODO: implement match logic for Module condition")
+                panic!("TODO: implement match logic for Module condition {:?}", when)
             },
             TriggerCondition::Nop => {},
         }
@@ -388,7 +388,8 @@ impl Job {
         config: &config::Config,
         runtime_workflow_config: &config::runtime::Workflow
     ) -> Result<Option<String>, Box<dyn Error>> where S: shell::Shell {
-        panic!("TODO: implement Job.run")
+        let runner = runner::Runner::new(self, config);
+        runner.run(shell, runtime_workflow_config)
     }
     pub fn env(
         &self,
@@ -397,9 +398,13 @@ impl Job {
     ) -> HashMap<String, config::Value> {
         let ci = self.ci(config);
         let mut envs_list = vec![];
-        let common_envs = hashmap!{
-            "DEPLO_JOB_CURRENT_NAME".to_string() => config::Value::new(&self.name)
-        };
+        let common_envs = merge_hashmap(&hashmap!{
+            "DEPLO_JOB_CURRENT_NAME".to_string() => config::Value::new(&self.name),
+            "DEPLO_CI_WORKFLOW_NAME".to_string() => config::Value::new(&runtime_workflow_config.name),
+        }, &match runtime_workflow_config.exec.release_target {
+            Some(ref v) => hashmap!{"DEPLO_CI_RELEASE_TARGET".to_string() => config::Value::new(v)},
+            None => hashmap!{},
+        });
         envs_list.push(&common_envs);
         let jenvs = ci.job_env();
         envs_list.push(&jenvs);
@@ -555,7 +560,7 @@ impl Jobs {
         let vcs = config.modules.vcs();
         let job_id = std::env::var("DEPLO_CI_ID").unwrap();
         let current_branch = std::env::var("DEPLO_CI_BRANCH_NAME").unwrap();
-        let current_ref = std::env::var("DEPLO_CI_CURRENT_SHA").unwrap();
+        let current_ref = std::env::var("DEPLO_CI_CURRENT_COMMIT_ID").unwrap();
         let (name, branches, options) = branches_and_options;
         if branches.len() > 0 {
             let working_branch = format!("deplo-auto-commits-{}-{}", job_id, name);
@@ -678,7 +683,7 @@ impl Jobs {
                     log::error!("push_job_result_branches fails: back to original branch");
                     let vcs = config.modules.vcs();
                     let current_branch = std::env::var("DEPLO_CI_BRANCH_NAME").unwrap();
-                    let current_ref = std::env::var("DEPLO_CI_CURRENT_SHA").unwrap();
+                    let current_ref = std::env::var("DEPLO_CI_CURRENT_COMMIT_ID").unwrap();
                     vcs.checkout(&current_ref, Some(&current_branch)).unwrap();
                     return Err(e);
                 }
@@ -727,7 +732,7 @@ impl Jobs {
         &self, config: &config::Config, runtime_workflow_config: &config::runtime::Workflow, shell: &S
     ) -> Result<(), Box<dyn Error>> where S: shell::Shell {
         let modules = &config.modules;
-        let ci = modules.ci_by_env();
+        let (_, ci) = modules.ci_by_env();
         for (name, job) in self.filter_as_map(config, runtime_workflow_config) {
             if config::Config::is_running_on_ci() {
                 ci.schedule_job(name)?;

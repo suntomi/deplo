@@ -783,9 +783,9 @@ impl Config {
             "DEPLO_CI_TYPE" => Some(ci_type.as_str()),
             "DEPLO_CI_TAG_NAME" => may_tag,
             "DEPLO_CI_BRANCH_NAME" => may_branch,
-            "DEPLO_CI_CURRENT_SHA" => Some(sha.as_str()),
+            "DEPLO_CI_CURRENT_COMMIT_ID" => Some(sha.as_str()),
             "DEPLO_CI_RELEASE_TARGET" => self.runtime.release_target.as_ref().map(|s| s.as_str()),
-            "DEPLO_CI_WORKFLOW_TYPE" => self.runtime.workflow_type.as_ref().map(|s| s.as_str()),
+            "DEPLO_CI_WORKFLOW_NAME" => self.runtime.workflow_type.as_ref().map(|s| s.as_str()),
             // TODO_CI: get pull request url from local execution
             "DEPLO_CI_PULL_REQUEST_URL" => Some(""),
             "DEPLO_CI_CLI_COMMIT_HASH" => Some(DEPLO_GIT_HASH),

@@ -176,15 +176,15 @@ impl<'a, S: shell::Shell> ci::CI for CircleCI<S> {
         log::warn!("TODO: implement set_job_output for circleci");
         Ok(())
     }
-    fn process_env(&self, _local: bool) -> Result<HashMap<&str, String>, Box<dyn Error>> {
+    fn process_env(&self) -> Result<HashMap<&str, String>, Box<dyn Error>> {
         let mut envs = hashmap!{
             "DEPLO_CI_TYPE" => "CircleCI".to_string(),
         };
         // get from env
-        for (src, target) in hashmap!{
-            "CIRCLE_WORKFLOW_ID" => "DEPLO_CI_ID",
-            "CIRCLE_PULL_REQUEST" => "DEPLO_CI_PULL_REQUEST_URL",
-            "CIRCLE_SHA1" => "DEPLO_CI_CURRENT_SHA",
+        for (target, src) in hashmap!{
+            "DEPLO_CI_ID" => "CIRCLE_WORKFLOW_ID",
+            "DEPLO_CI_PULL_REQUEST_URL" => "CIRCLE_PULL_REQUEST",
+            "DEPLO_CI_CURRENT_COMMIT_ID" => "CIRCLE_SHA1",
         } {
             match std::env::var(src) {
                 Ok(v) => {

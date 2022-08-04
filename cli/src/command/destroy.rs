@@ -22,6 +22,8 @@ impl<S: shell::Shell, A: args::Args> command::Command<A> for Destroy<S> {
     }
     fn run(&self, _: &A) -> Result<(), Box<dyn Error>> {
         log::debug!("destroy command invoked");
+        // TODO:
+        // remove CI settings and cache directory of deplo cli/module
         return Ok(())
     }
 }

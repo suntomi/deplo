@@ -12,16 +12,18 @@ use crate::config;
 pub struct ExecOptions {
     pub envs: HashMap<String, String>,
     pub revision: Option<String>,
+    pub release_target: Option<String>,
     pub verbosity: u64,
     pub remote: bool,
     pub silent: bool,
     pub timeout: Option<u64>,
 }
 impl ExecOptions {
-    pub fn new<A: Args>(args: &A, config: &config::Container) -> Result<Self, Box<dyn Error>> {
+    pub fn new<A: Args>(args: &A, _config: &config::Container) -> Result<Self, Box<dyn Error>> {
         Ok(Self {
             envs: args.map_of("env"),
-            revision: args.value_of("ref").map(|v| v.to_string()),
+            revision: args.value_of("rev").map(|v| v.to_string()),
+            release_target: args.value_of("release_target").map(|v| v.to_string()),
             verbosity: args.value_of("verbosity").unwrap_or("0").parse()?,
             remote: args.occurence_of("remote") > 0,
             silent: args.occurence_of("silent") > 0,
@@ -57,7 +59,7 @@ pub struct Job {
 }
 impl Job {
     pub fn new_or_none<A: Args>(
-        args: &A, config: &config::Container
+        args: &A, _config: &config::Container
     ) -> Result<Option<Self>, Box<dyn Error>> {
         match args.value_of("job").map(|v| v.to_string()) {
             Some(name) => Ok(Some(Self {
@@ -85,39 +87,40 @@ pub struct Workflow {
 }
 impl Workflow {
     pub fn new<A: Args>(args: &A, config: &config::Container) -> Result<Self, Box<dyn Error>> {
-        let trigger = match args.value_of("workflow") {
-            Some(v) => Some(crate::ci::WorkflowTrigger::DirectInput{
-                name: v.to_string(),
-                context: match args.value_of("workflow_context") {
+        let (workflow_name, context) = match args.value_of("workflow") {
+            // directly specify workflow_name and context
+            Some(v) => (
+                v.to_string(),
+                match args.value_of("workflow_context") {
                     Some(v) => serde_json::from_str(v)?,
                     None => hashmap!{}
                 }
-            }),
-            None => match args.value_of("workflow_event_payload") {
-                Some(v) => Some(crate::ci::WorkflowTrigger::EventPayload(v.to_string())),
-                None => None
+            ),
+            None => {
+                let trigger = match args.value_of("workflow_event_payload") {
+                    Some(v) => Some(crate::ci::WorkflowTrigger::EventPayload(v.to_string())),
+                    None => None
+                };
+                let mut matches = {
+                    let config = config.borrow();
+                    let (_, ci) = config.modules.ci_by_env();
+                    ci.filter_workflows(trigger)?
+                };
+                if matches.len() == 0 {
+                    panic!("no workflow matches with trigger")
+                } else if matches.len() > 2 {
+                    log::warn!(
+                        "multiple workflow matches({})",
+                        matches.iter().map(|(n,_)| {n.to_string()}).collect::<Vec<String>>().join(",")
+                    );
+                }
+                matches.remove(0)
             }
         };
-        let matches = {
-            let config = config.borrow();
-            let ci = config.modules.ci_by_env();
-            ci.filter_workflows(trigger)?
-        };
-        let (workflow_name, context) = if matches.len() == 0 {
-            panic!("no workflow matches with trigger");
-        } else if matches.len() > 2 {
-            log::warn!(
-                "multiple workflow matches({})",
-                matches.iter().map(|(n,_)| {n.to_string()}).collect::<Vec<String>>().join(",")
-            );
-            &matches[0]
-        } else {
-            &matches[0]
-        };
         Ok(Self {
-            name: workflow_name.to_string(),
+            name: workflow_name,
             job: Job::new_or_none(args, config)?,
-            context: context.clone(),
+            context: context,
             exec: ExecOptions::new(args, config)?
         })
     }

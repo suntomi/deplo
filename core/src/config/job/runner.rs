@@ -12,16 +12,16 @@ use crate::util::{defer, merge_hashmap, rm};
 use crate::vcs;
 
 pub struct Runner<'a> {
-    pub config: config::Container,
+    pub config: &'a config::Config,
     pub job: &'a config::job::Job
 }
 
 impl<'a> Runner<'a> {
-    pub fn new(job: &'a config::job::Job, config: config::Container) -> Self {
+    pub fn new(job: &'a config::job::Job, config: &'a config::Config) -> Self {
         Self { config, job }
     }
     fn adjust_commit_hash(&self, commit: &Option<&str>) -> Result<(), Box<dyn Error>> {
-        let config = self.config.borrow();
+        let config = self.config;
         if !config::Config::is_running_on_ci() {
             if let Some(ref c) = commit {
                 log::debug!("change commit hash to {}", c);
@@ -31,7 +31,7 @@ impl<'a> Runner<'a> {
         Ok(())
     }
     fn recover_branch(&self) -> Result<(), Box<dyn Error>> {
-        let config = self.config.borrow();
+        let config = self.config;
         if !config::Config::is_running_on_ci() {
             let vcs = config.modules.vcs();
             let (ref_type, ref_path) = vcs.current_ref()?;
@@ -113,7 +113,7 @@ impl<'a> Runner<'a> {
     pub fn run(
         &self, shell: &impl shell::Shell, runtime_workflow_config: &config::runtime::Workflow
     ) -> Result<Option<String>, Box<dyn Error>> {
-        let config = self.config.borrow();
+        let config = self.config;
         let job = self.job;
         let exec = &runtime_workflow_config.exec;
         let command = runtime_workflow_config.command();
@@ -224,7 +224,7 @@ impl<'a> Runner<'a> {
     }
     pub fn post_run(&self, runtime_workflow_config: &config::runtime::Workflow) -> Result<(), Box<dyn Error>> {
         let job = self.job;
-        let config = self.config.borrow();
+        let config = self.config;
         let job_name = &job.name;
         let mut system_job_outputs = hashmap!{};
         match job.commit_setting_from_config(&config, runtime_workflow_config) {

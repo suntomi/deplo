@@ -575,7 +575,6 @@ impl<S: shell::Shell> ci::CI for GhAction<S> {
         };
         let config = self.config.borrow();
         match resolved_trigger {
-            ci::WorkflowTrigger::DirectInput{name,context} => return Ok(vec![(name.to_string(), context.clone())]),
             ci::WorkflowTrigger::EventPayload(payload) => {
                 let mut matched_names = vec![];
                 let workflow_event = serde_json::from_str::<WorkflowEvent>(&payload)?;
@@ -789,7 +788,7 @@ impl<S: shell::Shell> ci::CI for GhAction<S> {
         }
         Ok(())
     }
-    fn process_env(&self, _local: bool) -> Result<HashMap<&str, String>, Box<dyn Error>> {
+    fn process_env(&self) -> Result<HashMap<&str, String>, Box<dyn Error>> {
         let config = self.config.borrow();
         let vcs = config.modules.vcs();
         let mut envs = hashmap!{
@@ -797,8 +796,8 @@ impl<S: shell::Shell> ci::CI for GhAction<S> {
         };
         // get from env
         for (src, target) in hashmap!{
-            "DEPLO_GHACTION_CI_ID" => "DEPLO_CI_ID",
-            "DEPLO_GHACTION_PR_URL" => "DEPLO_CI_PULL_REQUEST_URL"
+            "DEPLO_CI_ID" => "DEPLO_GHACTION_CI_ID",
+            "DEPLO_CI_PULL_REQUEST_URL" => "DEPLO_GHACTION_PR_URL"
         } {
             match std::env::var(src) {
                 Ok(v) => {
@@ -809,7 +808,7 @@ impl<S: shell::Shell> ci::CI for GhAction<S> {
         };
         match std::env::var("GITHUB_SHA") {
             Ok(v) => envs.insert(
-                "DEPLO_CI_CURRENT_SHA", 
+                "DEPLO_CI_CURRENT_COMMIT_ID", 
                 match vcs.current_ref()? {
                     (vcs::RefType::Pull, _) => {
                         let output = vcs.commit_hash(Some(&format!("{}^@", v)))?;

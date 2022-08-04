@@ -28,9 +28,11 @@ impl Error for CommandError {
 
 // subcommands
 pub mod init;
+pub mod job;
 pub mod destroy;
 pub mod ci;
 pub mod info;
+pub mod run;
 pub mod start;
 pub mod stop;
 pub mod vcs;
@@ -49,7 +51,9 @@ pub fn factory<'a, S: args::Args>(
     let cmd = match name {
         "init" => factory_by::<S, init::Init>(config),
         "info" => factory_by::<S, info::Info>(config),
+        "job" => factory_by::<S, job::Job>(config),
         "destroy" => factory_by::<S, destroy::Destroy>(config),
+        "run" => factory_by::<S, run::Run>(config),
         "start" => factory_by::<S, start::Start>(config),
         "stop" => factory_by::<S, stop::Stop>(config),
         "ci" => factory_by::<S, ci::CI>(config),

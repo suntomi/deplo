@@ -101,7 +101,7 @@ on = { workflows = ["deploy", "integrate"], changed = ["tools/docker/Dockerfile.
 runner = { type = "machine", os = "Linux", local_fallback = { image = "docker:20.10", shell = "sh" } }
 command = """
 docker build -t ghcr.io/suntomi/deplo:base -f tools/docker/Dockerfile.base tools/docker
-if [ "${DEPLO_CI_WORKFLOW_TYPE}" = "deploy" ]; then
+if [ "${DEPLO_CI_WORKFLOW_NAME}" = "deploy" ]; then
     echo ${SUNTOMI_VCS_ACCOUNT_KEY} | docker login ghcr.io -u ${SUNTOMI_VCS_ACCOUNT} --password-stdin
     docker push ghcr.io/suntomi/deplo:base
 fi
@@ -114,7 +114,7 @@ runner = { type = "machine", os = "Linux", local_fallback = { image = "docker:20
 command = """
 sh tools/scripts/copy_manifests.sh
 docker build -t ghcr.io/suntomi/deplo:builder -f tools/docker/Dockerfile.builder tools/docker
-if [ "${DEPLO_CI_WORKFLOW_TYPE}" = "deploy" ]; then
+if [ "${DEPLO_CI_WORKFLOW_NAME}" = "deploy" ]; then
     echo ${SUNTOMI_VCS_ACCOUNT_KEY} | docker login ghcr.io -u ${SUNTOMI_VCS_ACCOUNT} --password-stdin
     docker push ghcr.io/suntomi/deplo:builder
 fi

@@ -235,7 +235,7 @@ impl<S: shell::Shell> CI<S> {
         // let vcs = config.vcs_service()?;
         // let job_id = std::env::var("DEPLO_CI_ID").unwrap();
         // let current_branch = std::env::var("DEPLO_CI_BRANCH_NAME").unwrap();
-        // let current_ref = std::env::var("DEPLO_CI_CURRENT_SHA").unwrap();
+        // let current_ref = std::env::var("DEPLO_CI_CURRENT_COMMIT_ID").unwrap();
         // let (name, branches, options) = branches_and_options;
         // if branches.len() > 0 {
         //     let working_branch = format!("deplo-auto-commits-{}-{}", job_id, name);
@@ -296,7 +296,7 @@ impl<S: shell::Shell> CI<S> {
     //                 let config = self.config.borrow();
     //                 let vcs = config.modules.vcs();
     //                 let current_branch = std::env::var("DEPLO_CI_BRANCH_NAME").unwrap();
-    //                 let current_ref = std::env::var("DEPLO_CI_CURRENT_SHA").unwrap();
+    //                 let current_ref = std::env::var("DEPLO_CI_CURRENT_COMMIT_ID").unwrap();
     //                 vcs.checkout(&current_ref, Some(&current_branch)).unwrap();
     //                 return Err(e);
     //             }
@@ -316,8 +316,6 @@ impl<S: shell::Shell, A: args::Args> command::Command<A> for CI<S> {
     fn run(&self, args: &A) -> Result<(), Box<dyn Error>> {
         match args.subcommand() {
             Some(("setenv", subargs)) => return self.setenv(&subargs),
-            Some(("output", subargs)) => return self.output(&subargs),
-            Some(("set-output", subargs)) => return self.set_output(&subargs),
             Some((name, _)) => return escalate!(args.error(
                 &format!("no such subcommand: [{}]", name) 
             )),

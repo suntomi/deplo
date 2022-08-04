@@ -11,7 +11,7 @@ use maplit::hashmap;
 
 use crate::args;
 use crate::shell;
-use crate::util::{make_absolute, escalate, path_join};
+use crate::util::{make_absolute, escalate, path_join, randombytes_as_string};
 
 pub mod ci;
 pub mod job;
@@ -72,13 +72,13 @@ impl Modules {
     pub fn ci_by_default(&self) -> &Box<dyn crate::ci::CI> {
         self.ci_for("default")
     }
-    pub fn ci_by_env(&self) -> &Box<dyn crate::ci::CI> {
+    pub fn ci_by_env(&self) -> (&str, &Box<dyn crate::ci::CI>) {
         for (k, v) in &self.ci {
             if v.runs_on_service() {
-                return v;
+                return (k, v);
             }
         }
-        return self.ci_by_default();
+        return ("default", self.ci_by_default());
     }
 }
 pub type ConfigVersion = u64;
@@ -101,6 +101,9 @@ pub struct Config {
     #[serde(skip)]
     pub runtime: runtime::Config,
 
+    #[serde(skip)]
+    pub envs: HashMap<String, String>,
+
     // module object
     #[serde(skip)]
     pub modules: Modules
@@ -118,14 +121,24 @@ impl Container {
     pub fn borrow_mut(&self) -> RefMut<'_> {
         self.ptr.borrow_mut()
     }
-    pub fn load_modules(&self) -> Result<(), Box<dyn Error>> {
-        // load vcs modules
+    pub fn load_vcs_modules(&self) -> Result<(), Box<dyn Error>> {
         let vcs = crate::vcs::factory(self)?;
-        // load ci modules
+        let mut c = self.borrow_mut();
+        c.modules.vcs = Some(vcs);
+        c.set_vcs_process_envs()?;
+        Ok(())
+    }
+    pub fn load_ci_modules(&self) -> Result<(), Box<dyn Error>> {
         let mut ci = hashmap!{};
         for (k, _) in self.borrow().ci.as_map() {
             ci.insert(k.to_string(), crate::ci::factory(self, &k)?);
         }
+        let mut c = self.borrow_mut();
+        c.modules.ci = ci;
+        c.set_ci_process_envs()?;
+        Ok(())
+    }
+    pub fn load_modules(&self) -> Result<(), Box<dyn Error>> {
         // load step modules
         let mut steps = hashmap!{};
         module::config_for::<crate::step::Module, _, (), Box<dyn Error>>(|configs| {
@@ -144,10 +157,56 @@ impl Container {
         })?;
         // store modules
         let mut c = self.borrow_mut();
-        c.modules.vcs = Some(vcs);
-        c.modules.ci = ci;
         c.modules.steps = steps;
         c.modules.workflows = workflows;
+        Ok(())
+    }
+    pub fn setup_envs(&self) -> Result<(), Box<dyn Error>> {
+        let mut applied_process_envs = hashmap!{};
+        {
+            let config = self.borrow();
+            let (account_name, ci) = config.modules.ci_by_env();
+            let vcs = config.modules.vcs();
+            let (ref_type, ref_path) = vcs.current_ref()?;
+            let (may_tag, may_branch) = if ref_type == crate::vcs::RefType::Tag {
+                (Some(ref_path.as_str()), None)
+            } else {
+                (None, Some(ref_path.as_str()))
+            };
+            let commit_id = vcs.commit_hash(None)?;
+            let random_id = randombytes_as_string!(16);
+            let ci_type = config.ci.get(account_name).unwrap().type_as_str();
+            let mut default_envs = hashmap!{
+                // on local, CI ID should be inherited from parent, if exists.
+                // on CI DEPLO_CI_ID replaced with CI specific environment variable that represents canonical ID
+                "DEPLO_CI_ID" => Some(random_id.as_str()),
+                // other CI process env should be recalculated, because user may call deplo on deferent environment.
+                // but on CI, some of these variables may replaced by CI specific way, by return values of ci.process_env
+                "DEPLO_CI_TYPE" => Some(ci_type),
+                "DEPLO_CI_TAG_NAME" => may_tag,
+                "DEPLO_CI_BRANCH_NAME" => may_branch,
+                "DEPLO_CI_CURRENT_COMMIT_ID" => Some(commit_id.as_str()),
+                // TODO_CI: get pull request url from local execution
+                "DEPLO_CI_PULL_REQUEST_URL" => Some(""),
+                "DEPLO_CI_CLI_COMMIT_HASH" => Some(DEPLO_GIT_HASH),
+                "DEPLO_CI_CLI_VERSION" => Some(DEPLO_VERSION),
+            };
+            let ci_envs = ci.process_env()?;
+            for (k, v) in &ci_envs {
+                default_envs.insert(k, Some(v.as_str()));
+            }
+            for (k, v) in &default_envs {
+                match v {
+                    Some(v) => {
+                        std::env::set_var(k, v);
+                        applied_process_envs.insert(k.to_string(), v.to_string());
+                    },
+                    None => std::env::remove_var(k),
+                }
+            };
+        }
+        let mut config_mut = self.borrow_mut();
+        config_mut.envs = applied_process_envs;
         Ok(())
     }
     pub fn prepare_workflow(&self) -> Result<(), Box<dyn Error>> {
@@ -181,6 +240,63 @@ impl Config {
         self.workflows.setup();
         self.jobs.setup();
     }
+    pub fn set_process_envs<K: AsRef<str>,V: AsRef<str>>(&mut self, envs: HashMap<K, Option<V>>) {
+        let process_envs = &mut self.envs;
+        for (k, v) in &envs {
+            match v {
+                Some(v) => {
+                    std::env::set_var(k.as_ref(), v.as_ref());
+                    process_envs.insert(k.as_ref().to_string(), v.as_ref().to_string());
+                },
+                None => {
+                    std::env::remove_var(k.as_ref());
+                    process_envs.remove(k.as_ref());
+                },
+            }
+        }
+    }
+    pub fn set_vcs_process_envs(&mut self) -> Result<(), Box<dyn Error>> {
+        self.set_process_envs(hashmap!{
+            "DEPLO_CI_CLI_COMMIT_HASH" => Some(DEPLO_GIT_HASH),
+            "DEPLO_CI_CLI_VERSION" => Some(DEPLO_VERSION),
+        });
+        Ok(())
+    }
+    pub fn set_ci_process_envs(&mut self) -> Result<(), Box<dyn Error>>{
+        let process_envs = {
+            let (account_name, ci) = self.modules.ci_by_env();
+            let vcs = self.modules.vcs();
+            let (ref_type, ref_path) = vcs.current_ref()?;
+            let (may_tag, may_branch) = if ref_type == crate::vcs::RefType::Tag {
+                (Some(ref_path), None)
+            } else {
+                (None, Some(ref_path))
+            };
+            let commit_id = vcs.commit_hash(None)?;
+            let random_id = randombytes_as_string!(16);
+            let ci_type = self.ci.get(account_name).unwrap().type_as_str().to_string();
+            let mut penvs = hashmap!{
+                // on local, CI ID should be inherited from parent, if exists.
+                // on CI DEPLO_CI_ID replaced with CI specific environment variable that represents canonical ID
+                "DEPLO_CI_ID".to_string() => Some(random_id),
+                // other CI process env should be calculated, because user may call deplo on non-CI environment.
+                // on CI, some of these variables may replaced by CI specific way, by return values of ci.process_env
+                "DEPLO_CI_TYPE".to_string() => Some(ci_type),
+                "DEPLO_CI_TAG_NAME".to_string() => may_tag,
+                "DEPLO_CI_BRANCH_NAME".to_string() => may_branch,
+                "DEPLO_CI_CURRENT_COMMIT_ID".to_string() => Some(commit_id),
+                // TODO_CI: get pull request url from local execution
+                "DEPLO_CI_PULL_REQUEST_URL".to_string() => Some("".to_string())
+            };
+            let ci_envs = ci.process_env()?;
+            for (k, v) in &ci_envs {
+                penvs.insert(k.to_string(), Some(v.to_string()));
+            }
+            penvs
+        };
+        self.set_process_envs(process_envs);
+        Ok(())
+    }
     pub fn create<A: args::Args>(args: &A) -> Result<Container, Box<dyn Error>> {
         // generate runtime config
         let runtime_config =  runtime::Config::with_args(args);
@@ -197,7 +313,12 @@ impl Config {
             config.setup();
             Self::containerize(config)
         };
-        // 3. load modules
+        // 3. load modules phase 1 (necessary for setup other modules)
+        c.load_vcs_modules()?;
+        c.load_ci_modules()?;
+        // 4. setup environment variables
+        c.setup_envs()?;
+        // 5. load modules phase 2 (modules not loaded during phase 1)
         c.load_modules()?;
         return Ok(c);
     }

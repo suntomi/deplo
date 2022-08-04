@@ -22,14 +22,11 @@ impl OutputKind {
 pub enum WorkflowTrigger {
     /// payload from CI service (github, circleci, etc...)
     EventPayload(String),
-    /// direct input of Workflow (eg. via CLI). consisted of workflow name and its context
-    DirectInput{name: String, context: HashMap<String, config::AnyValue>},
 }
 impl WorkflowTrigger {
     pub fn to_string(&self) -> String {
         match self {
             Self::EventPayload(payload) => format!("EventPayload({})", payload),
-            Self::DirectInput{name,context} => format!("DirectInput({},{:?})", name, context)
         }
     }
 }
@@ -49,7 +46,7 @@ pub trait CI {
     fn set_secret(&self, key: &str, val: &str) -> Result<(), Box<dyn Error>>;
     fn list_secret_name(&self) -> Result<Vec<String>, Box<dyn Error>>;
     fn job_env(&self) -> HashMap<String, config::Value>;
-    fn process_env(&self, local: bool) -> Result<HashMap<&str, String>, Box<dyn Error>>;
+    fn process_env(&self) -> Result<HashMap<&str, String>, Box<dyn Error>>;
     fn filter_workflows(
         &self, trigger: Option<WorkflowTrigger>
     ) -> Result<Vec<(String, HashMap<String, config::AnyValue>)>, Box<dyn Error>>;

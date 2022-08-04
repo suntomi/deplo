@@ -14,14 +14,18 @@ pub struct Run<S: shell::Shell = shell::Default> {
 }
 
 impl<S: shell::Shell, A: args::Args> command::Command<A> for Run<S> {
-    fn new(config: &config::Container) -> Result<Destroy<S>, Box<dyn Error>> {
+    fn new(config: &config::Container) -> Result<Run<S>, Box<dyn Error>> {
         return Ok(Run::<S> {
             config: config.clone(),
             shell: S::new(config)
         });
     }
-    fn run(&self, _: &A) -> Result<(), Box<dyn Error>> {
-        log::debug!("run command invoked");
-        return Ok(())
+    fn run(&self, args: &A) -> Result<(), Box<dyn Error>> {
+        log::debug!("start command invoked");
+        self.config.prepare_workflow()?;
+        let workflow = config::runtime::Workflow::new(args, &self.config)?;
+        let config = self.config.borrow();
+        config.jobs.boot(&config, &workflow, &self.shell)?;
+        return Ok(());
     }
 }
