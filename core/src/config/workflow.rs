@@ -6,6 +6,11 @@ use serde::{Deserialize, Serialize};
 
 use crate::config;
 
+#[derive(Serialize, Deserialize, Clone)]
+pub struct WorkflowExtension {
+    pub release_target: Option<String>,
+}
+
 #[derive(Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum Workflow {
@@ -17,7 +22,7 @@ pub enum Workflow {
     Repository {
         events: HashMap<String, Vec<config::Value>>
     },
-    Module(config::module::ConfigFor<crate::workflow::Module>)
+    Module(config::module::ConfigFor<crate::workflow::Module, WorkflowExtension>)
 }
 impl fmt::Display for Workflow {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -38,6 +43,7 @@ impl Workflows {
         if self.0.contains_key(name) {
             panic!("{} is reserved workflow name", name);
         }
+        self.0.insert(name.to_string(), value);
     }
     pub fn setup(&mut self) {
         self.insert_or_die("deploy", Workflow::Deploy);

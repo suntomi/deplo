@@ -570,7 +570,7 @@ impl<S: shell::Shell> ci::CI for GhAction<S> {
             Some(t) => t,
             None => match std::env::var("DEPLO_GHACTION_EVENT_DATA") {
                 Ok(v) => ci::WorkflowTrigger::EventPayload(v),
-                Err(_) => panic!("DEPLO_GHACTION_EVENT_DATA should set if no argument for workflow passed")
+                Err(_) => panic!("DEPLO_GHACTION_EVENT_DATA should set if no argument for workflow (-w) passed")
             }
         };
         let config = self.config.borrow();
@@ -598,7 +598,7 @@ impl<S: shell::Shell> ci::CI for GhAction<S> {
                         // config::DEPLO_MODULE_EVENT_TYPE => Module workflow invocation
                         // others => Repository workflow invocation
                         "repository_dispatch" => if let EventPayload::RepositoryDispatch{
-                            action,client_payload
+                            action, client_payload
                         } = &workflow_event.event {
                             if action == config::DEPLO_REMOTE_JOB_EVENT_TYPE {
                                 match client_payload.index("workflow_name") {

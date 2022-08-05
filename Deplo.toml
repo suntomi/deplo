@@ -75,6 +75,7 @@ repository = {
 }
 slack = {
     uses = "suntomi/slack@0.2.0",
+    release_taget = "nightly",
     with = {
         webhook = "https://hooks.slack.com/services/T0J5QJQ0P/B0J5QJQ0P/X0J5QJQ0P",
         channel = "#suntomi",
@@ -84,6 +85,7 @@ slack = {
 }
 discord = {
     uses = "suntomi/discord@0.3.0",
+    release_taget = "nightly",
     with = {
         key = "${SUNTOMI_DISCORD_KEY}",
     }

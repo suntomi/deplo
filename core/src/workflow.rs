@@ -33,6 +33,6 @@ pub fn factory<'a>(
     uses: &config::Value,
     with: &Option<HashMap<String, config::AnyValue>>
 ) -> Result<Box<dyn Workflow + 'a>, Box<dyn Error>> {
-    log::error!("Not implemented yet");
+    log::error!("workflow plugin is not implemented yet");
     return Ok(Box::new(Dummy));
 }

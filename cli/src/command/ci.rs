@@ -1,4 +1,3 @@
-use std::collections::{HashMap};
 use std::error::Error;
 
 use core::config;
@@ -21,28 +20,6 @@ impl<S: shell::Shell> CI<S> {
             ci.set_secret(&k, &v)?;
         }
         Ok(())
-    }
-    fn output<A: args::Args>(&self, args: &A) -> Result<(), Box<dyn Error>> {
-        let config = self.config.borrow();
-        let job = args.value_or_die("job");
-        let key = args.value_or_die("key");
-        config.jobs.user_output(&config, job, key)?;
-        Ok(())
-    }
-    fn set_output<A: args::Args>(&self, args: &A) -> Result<(), Box<dyn Error>> {
-        let config = self.config.borrow();
-        let key = args.value_or_die("key");
-        let value = args.value_or_die("value");
-        config.jobs.set_user_output(&config, key, value)?;
-        Ok(())
-    }
-    // helpers
-    fn make_task_command(task: &str, _: Vec<&str>) -> String {
-        // TODO: embedding args into task
-        task.to_string()
-    }
-    fn adhoc_envs<A: args::Args>(args: &A) -> HashMap<String, String> {
-        args.map_of("env")
     }
     // fn exec_job<A: args::Args>(&self, args: &A, job_name: &str) -> Result<Option<String>, Box<dyn Error>> {
     //     Ok(None)

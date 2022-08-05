@@ -1,4 +1,3 @@
-use std::collections::{HashMap};
 use std::error::Error;
 
 use core::config;

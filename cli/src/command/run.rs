@@ -21,7 +21,7 @@ impl<S: shell::Shell, A: args::Args> command::Command<A> for Run<S> {
         });
     }
     fn run(&self, args: &A) -> Result<(), Box<dyn Error>> {
-        log::debug!("start command invoked");
+        log::debug!("run command invoked");
         self.config.prepare_workflow()?;
         let workflow = config::runtime::Workflow::new(args, &self.config)?;
         let config = self.config.borrow();
