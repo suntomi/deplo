@@ -287,8 +287,10 @@ impl Trigger {
     pub fn matches(
         &self,
         config: &config::Config,
-        runtime_workflow_config: &config::runtime::Workflow
+        runtime_workflow_config: &config::runtime::Workflow,
+        options: Option<MatchOptions>
     ) -> bool {
+        let opts = options.unwrap_or(MatchOptions::from(runtime_workflow_config));
         let workflow = config.workflows.as_map().get(&runtime_workflow_config.name).expect(
             &format!("{} does not exist in workflows of Deplo.toml", runtime_workflow_config.name)
         );
@@ -317,23 +319,38 @@ impl Trigger {
         if !self.condition.check_workflow_type(workflow) {
             log::debug!("workflow {} does not match for trigger condition", workflow);
         }
+        if !opts.check_condition {
+            log::debug!(
+                "skip condition check for job {} in workflow {}",
+                runtime_workflow_config.job.as_ref().expect("should have job").name, 
+                workflow
+            );
+            return true;
+        }
         match &self.condition {
             TriggerCondition::Commit{ changed, diff_matcher } => {
                 if let Some(ch) = changed {
                     // diff pattern matches
                     let dm = Self::diff_matcher(diff_matcher, ch);
                     if !config.modules.vcs().changed(&dm) {
+                        log::trace!("diff pattern {:?} does not match any of changed files in last commit", changed);
                         return false;
                     }
                 }
             },
             TriggerCondition::Cron{ schedules } => {
                 let schedule = runtime_workflow_config.context.get("schedule").unwrap();
-                return schedules.iter().find(|s| { s.resolve() == schedule.resolve() }).is_some();
+                if !schedules.iter().find(|s| { s.resolve() == schedule.resolve() }).is_some() {
+                    log::trace!("schedule {} does not match any of schedules {:?}", schedule.resolve(), schedules);
+                    return false;
+                }
             },
             TriggerCondition::Repository{ events } => {
                 let event = runtime_workflow_config.context.get("event").unwrap();
-                return events.iter().find(|e| { e.resolve() == event.resolve() }).is_some();
+                if !events.iter().find(|e| { e.resolve() == event.resolve() }).is_some() {
+                    log::trace!("event {} does not match any of events {:?}", event.resolve(), events);
+                    return false;
+                }
             },
             TriggerCondition::Module{ when } => {
                 // use module method like _wf.matches(when) to determine.
@@ -374,6 +391,26 @@ impl Job {
         match &self.runner {
             Runner::Machine{ .. } => true,
             Runner::Container{ .. } => false
+        }
+    }
+    pub fn command_args<'a>(&self, may_args: Option<Vec<&'a str>>) -> Option<Vec<String>> {
+        match may_args {
+            Some(args) => if args.len() > 0 {
+                if args[0].starts_with("@") {
+                    let task = &(args[0][1..]);
+                    let task_command = self.tasks.as_ref().
+                        expect(&format!("no task definition for job {}", self.name)).
+                        get(task).
+                        expect(&format!("task definition for {} not found", task));
+                    log::debug!("task '{}' resolved to [{}]", task, task_command.resolve());
+                    Some(vec![task_command.resolve()])
+                } else {
+                    Some(args.iter().map(|vv| vv.to_string()).collect())
+                }
+            } else {
+                None
+            },
+            None => None
         }
     }
     pub fn ci<'a>(&self, config: &'a config::Config) -> &Box<dyn ci::CI + 'a> {
@@ -430,7 +467,7 @@ impl Job {
         rtconfig: &config::runtime::Workflow
     ) -> bool {
         for t in &self.on {
-            if t.matches(config, rtconfig) {
+            if t.matches(config, rtconfig, None) {
                 return true
             }
         }
@@ -446,7 +483,7 @@ impl Job {
                 for commit in v {
                     match commit.on {
                         // first only matches commit entry that has valid for_targets and target
-                        Some(ref t) => if t.matches(config, runtime_workflow_config) {
+                        Some(ref t) => if t.matches(config, runtime_workflow_config, None) {
                             return Some(commit)
                         },
                         None => {}
@@ -471,6 +508,16 @@ impl Job {
 struct AggregatedPullRequestOptions {
     labels: Vec<config::Value>,
     assignees: Vec<config::Value>,
+}
+pub struct MatchOptions {
+    check_condition: bool
+}
+impl MatchOptions {
+    fn from(runtime_workflow_config: &config::runtime::Workflow) -> Self {
+        Self {
+            check_condition: runtime_workflow_config.job.is_none()
+        }
+    }
 }
 
 #[derive(Serialize, Deserialize)]

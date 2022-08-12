@@ -69,7 +69,9 @@ pub fn ctoa<'a, I, K, V: 'a>(collection: I) -> Vec<(K, Arg<'a>)>
 where 
     I: IntoIterator<Item = (K, V)>, K: AsRef<OsStr>, V: ArgTrait {
     let mut h = vec![];
-    collection.into_iter().map(|(k,v)| h.push((k, arg!(v))));
+    for (k,v) in collection.into_iter() {
+        h.push((k, arg!(v)));
+    }
     return h;
 }
 
@@ -77,6 +79,7 @@ pub use arg;
 pub use args;
 pub use protected_arg;
 
+#[derive(Clone)]
 pub struct Settings {
     capture: bool,
     interactive: bool,
@@ -146,7 +149,7 @@ pub trait Shell {
         for (k, v) in mounts {
             let key = k.as_ref().to_string_lossy();
             let val = v.value();
-            mounts_vec.push(arg!("-e"));
+            mounts_vec.push(arg!("-v"));
             mounts_vec.push(protected_arg!(format!(
                 "{k}:{v}", k = docker_mount_path(&key), v = val
             ).as_str()));

@@ -39,11 +39,11 @@ pub struct Command {
     pub args: Option<Vec<String>>
 }
 impl Command {
-    pub fn new_or_none<A: Args>(args: &A) -> Option<Self> {
+    pub fn new_or_none<A: Args>(args: &A, job: &config::job::Job) -> Option<Self> {
         match args.subcommand() {
             Some((name, args)) => match name {
                 "sh" => Some(Self {
-                    args: args.values_of("command").map(|v| v.iter().map(|vv| vv.to_string()).collect())
+                    args: job.command_args(args.values_of("task"))
                 }),
                 _ => None
             },
@@ -59,20 +59,23 @@ pub struct Job {
 }
 impl Job {
     pub fn new_or_none<A: Args>(
-        args: &A, _config: &config::Container
+        args: &A, config: &config::Container
     ) -> Result<Option<Self>, Box<dyn Error>> {
         match args.value_of("job").map(|v| v.to_string()) {
-            Some(name) => Ok(Some(Self {
-                name,
-                command: Command::new_or_none(args)
-            })),
+            Some(name) => {
+                let command = Command::new_or_none(
+                    args,
+                    config.borrow().jobs.find(&name).expect(&format!("config for job {} does not exist", name))
+                );
+                Ok(Some(Self { name, command }))
+            },
             None => Ok(None)
         }
     }
 }
 
 /// runtime configuration for workflow execution commands
-/// only `deplo start/stop` shold contains this configuration
+/// `deplo start/stop/run/i/d` shold contains this configuration
 #[derive(Serialize, Deserialize, Clone)]
 pub struct Workflow {
     /// key of config.workflows

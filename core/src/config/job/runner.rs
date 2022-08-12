@@ -117,7 +117,7 @@ impl<'a> Runner<'a> {
         let job = self.job;
         let exec = &runtime_workflow_config.exec;
         let command = runtime_workflow_config.command();
-        let mut shell_settings = match command {
+        let shell_settings = &mut match command {
             job::Command::Shell => shell::interactive(),
             _ => if exec.silent {
                 shell::silent()
@@ -141,7 +141,10 @@ impl<'a> Runner<'a> {
             job::Runner::Machine{os, ref local_fallback, ..} => {
                 let current_os = shell.detect_os()?;
                 if os == current_os {
-                    let path = config.setup_deplo_cli(os, shell)?;
+                    if let Some(p) = config.setup_deplo_cli(os, shell)? {
+                        let parent = p.parent().expect(&format!("path should not be root {}", p.display()));
+                        shell_settings.paths(vec![parent.to_string_lossy().to_string()]);
+                    };
                     // run command directly here, add path to locally downloaded cli.
                     self.run_steps(shell, &shell_settings, &job.env(&config, runtime_workflow_config), &steps)?;
                     self.post_run(runtime_workflow_config)?;
@@ -202,6 +205,7 @@ impl<'a> Runner<'a> {
             job::Runner::Container{ ref image } => {
                 if config::Config::is_running_on_ci() {
                     // already run inside container `image`, run command directly here
+                    // no need to setup_deplo_cli because CI should already setup it
                     self.run_steps(shell, &shell_settings, &job.env(&config, &runtime_workflow_config), &steps)?;
                 } else {
                     let path = &config.setup_deplo_cli(job::RunnerOS::Linux, shell)?.expect("path should return because not running on CI");

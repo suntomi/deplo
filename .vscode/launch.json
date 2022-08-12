@@ -2,12 +2,12 @@
     "version": "0.2.0",
     "configurations": [
     {
-        "name": "Integrate",
+        "name": "RunTask",
         "type": "lldb",
         "request": "launch",
         "program": "${workspaceFolder}/target/debug/cli",
         "args": [
-            "-v=3", "-r=prod", "i", "src"
+            "-v=3", "run", "-w=integrate", "builder", "sh", "@long_running"
         ]
     },    
     {
@@ -29,21 +29,21 @@
         ]
     },
     {
-        "name": "Kick",
+        "name": "Start",
         "type": "lldb",
         "request": "launch",
         "program": "${workspaceFolder}/target/debug/cli",
         "args": [
-            "-v=3", "-r=nightly", "-w=integrate", "ci", "kick"
+            "-v=3", "start", "-r=nightly", "-w=integrate"
         ]
     },
     {
-        "name": "Deploy",
+        "name": "Stop",
         "type": "lldb",
         "request": "launch",
         "program": "${workspaceFolder}/target/debug/cli",
         "args": [
-            "-v=3", "d", "mac"
+            "-v=3", "stop", "-r=nightly", "-w=integrate"
         ]
     },
     {
