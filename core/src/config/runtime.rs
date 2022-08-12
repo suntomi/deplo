@@ -19,12 +19,12 @@ pub struct ExecOptions {
     pub timeout: Option<u64>,
 }
 impl ExecOptions {
-    pub fn new<A: Args>(args: &A, _config: &config::Container) -> Result<Self, Box<dyn Error>> {
+    pub fn new<A: Args>(args: &A, config: &config::Container) -> Result<Self, Box<dyn Error>> {
         Ok(Self {
             envs: args.map_of("env"),
-            revision: args.value_of("rev").map(|v| v.to_string()),
+            revision: args.value_of("revision").map(|v| v.to_string()),
             release_target: args.value_of("release_target").map(|v| v.to_string()),
-            verbosity: args.value_of("verbosity").unwrap_or("0").parse()?,
+            verbosity: config.borrow().runtime.verbosity,
             remote: args.occurence_of("remote") > 0,
             silent: args.occurence_of("silent") > 0,
             timeout: args.value_of("timeout").map(|v| v.parse().expect(

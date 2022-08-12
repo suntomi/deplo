@@ -63,38 +63,37 @@ fn workflow_command_options(
 ) -> App<'static> {
     App::new(name)
     .about(about)
-    .arg(Arg::new("name")
-        .help("job name")
-        .index(1)
-        .required(false))
     .arg((|d| {
         let a = Arg::new("workflow")
             .help("workflow name eg. deploy/integrate")
             .short('w')
             .long("workflow")
-            .conflicts_with("workflow_event_payload")
-            .required(false);
+            .takes_value(true)
+            .conflicts_with("workflow_event_payload");
         match d {
-            Some(v) => a.default_value(v),
-            None => a
+            Some(v) => a.required(false).default_value(v),
+            None => a.required(true)
         }
     })(default_workflow))
     .arg(Arg::new("workflow_context")
         .help("JSON format workflow parameter")
         .long("workflow-context")
         .short('c')
+        .takes_value(true)
         .conflicts_with("workflow_event_payload")
         .required(false))
     .arg(Arg::new("workflow_event_payload")
         .help("specify CI event payload directly. deplo calculate workflow type and context from payload")
         .long("workflow-event-payload")
         .short('p')
+        .takes_value(true)
         .conflicts_with_all(&["workflow_context", "workflow"])
         .required(false))
     .arg(Arg::new("release_target")
         .help("specify CI event payload directly. deplo calculate workflow type and context from payload")
         .long("release-target")
         .short('r')
+        .takes_value(true)
         .required(false))
     .arg(Arg::new("env")
         .help("set adhoc environment variables for remote job")
@@ -124,9 +123,9 @@ fn workflow_command_options(
         .long("timeout")
         .required(false)
         .takes_value(true))
-    .arg(Arg::new("ref")
+    .arg(Arg::new("revision")
         .help("git ref to run the job")
-        .long("ref")
+        .long("rev")
         .takes_value(true)
         .required(false))
 }
@@ -136,6 +135,10 @@ fn run_command_options(
     default_workflow: Option<&'static str>
 ) -> App<'static> {
     workflow_command_options(name, about, default_workflow)
+        .arg(Arg::new("job")
+            .help("job name")
+            .index(1)
+            .required(false))
         .subcommand(
             App::new("sh")
                 .about("running arbiter command for environment of jobs")
