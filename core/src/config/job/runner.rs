@@ -258,7 +258,7 @@ impl<'a> Runner<'a> {
                 }
             },
             None => { 
-                log::debug!("no commit settings for workflow {}", runtime_workflow_config.name);
+                log::debug!("no commit settings for workflow '{}'", runtime_workflow_config.name);
             }
         };
         let ci = job.ci(&config);

@@ -27,14 +27,14 @@ impl Error for CommandError {
 }
 
 // subcommands
-pub mod init;
-pub mod job;
-pub mod destroy;
+pub mod boot;
 pub mod ci;
+pub mod destroy;
+pub mod halt;
+pub mod init;
 pub mod info;
+pub mod job;
 pub mod run;
-pub mod start;
-pub mod stop;
 pub mod vcs;
 
 // factorys
@@ -54,8 +54,8 @@ pub fn factory<'a, S: args::Args>(
         "job" => factory_by::<S, job::Job>(config),
         "destroy" => factory_by::<S, destroy::Destroy>(config),
         "run" => factory_by::<S, run::Run>(config),
-        "start" => factory_by::<S, start::Start>(config),
-        "stop" => factory_by::<S, stop::Stop>(config),
+        "boot" => factory_by::<S, boot::Boot>(config),
+        "halt" => factory_by::<S, halt::Halt>(config),
         "ci" => factory_by::<S, ci::CI>(config),
         "vcs" => factory_by::<S, vcs::VCS>(config),
         _ => return Err(Box::new(CommandError {

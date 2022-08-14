@@ -8,7 +8,6 @@ use maplit::hashmap;
 use crate::config;
 use crate::ci;
 use crate::shell;
-use crate::module;
 use crate::util::{escalate,MultilineFormatString,rm,maphash};
 
 pub struct CircleCI<S: shell::Shell = shell::Default> {

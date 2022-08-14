@@ -28,14 +28,14 @@ jobs:
     name: Start CI ${{ github.event.client_payload.job_id }}
     runs-on: ubuntu-latest
     outputs:
-      base: ${{ steps.deplo-ci-kick.outputs.base }}
-      builder: ${{ steps.deplo-ci-kick.outputs.builder }}
-      config: ${{ steps.deplo-ci-kick.outputs.config }}
-      latest: ${{ steps.deplo-ci-kick.outputs.latest }}
-      mac: ${{ steps.deplo-ci-kick.outputs.mac }}
-      product: ${{ steps.deplo-ci-kick.outputs.product }}
-      test: ${{ steps.deplo-ci-kick.outputs.test }}
-      win: ${{ steps.deplo-ci-kick.outputs.win }}
+      base: ${{ steps.deplo-boot.outputs.base }}
+      builder: ${{ steps.deplo-boot.outputs.builder }}
+      config: ${{ steps.deplo-boot.outputs.config }}
+      latest: ${{ steps.deplo-boot.outputs.latest }}
+      mac: ${{ steps.deplo-boot.outputs.mac }}
+      product: ${{ steps.deplo-boot.outputs.product }}
+      test: ${{ steps.deplo-boot.outputs.test }}
+      win: ${{ steps.deplo-boot.outputs.win }}
     steps:
       - name: Fetch deplo cli
         run: |
@@ -47,7 +47,7 @@ jobs:
           fetch-depth: 2
           ref: ${{ github.event.client_payload.commit }}
       - name: Start deplo
-        id: deplo-ci-kick
+        id: deplo-boot
         run: deplo start
       - name: Setup ssh session to debug
         if: ${{ failure() }}
@@ -80,7 +80,7 @@ jobs:
           lfs: false
           ref: ${{ github.event.client_payload.commit }}
       - name: Cleanup deplo
-        id: deplo-ci-fin
+        id: deplo-halt
         run: deplo ci fin
       - name: Setup ssh session to debug
         if: ${{ failure() }}

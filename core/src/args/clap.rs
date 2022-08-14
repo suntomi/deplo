@@ -40,7 +40,7 @@ impl AliasCommands {
     fn create(&self, name: &'static str) -> App<'static> {
         match self.alias_map.get(name) {
             Some(body) => {
-                self.map.get(body).expect(&format!("alias does not have body for {body}")).1.create(name)
+                self.map.get(body).expect(&format!("alias does not have body for {body}", body = body)).1.create(name)
             },
             None => match self.map.get(name) {
                 Some(ent) => ent.1.create(ent.0.last().expect("alias body has no element")),
@@ -254,19 +254,19 @@ lazy_static! {
         )
         .subcommand(
             workflow_command_options(
-                "start",
-                "destroy deplo configurations",
+                "boot",
+                "boot deplo workflow",
                 None
             )
         )
         .subcommand(
-            App::new("stop")
-                .about("destroy deplo configurations")
+            App::new("halt")
+                .about("halt and cleanup deplo workflow")
         )
         .subcommand(
             run_command_options(
                 "run",
-                "run specific job in Deplo.toml manually",
+                "run specific job/workflow in Deplo.toml",
                 None
             )
         )
@@ -303,7 +303,7 @@ lazy_static! {
         )
         .subcommand(
             App::new("ci")
-                .about("handling CI input/control CI settings")
+                .about("control CI resources")
                 .subcommand(
                     App::new("setenv")
                     .about("upload current .env contents as CI service secrets")

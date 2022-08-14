@@ -58,19 +58,15 @@ pub struct Job {
     pub command: Option<Command>
 }
 impl Job {
-    pub fn new_or_none<A: Args>(
+    pub fn new<A: Args>(
         args: &A, config: &config::Container
-    ) -> Result<Option<Self>, Box<dyn Error>> {
-        match args.value_of("job").map(|v| v.to_string()) {
-            Some(name) => {
-                let command = Command::new_or_none(
-                    args,
-                    config.borrow().jobs.find(&name).expect(&format!("config for job {} does not exist", name))
-                );
-                Ok(Some(Self { name, command }))
-            },
-            None => Ok(None)
-        }
+    ) -> Self {
+        let name = args.value_of("job").map(|v| v.to_string()).expect("job name should be specified");
+        let command = Command::new_or_none(
+            args,
+            config.borrow().jobs.find(&name).expect(&format!("config for job {} does not exist", name))
+        );
+        Self { name, command }
     }
 }
 
@@ -89,7 +85,7 @@ pub struct Workflow {
     pub exec: ExecOptions,
 }
 impl Workflow {
-    pub fn new<A: Args>(args: &A, config: &config::Container) -> Result<Self, Box<dyn Error>> {
+    pub fn new<A: Args>(args: &A, config: &config::Container, has_job_config: bool) -> Result<Self, Box<dyn Error>> {
         let (workflow_name, context) = match args.value_of("workflow") {
             // directly specify workflow_name and context
             Some(v) => (
@@ -122,7 +118,7 @@ impl Workflow {
         };
         Ok(Self {
             name: workflow_name,
-            job: Job::new_or_none(args, config)?,
+            job: if has_job_config { Some(Job::new(args, config)) } else { None },
             context: context,
             exec: ExecOptions::new(args, config)?
         })

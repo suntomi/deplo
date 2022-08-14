@@ -1396,7 +1396,7 @@ impl Config {
             },
             None => { 
                 log::debug!(
-                    "no commit settings for release target {}", 
+                    "no commit settings for release target '{}'", 
                     self.runtime.release_target.as_ref().map_or_else(|| "none", |v| v.as_str())
                 );
             }

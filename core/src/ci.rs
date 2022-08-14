@@ -2,8 +2,6 @@ use std::collections::{HashMap};
 use std::error::Error;
 use std::fmt;
 
-use serde::{Deserialize, Serialize};
-
 use crate::config;
 use crate::module;
 

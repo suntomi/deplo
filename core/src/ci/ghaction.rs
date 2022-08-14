@@ -146,7 +146,7 @@ impl<S: shell::Shell> GhAction<S> {
     }
     fn generate_outputs(&self, jobs: &HashMap<String, config::job::Job>) -> Vec<String> {
         sorted_key_iter(jobs).map(|(v,_)| {
-            format!("{name}: ${{{{ steps.deplo-ci-kick.outputs.{name} }}}}", name = v)
+            format!("{name}: ${{{{ steps.deplo-boot.outputs.{name} }}}}", name = v)
         }).collect()
     }
     fn generate_need_cleanups<'a>(&self, jobs: &HashMap<String, config::job::Job>) -> String {

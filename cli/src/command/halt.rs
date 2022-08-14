@@ -8,21 +8,21 @@ use core::shell;
 
 use crate::command;
 
-pub struct Stop<S: shell::Shell = shell::Default> {
+pub struct Halt<S: shell::Shell = shell::Default> {
     pub config: config::Container,
     pub shell: S
 }
 
-impl<S: shell::Shell, A: args::Args> command::Command<A> for Stop<S> {
-    fn new(config: &config::Container) -> Result<Stop<S>, Box<dyn Error>> {
-        return Ok(Stop::<S> {
+impl<S: shell::Shell, A: args::Args> command::Command<A> for Halt<S> {
+    fn new(config: &config::Container) -> Result<Halt<S>, Box<dyn Error>> {
+        return Ok(Halt::<S> {
             config: config.clone(),
             shell: S::new(config)
         });
     }
     fn run(&self, args: &A) -> Result<(), Box<dyn Error>> {
-        log::debug!("stop command invoked");
-        let workflow = config::runtime::Workflow::new(args, &self.config)?;
+        log::debug!("halt command invoked");
+        let workflow = config::runtime::Workflow::new(args, &self.config, false)?;
         let config = self.config.borrow();
         config.jobs.halt(&config, &workflow)?;
         return Ok(())
