@@ -6,6 +6,7 @@ use regex::{Regex};
 use serde::{de, Deserialize, Serialize, Deserializer};
 
 use crate::config;
+use crate::shell;
 
 type AnyValue = toml::value::Value;
 type ValueResolver = fn(&str) -> String;
@@ -273,5 +274,38 @@ impl crate::shell::ArgTrait for Sensitive {
     }
     fn view(&self) -> Cow<'_, str> {
         Cow::Borrowed("<sensitive>")
+    }
+}
+
+pub struct KeyValue<'a> {
+    pub key: shell::Arg<'a>,
+    pub value: shell::Arg<'a>,
+    pub seps: String,
+}
+impl<'a> KeyValue<'a> {
+    pub fn new(key: shell::Arg<'a>, value: shell::Arg<'a>, seps: &str) -> Self {
+        Self { key, value, seps: seps.to_string() }
+    }
+}
+impl<'a> fmt::Display for KeyValue<'a> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}{}{}", self.key.view(), self.seps, self.value.view())
+    }
+}
+impl<'a> fmt::Debug for KeyValue<'a> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("KeyValue")
+            .field("key", &self.key.view())
+            .field("seps", &self.seps)
+            .field("value", &self.value.view())
+            .finish()
+    }
+}
+impl<'a> shell::ArgTrait for KeyValue<'a> {
+    fn value(&self) -> String {
+        format!("{}{}{}", self.key.value(), self.seps, self.value.value())
+    }
+    fn view(&self) -> Cow<'_, str> {
+        Cow::Owned(format!("{}{}{}", self.key.view(), self.seps, self.value.view()))
     }
 }

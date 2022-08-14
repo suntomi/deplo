@@ -65,6 +65,14 @@ macro_rules! protected_arg {
     };
 }
 
+#[macro_export]
+macro_rules! kv_arg {
+    ($k:expr,$v:expr,$seps:expr) => {
+        Box::new(crate::config::value::KeyValue::new($k,$v,$seps)) as crate::shell::Arg
+    };
+}
+
+
 pub fn ctoa<'a, I, K, V: 'a>(collection: I) -> Vec<(K, Arg<'a>)>
 where 
     I: IntoIterator<Item = (K, V)>, K: AsRef<OsStr>, V: ArgTrait {
@@ -123,7 +131,7 @@ pub trait Shell {
     ) -> Result<String, ShellError> 
     where 
         I: IntoIterator<Item = (K, Arg<'a>)>,
-        K: AsRef<OsStr>, P: ArgTrait 
+        K: AsRef<OsStr>, P: ArgTrait
     {
         let sh = shell.as_ref().map_or_else(|| "bash", |v| v.as_str());
         return self.exec(args!(sh, "-c", code), envs, cwd, settings);
@@ -140,19 +148,18 @@ pub trait Shell {
         let config = self.config().borrow();
         let mut envs_vec: Vec<Arg> = vec![];
         for (k, v) in envs {
-            let key = k.as_ref().to_string_lossy();
-            let val = v.value();
+            let key = k.as_ref().to_string_lossy().to_string();
             envs_vec.push(arg!("-e"));
-            envs_vec.push(protected_arg!(format!("{k}={v}", k = key, v = val).as_str()));
+            envs_vec.push(kv_arg!(arg!(key), v, "="));
         }
         let mut mounts_vec: Vec<Arg> = vec![];
         for (k, v) in mounts {
             let key = k.as_ref().to_string_lossy();
             let val = v.value();
             mounts_vec.push(arg!("-v"));
-            mounts_vec.push(protected_arg!(format!(
+            mounts_vec.push(arg!(format!(
                 "{k}:{v}", k = docker_mount_path(&key), v = val
-            ).as_str()));
+            )));
         }
         let repository_mount_path = config.modules.vcs().repository_root()?;
         let workdir = match cwd {
