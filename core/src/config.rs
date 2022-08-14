@@ -102,7 +102,7 @@ pub struct Config {
     pub runtime: runtime::Config,
 
     #[serde(skip)]
-    pub envs: HashMap<String, String>,
+    pub envs: HashMap<String, Value>,
 
     // module object
     #[serde(skip)]
@@ -216,7 +216,7 @@ impl Config {
             match v {
                 Some(v) => {
                     std::env::set_var(k.as_ref(), v.as_ref());
-                    process_envs.insert(k.as_ref().to_string(), v.as_ref().to_string());
+                    process_envs.insert(k.as_ref().to_string(), Value::new(v.as_ref()));
                 },
                 None => {
                     std::env::remove_var(k.as_ref());

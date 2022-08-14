@@ -56,6 +56,12 @@ impl Value {
             resolver: None,
         }
     }
+    pub fn new_secret(key: &str) -> Self {
+        Self {
+            value: key.to_string(),
+            resolver: Some(secret_resolver)
+        }
+    }
     pub fn as_str(&self) -> &str {
         self.value.as_str()
     }

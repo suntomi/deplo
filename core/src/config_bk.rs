@@ -252,7 +252,7 @@ impl Job {
         let ci = config.ci_service_by_job(&self).unwrap();
         let env = ci.job_env();
         let mut common_envs = hashmap!{
-            "DEPLO_JOB_CURRENT_NAME" => system.job_name.clone()
+            "DEPLO_CI_JOB_NAME" => system.job_name.clone()
         };
         match config.runtime.release_target {
             Some(ref v) => {
@@ -1436,7 +1436,7 @@ impl Config {
     }
     pub fn user_job_output(&self, job_name: &str, key: &str) -> Result<Option<String>, Box<dyn Error>> {
         let ci = self.ci_service_by_job_name(job_name)?;
-        match std::env::var("DEPLO_JOB_CURRENT_NAME") {
+        match std::env::var("DEPLO_CI_JOB_NAME") {
             Ok(n) => {
                 if n == job_name {
                     // get output of current job. read from temporary file

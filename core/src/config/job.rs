@@ -321,7 +321,7 @@ impl Trigger {
         }
         if !opts.check_condition {
             log::debug!(
-                "skip condition check for job {} in workflow {}",
+                "skip condition check for job '{}' in workflow '{}'",
                 runtime_workflow_config.job.as_ref().expect("should have job").name, 
                 workflow
             );
@@ -434,9 +434,12 @@ impl Job {
         runtime_workflow_config: &config::runtime::Workflow
     ) -> HashMap<String, config::Value> {
         let ci = self.ci(config);
+        let secrets = config::secret::as_config_values();
         let mut envs_list = vec![];
+        envs_list.push(&config.envs);
+        envs_list.push(&secrets);
         let common_envs = merge_hashmap(&hashmap!{
-            "DEPLO_JOB_CURRENT_NAME".to_string() => config::Value::new(&self.name),
+            "DEPLO_CI_JOB_NAME".to_string() => config::Value::new(&self.name),
             "DEPLO_CI_WORKFLOW_NAME".to_string() => config::Value::new(&runtime_workflow_config.name),
         }, &match runtime_workflow_config.exec.release_target {
             Some(ref v) => hashmap!{"DEPLO_CI_RELEASE_TARGET".to_string() => config::Value::new(v)},
@@ -562,7 +565,7 @@ impl Jobs {
     ) -> Result<Option<String>, Box<dyn Error>> {
         let job = self.as_map().get(job_name).expect(&format!("job {} does not exist", job_name));
         let ci = job.ci(config);
-        match std::env::var("DEPLO_JOB_CURRENT_NAME") {
+        match std::env::var("DEPLO_CI_JOB_NAME") {
             Ok(n) => {
                 if n == job_name {
                     // get output of current job. read from temporary file

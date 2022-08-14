@@ -149,7 +149,7 @@ impl<'a> Runner<'a> {
                     self.run_steps(shell, &shell_settings, &job.env(&config, runtime_workflow_config), &steps)?;
                     self.post_run(runtime_workflow_config)?;
                 } else {
-                    log::debug!("runner os is different from current os {} {}", os, current_os);
+                    log::debug!("runner os '{}' is different from current os '{}'", os, current_os);
                     match local_fallback {
                         Some(f) => {
                             let (image, sh) = match f {

@@ -3,8 +3,9 @@ use std::error::Error;
 use std::sync::RwLock;
 
 use maplit::hashmap;
-
 use serde::{Deserialize, Serialize};
+
+use crate::config;
 
 type SecretAccessors = HashMap<String, Box<dyn crate::secret::Accessor + Send + Sync>>;
 
@@ -66,4 +67,12 @@ pub fn vars() -> Result<HashMap<String, String>, Box<dyn Error>> {
         };
     }
     return Ok(result);
+}
+pub fn as_config_values() -> HashMap<String, config::Value> {
+    let reader = G_SECRET_REF.read().unwrap();
+    let mut result = hashmap!{};
+    for (k, _v) in &*reader {
+        result.insert(k.clone(), config::Value::new_secret(k));
+    }
+    return result;
 }
