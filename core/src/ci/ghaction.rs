@@ -479,7 +479,9 @@ impl<S: shell::Shell> ci::CI for GhAction<S> {
             // check if lfs is enabled
             if !lfs {
                 lfs = job.checkout.as_ref().map_or_else(|| false, |v| v.get("lfs").is_some() && job.commit.is_some());
-                log::debug!("there is an job {}, that has commits option and does lfs checkout. enable lfs for deplo fin", name)
+                if lfs {
+                    log::debug!("there is an job {}, that has commits option and does lfs checkout. enable lfs for deplo fin", name);
+                }
             }
         }
         fs::write(&workflow_yml_path,
