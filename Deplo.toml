@@ -158,7 +158,7 @@ caches = {
 }
 
 [jobs.config]
-on = { workflows = ["deploy"], changed = ["Deplo.toml"] }
+on = { workflows = ["integrate"], changed = ["Deplo.toml"] }
 # local_fallback can be path to docker file. if you specify docker file path, deplo automatically build corresponding image
 # and use it as local fallback container image.
 runner = { os = "linux", local_fallback = { path = "tools/docker/Dockerfile.vmfb", shell = "sh" } }

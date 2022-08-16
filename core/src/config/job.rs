@@ -286,6 +286,7 @@ impl Trigger {
     }
     pub fn matches(
         &self,
+        job: &config::job::Job,
         config: &config::Config,
         runtime_workflow_config: &config::runtime::Workflow,
         options: Option<MatchOptions>
@@ -301,7 +302,7 @@ impl Trigger {
             // if more than 1 workflows specified, runtime_workflow_config.name should match any of them
             |v| v.iter().find(|v| { let s: &str = &v.resolve(); s == runtime_workflow_config.name }).is_some()
         ) {
-            log::debug!("workflow {} does not match for trigger", runtime_workflow_config.name);
+            log::debug!("workflow '{}' does not match for trigger of '{}'", runtime_workflow_config.name, job.name);
             return false;
         }
         if !self.release_targets.as_ref().map_or_else(
@@ -317,14 +318,10 @@ impl Trigger {
             return false;
         }        
         if !self.condition.check_workflow_type(workflow) {
-            log::debug!("workflow {} does not match for trigger condition", workflow);
+            log::debug!("workflow '{}' does not match for trigger condition of '{}'", workflow, job.name);
         }
         if !opts.check_condition {
-            log::debug!(
-                "skip condition check for job '{}' in workflow '{}'",
-                runtime_workflow_config.job.as_ref().expect("should have job").name, 
-                workflow
-            );
+            log::debug!("skip condition check for job '{}' in workflow '{}'", job.name, workflow);
             return true;
         }
         match &self.condition {
@@ -333,7 +330,10 @@ impl Trigger {
                     // diff pattern matches
                     let dm = Self::diff_matcher(diff_matcher, ch);
                     if !config.modules.vcs().changed(&dm) {
-                        log::trace!("diff pattern {:?} does not match any of changed files in last commit", changed);
+                        log::trace!(
+                            "workflow '{}' job '{}' diff pattern {:?} does not match any of changed files in last commit", 
+                            workflow, job.name, changed
+                        );
                         return false;
                     }
                 }
@@ -341,20 +341,29 @@ impl Trigger {
             TriggerCondition::Cron{ schedules } => {
                 let schedule = runtime_workflow_config.context.get("schedule").unwrap();
                 if !schedules.iter().find(|s| { s.resolve() == schedule.resolve() }).is_some() {
-                    log::trace!("schedule {} does not match any of schedules {:?}", schedule.resolve(), schedules);
+                    log::trace!(
+                        "workflow '{}' job '{}' schedule {} does not match any of schedules {:?}", 
+                        workflow, job.name, schedule.resolve(), schedules
+                    );
                     return false;
                 }
             },
             TriggerCondition::Repository{ events } => {
                 let event = runtime_workflow_config.context.get("event").unwrap();
                 if !events.iter().find(|e| { e.resolve() == event.resolve() }).is_some() {
-                    log::trace!("event {} does not match any of events {:?}", event.resolve(), events);
+                    log::trace!(
+                        "workflow '{}' job '{}' event {} does not match any of events {:?}",
+                        workflow, job.name, event.resolve(), events
+                    );
                     return false;
                 }
             },
             TriggerCondition::Module{ when } => {
                 // use module method like _wf.matches(when) to determine.
-                panic!("TODO: implement match logic for Module condition {:?}", when)
+                panic!(
+                    "TODO: workflow '{}' job '{}' implement match logic for Module condition {:?}",
+                    workflow, job.name, when
+                );
             },
             TriggerCondition::Nop => {},
         }
@@ -470,7 +479,7 @@ impl Job {
         rtconfig: &config::runtime::Workflow
     ) -> bool {
         for t in &self.on {
-            if t.matches(config, rtconfig, None) {
+            if t.matches(self, config, rtconfig, None) {
                 return true
             }
         }
@@ -486,7 +495,7 @@ impl Job {
                 for commit in v {
                     match commit.on {
                         // first only matches commit entry that has valid for_targets and target
-                        Some(ref t) => if t.matches(config, runtime_workflow_config, None) {
+                        Some(ref t) => if t.matches(self, config, runtime_workflow_config, None) {
                             return Some(commit)
                         },
                         None => {}
