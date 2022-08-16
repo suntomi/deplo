@@ -1,37 +1,28 @@
+version = 1
 # ---------------
 # common settings
 # ---------------
-version = 1
+
+[common]
 project_name = "deplo"
 debug = { ghaction_deplo_debugger = "on", ghaction_job_debugger = "on" }
 
 # release target branch settings
-[release_targets]
+[common.release_targets]
 # main branch will be released as nightly
-nightly = { patterns = ["main"] }
+nightly = { type = "Branch", patterns = ["main"] }
 # branch which name is 'lab' will be released as lab
-lab = { patterns = ["lab"] }
+lab = { type = "Branch", patterns = ["lab"] }
 # tag which name is started with numerals treated as release (eg. 0.1.10)
-prod = { tag = true, patterns = ["[0-9]*"] }
-
-
-# ------------
-# secret settings
-# ------------
-[secrets]
-SUNTOMI_VCS_ACCOUNT = { key = "SUNTOMI_VCS_ACCOUNT" }
-SUNTOMI_VCS_ACCOUNT_EMAIL = { key = "SUNTOMI_VCS_ACCOUNT_EMAIL" }
-SUNTOMI_VCS_ACCOUNT_KEY = { key = "SUNTOMI_VCS_ACCOUNT_KEY" }
-SUNTOMI_VCS_APP_ID = { key = "SUNTOMI_VCS_APP_ID" }
-SUNTOMI_VCS_APP_PKEY = { path = "./.secrets/ghapp.pem" }
-
+prod = { type = "Tag", patterns = ["[0-9]*"] }
 
 # ------------
 # vcs settings
 # ------------
+
 # version control system account settings
 [vcs]
-type = "github"
+type = "Github"
 email = "${SUNTOMI_VCS_ACCOUNT_EMAIL}"
 account = "${SUNTOMI_VCS_ACCOUNT}"
 key = "${SUNTOMI_VCS_ACCOUNT_KEY}"
@@ -40,87 +31,38 @@ key = "${SUNTOMI_VCS_ACCOUNT_KEY}"
 # ------------
 # ci settings
 # ------------
-[ci.default]
+
 # ci account setting, mutiple ci service can be used by creating mutiple [ci.accounts.$name] sections.
-# [ci.default] should always be set.
-type = "ghaction"
+# [ci.accounts.default] should always be set.
+[ci.accounts.default]
+type = "GhAction"
 account = "${SUNTOMI_VCS_ACCOUNT}"
 key = "${SUNTOMI_VCS_ACCOUNT_KEY}"
-
-[ci.gh_app]
-type = "ghaction"
-account = "${SUNTOMI_VCS_APP_ID}"
-key = "${SUNTOMI_VCS_APP_PKEY}"
-
-
-# ------------
-# workflow settings
-# ------------
-[workflows]
-# workflow is defined event that triggers it. 
-# you can define workflow here, by specifying $workflow_name = $event_source.
-# by default, following 2 workflows are implicitly defined
-# 1. integrate workflow. which is triggered when a pull request against release target branch, is opened or update 
-# 2. deploy workflow. which is trigger when release target is created or updated
-# you can add new builtin workflow like repository event (eg. issue opened), cron job, etc. 
-# or using 3rd party module to receive event from another system (planed at 0.6.0)
-cron = { schedules = { hourly = "30 * * * *", daily = "30 0 * * *" } } # cron workflow from cron event source.
-# repository workflow from repository event source.
-repository = { 
-    events = { 
-        issue_change = ["issue.opened", "issue.closed"], 
-        manual = ["workflow_dispatch"],
-        from_external_service = ["repository_dispatch.from_external_service"]
-    }
-}
-slack = {
-    uses = "suntomi/slack@0.2.0",
-    release_taget = "nightly",
-    with = {
-        webhook = "https://hooks.slack.com/services/T0J5QJQ0P/B0J5QJQ0P/X0J5QJQ0P",
-        channel = "#suntomi",
-        username = "suntomi",
-        icon_url = "https://avatars.slack-edge.com/2018-09-18/5b9b8f8f9d8f8a3f7f8b8b8f-192.png"
-    }
-}
-discord = {
-    uses = "suntomi/discord@0.3.0",
-    release_taget = "nightly",
-    with = {
-        key = "${SUNTOMI_DISCORD_KEY}",
-    }
-}
 
 
 # ------------
 # job settings
 # ------------
-[jobs.base]
+
+# workflow settings (CI), which runs when branch that has related pull request to release targets created/updated.
+# declare job name `$job_name` like jobs.integrate.$job_name, as table element of toml
+[jobs.integrate.base]
 # git's changeset pattern to invoke the job. that is, integrate.base only invoked when tools/docker/Dockerfile.base is
 # changed by commit.
-on = { workflows = ["deploy", "integrate"], changed = ["tools/docker/Dockerfile.base"] }
+patterns = ["tools/docker/Dockerfile.base"]
 # you can set local_fallback container image. if its set, command will be executed on container of `local_fallback.image`,
 # with using shell `local_fallback.shell`, if local machine's OS does not matched runner.os.
-runner = { os = "linux", local_fallback = { image = "docker:20.10", shell = "sh" } }
+runner = { type = "Machine", os = "Linux", local_fallback = { image = "docker:20.10", shell = "sh" } }
 command = """
 docker build -t ghcr.io/suntomi/deplo:base -f tools/docker/Dockerfile.base tools/docker
-if [ "${DEPLO_CI_WORKFLOW_NAME}" = "deploy" ]; then
-    echo ${SUNTOMI_VCS_ACCOUNT_KEY} | docker login ghcr.io -u ${SUNTOMI_VCS_ACCOUNT} --password-stdin
-    docker push ghcr.io/suntomi/deplo:base
-fi
 """
 
-[jobs.builder]
-# if workflows is opmitted, use ["deploy", "integrate"] by default.
-on = { changed = ["tools/docker/Dockerfile.builder", "Cargo.*"] }
-runner = { os = "linux", local_fallback = { image = "docker:20.10", shell = "sh" } }
+[jobs.integrate.builder]
+patterns = ["tools/docker/Dockerfile.builder", "Cargo.*"]
+runner = { type = "Machine", os = "Linux", local_fallback = { image = "docker:20.10", shell = "sh" } }
 command = """
 sh tools/scripts/copy_manifests.sh
 docker build -t ghcr.io/suntomi/deplo:builder -f tools/docker/Dockerfile.builder tools/docker
-if [ "${DEPLO_CI_WORKFLOW_NAME}" = "deploy" ]; then
-    echo ${SUNTOMI_VCS_ACCOUNT_KEY} | docker login ghcr.io -u ${SUNTOMI_VCS_ACCOUNT} --password-stdin
-    docker push ghcr.io/suntomi/deplo:builder
-fi
 """
 # tasks. task is a pre-defined command to be executed in same environment as job.
 # you can use tasks to use deplo like repository of utility command, like make or rake.
@@ -131,18 +73,13 @@ for i in `seq 1 ${COUNT:-10}`; do
     sleep 1
 done
 """,
-    test = "deplo info"
+    test = "echo 'suntomi-bot'"
 }
 
-[jobs.test]
-on = [
-    { workflows = ["integrate"], changed = ["*/src/*", "Cargo.*"] },
-    { workflows = ["cron"], schedules = ["daily"] },
-    { workflows = ["repository"], events = ["manual"] },
-    { workflows = ["slack"], when = { message_matches = ['.*test\sit.*'] } }
-]
-runner = { os = "linux", local_fallback = { image = "ghcr.io/suntomi/deplo:builder" } }
-command = "cargo test"
+[jobs.integrate.src]
+patterns = ["*/src/*", "Cargo.*",]
+runner = { type = "Machine", os = "Linux", local_fallback = { image = "ghcr.io/suntomi/deplo:builder" } }
+command = "cargo build"
 tasks = { test = "cargo test", home = "echo ${HOME}" }
 # cache settings. file paths that is listed in paths will be preserved with tha key `keys[0]`.
 # if you specify multiple keys, `keys[1..]` are used as fallback keys to search similar caches 
@@ -154,28 +91,51 @@ caches = {
         keys = ["integrate-build-${{ runner.os }}-v1-${{ hashFiles('**/Cargo.lock') }}"], # each os and Cargo.lock definition
         # paths root are also CI specific
         paths = ["target", "~/.cargo/bin", "~/.cargo/registry/cache", "~/.cargo/registry/index", "~/.cargo/git/db"] # all possible cargo cache paths
-    }
+    }, # last comma also valid
 }
 
-[jobs.config]
-on = { workflows = ["integrate"], changed = ["Deplo.toml"] }
+[jobs.integrate.config]
+patterns = ["Deplo.toml"]
 # local_fallback can be path to docker file. if you specify docker file path, deplo automatically build corresponding image
 # and use it as local fallback container image.
-runner = { os = "linux", local_fallback = { path = "tools/docker/Dockerfile.vmfb", shell = "sh" } }
+runner = { type = "Machine", os = "Linux", local_fallback = { path = "tools/docker/Dockerfile.vmfb", shell = "sh" } }
 command = "deplo init"
-# commit settings. if path of files that changed after the job finish running, matched patterns, 
+# commits settings. if path of files that changed after the job finish running, matched patterns, 
 # deplo push or made pull request such a changes to repoisitory, after all jobs finish running.
-commit = [
-    { files = [".github/*"], on = { release_targets = ["nightly"] }, with = "push" },
-    { files = [".github/*"], on = { release_targets = ["prod"] }, with = "pull_request" },
-    { files = ["docs/*"], on = { release_targets = ["lab"] }, with = "push" }
+commits = [
+    { patterns = [".github/*"], for_targets = ["nightly"], push_opts = { type = "Push" } },
+    { patterns = [".github/*"], for_targets = ["prod"], push_opts = { type = "PullRequest" } },
+    { patterns = ["docs/*"], for_targets = ["lab"], push_opts = { type = "Push" } }
 ]
 
-[jobs.product]
-on = { workflows = ["deploy"], changed = ["*/src/*", "Cargo.*"] }
+
+
+# workflow settings (CD), which runs when release target branches are created/updated
+# declare job name `$job_name` like jobs.deploy.$job_name, as table element of toml
+[jobs.deploy.base]
+patterns = ["tools/docker/Dockerfile.base"]
+runner = { type = "Machine", os = "Linux", local_fallback = { image = "docker:20.10", shell = "sh" } }
+command = """
+docker build -t ghcr.io/suntomi/deplo:base -f tools/docker/Dockerfile.base tools/docker
+echo ${SUNTOMI_VCS_ACCOUNT_KEY} | docker login ghcr.io -u ${SUNTOMI_VCS_ACCOUNT} --password-stdin
+docker push ghcr.io/suntomi/deplo:base
+"""
+
+[jobs.deploy.builder]
+patterns = ["tools/docker/Dockerfile.builder", "Cargo.*"]
+runner = { type = "Machine", os = "Linux", local_fallback = { image = "docker:20.10", shell = "sh" } }
+command = """
+sh tools/scripts/copy_manifests.sh
+docker build -t ghcr.io/suntomi/deplo:builder -f tools/docker/Dockerfile.builder tools/docker
+echo ${SUNTOMI_VCS_ACCOUNT_KEY} | docker login ghcr.io -u ${SUNTOMI_VCS_ACCOUNT} --password-stdin
+docker push ghcr.io/suntomi/deplo:builder
+"""
+
+[jobs.deploy.product]
 # job dependencies. deploy.product only starts to run after deploy.builder finished.
 depends = ["builder"]
-runner = { os = "linux", local_fallback = { path = "tools/docker/Dockerfile.vmfb", shell = "sh" } }
+patterns = ["*/src/*", "Cargo.*"]
+runner = { type = "Machine", os = "Linux", local_fallback = { path = "tools/docker/Dockerfile.vmfb", shell = "sh" } }
 command = """
 set -e
 mkdir -p tools/docker/bin
@@ -201,14 +161,21 @@ if [ $(deplo d product output foo) != "bar" ]; then
     exit 1
 fi
 """
+tasks = {
+    build = """
+set -e
+mkdir -p tools/docker/bin
+. tools/scripts/setup_release_env.sh
+sh tools/scripts/build_linux.sh
+"""
+}
 
-[jobs.latest]
-# latest tag of docker image is only updated when production release is created.
-on = { workflows = ["deploy"], release_targets = ["prod"], changed = ["*/src/*", "Cargo.*"] }
-# prohibit to run from cli
-options = { only_from_ci = true }
+[jobs.deploy.latest]
 depends = ["product"]
-runner = { os = "linux", local_fallback = { image = "docker:20.10", shell = "sh" } }
+# latest tag of docker image is only updated when production release is created.
+for_targets = ["prod"]
+patterns = ["*/src/*", "Cargo.*"]
+runner = { type = "Machine", os = "Linux", local_fallback = { image = "docker:20.10", shell = "sh" } }
 command = """
 . tools/scripts/setup_release_env.sh
 echo ${SUNTOMI_VCS_ACCOUNT_KEY} | docker login ghcr.io -u ${SUNTOMI_VCS_ACCOUNT} --password-stdin
@@ -217,10 +184,10 @@ docker tag ghcr.io/suntomi/deplo:${DEPLO_RELEASE_VERSION} ghcr.io/suntomi/deplo:
 docker push ghcr.io/suntomi/deplo:latest
 """
 
-[jobs.mac]
-on = { workflows = ["deploy"], changed = ["*/src/*", "Cargo.*"] }
+[jobs.deploy.mac]
 depends = ["product"]
-runner = { os = "macos" }
+patterns = ["*/src/*", "Cargo.*"]
+runner = { type = "Machine", os = "MacOS" }
 steps = [{
     name = "before test"
     env = { HOGE = "hoge" },
@@ -279,10 +246,11 @@ caches.cargo = {
     paths = ["target", "~/.cargo/bin", "~/.cargo/registry/cache", "~/.cargo/registry/index", "~/.cargo/git/db"]
 }
 
-[jobs.win]
-on = { workflows = ["deploy"], changed = [".*/src/.*", 'Cargo\.*'], diff_matcher = "regex" }
+[jobs.deploy.win]
 depends = ["product"]
-runner = { os = "windows" }
+patterns = [".*/src/.*", 'Cargo\.*']
+options = { diff_matcher = "regex" }
+runner = { type = "Machine", os = "Windows" }
 command = """
 set -e
 . tools/scripts/setup_release_env.sh
