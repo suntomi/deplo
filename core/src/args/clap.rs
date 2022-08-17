@@ -69,10 +69,11 @@ fn workflow_command_options(
             .short('w')
             .long("workflow")
             .takes_value(true)
-            .conflicts_with("workflow_event_payload");
+            .conflicts_with("workflow_event_payload")
+            .required(false);
         match d {
-            Some(v) => a.required(false).default_value(v),
-            None => a.required(true)
+            Some(v) => a.default_value(v),
+            None => a
         }
     })(default_workflow))
     .arg(Arg::new("workflow_context")
