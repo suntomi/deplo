@@ -16,7 +16,7 @@ env:
   DEPLO_OVERWRITE_WORKFLOW: ${{{{ github.event.client_payload.workflow }}}}
 {secrets:>2}
 jobs:
-  deplo-boot:
+  deplo-main:
     name: Start CI ${{{{ github.event.client_payload.job_id }}}}
     runs-on: ubuntu-latest
     outputs:
@@ -25,7 +25,7 @@ jobs:
 {fetchcli:>6}
 {kick_checkout:>6}
       - name: Boot deplo
-        id: deplo-boot
+        id: deplo-main
         run: deplo boot
       - name: Setup ssh session to debug
         if: ${{{{ failure() }}}}

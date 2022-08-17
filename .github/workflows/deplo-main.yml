@@ -18,24 +18,24 @@ env:
   DEPLO_OVERWRITE_RELEASE_TARGET: ${{ github.event.client_payload.release_target }}
   DEPLO_OVERWRITE_VERBOSITY: ${{ github.event.client_payload.verbosity }}
   DEPLO_OVERWRITE_WORKFLOW: ${{ github.event.client_payload.workflow }}
-  SUNTOMI_VCS_APP_PKEY: ${{ secrets.SUNTOMI_VCS_APP_PKEY }}
-  SUNTOMI_VCS_APP_ID: ${{ secrets.SUNTOMI_VCS_APP_ID }}
-  SUNTOMI_VCS_ACCOUNT_KEY: ${{ secrets.SUNTOMI_VCS_ACCOUNT_KEY }}
   SUNTOMI_VCS_ACCOUNT: ${{ secrets.SUNTOMI_VCS_ACCOUNT }}
   SUNTOMI_VCS_ACCOUNT_EMAIL: ${{ secrets.SUNTOMI_VCS_ACCOUNT_EMAIL }}
+  SUNTOMI_VCS_ACCOUNT_KEY: ${{ secrets.SUNTOMI_VCS_ACCOUNT_KEY }}
+  SUNTOMI_VCS_APP_ID: ${{ secrets.SUNTOMI_VCS_APP_ID }}
+  SUNTOMI_VCS_APP_PKEY: ${{ secrets.SUNTOMI_VCS_APP_PKEY }}
 jobs:
-  deplo-boot:
+  deplo-main:
     name: Start CI ${{ github.event.client_payload.job_id }}
     runs-on: ubuntu-latest
     outputs:
-      base: ${{ steps.deplo-boot.outputs.base }}
-      builder: ${{ steps.deplo-boot.outputs.builder }}
-      config: ${{ steps.deplo-boot.outputs.config }}
-      latest: ${{ steps.deplo-boot.outputs.latest }}
-      mac: ${{ steps.deplo-boot.outputs.mac }}
-      product: ${{ steps.deplo-boot.outputs.product }}
-      test: ${{ steps.deplo-boot.outputs.test }}
-      win: ${{ steps.deplo-boot.outputs.win }}
+      base: ${{ steps.deplo-main.outputs.base }}
+      builder: ${{ steps.deplo-main.outputs.builder }}
+      config: ${{ steps.deplo-main.outputs.config }}
+      latest: ${{ steps.deplo-main.outputs.latest }}
+      mac: ${{ steps.deplo-main.outputs.mac }}
+      product: ${{ steps.deplo-main.outputs.product }}
+      test: ${{ steps.deplo-main.outputs.test }}
+      win: ${{ steps.deplo-main.outputs.win }}
     steps:
       - name: Fetch deplo cli
         run: |
@@ -47,7 +47,7 @@ jobs:
           fetch-depth: 2
           ref: ${{ github.event.client_payload.commit }}
       - name: Boot deplo
-        id: deplo-boot
+        id: deplo-main
         run: deplo boot
       - name: Setup ssh session to debug
         if: ${{ failure() }}

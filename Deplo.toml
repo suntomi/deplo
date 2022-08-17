@@ -2,7 +2,6 @@ version = 1
 # ---------------
 # common settings
 # ---------------
-version = 1
 project_name = "deplo"
 debug = { ghaction_deplo_debugger = "on", ghaction_job_debugger = "on" }
 

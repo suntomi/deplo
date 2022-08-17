@@ -146,7 +146,7 @@ impl<S: shell::Shell> GhAction<S> {
     }
     fn generate_outputs(&self, jobs: &HashMap<String, config::job::Job>) -> Vec<String> {
         sorted_key_iter(jobs).map(|(v,_)| {
-            format!("{name}: ${{{{ steps.deplo-boot.outputs.{name} }}}}", name = v)
+            format!("{name}: ${{{{ steps.deplo-main.outputs.{name} }}}}", name = v)
         }).collect()
     }
     fn generate_need_cleanups<'a>(&self, jobs: &HashMap<String, config::job::Job>) -> String {
@@ -401,7 +401,7 @@ impl<S: shell::Shell> ci::CI for GhAction<S> {
         let previously_no_file = !rm(&workflow_yml_path);
         // inject secrets from dotenv file
         let mut secrets = vec!();
-        for (k, v) in &config::secret::vars()? {
+        for (k, v) in sorted_key_iter(&config::secret::vars()?) {
             if previously_no_file || reinit {
                 (self as &dyn ci::CI).set_secret(k, v)?;
                 log::debug!("set secret value of {}", k);
