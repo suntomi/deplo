@@ -9,15 +9,14 @@ on:
 env:
   DEPLO_GHACTION_CI_ID: ${{{{ github.run_id }}}}-${{{{ github.run_attempt }}}}
   DEPLO_GHACTION_PR_URL: ${{{{ github.event.pull_request.url }}}}
-  DEPLO_GHACTION_EVENT_TYPE: ${{{{ github.event.action }}}}
-  DEPLO_GHACTION_EVENT_PAYLOAD: ${{{{ toJSON(github.event.client_payload) }}}}
+  DEPLO_GHACTION_EVENT_DATA: ${{ toJson(github) }}
   DEPLO_OVERWRITE_COMMIT: ${{{{ github.event.client_payload.commit }}}}
   DEPLO_OVERWRITE_RELEASE_TARGET: ${{{{ github.event.client_payload.release_target }}}}
   DEPLO_OVERWRITE_VERBOSITY: ${{{{ github.event.client_payload.verbosity }}}}
   DEPLO_OVERWRITE_WORKFLOW: ${{{{ github.event.client_payload.workflow }}}}
 {secrets:>2}
 jobs:
-  deplo-main:
+  deplo-boot:
     name: Start CI ${{{{ github.event.client_payload.job_id }}}}
     runs-on: ubuntu-latest
     outputs:
@@ -25,15 +24,15 @@ jobs:
     steps:
 {fetchcli:>6}
 {kick_checkout:>6}
-      - name: Start deplo
-        id: deplo-ci-kick
-        run: deplo ci kick
+      - name: Boot deplo
+        id: deplo-boot
+        run: deplo boot
       - name: Setup ssh session to debug
         if: ${{{{ failure() }}}}
         uses: umegaya/action-tmate@a3d459813f3429bd95fc48bcd980b2fb40f10ad0
         with:
           sudo: true
-  deplo-finish:
+  deplo-halt:
     name: Cleanup CI
     if: ${{{{ !failure() && ({need_cleanups}) }}}}
     needs: [{needs}]
@@ -42,8 +41,8 @@ jobs:
     steps:
 {fetchcli:>6}
 {fin_checkout:>6}
-      - name: Cleanup deplo
-        id: deplo-ci-fin
-        run: deplo ci fin
+      - name: Halt deplo
+        id: deplo-halt
+        run: deplo halt
 {debugger:>6}
 {jobs:>2}

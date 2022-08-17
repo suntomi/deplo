@@ -1,5 +1,6 @@
 use std::process::{Command, Stdio, ChildStdout};
 use std::collections::HashMap;
+use std::borrow::Cow;
 use std::error::Error;
 use std::io::{Read, Seek};
 use std::path::{Path};
@@ -18,7 +19,7 @@ pub struct Native {
     pub cwd: Option<String>,
     pub envs: HashMap<String, String>,
 }
-pub struct CaptureTarget {
+struct CaptureTarget {
     pub stdout: File,
     pub stderr: File,
 }
@@ -40,9 +41,9 @@ impl<'a> shell::Shell for Native {
             envs: hashmap!{}
         }
     }
-    fn set_cwd<P: AsRef<Path>>(&mut self, dir: &Option<P>) -> Result<(), Box<dyn Error>> {
+    fn set_cwd<P: shell::ArgTrait>(&mut self, dir: &Option<P>) -> Result<(), Box<dyn Error>> {
         self.cwd = match dir {
-            Some(d) => Some(d.as_ref().to_str().unwrap().to_string()),
+            Some(d) => Some(d.value()),
             None => None
         };
         Ok(())
@@ -55,68 +56,97 @@ impl<'a> shell::Shell for Native {
     fn config(&self) -> &config::Container {
         return &self.config;
     }
-    fn output_of<I, K, V, P>(
-        &self, args: &Vec<&str>, envs: I, cwd: &Option<P>
+    fn output_of<'b, I, J, K, P>(
+        &self, args: I, envs: J, cwd: &Option<P>
     ) -> Result<String, shell::ShellError> 
-    where I: IntoIterator<Item = (K, V)>, K: AsRef<OsStr>, V: AsRef<OsStr>, P: AsRef<Path> {
-        let (mut cmd, mut ct) = self.create_command(
-            args, envs, cwd, &shell::Settings { capture: true, interactive: false, silent: false}
+    where 
+    I: IntoIterator<Item = shell::Arg<'b>>,
+    J: IntoIterator<Item = (K, shell::Arg<'b>)>,
+    K: AsRef<OsStr>, P: shell::ArgTrait
+    {
+        let (mut cmd, mut ct, cmdstr) = self.create_command(
+            args, envs, cwd, &shell::Settings { capture: true, interactive: false, silent: false, paths: None}
         );
-        return Native::get_output(&mut cmd, &mut ct);
+        return Native::get_output(&mut cmd, &mut ct, cmdstr);
     }
-    fn exec<I, K, V, P>(
-        &self, args: &Vec<&str>, envs: I, cwd: &Option<P>, settings: &shell::Settings
+    fn exec<'b, I, J, K, P>(
+        &self, args: I, envs: J, cwd: &Option<P>, settings: &shell::Settings
     ) -> Result<String, shell::ShellError> 
-    where I: IntoIterator<Item = (K, V)>, K: AsRef<OsStr>, V: AsRef<OsStr>, P: AsRef<Path> {
-        let config = self.config.borrow();
-        if config.runtime.dryrun {
-            let cmd = args.join(" ");
-            println!("dryrun: {}", cmd);
-            return Ok(cmd);
-        } else if !settings.interactive && settings.silent {
+    where 
+        I: IntoIterator<Item = shell::Arg<'b>>,
+        J: IntoIterator<Item = (K, shell::Arg<'b>)>,
+        K: AsRef<OsStr>, P: shell::ArgTrait
+    {
+        if !settings.interactive && settings.silent {
             // regardless for the value of `capture`, always capture value
-            let (mut cmd, mut ct) = self.create_command(
-                args, envs, cwd, &shell::Settings { capture: true, interactive: false, silent: false }
+            let (mut cmd, mut ct, cmdstr) = self.create_command(
+                args, envs, cwd, &shell::Settings { 
+                    capture: true, interactive: false, silent: false, paths: settings.paths.clone() 
+                }
             );
-            return Native::run_as_child(&mut cmd, &mut ct);
+            return Native::run_as_child(&mut cmd, &mut ct, cmdstr);
         } else {
-            let (mut cmd, mut ct) = self.create_command(args, envs, cwd, settings);
-            return Native::run_as_child(&mut cmd, &mut ct);
+            let (mut cmd, mut ct, cmdstr) = self.create_command(args, envs, cwd, settings);
+            return Native::run_as_child(&mut cmd, &mut ct, cmdstr);
         }
     }
 }
 impl Native {
-    fn create_command<I, K, V, P>(
-        &self, args: &Vec<&str>, envs: I, cwd: &Option<P>, settings: &shell::Settings
-    ) -> (Command, Option<CaptureTarget>)
-    where I: IntoIterator<Item = (K, V)>, K: AsRef<OsStr>, V: AsRef<OsStr>, P: AsRef<Path> {
-        let mut c = Command::new(args[0]);
-        c.args(&args[1..]);
-        c.envs(envs);
+    fn add_paths<'a>(envs: &mut HashMap<String, Box<dyn shell::ArgTrait + 'a>>, paths: &Vec<String>) {
+        envs.insert("PATH".to_string(), shell::arg!(format!("{}:{}", match envs.get("PATH") {
+            Some(v) => v.value(),
+            None => match std::env::var("PATH") {
+                Ok(v) => v,
+                Err(e) => panic!("fail to get system PATH by {:?}", e)
+            }
+        }, paths.join(":"))));
+    }
+    fn create_command<'a, I, J, K, P>(
+        &self, args: I, envs: J, cwd: &Option<P>, settings: &shell::Settings
+    ) -> (Command, Option<CaptureTarget>, String)
+    where
+        I: IntoIterator<Item = shell::Arg<'a>>,
+        J: IntoIterator<Item = (K, shell::Arg<'a>)>,
+        K: AsRef<OsStr>, P: shell::ArgTrait
+    {
+        let mut args_vec = vec![];
+        let mut raw_args = vec![];
+        for a in args.into_iter() {
+            raw_args.push(a.value());
+            args_vec.push(a);
+        }
+        let mut envs_map = hashmap!{};
+        for (k,v) in envs.into_iter() {
+            let key = k.as_ref().to_string_lossy().to_string();
+            envs_map.insert(key, v);
+        }
+        match &settings.paths {
+            Some(p) => Self::add_paths(&mut envs_map, p),
+            None => {}
+        };
+        let mut c = Command::new(&raw_args[0]);
+        c.args(&raw_args[1..]);
+        c.envs(&self.envs);
+        c.envs(envs_map.iter().map(|(k,v)| (k, v.value())));
         let cwd_used = match cwd {
             Some(d) => {
-                c.current_dir(d.as_ref()); 
-                d.as_ref().to_string_lossy().to_string()
+                c.current_dir(&Path::new(&d.value())); 
+                d.view()
             },
             None => match &self.cwd {
                 Some(cwd) => {
-                    c.current_dir(cwd); 
-                    cwd.clone()
+                    c.current_dir(cwd);
+                    Cow::Owned(cwd.clone())
                 },
-                _ => "no cwd".to_string()
+                _ => Cow::Borrowed("none")
             }
         };
-        c.envs(&self.envs);
-        log::trace!(
-            "create_command:[{}]@[{}] envs[{}]", 
-            args.join(" "), cwd_used,
-            c.get_envs().collect::<Vec<(&OsStr, Option<&OsStr>)>>().iter().map(
-                |(k,v)| format!(
-                    "{}={}", k.to_string_lossy(), 
-                    v.map(|s| s.to_string_lossy().to_string()).unwrap_or("".to_string())
-                )
-            ).collect::<Vec<String>>().join(",")
+        let cmdstr = format!(
+            "[{}] cwd[{}] envs[{}]",
+            args_vec.iter().map(|a| a.view()).collect::<Vec<Cow<'_, str>>>().join(" "), cwd_used,
+            envs_map.iter().map(|(k,v)| format!("{}={}", k, v.view())).collect::<Vec<String>>().join(",")
         );
+        log::trace!("create_command:{}", cmdstr);
         let ct = if settings.capture {
             // windows std::process::Command does not work well with huge (>1kb) output piping.
             // see https://github.com/rust-lang/rust/issues/45572 for detail
@@ -137,9 +167,9 @@ impl Native {
         } else {
             None
         };
-        return (c, ct);
+        return (c, ct, cmdstr);
     }
-    fn get_output(cmd: &mut Command, ct: &mut Option<CaptureTarget>) -> Result<String, shell::ShellError> {
+    fn get_output(cmd: &mut Command, ct: &mut Option<CaptureTarget>, cmdstr: String) -> Result<String, shell::ShellError> {
         // TODO: option to capture stderr as no error case
         match cmd.output() {
             Ok(output) => {
@@ -149,7 +179,7 @@ impl Native {
                             let mut buf = String::new();
                             v.read_stdout(&mut buf).map_err(|e| shell::ShellError::OtherFailure{
                                 cause: format!("cannot read from stdout tempfile error {:?}", e),
-                                cmd: format!("{:?}", cmd)
+                                cmd: cmdstr
                             })?;
                             log::debug!("stdout: [{}]", buf);
                             return Ok(buf.trim().to_string());
@@ -158,7 +188,7 @@ impl Native {
                             Ok(s) => return Ok(s.trim().to_string()),
                             Err(err) => return Err(shell::ShellError::OtherFailure{
                                 cause: format!("stdout character code error {:?}", err),
-                                cmd: format!("{:?}", cmd)
+                                cmd: cmdstr
                             })
                         }
                     }
@@ -168,18 +198,18 @@ impl Native {
                             let mut buf = String::new();
                             v.read_stderr(&mut buf).map_err(|e| shell::ShellError::OtherFailure{
                                 cause: format!("cannot read from stderr tempfile error {:?}", e),
-                                cmd: format!("{:?}", cmd)
+                                cmd: cmdstr
                             })?;
                             return Ok(buf.trim().to_string());
                         },
                         None => match String::from_utf8(output.stderr) {
                             Ok(s) => return Err(shell::ShellError::OtherFailure{ 
                                 cause: format!("command returns error {}", s),
-                                cmd: format!("{:?}", cmd)
+                                cmd: cmdstr
                             }),
                             Err(err) => return Err(shell::ShellError::OtherFailure{
                                 cause: format!("stderr character code error {:?}", err),
-                                cmd: format!("{:?}", cmd)
+                                cmd: cmdstr
                             })
                         }
                     }
@@ -187,18 +217,20 @@ impl Native {
             },
             Err(err) => return Err(shell::ShellError::OtherFailure{
                 cause: format!("get output error {:?}", err),
-                cmd: format!("{:?}", cmd)
+                cmd: cmdstr
             })
         }
     }
-    fn read_stdout_or_empty(cmd: &Command, stdout: Option<ChildStdout>, ct: &mut Option<CaptureTarget>) -> Result<String, shell::ShellError> {
+    fn read_stdout_or_empty(
+        cmd: &Command, stdout: Option<ChildStdout>, ct: &mut Option<CaptureTarget>, cmdstr: &str
+    ) -> Result<String, shell::ShellError> {
         let mut buf = String::new();
         match ct {
             Some(v) => {
                 let mut buf = String::new();
                 v.read_stdout(&mut buf).map_err(|e| shell::ShellError::OtherFailure{
                     cause: format!("cannot read from stderr tempfile error {:?}", e),
-                    cmd: format!("{:?}", cmd)
+                    cmd: cmdstr.to_string()
                 })?;
             },
             None => match stdout {
@@ -215,7 +247,7 @@ impl Native {
         }
         Ok(buf)
     }
-    fn run_as_child(cmd: &mut Command, ct: &mut Option<CaptureTarget>) -> Result<String,shell::ShellError> {
+    fn run_as_child(cmd: &mut Command, ct: &mut Option<CaptureTarget>, cmdstr: String) -> Result<String,shell::ShellError> {
         match cmd.spawn() {
             Ok(mut process) => {
                 match process.wait() { 
@@ -227,7 +259,7 @@ impl Native {
                                     let mut buf = String::new();
                                     v.read_stdout(&mut buf).map_err(|e| shell::ShellError::OtherFailure{
                                         cause: format!("cannot read from stderr tempfile error {:?}", e),
-                                        cmd: format!("{:?}", cmd)
+                                        cmd: cmdstr
                                     })?;
                                     log::debug!("stdout: [{}]", buf);
                                     return Ok(buf.trim().to_string())
@@ -237,7 +269,7 @@ impl Native {
                                         Ok(_) => return Ok(s.trim().to_string()),
                                         Err(err) => return Err(shell::ShellError::OtherFailure{
                                             cause: format!("read stream error {:?}", err),
-                                            cmd: format!("{:?}", cmd)
+                                            cmd: cmdstr
                                         })
                                     },
                                     None => return Ok("".to_string())
@@ -248,16 +280,20 @@ impl Native {
                             let output = match process.stderr {
                                 Some(mut stream) => {
                                     match stream.read_to_string(&mut s) {
-                                        Ok(_) => if s.is_empty() { Self::read_stdout_or_empty(&cmd, process.stdout, ct)? } else { s },
-                                        Err(_) => Self::read_stdout_or_empty(&cmd, process.stdout, ct)?
+                                        Ok(_) => if s.is_empty() {
+                                            Self::read_stdout_or_empty(&cmd, process.stdout, ct, &cmdstr)?
+                                        } else {
+                                            s
+                                        },
+                                        Err(_) => Self::read_stdout_or_empty(&cmd, process.stdout, ct, &cmdstr)?
                                     }
                                 },
-                                None => Self::read_stdout_or_empty(&cmd, process.stdout, ct)?
+                                None => Self::read_stdout_or_empty(&cmd, process.stdout, ct, &cmdstr)?
                             };           
                             return match status.code() {
                                 Some(_) => Err(shell::ShellError::ExitStatus{ 
                                     status, stderr: output,
-                                    cmd: format!("{:?}", cmd)
+                                    cmd: cmdstr
                                 }),
                                 None => Err(shell::ShellError::OtherFailure{
                                     cause: if output.is_empty() { 
@@ -265,20 +301,20 @@ impl Native {
                                     } else {
                                         format!("cmd failed. output: {}", output)
                                     },
-                                    cmd: format!("{:?}", cmd)
+                                    cmd: cmdstr
                                 }),
                             }
                         }
                     },
                     Err(err) => Err(shell::ShellError::OtherFailure{
                         cause: format!("wait process error {:?}", err),
-                        cmd: format!("{:?}", cmd)
+                        cmd: cmdstr
                     })
                 }
             },
             Err(err) => Err(shell::ShellError::OtherFailure{
                 cause: format!("process spawn error {:?}", err),
-                cmd: format!("{:?}", cmd)
+                cmd: cmdstr
             })
         }
     }

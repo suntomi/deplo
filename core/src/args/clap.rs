@@ -8,10 +8,11 @@ use maplit::hashmap;
 use crate::args;
 use crate::config;
 
+/// represents matched command line arguments by clap.
 pub struct Clap<'a> {
     pub hierarchy: Vec<&'a str>,
     pub matches: &'a ArgMatches,
-    pub ailiased_path: Vec<&'a str>,
+    pub aliased_path: Vec<&'a str>,
 }
 
 struct CommandFactory {
@@ -39,32 +40,61 @@ impl AliasCommands {
     fn create(&self, name: &'static str) -> App<'static> {
         match self.alias_map.get(name) {
             Some(body) => {
-                self.map.get(body).unwrap().1.create(name)
+                self.map.get(body).expect(&format!("alias does not have body for {body}", body = body)).1.create(name)
             },
             None => match self.map.get(name) {
-                Some(ent) => ent.1.create(ent.0.last().unwrap()),
+                Some(ent) => ent.1.create(ent.0.last().expect("alias body has no element")),
                 None => panic!("no such aliased command [{}]", name)
             }
         }
     }
     fn find_path(&self, name: &str) -> Vec<&'static str> {
         match self.alias_map.get(name) {
-            Some(body) => self.map.get(body).unwrap().0.clone(),
+            Some(body) => self.map.get(body).expect("alias does not have body").0.clone(),
             None => vec![]
         }
     }
 }
 
-fn job_running_command_options(
+fn workflow_command_options(
     name: &'static str,
-    help: &'static str
+    about: &'static str,
+    default_workflow: Option<&'static str>
 ) -> App<'static> {
     App::new(name)
-    .about(help)
-    .arg(Arg::new("name")
-        .help("job name")
-        .index(1)
-        .required(true))
+    .about(about)
+    .arg((|d| {
+        let a = Arg::new("workflow")
+            .help("workflow name eg. deploy/integrate")
+            .short('w')
+            .long("workflow")
+            .takes_value(true)
+            .conflicts_with("workflow_event_payload");
+        match d {
+            Some(v) => a.required(false).default_value(v),
+            None => a.required(true)
+        }
+    })(default_workflow))
+    .arg(Arg::new("workflow_context")
+        .help("JSON format workflow parameter")
+        .long("workflow-context")
+        .short('c')
+        .takes_value(true)
+        .conflicts_with("workflow_event_payload")
+        .required(false))
+    .arg(Arg::new("workflow_event_payload")
+        .help("specify CI event payload directly. deplo calculate workflow type and context from payload")
+        .long("workflow-event-payload")
+        .short('p')
+        .takes_value(true)
+        .conflicts_with_all(&["workflow_context", "workflow"])
+        .required(false))
+    .arg(Arg::new("release_target")
+        .help("specify CI event payload directly. deplo calculate workflow type and context from payload")
+        .long("release-target")
+        .short('r')
+        .takes_value(true)
+        .required(false))
     .arg(Arg::new("env")
         .help("set adhoc environment variables for remote job")
         .long("env")
@@ -93,52 +123,58 @@ fn job_running_command_options(
         .long("timeout")
         .required(false)
         .takes_value(true))
-    .arg(Arg::new("ref")
+    .arg(Arg::new("revision")
         .help("git ref to run the job")
-        .long("ref")
+        .long("rev")
         .takes_value(true)
         .required(false))
-    .subcommand(
-        App::new("sh")
-            .about("running arbiter command for environment of jobs")
-            .arg(Arg::new("task")
-                .help("running command that declared in tasks directive")
-                .multiple_values(true)))
-    .subcommand(
-        App::new("wait")
-        .about("wait specified job id. --ref,--remote,--async,--env options of parent command is ignored")
-        .arg(Arg::new("job_id")
-            .help("job id to wait")
+}
+fn run_command_options(
+    name: &'static str,
+    about: &'static str,
+    default_workflow: Option<&'static str>
+) -> App<'static> {
+    workflow_command_options(name, about, default_workflow)
+        .arg(Arg::new("job")
+            .help("job name")
             .index(1)
-            .required(true)
-            .takes_value(true)))
-    .subcommand(
-        App::new("steps")
-        .about("run all steps of the job. designed to be used by deplo itself, you seldom can utilize this command"))
-    .subcommand(
-        App::new("output")
-        .about("get output, data passed between jobs, of specified job")
-        .arg(Arg::new("key")
-            .help("key to get data")
-            .index(1)
-            .required(true)))
+            .required(false))
+        .subcommand(
+            App::new("sh")
+                .about("running arbiter command for environment of jobs")
+                .arg(Arg::new("task")
+                    .help("running command that declared in tasks directive")
+                    .multiple_values(true)))
+        .subcommand(
+            App::new("wait")
+            .about("wait specified job id. --ref,--remote,--async,--env options of parent command is ignored")
+            .arg(Arg::new("job_id")
+                .help("job id to wait")
+                .index(1)
+                .required(true)
+                .takes_value(true)))
+        .subcommand(
+            App::new("steps")
+            .about("run all steps of the job. designed to be used by deplo itself, you seldom can utilize this command"))
 }
 
 lazy_static! {
     static ref G_ALIASED_COMMANDS: AliasCommands = AliasCommands::new(hashmap!{
-        "ci_deploy" => (
-            vec!["ci", "deploy"], CommandFactory::new(|name| -> App<'static> { 
-                job_running_command_options(
+        "run_deploy" => (
+            vec!["run"], CommandFactory::new(|name| -> App<'static> {
+                run_command_options(
                     name, 
-                    "run specific deploy job in Deplo.toml manually"
+                    "run specific deploy job in Deplo.toml manually",
+                    Some("deploy")
                 )
             })
         ),
-        "ci_integrate" => (
-            vec!["ci", "integrate"], CommandFactory::new(|name| -> App<'static> { 
-                job_running_command_options(
+        "run_integrate" => (
+            vec!["run"], CommandFactory::new(|name| -> App<'static> {
+                run_command_options(
                     name, 
-                    "run specific integrate job in Deplo.toml manually"
+                    "run specific integrate job in Deplo.toml manually",
+                    Some("integrate")
                 )
             })
         ),
@@ -147,23 +183,18 @@ lazy_static! {
         // "$subcommand/$subcommand_of_subcommand/$subcommand_of_subcommand_of_subcommand/..." => 
         // ["$other_subcommand", "$subcommand_of_other_subcommand", ...]
         // you also add matches for both corresponding subcommand path of G_ROOT_MATCH.
-        "d" => "ci_deploy",    // linked to G_ALIASED_COMMANDS.map["ci_deploy"]
-        "i" => "ci_integrate", // linked to G_ALIASED_COMMANDS.map["ci_integrate"]
+        "d" => "run_deploy",    // linked to G_ALIASED_COMMANDS.map["ci_deploy"]
+        "i" => "run_integrate", // linked to G_ALIASED_COMMANDS.map["ci_integrate"]
     });
     static ref G_ROOT_MATCH: ArgMatches = App::new("deplo")
         .version(config::DEPLO_VERSION)
         .author("umegaya <iyatomi@gmail.com>")
-        .about("write once, run anywhere for CI/CD")
+        .about("provide integrated develop/operation UX for any automation process")
         .arg(Arg::new("config")
             .short('c')
             .long("config")
             .value_name("FILE")
-            .help("Sets a custom config file")
-            .takes_value(true))
-        .arg(Arg::new("release-target")
-            .help("force set release target")
-            .short('r')
-            .long("release-target")
+            .help("Sets a custom config file path")
             .takes_value(true))
         .arg(Arg::new("debug")
             .short('d')
@@ -180,23 +211,14 @@ lazy_static! {
             .value_name(".ENV FILE OR TEXT")
             .help("specify .env file path or .env file content directly")
             .takes_value(true))
-        .arg(Arg::new("dryrun")
-            .long("dryrun")
-            .help("Prints executed commands instead of invoking them")
-            .takes_value(false))
         .arg(Arg::new("verbosity")
             .short('v')
             .long("verbose")
             .help("Sets the level of verbosity")
             .takes_value(true))
-        .arg(Arg::new("workflow-type")
-            .long("workflow")
-            .short('w')
-            .help("Sets workflow type of current run")
-            .takes_value(true))
         .arg(Arg::new("workdir")
             .long("workdir")
-            .help("Sets workflow type of current run")
+            .help("base directory that deplo runs")
             .takes_value(true))
         .subcommand(
             App::new("info")
@@ -228,7 +250,25 @@ lazy_static! {
         )
         .subcommand(
             App::new("destroy")
-                .about("destroy deplo project")
+                .about("destroy deplo configurations")
+        )
+        .subcommand(
+            workflow_command_options(
+                "boot",
+                "boot deplo workflow",
+                None
+            )
+        )
+        .subcommand(
+            App::new("halt")
+                .about("halt and cleanup deplo workflow")
+        )
+        .subcommand(
+            run_command_options(
+                "run",
+                "run specific job/workflow in Deplo.toml",
+                None
+            )
         )
         .subcommand(
             G_ALIASED_COMMANDS.create("d")
@@ -237,37 +277,37 @@ lazy_static! {
             G_ALIASED_COMMANDS.create("i")
         )
         .subcommand(
+            App::new("job")
+            .subcommand(
+                App::new("set-output")
+                .about("set output, data passed between jobs, of current running job")
+                .arg(Arg::new("key")
+                    .help("key to set/get data")
+                    .index(1)
+                    .required(true))
+                .arg(Arg::new("value")
+                    .help("value to set for key")
+                    .index(2)
+                    .required(true)))
+            .subcommand(
+                App::new("output")
+                .about("set output, data passed between jobs, of current running job")
+                .arg(Arg::new("job")
+                    .help("job name to get data. values of jobs only dependency of current job, can be retrieved")
+                    .index(1)
+                    .required(true))
+                .arg(Arg::new("key")
+                    .help("key to get value")
+                    .index(2)
+                    .required(true)))
+        )
+        .subcommand(
             App::new("ci")
-                .about("handling CI input/control CI settings")
-                .subcommand(
-                    App::new("kick")
-                    .about("entry point of CI/CD process")
-                )
-                .subcommand(
-                    G_ALIASED_COMMANDS.create("ci_deploy")
-                )
-                .subcommand(
-                    G_ALIASED_COMMANDS.create("ci_integrate")
-                )
+                .about("control CI resources")
                 .subcommand(
                     App::new("setenv")
                     .about("upload current .env contents as CI service secrets")
                 )
-                .subcommand(
-                    App::new("fin")
-                    .about("cleanup CI/CD process after all related job finished")
-                )
-                .subcommand(
-                    App::new("set-output")
-                    .about("set output, data passed between jobs, of current running job")
-                    .arg(Arg::new("key")
-                        .help("key to set/get data")
-                        .index(1)
-                        .required(true))
-                    .arg(Arg::new("value")
-                        .help("value to set for key")
-                        .index(2)
-                        .required(true)))                    
         )
         .subcommand(
             App::new("vcs")
@@ -330,12 +370,12 @@ impl<'a> args::Args for Clap<'a> {
         return Ok(Clap::<'a> {
             hierarchy: vec!{},
             matches: &G_ROOT_MATCH,
-            ailiased_path: vec!{}
+            aliased_path: vec!{}
         })
     }
     fn subcommand(&self) -> Option<(&str, Self)> {
-        let (may_subcommand_name, aliased) = if self.ailiased_path.len() > 0 {
-            (Some(self.ailiased_path[0]), true)
+        let (may_subcommand_name, aliased) = if self.aliased_path.len() > 0 {
+            (Some(self.aliased_path[0]), true)
         } else {
             (self.matches.subcommand_name(), false)
         };
@@ -343,13 +383,13 @@ impl<'a> args::Args for Clap<'a> {
             Some(name) => {
                 if aliased {
                     let mut h = self.hierarchy.clone();
-                    let mut ap = self.ailiased_path.clone();
+                    let mut ap = self.aliased_path.clone();
                     h.push(name);
                     ap.pop();
                     Some((name, Clap::<'a>{
                         hierarchy: h,
                         matches: self.matches,
-                        ailiased_path: ap
+                        aliased_path: ap
                     }))
                 } else {
                     match self.matches.subcommand_matches(name) {
@@ -367,7 +407,7 @@ impl<'a> args::Args for Clap<'a> {
                             Some((may_aliased_name, Clap::<'a>{
                                 hierarchy: h,
                                 matches: m,
-                                ailiased_path: ap
+                                aliased_path: ap
                             }))
                         },
                         None => None

@@ -9,8 +9,8 @@ use core::config;
 use log;
 
 fn main() {
-    let args = args::create().unwrap();
-    let c = &mut config::Config::create(&args).unwrap();
+    let args = args::create().expect("fail to process cli args");
+    let c = &mut config::Config::create(&args).expect("fail to create config");
 
     match cli::run(&args, c){
         Ok(()) => std::process::exit(0),

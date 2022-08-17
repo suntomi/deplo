@@ -1,15 +1,15 @@
-{full_name}:
-  name: Running job {full_name}
+{name}:
+  name: Running job {name}
 {machine_or_container:>2}
 {workdir:>2}
   steps:
     - attach_workspace:
         at: /tmp/deplo
     - run: |
-        if [ ! -f "/tmp/deplo/marked_jobs/{full_name}" ]; then
-          echo "Job {full_name} is not marked to execute."
+        if [ ! -f "/tmp/deplo/marked_jobs/{name}" ]; then
+          echo "Job {name} is not marked to execute."
           circleci-agent step halt
         fi
 {checkout:>4}
-    - name: {kind} {name}
-      run: deplo ci {kind} {name}
+    - name: {name}
+      run: deplo run {name}

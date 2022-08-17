@@ -6,12 +6,12 @@ use glob::Pattern;
 use regex::Regex;
 use serde_json::{Value as JsonValue};
 
-use super::config;
+use crate::config;
 use crate::module;
 
-pub enum DiffMatcher<'a> {
-    Glob(Vec<&'a str>),
-    Regex(Vec<&'a str>)
+pub enum DiffMatcher {
+    Glob(Vec<String>),
+    Regex(Vec<String>)
 }
 
 #[derive(Eq, PartialEq, Clone, Copy, Debug)]
@@ -34,7 +34,7 @@ impl fmt::Display for RefType {
     }
 }
 
-pub trait VCS : module::Module {
+pub trait VCS {
     fn new(config: &config::Container) -> Result<Self, Box<dyn Error>> where Self : Sized;
     fn release_target(&self) -> Option<String>;
     fn current_ref(&self) -> Result<(RefType, String), Box<dyn Error>>;
@@ -43,9 +43,11 @@ pub trait VCS : module::Module {
     fn squash_branch(&self, n: usize) -> Result<(), Box<dyn Error>>;
     fn commit_hash(&self, expr: Option<&str>) -> Result<String, Box<dyn Error>>;
     fn checkout(&self, commit: &str, branch_name: Option<&str>) -> Result<(), Box<dyn Error>>;
+    fn checkout_previous(&self) -> Result<(), Box<dyn Error>> { self.checkout("-", None) }
     fn repository_root(&self) -> Result<String, Box<dyn Error>>;
     fn rebase_with_remote_counterpart(&self, branch: &str) -> Result<(), Box<dyn Error>>;
     fn pick_ref(&self, target: &str) -> Result<(), Box<dyn Error>>;
+    fn pick_fetched_head(&self) -> Result<(), Box<dyn Error>> { self.pick_ref("FETCH_HEAD") }
     fn push_branch(
         &self, local_ref: &str, remote_branch: &str, option: &HashMap<&str, &str>
     ) -> Result<(), Box<dyn Error>>;
@@ -66,7 +68,7 @@ pub trait VCS : module::Module {
         &self, remote_branch: &str, msg: &str, patterns: &Vec<&str>, option: &HashMap<&str, &str>
     ) -> Result<bool, Box<dyn Error>>;
     fn diff<'b>(&'b self) -> &'b Vec<String>;
-    fn changed<'b, 'c>(&'b self, matcher: &DiffMatcher<'c>) -> bool {
+    fn changed<'b>(&'b self, matcher: &DiffMatcher) -> bool {
         let difflines = self.diff();
         if difflines.len() == 1 && difflines[0] == "*" {
             // this specifal pattern indicates everything changed
@@ -105,6 +107,11 @@ pub trait VCS : module::Module {
         false
     }
 }
+#[derive(Clone)]
+pub struct Module;
+impl module::Module for Module {
+    fn ty() -> config::module::Type { return config::module::Type::Vcs; }
+}
 
 #[derive(Debug)]
 pub struct VCSError {
@@ -137,7 +144,7 @@ pub fn factory<'a>(
     config: &config::Container
 ) -> Result<Box<dyn VCS + 'a>, Box<dyn Error>> {
     match &config.borrow().vcs {
-        config::VCSConfig::Github {..} => {
+        config::vcs::Account::Github {..} => {
             return factory_by::<github::Github>(config);
         },
         _ => return Err(Box::new(VCSError {

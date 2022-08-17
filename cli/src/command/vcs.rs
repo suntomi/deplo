@@ -14,23 +14,23 @@ pub struct VCS<S: shell::Shell = shell::Default> {
 impl<S: shell::Shell> VCS<S> {
     fn release<A: args::Args>(&self, args: &A) -> Result<(), Box<dyn Error>> {
         let config = self.config.borrow();
-        let vcs = config.vcs_service()?;
+        let vcs = config.modules.vcs();
         vcs.release(
-            (args.value_of("tag_name").unwrap(), false),
+            (args.value_or_die("tag_name"), false),
             &args.json_value_of("option")?
         )?;
         Ok(())
     }
     fn release_assets<A: args::Args>(&self, args: &A) -> Result<(), Box<dyn Error>> {
         let config = self.config.borrow();
-        let vcs = config.vcs_service()?;
+        let vcs = config.modules.vcs();
         let mut options = args.json_value_of("option")?;
         if args.occurence_of("replace") > 0 {
             options.as_object_mut().unwrap().insert("replace".to_string(), serde_json::json!(true));
         }
         vcs.release_assets(
-            (args.value_of("tag_name").unwrap(), false),
-            args.value_of("asset_file_path").unwrap(),
+            (args.value_or_die("tag_name"), false),
+            args.value_or_die("asset_file_path"),
             &options
         )?;
         Ok(())

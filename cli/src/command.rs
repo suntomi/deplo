@@ -27,10 +27,14 @@ impl Error for CommandError {
 }
 
 // subcommands
-pub mod init;
-pub mod destroy;
+pub mod boot;
 pub mod ci;
+pub mod destroy;
+pub mod halt;
+pub mod init;
 pub mod info;
+pub mod job;
+pub mod run;
 pub mod vcs;
 
 // factorys
@@ -47,7 +51,11 @@ pub fn factory<'a, S: args::Args>(
     let cmd = match name {
         "init" => factory_by::<S, init::Init>(config),
         "info" => factory_by::<S, info::Info>(config),
+        "job" => factory_by::<S, job::Job>(config),
         "destroy" => factory_by::<S, destroy::Destroy>(config),
+        "run" => factory_by::<S, run::Run>(config),
+        "boot" => factory_by::<S, boot::Boot>(config),
+        "halt" => factory_by::<S, halt::Halt>(config),
         "ci" => factory_by::<S, ci::CI>(config),
         "vcs" => factory_by::<S, vcs::VCS>(config),
         _ => return Err(Box::new(CommandError {

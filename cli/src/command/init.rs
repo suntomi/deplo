@@ -1,5 +1,4 @@
 use std::error::Error;
-use std::fs;
 
 use log;
 
@@ -26,13 +25,13 @@ impl<S: shell::Shell, A: args::Args> command::Command<A> for Init<S> {
         log::debug!("init command invoked");
         // do preparation
         let reinit = args.value_of("reinit").unwrap_or("none");
-        config::Config::prepare_ci(&self.config, reinit == "all" || reinit == "ci")?;
-        config::Config::prepare_vcs(&self.config, reinit == "all" || reinit == "vcs")?;
         let config = self.config.borrow();
         let data_path = path_join(vec![config.deplo_data_path()?.to_str().unwrap(), "..", "deplow"]);
         rm(&data_path);
-        fs::write(&data_path, config.generate_wrapper_script())?;
-        self.shell.exec(&vec!["chmod", "+x", data_path.to_str().unwrap()], shell::no_env(), shell::no_cwd(), &shell::no_capture())?;
+        config.generate_wrapper_script(&self.shell, &data_path)?;
+        for (_, v) in config.modules.ci() {
+            v.generate_config(reinit == "all" || reinit == "ci")?;
+        }
         return Ok(())
     }
 }
