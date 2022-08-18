@@ -13,7 +13,7 @@ type SecretAccessors = HashMap<String, Box<dyn crate::secret::Accessor + Send + 
 #[serde(untagged)]
 pub enum Secret {
     Env {
-        key: String
+        env: String
     },
     File {
         path: String
@@ -35,7 +35,7 @@ impl Config {
     ) -> Result<(), Box<dyn Error>> {
         let mut secrets = hashmap!{};
         for (k, secret) in &self.secrets {
-            let s = crate::secret::factory(runtime_config, secret)?;
+            let s = crate::secret::factory(k, runtime_config, secret)?;
             secrets.insert(k.clone(), s);
         }
         set_secret_ref(secrets);

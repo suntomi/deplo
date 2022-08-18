@@ -19,10 +19,10 @@ prod = { tag = true, patterns = ["[0-9]*"] }
 # secret settings
 # ------------
 [secrets]
-SUNTOMI_VCS_ACCOUNT = { key = "SUNTOMI_VCS_ACCOUNT" }
-SUNTOMI_VCS_ACCOUNT_EMAIL = { key = "SUNTOMI_VCS_ACCOUNT_EMAIL" }
-SUNTOMI_VCS_ACCOUNT_KEY = { key = "SUNTOMI_VCS_ACCOUNT_KEY" }
-SUNTOMI_VCS_APP_ID = { key = "SUNTOMI_VCS_APP_ID" }
+SUNTOMI_VCS_ACCOUNT = { env = "SUNTOMI_VCS_ACCOUNT" }
+SUNTOMI_VCS_ACCOUNT_EMAIL = { env = "SUNTOMI_VCS_ACCOUNT_EMAIL" }
+SUNTOMI_VCS_ACCOUNT_KEY = { env = "SUNTOMI_VCS_ACCOUNT_KEY" }
+SUNTOMI_VCS_APP_ID = { env = "SUNTOMI_VCS_APP_ID" }
 SUNTOMI_VCS_APP_PKEY = { path = "./.secrets/ghapp.pem" }
 
 

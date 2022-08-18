@@ -14,6 +14,7 @@ pub struct File {
 
 impl secret::Factory for File {
     fn new(
+        name: &str,
         runtime_config: &config::runtime::Config,
         secret_config: &config::secret::Secret
     ) -> Result<Self, Box<dyn Error>> {
@@ -23,11 +24,20 @@ impl secret::Factory for File {
         };
         return Ok(match secret_config {
             config::secret::Secret::File { path } => Self{
-                path: path.clone(), val: match fs::read_to_string(cwd.join(&path)) {
-                    Ok(val) => val,
-                    Err(e) => return escalate!(Box::new(secret::SecretError{
-                        cause: format!("file load error {:?} path={}", e, cwd.join(&path).display())
-                    }))
+                path: path.clone(), val: if config::Config::is_running_on_ci() {
+                    match std::env::var(&name) {
+                        Ok(val) => val,
+                        Err(_) => return escalate!(Box::new(secret::SecretError{
+                            cause: format!("env var {} not found", name)
+                        }))
+                    }
+                } else {
+                    match fs::read_to_string(cwd.join(&path)) {
+                        Ok(val) => val,
+                        Err(e) => return escalate!(Box::new(secret::SecretError{
+                            cause: format!("file load error {:?} path={}", e, cwd.join(&path).display())
+                        }))
+                    }
                 }
             },
             _ => panic!("unexpected secret type")
