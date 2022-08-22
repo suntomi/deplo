@@ -693,7 +693,7 @@ impl<S: shell::Shell> ci::CI for GhAction<S> {
         let user_and_repo = config.modules.vcs().user_and_repo()?;
         let payload = ClientPayload::new(job_config);
         self.shell.exec(shell::args![
-            "curl", "-H", format!("Authorization: token {}", token), 
+            "curl", "-H", shell::fmtargs!("Authorization: token {}", &token), 
             "-H", "Accept: application/vnd.github.v3+json", 
             format!(
                 "https://api.github.com/repos/{}/{}/dispatches", 
@@ -714,7 +714,7 @@ impl<S: shell::Shell> ci::CI for GhAction<S> {
         let start = Utc::now().checked_sub_signed(Duration::minutes(1)).unwrap();
         loop {
             let response = self.shell.exec(shell::args![
-                "curl", "-H", format!("Authorization: token {}", token), 
+                "curl", "-H", shell::fmtargs!("Authorization: token {}", &token), 
                 "-H", "Accept: application/vnd.github.v3+json", 
                 format!(
                     "https://api.github.com/repos/{}/{}/actions/runs?event=repository_dispatch&created={}",
@@ -727,7 +727,7 @@ impl<S: shell::Shell> ci::CI for GhAction<S> {
             if workflows.workflow_runs.len() > 0 {
                 for wf in workflows.workflow_runs {
                     let response = self.shell.exec(shell::args![
-                        "curl", "-H", format!("Authorization: token {}", token), 
+                        "curl", "-H", shell::fmtargs!("Authorization: token {}", &token), 
                         "-H", "Accept: application/vnd.github.v3+json", wf.jobs_url
                     ], shell::no_env(), shell::no_cwd(), &shell::capture())?;
                     let parsed = serde_json::from_str::<PartialJobs>(&response)?;
@@ -754,7 +754,7 @@ impl<S: shell::Shell> ci::CI for GhAction<S> {
         let token = self.get_token()?;
         let user_and_repo = config.modules.vcs().user_and_repo()?;
         let response = self.shell.exec(shell::args![
-            "curl", "-H", format!("Authorization: token {}", token),
+            "curl", "-H", shell::fmtargs!("Authorization: token {}", token),
             "-H", "Accept: application/vnd.github.v3+json",
             format!(
                 "https://api.github.com/repos/{}/{}/actions/runs/{}",
@@ -865,7 +865,7 @@ impl<S: shell::Shell> ci::CI for GhAction<S> {
                 "https://api.github.com/repos/{}/{}/actions/secrets",
                 user_and_repo.0, user_and_repo.1
             ),
-            "-H", format!("Authorization: token {}", token),
+            "-H", shell::fmtargs!("Authorization: token {}", token),
             "-H", "Accept: application/json"
         ], shell::no_env(), shell::no_cwd(), &shell::capture())?) {
             Ok(v) => v,
@@ -882,7 +882,7 @@ impl<S: shell::Shell> ci::CI for GhAction<S> {
         let public_key_info = match serde_json::from_str::<RepositoryPublicKeyResponse>(
             &self.shell.exec(shell::args![
                 "curl", format!("https://api.github.com/repos/{}/{}/actions/secrets/public-key", user_and_repo.0, user_and_repo.1),
-                "-H", format!("Authorization: token {}", token)
+                "-H", shell::fmtargs!("Authorization: token {}", &token)
             ], shell::no_env(), shell::no_cwd(), &shell::capture()
         )?) {
             Ok(v) => v,
@@ -902,7 +902,7 @@ impl<S: shell::Shell> ci::CI for GhAction<S> {
             ),
             "-H", "Content-Type: application/json",
             "-H", "Accept: application/json",
-            "-H", format!("Authorization: token {}", token),
+            "-H", shell::fmtargs!("Authorization: token {}", &token),
             "-d", json, "-w", "%{http_code}", "-o", "/dev/null"
         ), shell::no_env(), shell::no_cwd(), &shell::capture())?.parse::<u32>()?;
         if status >= 200 && status < 300 {

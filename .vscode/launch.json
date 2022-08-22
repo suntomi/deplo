@@ -7,7 +7,7 @@
         "request": "launch",
         "program": "${workspaceFolder}/target/debug/cli",
         "args": [
-            "-v=3", "run", "-w=integrate", "builder", "sh", "@long_running"
+            "-v=3", "run", "-w=deploy", "-r=nightly", "product"
         ]
     },    
     {
@@ -43,11 +43,7 @@
         "request": "launch",
         "program": "${workspaceFolder}/target/debug/cli",
         "args": [
-<<<<<<< HEAD
             "-v=3", "stop", "-r=nightly", "-w=integrate"
-=======
-            "-v=3", "d", "mac"
->>>>>>> 0722dba (using homebrew version of toml-rs to enable multiline inline table)
         ]
     },
     {

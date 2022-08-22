@@ -65,7 +65,7 @@ pub struct RemoteCredential {
 }
 impl RemoteCredential {
     pub fn authorize<'a>(
-        &'a self, command: Vec<&'a str>, target_url: &str
+        &'a self, command: Vec<&'a str>, target_url: &'a str
     ) -> Result<Vec<shell::Arg>, Box<dyn Error>> {
         let mut authorized: Vec<Vec<shell::Arg>> = vec![];
         if command[0] != "git" {
@@ -97,11 +97,11 @@ impl RemoteCredential {
         // by regex, base_url contains last /
         authorized.push(shell::args!["-c", format!("http.{}.extraheader=", base_url)]);
         authorized.push(shell::args!["-c"]);
-        authorized.push(vec![shell::protected_arg!(&format!(
+        authorized.push(shell::args![shell::fmtargs!(
             "http.{}/.extraheader=AUTHORIZATION: Basic {}", 
             if target_url.ends_with("/") { &target_url[0..target_url.len()-1] } else { target_url },
-            base64::encode(format!("{}:{}" , self.username, self.key))
-        ))]);
+            shell::synthesize_arg!(|v| base64::encode(format!("{}:{}", v[0], v[1])), &self.username, &self.key)
+        )]);
         authorized.push(
             command.iter().enumerate()
                 .filter(|(idx, _)| *idx > 0)
@@ -188,7 +188,7 @@ impl<S: shell::Shell> GitFeatures<S> for Git<S> {
                     None => cwd.as_path()
                 },
                 RepositoryOpenFlags::empty(), 
-                &[crate::util::env::var_or_die("HOME")]
+                &[std::env::var("HOME").unwrap()]
             ).unwrap(),
             #[cfg(not(feature="git2"))]
             repo: StubRepository {},

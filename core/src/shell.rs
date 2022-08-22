@@ -40,6 +40,25 @@ impl ArgTrait for String {
         Cow::Borrowed(self)
     }
 }
+impl ArgTrait for &String {
+    fn value(&self) -> String {
+        self.to_string()
+    }
+    fn view(&self) -> Cow<'_, str> {
+        Cow::Borrowed(self)
+    }
+}
+
+pub trait Inc {
+    fn inc(&mut self,_void:()) -> Self;
+}
+impl Inc for usize {
+    fn inc(&mut self,_void:()) -> Self {
+        let prev = *self;
+        *self = prev + 1;
+        return prev;
+    }
+}
 
 #[macro_export]
 macro_rules! arg {
@@ -72,6 +91,44 @@ macro_rules! kv_arg {
     };
 }
 
+#[macro_export]
+macro_rules! synthesize_arg_internal {
+    ($proc: expr, $($values: expr),+) => {
+        $crate::config::value::Synthesize::new($proc, vec![$($crate::arg!($values)),+])
+    };
+}
+pub use synthesize_arg_internal as synthesize_arg;
+
+#[macro_export]
+macro_rules! fmtargs_internal {
+    ($format: expr) => {
+        $crate::config::value::Synthesize::new(
+            |v| v[0].value(), vec![$crate::arg!($format)]
+        )
+    };
+    ($format: expr, $($values: expr),*) => {{
+        $crate::config::value::Synthesize::new(|v| {
+            let mut tmpl = formatx::Template::new(&v[0]).expect(&format!("format parse error {}", v[0]));
+            for e in &v[1..] {
+                tmpl.replace_positional(e);
+            }
+            tmpl.text().expect(&format!("runtime format error {}", v[0]))
+        }, vec![$crate::arg!($format),$($crate::arg!($values)),*])
+    }};
+}
+pub use fmtargs_internal as fmtargs;
+
+#[macro_export]
+#[doc(hidden)]
+macro_rules! format_internal_args {
+    ($args: expr, $value: expr) => {
+        $args.push($crate::arg!($value));
+    };
+    ($args: expr, $value: expr, $($values: tt)*) => {
+        $args.push($crate::arg!($value));
+        $crate::format_internal_args!($args, $($values)*);
+    };
+}
 
 pub fn ctoa<'a, I, K, V: 'a>(collection: I) -> Vec<(K, Arg<'a>)>
 where 

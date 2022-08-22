@@ -188,16 +188,16 @@ docker push ghcr.io/suntomi/deplo:${DEPLO_RELEASE_VERSION}
 # deplo provides unified command for controlling vcs. 
 # `deplo vcs release` and `deplo vcs release-assets` are used for creating release of vcs like github/gitlab
 # with unified interface.
-deplo vcs release ${DEPLO_RELEASE_TAG} -o name=${DEPLO_RELEASE_NAME}
-deplo vcs release-assets ${DEPLO_RELEASE_TAG} tools/docker/bin/cli --replace -o name=deplo-Linux
+deplo -v=3 vcs release ${DEPLO_RELEASE_TAG} -o name=${DEPLO_RELEASE_NAME}
+deplo -v=3 vcs release-assets ${DEPLO_RELEASE_TAG} tools/docker/bin/cli --replace -o name=deplo-Linux
 
 # deplo provides dyanamically generated job output. you can use value for 'foo' and 'fuga' in jobs that depends on the job. 
-deplo ci set-output foo bar
-deplo ci set-output fuga hoge
+deplo job set-output foo bar
+deplo job set-output fuga hoge
 
 # job output can be used in the job that originally create output.
-if [ $(deplo d product output foo) != "bar" ]; then
-    echo "failed to get output from deploy-product locally"
+if [ $(deplo job output product foo) != "bar" ]; then
+    echo "failed to get output from job 'product' locally"
     exit 1
 fi
 """
@@ -256,8 +256,8 @@ steps = [{
     cargo build --release
     deplo vcs release-assets ${DEPLO_RELEASE_TAG} target/release/cli --replace -o name=deplo-Darwin
     # deploy-mac depends on deploy-product, so can use its output
-    if [ "$(deplo d product output foo)" != "bar" ]; then
-        echo "failed to get output from deploy-product"
+    if [ "$(deplo job output product foo)" != "bar" ]; then
+        echo "failed to get output from job 'product'"
         exit 1
     fi
     """
@@ -297,9 +297,9 @@ set -e
 cargo build --release
 deplo vcs release-assets ${DEPLO_RELEASE_TAG} target/release/cli.exe --replace -o name=deplo-Windows.exe
 deplo vcs release-assets ${DEPLO_RELEASE_TAG} target/release/cli.pdb --replace -o name=deplo-Windows.pdb
-# deploy-win depends on deploy-product, so can use its output
-if [ $(deplo d product output fuga) != "hoge" ]; then
-    echo "failed to get output from deploy-product"
+# job 'win' depends on job 'product', so can use its output
+if [ $(deplo job output product fuga) != "hoge" ]; then
+    echo "failed to get output from job 'product'"
     exit 1
 fi
 """
