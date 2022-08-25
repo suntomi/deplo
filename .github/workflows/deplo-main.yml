@@ -371,7 +371,6 @@ jobs:
         run: deplo -v=3 run win
         shell: bash
       - name: Setup ssh session to debug
-        if: ${{ failure() }}
         uses: mxschmitt/action-tmate@v3
         with:
           sudo: true
