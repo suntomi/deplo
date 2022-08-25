@@ -355,16 +355,16 @@ impl<S: shell::Shell> GhAction<S> {
             ).split("\n").map(|s| s.to_string()).collect()
         }
     }
-    fn get_token(&self) -> Result<String, Box<dyn Error>> {
+    fn get_token(&self) -> Result<config::Value, Box<dyn Error>> {
         let config = self.config.borrow();
-        Ok(match &config.ci.get(&self.account_name).unwrap() {
+        Ok(match config.ci.get(&self.account_name).unwrap() {
             config::ci::Account::GhAction { account, key, kind } => {
                 let kind_resolved = match kind.as_ref() {
                     Some(v) => v.resolve(),
                     None => "user".to_string()
                 };
                 match kind_resolved.as_str() {
-                    "user" => key.to_string(),
+                    "user" => key.clone(),
                     "app" => return escalate!(Box::new(ci::CIError {
                         cause: format!(
                             "TODO: generate jwt with account {} as sub and encrypt with key",
@@ -759,7 +759,7 @@ impl<S: shell::Shell> ci::CI for GhAction<S> {
         let token = self.get_token()?;
         let user_and_repo = config.modules.vcs().user_and_repo()?;
         let response = self.shell.exec(shell::args![
-            "curl", "-H", shell::fmtargs!("Authorization: token {}", token),
+            "curl", "-H", shell::fmtargs!("Authorization: token {}", &token),
             "-H", "Accept: application/vnd.github.v3+json",
             format!(
                 "https://api.github.com/repos/{}/{}/actions/runs/{}",
@@ -870,7 +870,7 @@ impl<S: shell::Shell> ci::CI for GhAction<S> {
                 "https://api.github.com/repos/{}/{}/actions/secrets",
                 user_and_repo.0, user_and_repo.1
             ),
-            "-H", shell::fmtargs!("Authorization: token {}", token),
+            "-H", shell::fmtargs!("Authorization: token {}", &token),
             "-H", "Accept: application/json"
         ], shell::no_env(), shell::no_cwd(), &shell::capture())?) {
             Ok(v) => v,
@@ -880,22 +880,28 @@ impl<S: shell::Shell> ci::CI for GhAction<S> {
             response.secrets.iter().map(|s| s.name.clone()).collect()
         )
     }
-    fn set_secret(&self, key: &str, _: &str) -> Result<(), Box<dyn Error>> {
+    fn set_secret(&self, key: &str, value: &str) -> Result<(), Box<dyn Error>> {
         let token = self.get_token()?;
         let config = self.config.borrow();
         let user_and_repo = config.modules.vcs().user_and_repo()?;
-        let public_key_info = match serde_json::from_str::<RepositoryPublicKeyResponse>(
-            &self.shell.exec(shell::args![
-                "curl", format!("https://api.github.com/repos/{}/{}/actions/secrets/public-key", user_and_repo.0, user_and_repo.1),
+        let pkey_response = &self.shell.exec(shell::args![
+                "curl", format!(
+                    "https://api.github.com/repos/{}/{}/actions/secrets/public-key",
+                    user_and_repo.0, user_and_repo.1
+                ),
                 "-H", shell::fmtargs!("Authorization: token {}", &token)
             ], shell::no_env(), shell::no_cwd(), &shell::capture()
-        )?) {
+        )?;
+        let public_key_info = match serde_json::from_str::<RepositoryPublicKeyResponse>(pkey_response) {
             Ok(v) => v,
-            Err(e) => return escalate!(Box::new(e))
+            Err(e) => {
+                log::error!("fail to get public key to encode secret: {}", pkey_response);
+                return escalate!(Box::new(e))
+            }
         };
         let json = format!("{{\"encrypted_value\":\"{}\",\"key_id\":\"{}\"}}", 
             //get value from env to unescapse
-            seal(&crate::util::env::var_or_die(key), &public_key_info.key)?,
+            seal(value, &public_key_info.key)?,
             public_key_info.key_id
         );
         // TODO_PATH: use Path to generate path of /dev/null
