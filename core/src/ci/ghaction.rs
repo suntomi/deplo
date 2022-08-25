@@ -25,16 +25,19 @@ use crate::util::{
 };
 
 #[derive(Deserialize)]
+#[serde(untagged)]
 enum EventPayload {
     Schedule {
         schedule: String
     },
-    Repository {
-        action: Option<String>
-    },
+    // enum variant 'RepositoryDispatch' should be defined earlier than 'Repository'
+    // to avoid wrongly being matched as 'Repository' variant.
     RepositoryDispatch {
         action: String,
         client_payload: config::AnyValue
+    },
+    Repository {
+        action: Option<String>
     }
 }
 impl fmt::Display for EventPayload {
@@ -567,12 +570,14 @@ impl<S: shell::Shell> ci::CI for GhAction<S> {
     fn filter_workflows(
         &self, trigger: Option<ci::WorkflowTrigger>
     ) -> Result<Vec<(String, HashMap<String, config::AnyValue>)>, Box<dyn Error>> {
-        // workflow.nameとworkflow.contextsを取得する
         let resolved_trigger = match trigger {
             Some(t) => t,
+            // on github action, full event payload is stored env var 'DEPLO_GHACTION_EVENT_DATA' 
             None => match std::env::var("DEPLO_GHACTION_EVENT_DATA") {
                 Ok(v) => ci::WorkflowTrigger::EventPayload(v),
-                Err(_) => panic!("DEPLO_GHACTION_EVENT_DATA should set if no argument for workflow (-w) passed")
+                Err(_) => panic!(
+                    "DEPLO_GHACTION_EVENT_DATA should set if on github acton or no argument for workflow (-w) passed"
+                )
             }
         };
         let config = self.config.borrow();

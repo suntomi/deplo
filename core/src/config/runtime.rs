@@ -1,5 +1,7 @@
 use std::collections::{HashMap};
 use std::error::Error;
+use std::fs;
+use std::path::Path;
 
 use maplit::hashmap;
 use serde::{Deserialize, Serialize};
@@ -97,7 +99,13 @@ impl Workflow {
             ),
             None => {
                 let trigger = match args.value_of("workflow_event_payload") {
-                    Some(v) => Some(crate::ci::WorkflowTrigger::EventPayload(v.to_string())),
+                    Some(v) => match fs::read_to_string(Path::new(v)) {
+                        Ok(s) => {
+                            log::debug!("read payload from {}", v);
+                            Some(crate::ci::WorkflowTrigger::EventPayload(s.to_string()))
+                        },
+                        Err(_) => Some(crate::ci::WorkflowTrigger::EventPayload(v.to_string()))
+                    },
                     None => None
                 };
                 let mut matches = {
