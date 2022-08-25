@@ -16,7 +16,10 @@ impl<S: shell::Shell> Job<S> {
         let config = self.config.borrow();
         let job = args.value_or_die("job");
         let key = args.value_or_die("key");
-        config.jobs.user_output(&config, job, key)?;
+        match config.jobs.user_output(&config, job, key)? {
+            Some(v) => println!("{}", v),
+            None => {}
+        }
         Ok(())
     }
     fn set_output<A: args::Args>(&self, args: &A) -> Result<(), Box<dyn Error>> {
