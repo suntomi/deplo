@@ -141,7 +141,7 @@ jobs:
   
       - name: builder
         id: deplo-job-builder
-        run: deplo run builder
+        run: deplo -v=3 run builder
       - name: Setup ssh session to debug
         if: ${{ failure() }}
         uses: mxschmitt/action-tmate@v3
@@ -247,7 +247,7 @@ jobs:
         run: echo "DEPLO_CACHE_CARGO_HIT=true" >> $GITHUB_ENV
       - name: mac
         id: deplo-job-mac
-        run: deplo run mac
+        run: deplo -v=3 run mac
       - name: Setup ssh session to debug
         if: ${{ failure() }}
         uses: mxschmitt/action-tmate@v3
@@ -368,7 +368,7 @@ jobs:
         run: echo "DEPLO_CACHE_CARGO_HIT=true" >> $GITHUB_ENV
       - name: win
         id: deplo-job-win
-        run: deplo run win
+        run: deplo -v=3 run win
         shell: bash
       - name: Setup ssh session to debug
         if: ${{ failure() }}
