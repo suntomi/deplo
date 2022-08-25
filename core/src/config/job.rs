@@ -443,6 +443,7 @@ impl Job {
         runtime_workflow_config: &config::runtime::Workflow
     ) -> HashMap<String, config::Value> {
         let ci = self.ci(config);
+        let vcs = config.modules.vcs();
         let secrets = config::secret::as_config_values();
         let mut envs_list = vec![];
         envs_list.push(&config.envs);
@@ -452,7 +453,10 @@ impl Job {
             "DEPLO_CI_WORKFLOW_NAME".to_string() => config::Value::new(&runtime_workflow_config.name),
         }, &match runtime_workflow_config.exec.release_target {
             Some(ref v) => hashmap!{"DEPLO_CI_RELEASE_TARGET".to_string() => config::Value::new(v)},
-            None => hashmap!{},
+            None => match vcs.release_target() {
+                Some(v) => hashmap!{"DEPLO_CI_RELEASE_TARGET".to_string() => config::Value::new(&v)},
+                None => hashmap!{}
+            }
         });
         envs_list.push(&common_envs);
         let jenvs = ci.job_env();
