@@ -1,13 +1,23 @@
 {
     "version": "0.2.0",
     "configurations": [
+
     {
-        "name": "RunTask",
+        "name": "Run",
         "type": "lldb",
         "request": "launch",
         "program": "${workspaceFolder}/target/debug/cli",
         "args": [
-            "-v=3", "run", "-w=integrate", "builder", "sh", "@long_running"
+            "-v=3", "run", "-r=nightly", "product"
+        ]
+    },    
+    {
+        "name": "RunOnCI",
+        "type": "lldb",
+        "request": "launch",
+        "program": "${workspaceFolder}/target/debug/cli",
+        "args": [
+            "-v=3", "run", "-p=payload.json", "builder"
         ]
     },    
     {
@@ -53,6 +63,15 @@
         "program": "${workspaceFolder}/target/debug/cli",
         "args": [
             "init"
+        ]
+    },
+    {
+        "name": "SetEnv",
+        "type": "lldb",
+        "request": "launch",
+        "program": "${workspaceFolder}/target/debug/cli",
+        "args": [
+            "-v=3", "ci", "setenv"
         ]
     },
     {

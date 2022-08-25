@@ -783,9 +783,9 @@ impl Config {
             "DEPLO_CI_TYPE" => Some(ci_type.as_str()),
             "DEPLO_CI_TAG_NAME" => may_tag,
             "DEPLO_CI_BRANCH_NAME" => may_branch,
-            "DEPLO_CI_CURRENT_COMMIT_ID" => Some(sha.as_str()),
+            "DEPLO_CI_CURRENT_SHA" => Some(sha.as_str()),
             "DEPLO_CI_RELEASE_TARGET" => self.runtime.release_target.as_ref().map(|s| s.as_str()),
-            "DEPLO_CI_WORKFLOW_NAME" => self.runtime.workflow_type.as_ref().map(|s| s.as_str()),
+            "DEPLO_CI_WORKFLOW_TYPE" => self.runtime.workflow_type.as_ref().map(|s| s.as_str()),
             // TODO_CI: get pull request url from local execution
             "DEPLO_CI_PULL_REQUEST_URL" => Some(""),
             "DEPLO_CI_CLI_COMMIT_HASH" => Some(DEPLO_GIT_HASH),
@@ -1167,7 +1167,7 @@ impl Config {
             if ref_type == vcs::RefType::Branch &&
                 ref_path == DEPLO_VCS_TEMPORARY_WORKSPACE_NAME {
                 log::debug!("back to previous branch");
-                vcs.checkout_previous()?;
+                vcs.checkout("-", None)?;
             }
         }
         Ok(())
@@ -1375,7 +1375,7 @@ impl Config {
                     (vcs::RefType::Branch|vcs::RefType::Pull, _) => {
                         let branch_name = format!(
                             "deplo-auto-commits-{}-tmp-{}", 
-                            crate::util::env::var_or_die("DEPLO_CI_ID"),
+                            std::env::var("DEPLO_CI_ID").unwrap(),
                             job_name
                         );
                         if vcs.push_diff(
@@ -1396,7 +1396,7 @@ impl Config {
             },
             None => { 
                 log::debug!(
-                    "no commit settings for release target '{}'", 
+                    "no commit settings for release target {}", 
                     self.runtime.release_target.as_ref().map_or_else(|| "none", |v| v.as_str())
                 );
             }
@@ -1436,7 +1436,7 @@ impl Config {
     }
     pub fn user_job_output(&self, job_name: &str, key: &str) -> Result<Option<String>, Box<dyn Error>> {
         let ci = self.ci_service_by_job_name(job_name)?;
-        match std::env::var("DEPLO_CI_JOB_NAME") {
+        match std::env::var("DEPLO_JOB_CURRENT_NAME") {
             Ok(n) => {
                 if n == job_name {
                     // get output of current job. read from temporary file

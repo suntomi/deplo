@@ -35,6 +35,13 @@ macro_rules! macro_func {
 }
 pub use macro_func as func;
 
+// erase
+#[macro_export]
+macro_rules! macro_void {
+    ($($values: expr),*) => {()}
+}
+pub use macro_void as void;
+
 // error
 use std::fmt;
 use std::error::Error;

@@ -27,6 +27,8 @@ simple_logger = "1.6.0"
 toml = { git = "https://github.com/umegaya/toml-rs", rev = "93292f8" }
 sodalite = { git = "https://github.com/suntomi/sodalite" }
 tempfile = "3.2.0"
+# strfmt = "0.2.2"
+formatx = "0.1.4"
 
 [features]
 default = []

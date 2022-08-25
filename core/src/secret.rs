@@ -10,6 +10,7 @@ pub trait Accessor {
 }
 pub trait Factory {
     fn new(
+        name: &str,
         runtime_config: &config::runtime::Config,
         secret_config: &config::secret::Secret
     ) -> Result<Self, Box<dyn Error>> where Self : Sized;
@@ -37,23 +38,25 @@ mod file;
 
 // factorys
 fn factory_by<'a, T: Accessor + Factory + Send + Sync + 'a>(
+    name: &str,
     runtime_config: &config::runtime::Config,
     secret: &config::secret::Secret
 ) -> Result<Box<dyn Accessor + Send + Sync + 'a>, Box<dyn Error>> {
-    let cmd = T::new(runtime_config, secret)?;
+    let cmd = T::new(name, runtime_config, secret)?;
     return Ok(Box::new(cmd) as Box<dyn Accessor + Send + Sync + 'a>);
 }
 
 pub fn factory<'a>(
+    name: &str,
     runtime_config: &config::runtime::Config,
     secret: &config::secret::Secret
 ) -> Result<Box<dyn Accessor + Send + Sync + 'a>, Box<dyn Error>> {
     match secret {
         config::secret::Secret::Env {..} => {
-            return factory_by::<env::Env>(runtime_config, secret);
+            return factory_by::<env::Env>(name, runtime_config, secret);
         },
         config::secret::Secret::File {..} => {
-            return factory_by::<file::File>(runtime_config, secret);
+            return factory_by::<file::File>(name, runtime_config, secret);
         },
         _ => panic!("unsupported secret type")
     };

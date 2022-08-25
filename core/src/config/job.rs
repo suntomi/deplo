@@ -793,7 +793,7 @@ impl Jobs {
         let modules = &config.modules;
         let (_, ci) = modules.ci_by_env();
         for (name, job) in self.filter_as_map(config, runtime_workflow_config) {
-            if config::Config::is_running_on_ci() {
+            if config::Config::is_running_on_ci() && runtime_workflow_config.job.is_none() {
                 ci.schedule_job(name)?;
             } else {
                 match job.run(shell, config, runtime_workflow_config)? {

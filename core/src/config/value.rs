@@ -1,9 +1,10 @@
-use std::fmt;
 use std::cmp::PartialEq;
 use std::borrow::Cow;
+use std::fmt;
 
 use regex::{Regex};
 use serde::{de, Deserialize, Serialize, Deserializer};
+//use strfmt::strfmt;
 
 use crate::config;
 use crate::shell;
@@ -149,6 +150,14 @@ impl crate::shell::ArgTrait for Value {
         Cow::Owned(format!("{}", self))
     }
 }
+impl crate::shell::ArgTrait for &Value {
+    fn value(&self) -> String {
+        self.resolve()
+    }
+    fn view(&self) -> Cow<'_, str> {
+        Cow::Owned(format!("{}", self))
+    }
+}
 
 
 #[derive(Serialize, Clone)]
@@ -251,7 +260,6 @@ impl fmt::Debug for Any {
 pub struct Sensitive {
     pub value: String,
 }
-
 impl Sensitive {
     pub fn new(value: &str) -> Self {
         Self {
@@ -315,3 +323,71 @@ impl<'a> shell::ArgTrait for KeyValue<'a> {
         Cow::Owned(format!("{}{}{}", self.key.view(), self.seps, self.value.view()))
     }
 }
+
+pub struct Synthesize<'a, F: Fn(&Vec<String>) -> String> {
+    pub transformer: F,
+    pub args: Vec<shell::Arg<'a>>
+}
+impl<'a, F: Fn(&Vec<String>) -> String> Synthesize<'a, F> {
+    pub fn new(transformer: F, args: Vec<shell::Arg<'a>>) -> Self {
+        Self { transformer, args }
+    }
+}
+impl<'a, F: Fn(&Vec<String>) -> String> fmt::Display for Synthesize<'a, F> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", (self as &dyn shell::ArgTrait).view())
+    }
+}
+impl<'a, F: Fn(&Vec<String>) -> String> fmt::Debug for Synthesize<'a, F> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let mut ds = f.debug_struct("Transform");
+        // ds.field("transformer", &format!("{:x}", self.transformer as usize));
+        let mut count = 0;
+        for v in &self.args {
+            ds.field(&count.to_string(), &v.view());
+            count = count + 1
+        }
+        return ds.finish();
+    }
+}
+impl<'a, F: Fn(&Vec<String>) -> String> shell::ArgTrait for Synthesize<'a, F> {
+    fn value(&self) -> String {
+        (self.transformer)(&self.args.iter().map(|v| v.value()).collect())
+    }
+    fn view(&self) -> Cow<'_, str> {
+        Cow::Owned(format!("({})", self.args.iter().map(|v| v.view()).collect::<Vec<Cow<'_, str>>>().join(",")))
+    }
+}
+
+// pub struct FormatArgs<'a> {
+//     pub format: String,
+//     pub args: HashMap<&'static str, shell::Arg<'a>>
+// }
+// impl<'a> FormatArgs<'a> {
+//     pub fn new(format: &str, args: HashMap<&'static str, shell::Arg<'a>>) -> Self {
+//         Self { format: format.to_string(), args }
+//     }
+// }
+// impl<'a> fmt::Display for FormatArgs<'a> {
+//     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+//         write!(f, "{}", (self as &dyn shell::ArgTrait).view())
+//     }
+// }
+// impl<'a> fmt::Debug for FormatArgs<'a> {
+//     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+//         let mut ds = f.debug_struct("FormatArgs");
+//         ds.field("format", &self.format);
+//         for (k, v) in &self.args {
+//             ds.field(k, &v.view());
+//         }
+//         return ds.finish();
+//     }
+// }
+// impl<'a> shell::ArgTrait for FormatArgs<'a> {
+//     fn value(&self) -> String {
+//         strfmt(&self.format, &self.args.iter().map(|(k,v)| (k.to_string(), v.value().to_string())).collect()).unwrap()
+//     }
+//     fn view(&self) -> Cow<'_, str> {
+//         Cow::Owned(strfmt(&self.format, &self.args.iter().map(|(k,v)| (k.to_string(), v.view().to_string())).collect()).unwrap())
+//     }
+// }
