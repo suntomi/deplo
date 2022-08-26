@@ -131,7 +131,7 @@ for i in `seq 1 ${COUNT:-10}`; do
     sleep 1
 done
 """,
-    test = "deplo info"
+    test = "sh ./tools/scripts/longrun.sh 5"
 }
 
 [jobs.test]
