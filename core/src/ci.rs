@@ -47,7 +47,7 @@ pub trait CI {
     fn process_env(&self) -> Result<HashMap<&str, String>, Box<dyn Error>>;
     fn filter_workflows(
         &self, trigger: Option<WorkflowTrigger>
-    ) -> Result<Vec<(String, HashMap<String, config::AnyValue>)>, Box<dyn Error>>;
+    ) -> Result<Vec<config::runtime::Workflow>, Box<dyn Error>>;
     fn set_job_output(&self, job_name: &str, kind: OutputKind, outputs: HashMap<&str, &str>) -> Result<(), Box<dyn Error>>;
     fn job_output(&self, job_name: &str, kind: OutputKind, key: &str) -> Result<Option<String>, Box<dyn Error>>;
 }

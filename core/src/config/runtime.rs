@@ -8,6 +8,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::args::{Args};
 use crate::config;
+use crate::util::{merge_hashmap};
 
 /// runtime configuration for single job execution
 #[derive(Serialize, Deserialize, Clone)]
@@ -21,18 +22,45 @@ pub struct ExecOptions {
     pub timeout: Option<u64>,
 }
 impl ExecOptions {
+    pub fn default() -> Self {
+        Self {
+            envs: hashmap!{},
+            revision: None,
+            release_target: None,
+            verbosity: 0,
+            remote: false,
+            silent: false,
+            timeout: None,
+        }        
+    }
     pub fn new<A: Args>(args: &A, config: &config::Container) -> Result<Self, Box<dyn Error>> {
-        Ok(Self {
-            envs: args.map_of("env"),
-            revision: args.value_of("revision").map(|v| v.to_string()),
-            release_target: args.value_of("release_target").map(|v| v.to_string()),
-            verbosity: config.borrow().runtime.verbosity,
-            remote: args.occurence_of("remote") > 0,
-            silent: args.occurence_of("silent") > 0,
-            timeout: args.value_of("timeout").map(|v| v.parse().expect(
+        let mut instance = Self::default();
+        instance.verbosity = config.borrow().runtime.verbosity;
+        instance.apply(args);
+        Ok(instance)
+    }
+    pub fn apply<A: Args>(&mut self, args: &A) {
+        self.envs = merge_hashmap(&self.envs, &args.map_of("env"));
+        match args.value_of("revision") {
+            Some(v) => self.revision = Some(v.to_string()),
+            None => {}
+        };
+        match args.value_of("release_target") {
+            Some(v) => self.release_target = Some(v.to_string()),
+            None => {}
+        };
+        match args.value_of("timeout") {
+            Some(v) => self.timeout = Some(v.parse().expect(
                 &format!("value of `timeout` should be a number but {}", v)
             )),
-        })
+            None => {}
+        };
+        // remote always apply cmdline parameter, to avoid remote parameter from event payload
+        // wrongly used.
+        self.remote = args.occurence_of("remote") > 0;
+        if args.occurence_of("silent") > 0 {
+            self.silent = true;
+        }
     }
 }
 
@@ -70,6 +98,21 @@ impl Job {
         );
         Self { name, command }
     }
+    pub fn apply<A: Args>(
+        &mut self, args: &A, config: &config::Container
+    ) {
+        match args.value_of("job").map(|v| v.to_string()) {
+            Some(v) => self.name = v,
+            None => {},
+        }
+        match config.borrow().jobs.find(&self.name) {
+            Some(j) => match Command::new_or_none(args, j) {
+                Some(c) => self.command = Some(c),
+                None => {}
+            },
+            None => {}
+        };
+    }
 }
 
 /// runtime configuration for workflow execution commands
@@ -88,20 +131,28 @@ pub struct Workflow {
 }
 impl Workflow {
     pub fn new<A: Args>(args: &A, config: &config::Container, has_job_config: bool) -> Result<Self, Box<dyn Error>> {
-        let (workflow_name, context) = match args.value_of("workflow") {
+        match args.value_of("workflow") {
             // directly specify workflow_name and context
-            Some(v) => (
-                v.to_string(),
-                match args.value_of("workflow_context") {
-                    Some(v) => serde_json::from_str(v)?,
+            Some(v) => return Ok(Self {
+                name: v.to_string(),
+                job: if has_job_config { Some(Job::new(args, config)) } else { None },
+                context: match args.value_of("workflow_context") {
+                    Some(v) => match fs::read_to_string(Path::new(v)) {
+                        Ok(s) => {
+                            log::debug!("read context payload from {}", v);
+                            serde_json::from_str(&s)?
+                        },
+                        Err(_) => serde_json::from_str(v)?
+                    },
                     None => hashmap!{}
-                }
-            ),
+                },
+                exec: ExecOptions::new(args, config)?
+            }),
             None => {
                 let trigger = match args.value_of("workflow_event_payload") {
                     Some(v) => match fs::read_to_string(Path::new(v)) {
                         Ok(s) => {
-                            log::debug!("read payload from {}", v);
+                            log::debug!("read event payload from {}", v);
                             Some(crate::ci::WorkflowTrigger::EventPayload(s.to_string()))
                         },
                         Err(_) => Some(crate::ci::WorkflowTrigger::EventPayload(v.to_string()))
@@ -118,18 +169,29 @@ impl Workflow {
                 } else if matches.len() > 2 {
                     log::warn!(
                         "multiple workflow matches({})",
-                        matches.iter().map(|(n,_)| {n.to_string()}).collect::<Vec<String>>().join(",")
+                        matches.iter().map(|m| {m.name.as_str()}).collect::<Vec<&str>>().join(",")
                     );
                 }
-                matches.remove(0)
+                let mut v = matches.remove(0);
+                v.apply(args, config, has_job_config);
+                Ok(v)
             }
-        };
-        Ok(Self {
-            name: workflow_name,
-            job: if has_job_config { Some(Job::new(args, config)) } else { None },
-            context: context,
-            exec: ExecOptions::new(args, config)?
-        })
+        }
+    }
+    pub fn with_context(name: String, context: HashMap<String, config::AnyValue>) -> Self {
+        Self { name, context, job: None, exec: ExecOptions::default() }
+    }
+    pub fn with_payload(payload: &str) -> Result<Self, Box<dyn Error>> {
+        Ok(serde_json::from_str(payload)?)
+    }
+    pub fn apply<A: Args>(&mut self, args: &A, config: &config::Container, has_job_config: bool) {
+        self.exec.apply(args);
+        if has_job_config { 
+            match self.job.as_mut() {
+                Some(j) => j.apply(args, config),
+                None => self.job = Some(Job::new(args, config))
+            };
+        }
     }
     pub fn command(&self) -> config::job::Command {
         match &self.job {

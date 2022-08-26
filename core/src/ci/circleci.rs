@@ -155,7 +155,7 @@ impl<'a, S: shell::Shell> ci::CI for CircleCI<S> {
     }
     fn filter_workflows(
         &self, _trigger: Option<ci::WorkflowTrigger>
-    ) -> Result<Vec<(String, HashMap<String, config::AnyValue>)>, Box<dyn Error>> {
+    ) -> Result<Vec<config::runtime::Workflow>, Box<dyn Error>> {
         log::warn!("TODO: implement filter_workflows for circleci");
         Ok(vec![])
     }

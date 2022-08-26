@@ -169,13 +169,7 @@ pub struct Any {
 impl<'de> Deserialize<'de> for Any {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where D: Deserializer<'de> {
-        let any = match AnyValue::deserialize(deserializer) {
-            Ok(v) => v,
-            Err(e) => {
-                log::error!("deserialize error: {}", e);
-                return Err(e);
-            }
-        };
+        let any = AnyValue::deserialize(deserializer)?;
         return match any {
             AnyValue::String(ref v) => {
                 let (value, resolver) = detect_value_ref(v);
