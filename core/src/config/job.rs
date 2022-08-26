@@ -800,6 +800,10 @@ impl Jobs {
             Some(job_id) => self.wait_job(&job_id, name, config, runtime_workflow_config)?,
             None => {}
         };
+        if !config::Config::is_running_on_ci() {
+            log::debug!("if not running on CI, all jobs should be finished");
+            self.halt(config, runtime_workflow_config)?;
+        }
         Ok(())
     }
     pub fn boot<S>(
