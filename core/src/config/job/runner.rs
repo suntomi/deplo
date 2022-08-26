@@ -22,10 +22,17 @@ impl<'a> Runner<'a> {
     }
     fn adjust_commit_hash(&self, commit: &Option<&str>) -> Result<(), Box<dyn Error>> {
         let config = self.config;
-        if !config::Config::is_running_on_ci() {
-            if let Some(ref c) = commit {
+        if let Some(ref c) = commit {
+            let vcs = config.modules.vcs();
+            if config::Config::is_running_on_ci() {
+                let target = vcs.commit_hash(Some(c))?;
+                let current = vcs.commit_hash(None)?;
+                if target != current {
+                    panic!("on CI, HEAD should already set to '{}' but '{}'", target, current);
+                }
+            } else {
                 log::debug!("change commit hash to {}", c);
-                config.modules.vcs().checkout(c, Some(config::DEPLO_VCS_TEMPORARY_WORKSPACE_NAME))?;
+                vcs.checkout(c, Some(config::DEPLO_VCS_TEMPORARY_WORKSPACE_NAME))?;
             }
         }
         Ok(())
@@ -116,7 +123,13 @@ impl<'a> Runner<'a> {
         let config = self.config;
         let job = self.job;
         let exec = &runtime_workflow_config.exec;
+        // apply exec settings to current workspace.
+        // verbosity is set via envvar DEPLO_OVERWRITE_VERBOSITY
+        // revision
+        self.adjust_commit_hash(&exec.revision.as_ref().map(|v| v.as_str()))?;
+        defer!{self.recover_branch().unwrap();};
         let command = runtime_workflow_config.command();
+        // silent
         let shell_settings = &mut match command {
             job::Command::Shell => shell::interactive(),
             _ => if exec.silent {
@@ -126,9 +139,6 @@ impl<'a> Runner<'a> {
             }
         };
         let (steps, main_command) = self.create_steps(&command);
-        // if current commit is modified, rollback after all operation is done.
-        self.adjust_commit_hash(&exec.revision.as_ref().map(|v| v.as_str()))?;
-        defer!{self.recover_branch().unwrap();};
         if exec.remote {
             log::debug!(
                 "force running job {} on remote with steps {} at {}", 

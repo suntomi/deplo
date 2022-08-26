@@ -251,7 +251,7 @@ impl Config {
         };
         Ok(())
     }
-    fn setup_logger(verbosity: u64) {
+    pub fn setup_logger(verbosity: u64) {
         // apply verbosity
         match std::env::var("RUST_LOG") {
             Ok(v) => {
@@ -262,7 +262,7 @@ impl Config {
             },
             Err(_) => {},
         };
-        simple_logger::init_with_level(match 
+        match simple_logger::init_with_level(match 
             match std::env::var("DEPLO_OVERWRITE_VERBOSITY") {
                 Ok(v) => if !v.is_empty() {
                     println!("overwrite log verbosity from {} to {}", verbosity, v);
@@ -278,7 +278,10 @@ impl Config {
             2 => log::Level::Debug,
             3 => log::Level::Trace,
             _ => log::Level::Trace
-        }).unwrap();
+        }) {
+            Ok(_) => {},
+            Err(e) => panic!("fail to init logger {}", e)
+        }
     }
 }
 
