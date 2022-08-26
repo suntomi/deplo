@@ -10,6 +10,7 @@ use chrono::{Utc, Duration};
 use log;
 use maplit::hashmap;
 use serde::{Deserialize, Serialize};
+use serde_json::{Value as JsonValue};
 
 use crate::config;
 use crate::ci;
@@ -34,7 +35,7 @@ enum EventPayload {
     // to avoid wrongly being matched as 'Repository' variant.
     RepositoryDispatch {
         action: String,
-        client_payload: config::AnyValue
+        client_payload: JsonValue
     },
     Repository {
         action: Option<String>
@@ -569,7 +570,7 @@ impl<S: shell::Shell> ci::CI for GhAction<S> {
     }
     fn filter_workflows(
         &self, trigger: Option<ci::WorkflowTrigger>
-    ) -> Result<Vec<(String, HashMap<String, config::AnyValue>)>, Box<dyn Error>> {
+    ) -> Result<Vec<config::runtime::Workflow>, Box<dyn Error>> {
         let resolved_trigger = match trigger {
             Some(t) => t,
             // on github action, full event payload is stored env var 'DEPLO_GHACTION_EVENT_DATA' 
@@ -601,28 +602,30 @@ impl<S: shell::Shell> ci::CI for GhAction<S> {
                             _ => {}
                         },
                         // repository_dispatch has a few possibility.
-                        // config::DEPLO_REMOTE_JOB_EVENT_TYPE => should contain workflow_name in client_payload
+                        // config::DEPLO_REMOTE_JOB_EVENT_TYPE => should contain workflow name in client_payload["name"]
                         // config::DEPLO_MODULE_EVENT_TYPE => Module workflow invocation
                         // others => Repository workflow invocation
                         "repository_dispatch" => if let EventPayload::RepositoryDispatch{
                             action, client_payload
                         } = &workflow_event.event {
                             if action == config::DEPLO_REMOTE_JOB_EVENT_TYPE {
-                                match client_payload.index("workflow_name") {
-                                    Some(n) => match n.as_str() {
-                                        Some(s) => matched_names.push(s.to_string()),
-                                        None => panic!(
-                                            "{}: event payload invalid {}", 
-                                            config::DEPLO_REMOTE_JOB_EVENT_TYPE, client_payload
-                                        )
+                                match &client_payload["name"] {
+                                    JsonValue::String(s) => {
+                                        let workflow_name = s.to_string();
+                                        if workflow_name == name {
+                                            return Ok(vec![config::runtime::Workflow::with_payload(
+                                                &serde_json::to_string(client_payload)?
+                                            )?]);
+                                        }
                                     },
-                                    None => panic!(
+                                    _ => panic!(
                                         "{}: event payload invalid {}", 
                                         config::DEPLO_REMOTE_JOB_EVENT_TYPE, client_payload
                                     )
                                 }
                             } else if action == config::DEPLO_MODULE_EVENT_TYPE {
                                 if let config::workflow::Workflow::Module(..) = v {
+                                    log::warn!("TODO: should check current workflow is matched for the module?");
                                     matched_names.push(name);
                                 }
                             } else if let config::workflow::Workflow::Repository{..} = v {
@@ -644,18 +647,20 @@ impl<S: shell::Shell> ci::CI for GhAction<S> {
                     match config.workflows.get(&name).expect(&format!("workflow {} not found", name)) {
                         config::workflow::Workflow::Deploy|config::workflow::Workflow::Integrate => {
                             let target = vcs.release_target();
-                            matches.push((name, if target.is_none() { hashmap!{} } else { hashmap!{
-                                "release_target".to_string() => config::AnyValue::new(&target.unwrap())
-                            }}))
+                            matches.push(config::runtime::Workflow::with_context(
+                                name, if target.is_none() { hashmap!{} } else { hashmap!{
+                                    "release_target".to_string() => config::AnyValue::new(&target.unwrap())
+                                }}
+                            ))
                         },
                         config::workflow::Workflow::Cron{schedules} => {
                             if let EventPayload::Schedule{ref schedule} = workflow_event.event {
                                 match schedules.iter().find_map(|(k, v)| {
                                     if v.resolve().as_str() == schedule.as_str() { Some(k) } else { None }
                                 }) {
-                                    Some(schedule_name) => matches.push((name, hashmap!{
-                                        "schedule".to_string() => config::AnyValue::new(schedule_name)
-                                    })),
+                                    Some(schedule_name) => matches.push(config::runtime::Workflow::with_context(
+                                        name, hashmap!{ "schedule".to_string() => config::AnyValue::new(schedule_name) }
+                                    )),
                                     None => {}
                                 }
                             } else {
@@ -674,16 +679,16 @@ impl<S: shell::Shell> ci::CI for GhAction<S> {
                                 match events.iter().find_map(|(k, vs)| {
                                     if vs.iter().find(|t| t == &key).is_some() { Some(k) } else { None }
                                 }) {
-                                    Some(event_name) => matches.push((name, hashmap!{
-                                        "event".to_string() => config::AnyValue::new(event_name)
-                                    })),
+                                    Some(event_name) => matches.push(config::runtime::Workflow::with_context(
+                                        name, hashmap!{ "event".to_string() => config::AnyValue::new(event_name) }
+                                    )),
                                     None => {}
                                 }
                             } else {
                                 panic!("event payload type does not match {}", workflow_event.event);
                             }
                         },
-                        config::workflow::Workflow::Module(c) => {
+                        config::workflow::Workflow::Module(_c) => {
                             panic!("not implemented yet")
                         }
                     }

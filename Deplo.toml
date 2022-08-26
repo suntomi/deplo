@@ -188,8 +188,8 @@ docker push ghcr.io/suntomi/deplo:${DEPLO_RELEASE_VERSION}
 # deplo provides unified command for controlling vcs. 
 # `deplo vcs release` and `deplo vcs release-assets` are used for creating release of vcs like github/gitlab
 # with unified interface.
-deplo -v=3 vcs release ${DEPLO_RELEASE_TAG} -o name=${DEPLO_RELEASE_NAME}
-deplo -v=3 vcs release-assets ${DEPLO_RELEASE_TAG} tools/docker/bin/cli --replace -o name=deplo-Linux
+deplo vcs release ${DEPLO_RELEASE_TAG} -o name=${DEPLO_RELEASE_NAME}
+deplo vcs release-assets ${DEPLO_RELEASE_TAG} tools/docker/bin/cli --replace -o name=deplo-Linux
 
 # deplo provides dyanamically generated job output. you can use value for 'foo' and 'fuga' in jobs that depends on the job. 
 deplo job set-output foo bar
