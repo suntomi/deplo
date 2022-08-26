@@ -47,11 +47,11 @@ jobs:
         run: deplo boot
       - name: Setup ssh session to debug
         if: ${{ failure() }}
-        uses: umegaya/action-tmate@a3d459813f3429bd95fc48bcd980b2fb40f10ad0
+        uses: mxschmitt/action-tmate@v3
         with:
           sudo: true
   deplo-halt:
-    name: Cleanup CI
+    name: Halt deplo
     if: ${{ !failure() && (needs.base.outputs.need-cleanup || needs.builder.outputs.need-cleanup || needs.config.outputs.need-cleanup || needs.latest.outputs.need-cleanup || needs.mac.outputs.need-cleanup || needs.product.outputs.need-cleanup || needs.test.outputs.need-cleanup || needs.win.outputs.need-cleanup) }}
     needs: ["deplo-main","base","builder","config","latest","mac","product","test","win"]
     runs-on: ubuntu-latest
