@@ -790,14 +790,25 @@ impl Jobs {
         }
         log::info!("remote job {} id={} finished", job_name, job_id);
         Ok(())
-    }    
+    }
+    pub fn run<S>(
+        &self, config: &config::Config, runtime_workflow_config: &config::runtime::Workflow, shell: &S
+    ) -> Result<(), Box<dyn Error>> where S: shell::Shell {
+        let name = &runtime_workflow_config.job.as_ref().expect("should have job setting").name;
+        let job = config.jobs.find(name).expect(&format!("job '{}' does not exist", name));
+        match job.run(shell, config, runtime_workflow_config)? {
+            Some(job_id) => self.wait_job(&job_id, name, config, runtime_workflow_config)?,
+            None => {}
+        };
+        Ok(())
+    }
     pub fn boot<S>(
         &self, config: &config::Config, runtime_workflow_config: &config::runtime::Workflow, shell: &S
     ) -> Result<(), Box<dyn Error>> where S: shell::Shell {
         let modules = &config.modules;
         let (_, ci) = modules.ci_by_env();
         for (name, job) in self.filter_as_map(config, runtime_workflow_config) {
-            if config::Config::is_running_on_ci() && runtime_workflow_config.job.is_none() {
+            if config::Config::is_running_on_ci() {
                 ci.schedule_job(name)?;
             } else {
                 match job.run(shell, config, runtime_workflow_config)? {

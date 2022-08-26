@@ -25,7 +25,7 @@ impl<S: shell::Shell, A: args::Args> command::Command<A> for Run<S> {
         self.config.prepare_workflow()?;
         let workflow = config::runtime::Workflow::new(args, &self.config, true)?;
         let config = self.config.borrow();
-        config.jobs.boot(&config, &workflow, &self.shell)?;
+        config.jobs.run(&config, &workflow, &self.shell)?;
         return Ok(());
     }
 }
