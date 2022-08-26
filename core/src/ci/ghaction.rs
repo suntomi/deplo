@@ -457,7 +457,7 @@ impl<S: shell::Shell> ci::CI for GhAction<S> {
                 checkout = MultilineFormatString{
                     strings: &self.generate_checkout_steps(&name, &job.checkout, &Some(merge_hashmap(
                         &hashmap!{
-                            "ref".to_string() => config::Value::new("${{ github.event.client_payload.commit }}"),
+                            "ref".to_string() => config::Value::new("${{ github.event.client_payload.exec.revision }}"),
                             "fetch-depth".to_string() => config::Value::new("2")
                         }, &job.checkout.as_ref().map_or_else(
                             || if job.commit.is_some() {
