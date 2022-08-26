@@ -10,6 +10,7 @@ use chrono::{Utc, Duration};
 use log;
 use maplit::hashmap;
 use serde::{Deserialize, Serialize};
+use serde_json::{Value as JsonValue};
 
 use crate::config;
 use crate::ci;
@@ -34,7 +35,7 @@ enum EventPayload {
     // to avoid wrongly being matched as 'Repository' variant.
     RepositoryDispatch {
         action: String,
-        client_payload: config::AnyValue
+        client_payload: JsonValue
     },
     Repository {
         action: Option<String>
@@ -601,22 +602,16 @@ impl<S: shell::Shell> ci::CI for GhAction<S> {
                             _ => {}
                         },
                         // repository_dispatch has a few possibility.
-                        // config::DEPLO_REMOTE_JOB_EVENT_TYPE => should contain workflow_name in client_payload
+                        // config::DEPLO_REMOTE_JOB_EVENT_TYPE => should contain workflow name in client_payload["name"]
                         // config::DEPLO_MODULE_EVENT_TYPE => Module workflow invocation
                         // others => Repository workflow invocation
                         "repository_dispatch" => if let EventPayload::RepositoryDispatch{
                             action, client_payload
                         } = &workflow_event.event {
                             if action == config::DEPLO_REMOTE_JOB_EVENT_TYPE {
-                                match client_payload.index("workflow_name") {
-                                    Some(n) => match n.as_str() {
-                                        Some(s) => matched_names.push(s.to_string()),
-                                        None => panic!(
-                                            "{}: event payload invalid {}", 
-                                            config::DEPLO_REMOTE_JOB_EVENT_TYPE, client_payload
-                                        )
-                                    },
-                                    None => panic!(
+                                match &client_payload["name"] {
+                                    JsonValue::String(s) => matched_names.push(s.to_string()),
+                                    _ => panic!(
                                         "{}: event payload invalid {}", 
                                         config::DEPLO_REMOTE_JOB_EVENT_TYPE, client_payload
                                     )
