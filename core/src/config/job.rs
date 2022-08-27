@@ -763,7 +763,7 @@ impl Jobs {
             None => return escalate!(Box::new(config::ConfigError{cause: format!("no such job: [{}]", job_name)})),
         };
         let ci = job.ci(config);
-        let progress = runtime_workflow_config.exec.silent;
+        let progress = !runtime_workflow_config.exec.silent;
         let mut timeout = runtime_workflow_config.exec.timeout;
         loop {
             match ci.check_job_finished(&job_id)? {
@@ -772,7 +772,9 @@ impl Jobs {
                     std::io::stdout().flush().unwrap();
                 },
                 None => {
-                    println!(".done");
+                    if progress {
+                        println!(".done");
+                    }
                     break
                 },
             }
