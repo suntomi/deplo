@@ -51,7 +51,7 @@ jobs:
         with:
           sudo: true
   deplo-halt:
-    name: Halt deplo
+    name: Cleanup CI
     if: ${{ !failure() && (needs.base.outputs.need-cleanup || needs.builder.outputs.need-cleanup || needs.config.outputs.need-cleanup || needs.latest.outputs.need-cleanup || needs.mac.outputs.need-cleanup || needs.product.outputs.need-cleanup || needs.test.outputs.need-cleanup || needs.win.outputs.need-cleanup) }}
     needs: ["deplo-main","base","builder","config","latest","mac","product","test","win"]
     runs-on: ubuntu-latest
