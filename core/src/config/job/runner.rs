@@ -122,6 +122,13 @@ impl<'a> Runner<'a> {
     ) -> Result<Option<String>, Box<dyn Error>> {
         let config = self.config;
         let job = self.job;
+        match config.runtime.debug_options.get("dryrun") {
+            Some(_) => {
+                log::warn!("skip running job '{}' by dryrun", job.name);
+                return Ok(None);
+            },
+            None => {}
+        }
         let exec = &runtime_workflow_config.exec;
         // apply exec settings to current workspace.
         // verbosity is set via envvar DEPLO_OVERWRITE_VERBOSITY

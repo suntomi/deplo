@@ -44,7 +44,7 @@ pub trait Args : Sized {
         match self.values_of(key) {
             Some(es) => for e in es {
                 let mut kv = e.split("=");
-                let k = kv.next().expect("env arg should be in key=value format");
+                let k = kv.next().expect("env arg should be in key=value or key format");
                 let v = kv.next().unwrap_or("");
                 envs.insert(k.to_string(), v.to_string());
             },

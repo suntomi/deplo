@@ -18,6 +18,7 @@ pub struct ExecOptions {
     pub release_target: Option<String>,
     pub verbosity: u64,
     pub remote: bool,
+    pub follow_dependency: bool,
     pub silent: bool,
     pub timeout: Option<u64>,
 }
@@ -29,17 +30,18 @@ impl ExecOptions {
             release_target: None,
             verbosity: 0,
             remote: false,
+            follow_dependency: false,
             silent: false,
             timeout: None,
         }        
     }
-    pub fn new<A: Args>(args: &A, config: &config::Container) -> Result<Self, Box<dyn Error>> {
+    pub fn new<A: Args>(args: &A, config: &config::Container, has_job_config: bool) -> Result<Self, Box<dyn Error>> {
         let mut instance = Self::default();
         instance.verbosity = config.borrow().runtime.verbosity;
-        instance.apply(args);
+        instance.apply(args, has_job_config);
         Ok(instance)
     }
-    pub fn apply<A: Args>(&mut self, args: &A) {
+    pub fn apply<A: Args>(&mut self, args: &A, has_job_config: bool) {
         self.envs = merge_hashmap(&self.envs, &args.map_of("env"));
         match args.value_of("revision") {
             Some(v) => self.revision = Some(v.to_string()),
@@ -55,9 +57,16 @@ impl ExecOptions {
             )),
             None => {}
         };
-        // remote always apply cmdline parameter, to avoid remote parameter from event payload
-        // wrongly used.
+        // remote/follow_dependency always apply cmdline parameter,
+        // to avoid these parameter from event payload wrongly used.
         self.remote = args.occurence_of("remote") > 0;
+        self.follow_dependency = if has_job_config {
+            args.occurence_of("follow_dependency") > 0
+        } else {
+            false // deplo boot does not see the option
+            // but if with remote option, each child job may run with following dependency.
+            // so we set the option false if it does not has job config.
+        };
         if args.occurence_of("silent") > 0 {
             self.silent = true;
         }
@@ -146,7 +155,7 @@ impl Workflow {
                     },
                     None => hashmap!{}
                 },
-                exec: ExecOptions::new(args, config)?
+                exec: ExecOptions::new(args, config, has_job_config)?
             }),
             None => {
                 let trigger = match args.value_of("workflow_event_payload") {
@@ -185,7 +194,7 @@ impl Workflow {
         Ok(serde_json::from_str(payload)?)
     }
     pub fn apply<A: Args>(&mut self, args: &A, config: &config::Container, has_job_config: bool) {
-        self.exec.apply(args);
+        self.exec.apply(args, has_job_config);
         if has_job_config { 
             match self.job.as_mut() {
                 Some(j) => j.apply(args, config),
@@ -213,6 +222,7 @@ pub struct Config {
     pub dotenv_path: Option<String>,
     pub config_path: String,
     pub workdir: Option<String>,
+    pub debug_options: HashMap<String, String>,
 }
 impl Config {
     pub fn with_args<A: Args>(args: &A) -> Self {
@@ -224,6 +234,7 @@ impl Config {
             dotenv_path: args.value_of("dotenv").map(|o| o.to_string()),
             config_path: args.value_of("config").unwrap_or("Deplo.toml").to_string(),
             workdir: args.value_of("workdir").map_or_else(|| None, |v| Some(v.to_string())),
+            debug_options: args.map_of("debug")
         }
     }
     pub fn apply(&self) -> Result<(), Box<dyn Error>> {

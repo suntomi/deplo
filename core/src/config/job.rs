@@ -8,6 +8,7 @@ use std::thread::sleep;
 use std::time::Duration;
 
 use maplit::hashmap;
+use petgraph;
 use serde::{Deserialize, Serialize};
 
 use crate::ci;
@@ -536,6 +537,61 @@ impl MatchOptions {
     }
 }
 
+struct Node<'a> {
+    job: Option<&'a Job>
+}
+type Graph<'a> = petgraph::Graph<Node<'a>, ()>;
+type NodeId = petgraph::graph::NodeIndex<petgraph::graph::DefaultIx>;
+pub struct DependencyGraph<'a>(Graph<'a>, HashMap<&'a String, NodeId>, NodeId);
+impl<'a> DependencyGraph<'a> {
+    pub fn new(jobs: &'a Jobs) -> Self {
+        let mut dag = Graph::<'a>::new();
+        let mut nodes = hashmap!{};
+        let root = dag.add_node(Node::<'a>{job: None});
+        let tail = dag.add_node(Node::<'a>{job: None});
+        // first, register all jobs as dag node
+        for (name, job) in jobs.as_map() {
+            let n = dag.add_node(Node::<'a>{job: Some(job)});
+            nodes.insert(name, n);
+            dag.add_edge(nodes[name], root, ());
+            dag.add_edge(tail, nodes[name], ());
+        }
+        // seconds, scan dependency settings and generate edge
+        for (name, job) in jobs.as_map() {
+            let n = nodes.get(name).expect(&format!("job '{}' does not exist", name));
+            match &job.depends {
+                Some(ds) => for d in ds {
+                    let dn = nodes.get(&d.resolve()).expect(
+                        &format!("dependent job '{}' does not exist", d)
+                    );
+                    dag.add_edge(*n, *dn, ());
+                },
+                None => {}
+            };
+        }
+        Self(dag, nodes, tail)
+    }
+    pub fn traverse<F>(
+        &self, start_job: Option<&str>, proc: F
+    ) -> Result<(), Box<dyn Error>> where F: Fn(&'a str, &'a Job) -> Result<(), Box<dyn Error>> {
+        // traversing dependency graph by dfs(post order), to run jobs ordered by dependency
+        let mut visitor = petgraph::visit::DfsPostOrder::new(
+            &self.0,
+            start_job.map_or_else(
+                || self.2,
+                |name| *self.1.get(&name.to_string()).expect(&format!("job '{}' not found", name))
+            )
+        );
+        while let Some(n) = visitor.next(&self.0) {
+            match self.0[n].job {
+                Some(j) => proc(&j.name, j)?,
+                None => {}
+            }
+        }
+        Ok(())
+    }
+}
+
 #[derive(Serialize, Deserialize)]
 pub struct Jobs(HashMap<String, Job>);
 impl Jobs {
@@ -551,6 +607,11 @@ impl Jobs {
     }
     pub fn find(&self, name: &str) -> Option<&Job> {
         self.as_map().get(name)
+    }
+    pub fn as_dg<'a>(
+        &'a self
+    ) -> DependencyGraph<'a> {
+        DependencyGraph::<'a>::new(self)
     }
     pub fn filter_as_map<'a>(
         &'a self, config: &'a config::Config, runtime: &'a config::runtime::Workflow
@@ -796,12 +857,27 @@ impl Jobs {
     pub fn run<S>(
         &self, config: &config::Config, runtime_workflow_config: &config::runtime::Workflow, shell: &S
     ) -> Result<(), Box<dyn Error>> where S: shell::Shell {
-        let name = &runtime_workflow_config.job.as_ref().expect("should have job setting").name;
-        let job = config.jobs.find(name).expect(&format!("job '{}' does not exist", name));
-        match job.run(shell, config, runtime_workflow_config)? {
-            Some(job_id) => self.wait_job(&job_id, name, config, runtime_workflow_config)?,
-            None => {}
-        };
+        let job_name = &runtime_workflow_config.job.as_ref().expect("should have job setting").name;
+        if runtime_workflow_config.exec.follow_dependency {
+            self.as_dg().traverse(Some(job_name), |name, job| {
+                log::debug!("run: job '{}' emitted", name);
+                if !job.matches_current_trigger(config, runtime_workflow_config) {
+                    log::debug!("run: job '{}' skipped because does not match trigger", name);
+                    return Ok(())
+                }
+                match job.run(shell, config, runtime_workflow_config)? {
+                    Some(job_id) => self.wait_job(&job_id, name, config, runtime_workflow_config)?,
+                    None => {}
+                };
+                Ok(())
+            })?;            
+        } else {
+            let job = config.jobs.find(job_name).expect(&format!("job '{}' does not exist", job_name));
+            match job.run(shell, config, runtime_workflow_config)? {
+                Some(job_id) => self.wait_job(&job_id, job_name, config, runtime_workflow_config)?,
+                None => {}
+            };
+        }
         if !config::Config::is_running_on_ci() {
             log::debug!("if not running on CI, all jobs should be finished");
             self.halt(config, runtime_workflow_config)?;
@@ -813,7 +889,11 @@ impl Jobs {
     ) -> Result<(), Box<dyn Error>> where S: shell::Shell {
         let modules = &config.modules;
         let (_, ci) = modules.ci_by_env();
-        for (name, job) in self.filter_as_map(config, runtime_workflow_config) {
+        self.as_dg().traverse(None, |name, job| {
+            if !job.matches_current_trigger(config, runtime_workflow_config) {
+                log::debug!("boot: job '{}' skipped because does not match trigger", name);
+                return Ok(())
+            }
             if config::Config::is_running_on_ci() {
                 ci.schedule_job(name)?;
             } else {
@@ -822,7 +902,8 @@ impl Jobs {
                     None => {}
                 };
             }
-        }
+            Ok(())
+        })?;
         if !config::Config::is_running_on_ci() {
             log::debug!("if not running on CI, all jobs should be finished");
             self.halt(config, runtime_workflow_config)?;
