@@ -166,7 +166,7 @@ command = "deplo init"
 # commit settings. if path of files that changed after the job finish running, matched patterns, 
 # deplo push or made pull request such a changes to repoisitory, after all jobs finish running.
 commit = [
-    { files = [".github/*"], on = { release_targets = ["nightly"] }, with = "push" },
+    { files = [".github/*"], with = "push" },
     { files = [".github/*"], on = { release_targets = ["prod"] }, with = "pull_request" },
     { files = ["docs/*"], on = { release_targets = ["lab"] }, with = "push" }
 ]
