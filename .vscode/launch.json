@@ -8,11 +8,11 @@
         "request": "launch",
         "program": "${workspaceFolder}/target/debug/cli",
         "args": [
-            "-v=3", "run", "-r=nightly", "product"
+            "-v=3", "i", "--follow-dependency", "mac"
         ]
     },    
     {
-        "name": "RunOnCI",
+        "name": "RunWithPayload",
         "type": "lldb",
         "request": "launch",
         "program": "${workspaceFolder}/target/debug/cli",
