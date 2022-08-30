@@ -613,27 +613,6 @@ impl Jobs {
     ) -> DependencyGraph<'a> {
         DependencyGraph::<'a>::new(self)
     }
-    pub fn filter_as_map<'a>(
-        &'a self, config: &'a config::Config, runtime: &'a config::runtime::Workflow
-    ) -> HashMap<&'a str, &'a Job> {
-        let mut h = HashMap::new();
-        match runtime.job {
-            Some(ref job) => match self.0.get(&job.name) {
-                Some(j) => if j.matches_current_trigger(config, runtime) {
-                    h.insert(job.name.as_str(), j);
-                },
-                None => {}
-            },
-            None => {
-                for (k, v) in &self.0 {
-                    if v.matches_current_trigger(config, runtime) {
-                        h.insert(k.as_str(), v);
-                    }
-                }
-            }
-        }
-        return h;
-    }
     pub fn user_output(
         &self, config: &config::Config, job_name: &str, key: &str
     ) -> Result<Option<String>, Box<dyn Error>> {
@@ -860,7 +839,6 @@ impl Jobs {
         let job_name = &runtime_workflow_config.job.as_ref().expect("should have job setting").name;
         if runtime_workflow_config.exec.follow_dependency {
             self.as_dg().traverse(Some(job_name), |name, job| {
-                log::debug!("run: job '{}' emitted", name);
                 if !job.matches_current_trigger(config, runtime_workflow_config) {
                     log::debug!("run: job '{}' skipped because does not match trigger", name);
                     return Ok(())
