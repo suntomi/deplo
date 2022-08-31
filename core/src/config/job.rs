@@ -292,6 +292,16 @@ impl Trigger {
         runtime_workflow_config: &config::runtime::Workflow,
         options: Option<MatchOptions>
     ) -> bool {
+        match &runtime_workflow_config.job {
+            Some(j) => if j.name != job.name {
+                log::debug!(
+                    "workflow '{}' is running for single job '{}' but current job is '{}'",
+                    runtime_workflow_config.name, j.name, job.name
+                );
+                return false;
+            },
+            None => {}
+        }
         let opts = options.unwrap_or(MatchOptions::from(runtime_workflow_config));
         let workflow = config.workflows.as_map().get(&runtime_workflow_config.name).expect(
             &format!("{} does not exist in workflows of Deplo.toml", runtime_workflow_config.name)
