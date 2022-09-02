@@ -169,9 +169,9 @@ impl<'a> Runner<'a> {
                     log::debug!("runner os '{}' is different from current os '{}'", os, current_os);
                     match local_fallback {
                         Some(f) => {
-                            let (image, sh) = match f {
-                                job::FallbackContainer::ImageUrl{ image, shell: sh } => (image.clone(), sh),
-                                job::FallbackContainer::DockerFile{ path, shell: sh, repo_name } => {
+                            let (image, sh) = match &f.source {
+                                job::ContainerImageSource::ImageUrl{ image } => (image.clone(), &f.shell),
+                                job::ContainerImageSource::DockerFile{ path, repo_name } => {
                                     let local_image = match repo_name.as_ref() {
                                         Some(n) => format!("{}:{}", n, job.name),
                                         None => format!("{}-deplo-local-fallback:{}", config.project_name, job.name)
@@ -189,7 +189,7 @@ impl<'a> Runner<'a> {
                                         &Some(path.parent().unwrap().to_string_lossy().to_string()),
                                         &shell::capture()
                                     )?;
-                                    (config::Value::new(&local_image), sh)
+                                    (config::Value::new(&local_image), &f.shell)
                                 },
                             };
                             let path = &config.setup_deplo_cli(os, shell)?.expect("local fallback only invoked on local machine");
@@ -219,7 +219,7 @@ impl<'a> Runner<'a> {
     
                 }
             },
-            job::Runner::Container{ ref image } => {
+            job::Runner::Container{ ref image, ref inputs } => {
                 if config::Config::is_running_on_ci() {
                     // already run inside container `image`, run command directly here
                     // no need to setup_deplo_cli because CI should already setup it

@@ -38,7 +38,7 @@ impl<S: shell::Shell> CircleCI<S> {
                     None => "".to_string(),
                 }
             ),
-            config::job::Runner::Container{ image } => format!("image: {}", image),
+            config::job::Runner::Container{ image, .. } => format!("image: {}", image),
         }
     }
     fn generate_workdir_setting<'a>(&self, job: &'a config::job::Job) -> String {

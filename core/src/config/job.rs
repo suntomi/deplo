@@ -37,11 +37,27 @@ pub struct Cache {
 /// FallbackContainer is represent such a configuration.
 #[derive(Serialize, Deserialize)]
 #[serde(untagged)]
-pub enum FallbackContainer {
+pub enum ContainerImageSource {
     /// docker image that is used for local execution.
-    ImageUrl{ image: config::Value, shell: Option<config::Value> },
+    ImageUrl{ image: config::Value },
     /// dockerfile that is used for local execution. deplo build docker iamge with the dockerfile.
-    DockerFile{ path: config::Value, repo_name: Option<config::Value>, shell: Option<config::Value> },
+    DockerFile{ path: config::Value, repo_name: Option<config::Value> },
+}
+#[derive(Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum Input {
+    Path(String),
+    List {
+        includes: Vec<config::Value>,
+        excludes: Vec<config::Value>
+    }
+}
+#[derive(Serialize, Deserialize)]
+pub struct FallbackContainer {
+    #[serde(flatten)]
+    source: ContainerImageSource,
+    shell: Option<config::Value>,
+    inputs: Option<Vec<Input>>
 }
 /// configuration of os of machine type runner
 #[derive(Serialize, Deserialize, Clone, Copy, Eq, PartialEq)]
@@ -108,6 +124,7 @@ pub enum Runner {
     Container {
         /// container image to run the job.
         image: config::Value,
+        inputs: Option<Vec<Input>>,
     }
 }
 /// command execution pattern
@@ -404,7 +421,7 @@ impl Job {
     pub fn runner_os(&self) -> RunnerOS {
         match &self.runner {
             Runner::Machine{ os, .. } => *os,
-            Runner::Container{ image: _ } => RunnerOS::Linux
+            Runner::Container{ .. } => RunnerOS::Linux
         }
     }
     pub fn runs_on_machine(&self) -> bool {

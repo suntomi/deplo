@@ -246,7 +246,7 @@ impl<S: shell::Shell> GhAction<S> {
                     _ => vec![cmd],
                 }
             },
-            config::job::Runner::Container{image:_} => vec![cmd],
+            config::job::Runner::Container{..} => vec![cmd],
         }
     }
     fn generate_job_envs<'a>(&self, job: &'a config::job::Job) -> Vec<String> {
@@ -285,7 +285,7 @@ impl<S: shell::Shell> GhAction<S> {
     fn generate_container_setting<'a>(&self, runner: &'a config::job::Runner) -> Vec<String> {
         match runner {
             config::job::Runner::Machine{ .. } => vec![],
-            config::job::Runner::Container{ image } => vec![format!("container: {}", image)]
+            config::job::Runner::Container{ image, .. } => vec![format!("container: {}", image)]
         }
     }
     fn generate_fetchcli_steps<'a>(&self, runner: &'a config::job::Runner) ->Vec<String> {
@@ -294,7 +294,7 @@ impl<S: shell::Shell> GhAction<S> {
                 config::job::RunnerOS::Windows => ("/usr/bin/deplo", "Windows", ".exe", "shell: bash"),
                 v => ("/usr/local/bin/deplo", v.uname(), "", "")
             },
-            config::job::Runner::Container{image:_} => ("/usr/local/bin/deplo", "Linux", "", "")
+            config::job::Runner::Container{..} => ("/usr/local/bin/deplo", "Linux", "", "")
         };
         let mut lines = format!(include_str!("../../res/ci/ghaction/fetchcli.yml.tmpl"),
             deplo_cli_path = path,
@@ -432,7 +432,7 @@ impl<S: shell::Shell> ci::CI for GhAction<S> {
                             config::job::RunnerOS::MacOS => "macos-latest",
                         }).to_string()
                     },
-                    config::job::Runner::Container{image:_} => "ubuntu-latest".to_string(),
+                    config::job::Runner::Container{..} => "ubuntu-latest".to_string(),
                 },
                 caches = MultilineFormatString{
                     strings: &self.generate_caches(&job),

@@ -29,7 +29,7 @@ sodalite = { git = "https://github.com/suntomi/sodalite" }
 tempfile = "3.2.0"
 # strfmt = "0.2.2"
 formatx = "0.1.4"
-petgraph = { version = "0.6.2", feature = ["graphmap"] }
+petgraph = { version = "0.6.2", features = ["graphmap"] }
 
 [features]
 default = []
