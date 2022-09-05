@@ -193,15 +193,17 @@ impl<'a> Runner<'a> {
                                 },
                             };
                             let path = &config.setup_deplo_cli(os, shell)?.expect("local fallback only invoked on local machine");
+                            let path_target = config::Value::new("/usr/local/bin/deplo");
+                            let mut mounts = shell::ContainerMounts::new(config, job);
                             shell.eval_on_container(
                                 image.as_str(),
                                 // if main_command is none, we need to run steps in single container.
                                 // so we execute `deplo ci steps $job_name` to run steps of $job_name.
                                 &main_command.map_or_else(|| Self::step_runner_command(&job.name), |v| v.to_string()),
                                 &sh.as_ref().map(|v| v.resolve()), shell::ctoa(job.env(&config, runtime_workflow_config)),
-                                &job.workdir, hashmap!{
-                                    path.as_os_str() => shell::arg!("/usr/local/bin/deplo")
-                                }, &shell_settings
+                                &job.workdir, mounts.bind(hashmap!{
+                                    path.as_os_str() => &path_target
+                                }), &shell_settings
                             )?;
                             self.post_run(runtime_workflow_config)?;
                             return Ok(None);
@@ -226,6 +228,8 @@ impl<'a> Runner<'a> {
                     self.run_steps(shell, &shell_settings, &job.env(&config, &runtime_workflow_config), &steps)?;
                 } else {
                     let path = &config.setup_deplo_cli(job::RunnerOS::Linux, shell)?.expect("path should return because not running on CI");
+                    let path_target = config::Value::new("/usr/local/bin/deplo");
+                    let mut mounts = shell::ContainerMounts::new(config, job);
                     // running on host. run command in container `image` with docker
                     shell.eval_on_container(
                         image.as_str(),
@@ -233,9 +237,9 @@ impl<'a> Runner<'a> {
                         // so we execute `deplo ci steps $job_name` to run steps of $job_name.
                         &main_command.map_or_else(|| Self::step_runner_command(&job.name), |v| v.to_string()),
                         &job.shell.as_ref().map(|v| v.resolve()), shell::ctoa(job.env(&config, runtime_workflow_config)),
-                        &job.workdir, hashmap!{
-                            path.as_os_str() => shell::arg!("/usr/local/bin/deplo")
-                        }, &shell_settings
+                        &job.workdir, mounts.bind(hashmap!{
+                            path.as_os_str() => &path_target
+                        }), &shell_settings
                     )?;
                 }
                 self.post_run(runtime_workflow_config)?;

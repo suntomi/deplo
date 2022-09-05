@@ -46,7 +46,7 @@ pub enum ContainerImageSource {
 #[derive(Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum Input {
-    Path(String),
+    Path(config::Value),
     List {
         includes: Vec<config::Value>,
         excludes: Vec<config::Value>
@@ -57,7 +57,7 @@ pub struct FallbackContainer {
     #[serde(flatten)]
     source: ContainerImageSource,
     shell: Option<config::Value>,
-    inputs: Option<Vec<Input>>
+    pub inputs: Option<Vec<Input>>
 }
 /// configuration of os of machine type runner
 #[derive(Serialize, Deserialize, Clone, Copy, Eq, PartialEq)]

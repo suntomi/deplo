@@ -141,7 +141,12 @@ on = [
     { workflows = ["repository"], events = ["manual"] },
     { workflows = ["slack"], when = { message_matches = ['.*test\sit.*'] } }
 ]
-runner = { os = "linux", local_fallback = { image = "ghcr.io/suntomi/deplo:builder" } }
+runner = {
+    os = "linux", local_fallback = {
+        image = "ghcr.io/suntomi/deplo:builder"
+        inputs = ["core", "cli", "Cargo.*"]
+    }
+}
 command = "cargo test"
 tasks = { test = "cargo test", home = "echo ${HOME}" }
 # cache settings. file paths that is listed in paths will be preserved with tha key `keys[0]`.
