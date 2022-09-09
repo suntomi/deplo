@@ -57,7 +57,8 @@ pub struct FallbackContainer {
     #[serde(flatten)]
     source: ContainerImageSource,
     shell: Option<config::Value>,
-    pub inputs: Option<Vec<Input>>
+    pub inputs: Option<Vec<Input>>,
+    pub caches: Option<Vec<config::Value>>
 }
 /// configuration of os of machine type runner
 #[derive(Serialize, Deserialize, Clone, Copy, Eq, PartialEq)]
@@ -894,6 +895,13 @@ impl Jobs {
     ) -> Result<(), Box<dyn Error>> where S: shell::Shell {
         let modules = &config.modules;
         let (_, ci) = modules.ci_by_env();
+        // TODO: support follow_dependency of remote job running.
+        // if runtime_workflow_config.job has some value and follow_dependency, 
+        // we use Some(runtime_workflow_config.job.name) as first argument of traverse,
+        // and modify runtime_workflow_config.job to None.
+        // then all dependent jobs of runtime_workflow_config.job will be scheduled.
+        // NOTE that we also need to change config::runtime::ExecOptions::apply implementation
+        // so that follow_dependency option is respected for deplo boot too
         self.as_dg().traverse(None, |name, job| {
             if !job.matches_current_trigger(config, runtime_workflow_config) {
                 log::debug!("boot: job '{}' skipped because does not match trigger", name);

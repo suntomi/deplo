@@ -143,8 +143,9 @@ on = [
 ]
 runner = {
     os = "linux", local_fallback = {
-        image = "ghcr.io/suntomi/deplo:builder"
-        inputs = ["core", "cli", "Cargo.*"]
+        image = "ghcr.io/suntomi/deplo:builder",
+        inputs = ["core", "cli", "Cargo.*"],
+        caches = ["/tmp/target"]
     }
 }
 command = "cargo test"
@@ -168,8 +169,8 @@ on = { workflows = ["integrate"], changed = ["Deplo.toml"] }
 # and use it as local fallback container image.
 runner = { os = "linux", local_fallback = { path = "tools/docker/Dockerfile.vmfb", shell = "sh" } }
 command = "deplo init"
-# commit settings. if path of files that changed after the job finish running, matched patterns, 
-# deplo push or made pull request such a changes to repoisitory, after all jobs finish running.
+# commit settings. if path of files that changed after the job finish running are matched patterns in 'files', 
+# deplo push or made pull request such a changes to repoisitory after all jobs finish running, in 'Cleanup CI' job.
 commit = [
     { files = [".github/*"], with = "push" },
     { files = [".github/*"], on = { release_targets = ["prod"] }, with = "pull_request" },
@@ -288,7 +289,10 @@ steps = [{
     """,
 }]
 caches.cargo = {
-    keys = ["integrate-build-${{ runner.os }}-v1-${{ hashFiles('**/Cargo.lock') }}"],
+    keys = [
+        "deploy-build-${{ runner.os }}-v1-${{ hashFiles('**/Cargo.lock') }}",
+        "deploy-build-${{ runner.os }}-v1-"
+    ],
     paths = ["target", "~/.cargo/bin", "~/.cargo/registry/cache", "~/.cargo/registry/index", "~/.cargo/git/db"]
 }
 
@@ -310,7 +314,10 @@ fi
 """
 caches = {
     cargo = {
-        keys = ["integrate-build-${{ runner.os }}-v1-${{ hashFiles('**/Cargo.lock') }}"],
+        keys = [
+            "deploy-build-${{ runner.os }}-v1-${{ hashFiles('**/Cargo.lock') }}",
+            "deploy-build-${{ runner.os }}-v1-"
+        ],
         paths = ["target", "~/.cargo/bin", "~/.cargo/registry/cache", "~/.cargo/registry/index", "~/.cargo/git/db"]
     }
 }

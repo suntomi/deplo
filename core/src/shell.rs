@@ -1,15 +1,17 @@
 use std::fmt;
 use std::borrow::Cow;
 use std::collections::HashMap;
+use std::convert::AsRef;
 use std::error::Error;
 use std::ffi::OsStr;
-use std::convert::AsRef;
+use std::path;
 
 use glob::glob;
 use maplit::hashmap;
+use regex::{Regex};
 
 use crate::config;
-use crate::util::{escalate,make_absolute,docker_mount_path,join_vector};
+use crate::util::{escalate,make_absolute,docker_mount_path,path_join,join_vector};
 
 pub mod native;
 
@@ -184,14 +186,34 @@ pub enum MountType {
 }
 pub struct ContainerMounts<'a>(HashMap<MountType, Vec<&'a config::Value>>);
 impl<'a> ContainerMounts<'a> {
+    fn resolve_path(pattern: &str) -> Cow<'_,str> {
+        // replace ~ to $HOME
+        let re = Regex::new(r"^\~(.*)").unwrap();
+        match re.captures(pattern) {
+            Some(c) => {
+                let home = std::env::var("HOME").expect("if you use ~ for cache pattern,$HOME should set");
+                let rel = c.get(1).unwrap().as_str();
+                let realpath = if rel.starts_with('/') {
+                    path_join(vec![home.as_str(), &rel[1..]])
+                } else {
+                    path_join(vec![home.as_str(), rel])
+                };
+                Cow::Owned(realpath.to_string_lossy().to_string())
+            },
+            None => Cow::Borrowed(pattern)
+        }
+    }
     fn glob(pattern: &str) -> glob::Paths {
-        glob(pattern).expect(&format!("invalid glob pattern {}", pattern))
+        glob(&Self::resolve_path(pattern).to_string()).expect(&format!("invalid glob pattern {}", pattern))
     }
     fn glob2str<'b>(may_path: &'b glob::GlobResult, repository_root: &str) -> String {
         match may_path {
-            Ok(p) => docker_mount_path(make_absolute(p, repository_root).to_string_lossy().to_string().as_str()),
+            Ok(p) => Self::to_abs_path(p, repository_root),
             Err(err) => panic!("glob error {}", err)
         }
+    }
+    fn to_abs_path(path: &path::PathBuf, repository_root: &str) -> String {
+        docker_mount_path(make_absolute(path, repository_root).to_string_lossy().to_string().as_str())
     }
     pub fn to_args(&self, repository_root: &'a str) -> Vec<Arg<'a>> {
         join_vector(self.0.iter().map(|(t,patterns)| {
@@ -219,12 +241,13 @@ impl<'a> ContainerMounts<'a> {
                     )]
                 }
                 MountType::NamedVolume(v) => join_vector(patterns.iter().map(
-                    |pattern| join_vector(Self::glob(pattern.resolve().as_str()).map(
-                        |p| args![
-                            "--mount",
-                            format!("source={v},target={path}", v = v, path = Self::glob2str(&p, repository_root))
-                        ]
-                    ).collect())
+                    |pattern| args![
+                        "--mount", format!("source={v},target={path}",
+                            v = v, path = Self::to_abs_path(
+                                &path::PathBuf::from(pattern.resolve()), repository_root
+                            )
+                        )
+                    ]
                 ).collect()),
                 MountType::AnonVolume => join_vector(patterns.iter().map(
                     |pattern| join_vector(Self::glob(pattern.resolve().as_str()).map(
@@ -240,7 +263,8 @@ impl<'a> ContainerMounts<'a> {
     fn with_job_and_inputs(
         config: &'a config::Config,
         job: &'a config::job::Job,
-        inputs: &'a Option<Vec<config::job::Input>>
+        inputs: &'a Option<Vec<config::job::Input>>,
+        caches: &'a Option<Vec<config::Value>>
     ) -> ContainerMounts<'a> {
         let mut bind_volumes = vec![];
         let mut anon_volumes = vec![];
@@ -260,18 +284,28 @@ impl<'a> ContainerMounts<'a> {
                 }
             }
         }
-        match &job.caches {
-            Some(caches) => {
-                for (name, cache) in caches {
-                    let entries = named_volumes.entry(
-                        format!("{}-deplo-cache-volume-{}-{}", config.project_name(), job.name, name)
-                    ).or_insert(vec![]);
-                    for path in &cache.paths {
-                        entries.push(path);
-                    }
+        match &caches {
+            Some(c) => {
+                let entries = named_volumes.entry(
+                    format!("{}-deplo-local-fallback-cache-volume-{}", config.project_name(), job.name)
+                ).or_insert(vec![]);
+                for path in c {
+                    entries.push(path);
                 }
             },
-            None => {}
+            None => match &job.caches {
+                Some(c) => {
+                    for (name, cache) in c {
+                        let entries = named_volumes.entry(
+                            format!("{}-deplo-cache-volume-{}-{}", config.project_name(), job.name, name)
+                        ).or_insert(vec![]);
+                        for path in &cache.paths {
+                            entries.push(path);
+                        }
+                    }
+                },
+                None => {}
+            }
         }
         let mut map = hashmap!{
             MountType::AnonVolume => anon_volumes,
@@ -284,10 +318,10 @@ impl<'a> ContainerMounts<'a> {
     }
     pub fn new(config: &'a config::Config, job: &'a config::job::Job) -> ContainerMounts<'a> {
         match &job.runner {
-            config::job::Runner::Container{inputs,..} => Self::with_job_and_inputs(config, job, inputs),
+            config::job::Runner::Container{inputs,..} => Self::with_job_and_inputs(config, job, inputs, &None),
             config::job::Runner::Machine{local_fallback,..} => match local_fallback {
-                Some(lf) => Self::with_job_and_inputs(config, job, &lf.inputs),
-                None => Self::with_job_and_inputs(config, job, &None)
+                Some(lf) => Self::with_job_and_inputs(config, job, &lf.inputs, &lf.caches),
+                None => Self::with_job_and_inputs(config, job, &None, &None)
             }
         }
     }

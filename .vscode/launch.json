@@ -8,7 +8,7 @@
         "request": "launch",
         "program": "${workspaceFolder}/target/debug/cli",
         "args": [
-            "-v=3", "i", "--follow-dependency", "mac"
+            "-v=3", "i", "test"
         ]
     },    
     {
