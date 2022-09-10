@@ -1,12 +1,17 @@
 use std::fmt;
 use std::borrow::Cow;
 use std::collections::HashMap;
+use std::convert::AsRef;
 use std::error::Error;
 use std::ffi::OsStr;
-use std::convert::AsRef;
+use std::path;
+
+use glob::glob;
+use maplit::hashmap;
+use regex::{Regex};
 
 use crate::config;
-use crate::util::{escalate,make_absolute,docker_mount_path,join_vector};
+use crate::util::{escalate,make_absolute,docker_mount_path,path_join,join_vector};
 
 pub mod native;
 
@@ -161,6 +166,176 @@ impl Settings {
     }
 }
 
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn glob_test() {
+        for entry in glob::glob("~/*/").unwrap() {
+            assert_eq!(entry.is_ok(), true);
+            println!("entry = {}", entry.unwrap().to_string_lossy());
+        }
+    }
+}
+
+#[derive(Eq, PartialEq, Hash)]
+pub enum MountType {
+    Bind,
+    BindWithTarget(String),
+    NamedVolume(String),
+    AnonVolume
+}
+pub struct ContainerMounts<'a>(HashMap<MountType, Vec<&'a config::Value>>);
+impl<'a> ContainerMounts<'a> {
+    fn resolve_path(pattern: &str) -> Cow<'_,str> {
+        // replace ~ to $HOME
+        let re = Regex::new(r"^\~(.*)").unwrap();
+        match re.captures(pattern) {
+            Some(c) => {
+                let home = std::env::var("HOME").expect("if you use ~ for cache pattern,$HOME should set");
+                let rel = c.get(1).unwrap().as_str();
+                let realpath = if rel.starts_with('/') {
+                    path_join(vec![home.as_str(), &rel[1..]])
+                } else {
+                    path_join(vec![home.as_str(), rel])
+                };
+                Cow::Owned(realpath.to_string_lossy().to_string())
+            },
+            None => Cow::Borrowed(pattern)
+        }
+    }
+    fn glob(pattern: &str) -> glob::Paths {
+        glob(&Self::resolve_path(pattern).to_string()).expect(&format!("invalid glob pattern {}", pattern))
+    }
+    fn glob2str<'b>(may_path: &'b glob::GlobResult, repository_root: &str) -> String {
+        match may_path {
+            Ok(p) => Self::to_abs_path(p, repository_root),
+            Err(err) => panic!("glob error {}", err)
+        }
+    }
+    fn to_abs_path(path: &path::PathBuf, repository_root: &str) -> String {
+        docker_mount_path(make_absolute(path, repository_root).to_string_lossy().to_string().as_str())
+    }
+    pub fn to_args(&self, repository_root: &'a str) -> Vec<Arg<'a>> {
+        join_vector(self.0.iter().map(|(t,patterns)| {
+            match t {
+                MountType::Bind => if patterns.len() <= 0 {
+                    args!["--mount", format!(
+                        "type=bind,source={path},target={path}", path = docker_mount_path(repository_root)
+                    )]
+                } else {
+                    join_vector(patterns.iter().map(
+                        |pattern| join_vector(Self::glob(pattern.resolve().as_str()).map(
+                            |p| args![
+                                "--mount",
+                                format!("type=bind,source={path},target={path}", path = Self::glob2str(&p, repository_root))
+                            ]
+                        ).collect())
+                    ).collect())
+                },
+                MountType::BindWithTarget(src) => if patterns.len() != 1 {
+                    panic!("if bind has target mount path, only one patterns can be specified but {:?}", patterns);
+                } else {
+                    args!["--mount", format!(
+                        "type=bind,source={src},target={target}",
+                        src = docker_mount_path(src), target = patterns[0]
+                    )]
+                }
+                MountType::NamedVolume(v) => join_vector(patterns.iter().map(
+                    |pattern| args![
+                        "--mount", format!("source={v},target={path}",
+                            v = v, path = Self::to_abs_path(
+                                &path::PathBuf::from(pattern.resolve()), repository_root
+                            )
+                        )
+                    ]
+                ).collect()),
+                MountType::AnonVolume => join_vector(patterns.iter().map(
+                    |pattern| join_vector(Self::glob(pattern.resolve().as_str()).map(
+                        |p| args![
+                            "--mount",
+                            format!("target={path}", path = Self::glob2str(&p, repository_root))
+                        ]
+                    ).collect())
+                ).collect())
+            }
+        }).collect())
+    }
+    fn with_job_and_inputs(
+        config: &'a config::Config,
+        job: &'a config::job::Job,
+        inputs: &'a Option<Vec<config::job::Input>>,
+        caches: &'a Option<Vec<config::Value>>
+    ) -> ContainerMounts<'a> {
+        let mut bind_volumes = vec![];
+        let mut anon_volumes = vec![];
+        let mut named_volumes = hashmap!{};
+        if let Some(ref input_list) = inputs {
+            for input in input_list {
+                match input {
+                    config::job::Input::Path(path) => bind_volumes.push(path),
+                    config::job::Input::List{includes, excludes} => {
+                        for include in includes {
+                            bind_volumes.push(include);
+                        }
+                        for exclude in excludes {
+                            anon_volumes.push(exclude);
+                        }
+                    }
+                }
+            }
+        }
+        match &caches {
+            Some(c) => {
+                let entries = named_volumes.entry(
+                    format!("{}-deplo-local-fallback-cache-volume-{}", config.project_name(), job.name)
+                ).or_insert(vec![]);
+                for path in c {
+                    entries.push(path);
+                }
+            },
+            None => match &job.caches {
+                Some(c) => {
+                    for (name, cache) in c {
+                        let entries = named_volumes.entry(
+                            format!("{}-deplo-cache-volume-{}-{}", config.project_name(), job.name, name)
+                        ).or_insert(vec![]);
+                        for path in &cache.paths {
+                            entries.push(path);
+                        }
+                    }
+                },
+                None => {}
+            }
+        }
+        let mut map = hashmap!{
+            MountType::AnonVolume => anon_volumes,
+            MountType::Bind => bind_volumes,
+        };
+        for (name, entries) in named_volumes {
+            map.insert(MountType::NamedVolume(name), entries);
+        }
+        Self(map)
+    }
+    pub fn new(config: &'a config::Config, job: &'a config::job::Job) -> ContainerMounts<'a> {
+        match &job.runner {
+            config::job::Runner::Container{inputs,..} => Self::with_job_and_inputs(config, job, inputs, &None),
+            config::job::Runner::Machine{local_fallback,..} => match local_fallback {
+                Some(lf) => Self::with_job_and_inputs(config, job, &lf.inputs, &lf.caches),
+                None => Self::with_job_and_inputs(config, job, &None, &None)
+            }
+        }
+    }
+    pub fn bind<K: AsRef<OsStr>>(
+        &mut self, binds: HashMap<K, &'a config::Value>
+    ) -> &ContainerMounts<'a> {
+        let map = &mut self.0;
+        for (k, v) in binds {
+            map.insert(MountType::BindWithTarget(k.as_ref().to_string_lossy().to_string()), vec![v]);
+        }
+        return self
+    }
+}
+
 pub trait Shell {
     fn new(config: &config::Container) -> Self;
     fn set_cwd<P: ArgTrait>(&mut self, dir: &Option<P>) -> Result<(), Box<dyn Error>>;
@@ -193,14 +368,13 @@ pub trait Shell {
         let sh = shell.as_ref().map_or_else(|| "bash", |v| v.as_str());
         return self.exec(args!(sh, "-c", code), envs, cwd, settings);
     }
-    fn eval_on_container<'a, I, J, K, L, P>(
+    fn eval_on_container<'a, I, K, P>(
         &self, image: &str, code: &str, shell: &Option<String>, envs: I,
-        cwd: &Option<P>, mounts: J, settings: &Settings
+        cwd: &Option<P>, mounts: &ContainerMounts<'a>, settings: &Settings
     ) -> Result<String, Box<dyn Error>>
     where 
         I: IntoIterator<Item = (K, Arg<'a>)>,
-        J: IntoIterator<Item = (L, Arg<'a>)>,
-        K: AsRef<OsStr>, L: AsRef<OsStr>, P: ArgTrait 
+        K: AsRef<OsStr>, P: ArgTrait
     {
         let config = self.config().borrow();
         let mut envs_vec: Vec<Arg> = vec![];
@@ -209,16 +383,8 @@ pub trait Shell {
             envs_vec.push(arg!("-e"));
             envs_vec.push(kv_arg!(arg!(key), v, "="));
         }
-        let mut mounts_vec: Vec<Arg> = vec![];
-        for (k, v) in mounts {
-            let key = k.as_ref().to_string_lossy();
-            let val = v.value();
-            mounts_vec.push(arg!("-v"));
-            mounts_vec.push(arg!(format!(
-                "{k}:{v}", k = docker_mount_path(&key), v = val
-            )));
-        }
         let repository_mount_path = config.modules.vcs().repository_root()?;
+        let mounts_vec = mounts.to_args(&repository_mount_path);
         let workdir = match cwd {
             Some(dir) => make_absolute(
                     &dir.value(),
@@ -233,7 +399,6 @@ pub trait Shell {
             envs_vec, mounts_vec,
             // TODO_PATH: use Path to generate path of /var/run/docker.sock (left(host) side)
             args!["-v", format!("{}:/var/run/docker.sock", docker_mount_path("/var/run/docker.sock"))],
-            args!["-v", format!("{}:{}", docker_mount_path(&repository_mount_path), docker_mount_path(&repository_mount_path))],
             args!["--entrypoint", shell.as_ref().map_or_else(|| "bash", |v| v.as_str())],
             args![image, "-c", code]
         ]), HashMap::<K,Arg<'a>>::new(), no_cwd(), &settings)?;

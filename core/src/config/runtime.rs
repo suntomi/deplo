@@ -37,6 +37,10 @@ impl ExecOptions {
     }
     pub fn new<A: Args>(args: &A, config: &config::Container, has_job_config: bool) -> Result<Self, Box<dyn Error>> {
         let mut instance = Self::default();
+        // rust simple_logger's verbosity cannot be changed once it set, and here already configured.
+        // so simply we override verbosity with process' verbosity.
+        // on remote running on CI, verbosity should configured with same value as cli specified,
+        // via envvar DEPLO_OVERWRITE_VERBOSITY
         instance.verbosity = config.borrow().runtime.verbosity;
         instance.apply(args, has_job_config);
         Ok(instance)
@@ -64,7 +68,7 @@ impl ExecOptions {
             args.occurence_of("follow_dependency") > 0
         } else {
             false // deplo boot does not see the option
-            // but if with remote option, each child job may run with following dependency.
+            // but if the option is set with remote option, each child job run with the option value true.
             // so we set the option false if it does not has job config.
         };
         if args.occurence_of("silent") > 0 {

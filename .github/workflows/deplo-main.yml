@@ -236,8 +236,10 @@ jobs:
             ~/.cargo/registry/cache
             ~/.cargo/registry/index
             ~/.cargo/git/db
-          key: integrate-build-${{ runner.os }}-v1-${{ hashFiles('**/Cargo.lock') }}
-      
+          key: deploy-build-${{ runner.os }}-v1-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys:
+            deploy-build-${{ runner.os }}-v1-
+          
       - name: Mark cache result
         if: steps.deplo-cache-cargo.outputs.cache-hit == 'true'
         run: echo "DEPLO_CACHE_CARGO_HIT=true" >> $GITHUB_ENV
@@ -357,8 +359,10 @@ jobs:
             ~/.cargo/registry/cache
             ~/.cargo/registry/index
             ~/.cargo/git/db
-          key: integrate-build-${{ runner.os }}-v1-${{ hashFiles('**/Cargo.lock') }}
-      
+          key: deploy-build-${{ runner.os }}-v1-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys:
+            deploy-build-${{ runner.os }}-v1-
+          
       - name: Mark cache result
         if: steps.deplo-cache-cargo.outputs.cache-hit == 'true'
         run: echo "DEPLO_CACHE_CARGO_HIT=true" >> $GITHUB_ENV

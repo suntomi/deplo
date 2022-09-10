@@ -37,11 +37,28 @@ pub struct Cache {
 /// FallbackContainer is represent such a configuration.
 #[derive(Serialize, Deserialize)]
 #[serde(untagged)]
-pub enum FallbackContainer {
+pub enum ContainerImageSource {
     /// docker image that is used for local execution.
-    ImageUrl{ image: config::Value, shell: Option<config::Value> },
+    ImageUrl{ image: config::Value },
     /// dockerfile that is used for local execution. deplo build docker iamge with the dockerfile.
-    DockerFile{ path: config::Value, repo_name: Option<config::Value>, shell: Option<config::Value> },
+    DockerFile{ path: config::Value, repo_name: Option<config::Value> },
+}
+#[derive(Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum Input {
+    Path(config::Value),
+    List {
+        includes: Vec<config::Value>,
+        excludes: Vec<config::Value>
+    }
+}
+#[derive(Serialize, Deserialize)]
+pub struct FallbackContainer {
+    #[serde(flatten)]
+    source: ContainerImageSource,
+    shell: Option<config::Value>,
+    pub inputs: Option<Vec<Input>>,
+    pub caches: Option<Vec<config::Value>>
 }
 /// configuration of os of machine type runner
 #[derive(Serialize, Deserialize, Clone, Copy, Eq, PartialEq)]
@@ -108,6 +125,7 @@ pub enum Runner {
     Container {
         /// container image to run the job.
         image: config::Value,
+        inputs: Option<Vec<Input>>,
     }
 }
 /// command execution pattern
@@ -292,6 +310,16 @@ impl Trigger {
         runtime_workflow_config: &config::runtime::Workflow,
         options: Option<MatchOptions>
     ) -> bool {
+        match &runtime_workflow_config.job {
+            Some(j) => if j.name != job.name {
+                log::debug!(
+                    "workflow '{}' is running for single job '{}' but current job is '{}'",
+                    runtime_workflow_config.name, j.name, job.name
+                );
+                return false;
+            },
+            None => {}
+        }
         let opts = options.unwrap_or(MatchOptions::from(runtime_workflow_config));
         let workflow = config.workflows.as_map().get(&runtime_workflow_config.name).expect(
             &format!("{} does not exist in workflows of Deplo.toml", runtime_workflow_config.name)
@@ -394,7 +422,7 @@ impl Job {
     pub fn runner_os(&self) -> RunnerOS {
         match &self.runner {
             Runner::Machine{ os, .. } => *os,
-            Runner::Container{ image: _ } => RunnerOS::Linux
+            Runner::Container{ .. } => RunnerOS::Linux
         }
     }
     pub fn runs_on_machine(&self) -> bool {
@@ -612,27 +640,6 @@ impl Jobs {
         &'a self
     ) -> DependencyGraph<'a> {
         DependencyGraph::<'a>::new(self)
-    }
-    pub fn filter_as_map<'a>(
-        &'a self, config: &'a config::Config, runtime: &'a config::runtime::Workflow
-    ) -> HashMap<&'a str, &'a Job> {
-        let mut h = HashMap::new();
-        match runtime.job {
-            Some(ref job) => match self.0.get(&job.name) {
-                Some(j) => if j.matches_current_trigger(config, runtime) {
-                    h.insert(job.name.as_str(), j);
-                },
-                None => {}
-            },
-            None => {
-                for (k, v) in &self.0 {
-                    if v.matches_current_trigger(config, runtime) {
-                        h.insert(k.as_str(), v);
-                    }
-                }
-            }
-        }
-        return h;
     }
     pub fn user_output(
         &self, config: &config::Config, job_name: &str, key: &str
@@ -860,7 +867,6 @@ impl Jobs {
         let job_name = &runtime_workflow_config.job.as_ref().expect("should have job setting").name;
         if runtime_workflow_config.exec.follow_dependency {
             self.as_dg().traverse(Some(job_name), |name, job| {
-                log::debug!("run: job '{}' emitted", name);
                 if !job.matches_current_trigger(config, runtime_workflow_config) {
                     log::debug!("run: job '{}' skipped because does not match trigger", name);
                     return Ok(())
@@ -889,6 +895,13 @@ impl Jobs {
     ) -> Result<(), Box<dyn Error>> where S: shell::Shell {
         let modules = &config.modules;
         let (_, ci) = modules.ci_by_env();
+        // TODO: support follow_dependency of remote job running.
+        // if runtime_workflow_config.job has some value and follow_dependency, 
+        // we use Some(runtime_workflow_config.job.name) as first argument of traverse,
+        // and modify runtime_workflow_config.job to None.
+        // then all dependent jobs of runtime_workflow_config.job will be scheduled.
+        // NOTE that we also need to change config::runtime::ExecOptions::apply implementation
+        // so that follow_dependency option is respected for deplo boot too
         self.as_dg().traverse(None, |name, job| {
             if !job.matches_current_trigger(config, runtime_workflow_config) {
                 log::debug!("boot: job '{}' skipped because does not match trigger", name);
