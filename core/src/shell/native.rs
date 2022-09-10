@@ -65,7 +65,7 @@ impl<'a> shell::Shell for Native {
     K: AsRef<OsStr>, P: shell::ArgTrait
     {
         let (mut cmd, mut ct, cmdstr) = self.create_command(
-            args, envs, cwd, &shell::Settings { capture: true, interactive: false, silent: false, paths: None}
+            args, envs, cwd, &shell::capture()
         );
         return Native::get_output(&mut cmd, &mut ct, cmdstr);
     }
@@ -79,9 +79,11 @@ impl<'a> shell::Shell for Native {
     {
         if !settings.interactive && settings.silent {
             // regardless for the value of `capture`, always capture value
+            let mut adjusted_settings = shell::capture();
             let (mut cmd, mut ct, cmdstr) = self.create_command(
-                args, envs, cwd, &shell::Settings { 
-                    capture: true, interactive: false, silent: false, paths: settings.paths.clone() 
+                args, envs, cwd, match &settings.paths {
+                    Some(paths) => adjusted_settings.paths(paths.clone()),
+                    None => &mut adjusted_settings
                 }
             );
             return Native::run_as_child(&mut cmd, &mut ct, cmdstr);
@@ -92,14 +94,20 @@ impl<'a> shell::Shell for Native {
     }
 }
 impl Native {
-    fn add_paths<'a>(envs: &mut HashMap<String, Box<dyn shell::ArgTrait + 'a>>, paths: &Vec<String>) {
-        envs.insert("PATH".to_string(), shell::arg!(format!("{}:{}", match envs.get("PATH") {
-            Some(v) => v.value(),
-            None => match std::env::var("PATH") {
+    fn add_paths<'a>(envs: &mut HashMap<String, Box<dyn shell::ArgTrait + 'a>>, paths: &Option<Vec<String>>) {
+        envs.insert("PATH".to_string(), match paths {
+            Some(paths) => shell::arg!(format!("{}:{}", match envs.get("PATH") {
+                Some(v) => v.value(),
+                None => match std::env::var("PATH") {
+                    Ok(v) => v,
+                    Err(e) => panic!("fail to get system PATH by {:?}", e)
+                }
+            }, paths.join(":"))),
+            None => shell::arg!(match std::env::var("PATH") {
                 Ok(v) => v,
                 Err(e) => panic!("fail to get system PATH by {:?}", e)
-            }
-        }, paths.join(":"))));
+            })
+        });
     }
     fn create_command<'a, I, J, K, P>(
         &self, args: I, envs: J, cwd: &Option<P>, settings: &shell::Settings
@@ -120,11 +128,11 @@ impl Native {
             let key = k.as_ref().to_string_lossy().to_string();
             envs_map.insert(key, v);
         }
-        match &settings.paths {
-            Some(p) => Self::add_paths(&mut envs_map, p),
-            None => {}
-        };
+        Self::add_paths(&mut envs_map, &settings.paths);
         let mut c = Command::new(&raw_args[0]);
+        if !settings.env_inherit {
+            c.env_clear();
+        }
         c.args(&raw_args[1..]);
         c.envs(&self.envs);
         c.envs(envs_map.iter().map(|(k,v)| (k, v.value())));

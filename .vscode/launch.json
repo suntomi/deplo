@@ -8,7 +8,7 @@
         "request": "launch",
         "program": "${workspaceFolder}/target/debug/cli",
         "args": [
-            "-v=3", "i", "test"
+            "-v=3", "i", "builder", "sh"
         ]
     },    
     {

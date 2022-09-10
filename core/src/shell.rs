@@ -154,6 +154,7 @@ pub struct Settings {
     capture: bool,
     interactive: bool,
     silent: bool,
+    env_inherit: bool,
     paths: Option<Vec<String>>
 }
 impl Settings {
@@ -162,6 +163,10 @@ impl Settings {
             Some(p) => p.extend(paths),
             None => self.paths = Some(paths)
         };
+        self
+    }
+    pub fn inherit_env(&mut self) -> &mut Self {
+        self.env_inherit = true;
         self
     }
 }
@@ -345,7 +350,7 @@ pub trait Shell {
     fn output_of<'a, I, J, K, P>(
         &self, args: I, envs: J, cwd: &Option<P>
     ) -> Result<String, ShellError> 
-    where 
+    where
         I: IntoIterator<Item = Arg<'a>>,
         J: IntoIterator<Item = (K, Arg<'a>)>,
         K: AsRef<OsStr>, P: ArgTrait;
@@ -353,7 +358,7 @@ pub trait Shell {
     fn exec<'a, I, J, K, P>(
         &self, args: I, envs: J, cwd: &Option<P>, settings: &Settings
     ) -> Result<String, ShellError> 
-    where 
+    where
         I: IntoIterator<Item = Arg<'a>>,
         J: IntoIterator<Item = (K, Arg<'a>)>,
         K: AsRef<OsStr>, P: ArgTrait;
@@ -361,7 +366,7 @@ pub trait Shell {
     fn eval<'a, I, K, P>(
         &self, code: &'a str, shell: &'a Option<String>, envs: I, cwd: &'a Option<P>, settings: &'a Settings
     ) -> Result<String, ShellError> 
-    where 
+    where
         I: IntoIterator<Item = (K, Arg<'a>)>,
         K: AsRef<OsStr>, P: ArgTrait
     {
@@ -387,9 +392,9 @@ pub trait Shell {
         let mounts_vec = mounts.to_args(&repository_mount_path);
         let workdir = match cwd {
             Some(dir) => make_absolute(
-                    &dir.value(),
-                    &repository_mount_path.clone()
-                ).to_string_lossy().to_string(),
+                &dir.value(),
+                &repository_mount_path.clone()
+            ).to_string_lossy().to_string(),
             None => repository_mount_path.clone()
         };
         let result = self.exec(join_vector(vec![
@@ -501,18 +506,24 @@ pub fn no_cwd<'a>() -> &'a Option<String> {
 pub fn default<'a>() -> &'a Option<String> {
     return &None;
 }
-pub fn inherit_env() -> HashMap<String, String> {
-    return std::env::vars().collect();
-}
+
 pub fn capture() -> Settings {
-    return Settings{ capture: true, interactive: false, silent: false, paths: None };
+    return Settings{ capture: true, interactive: false, silent: false, env_inherit: false, paths: None };
 }
 pub fn no_capture() -> Settings {
-    return Settings{ capture: false, interactive: false, silent: false, paths: None };
+    return Settings{ capture: false, interactive: false, silent: false, env_inherit: false, paths: None };
 }
 pub fn interactive() -> Settings {
-    return Settings{ capture: false, interactive: true, silent: false, paths: None };
+    return Settings{ capture: false, interactive: true, silent: false, env_inherit: false, paths: None };
 }
 pub fn silent() -> Settings {
-    return Settings{ capture: true, interactive: false, silent: true, paths: None };
+    return Settings{ capture: true, interactive: false, silent: true, env_inherit: false, paths: None };
+}
+
+pub fn sheban_of<'a>(script: &'a str, fallback: &'a str) -> &'a str {
+    let re = Regex::new(r"^#!([^\n]+)").unwrap();
+    match re.captures(script) {
+        Some(c) => c.get(1).unwrap().as_str(),
+        None => fallback
+    }
 }

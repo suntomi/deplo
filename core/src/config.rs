@@ -197,14 +197,14 @@ impl Container {
 
 impl Config {
     // static factory methods 
-    pub fn containerize(c: Config) -> Container {
+    pub fn wrap(c: Config) -> Container {
         Container{ ptr: Rc::new(RefCell::new(c)) }
     }
     pub fn with(src: Option<&str>) -> Result<Container, Box<dyn Error>> {
         let src = source::Source::Memory(src.unwrap_or(include_str!("../res/test/dummy-Deplo.toml")));
         let mut c = src.load_as::<Config>()?;
         c.runtime = runtime::Config::default();
-        return Ok(Self::containerize(c));
+        return Ok(Self::wrap(c));
     }
     fn setup(&mut self) {
         self.workflows.setup();
@@ -276,7 +276,7 @@ impl Config {
             let mut config = src.load_as::<Config>()?;
             config.runtime = runtime_config;
             config.setup();
-            Self::containerize(config)
+            Self::wrap(config)
         };
         // 3. load modules phase 1 (necessary for setup other modules)
         c.load_vcs_modules()?;

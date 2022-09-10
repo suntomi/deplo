@@ -87,12 +87,6 @@ impl<'a> Runner<'a> {
             }
         }
     }
-    // pub fn run_job_steps(
-    //     &self, shell: &impl shell::Shell, shell_settings: &shell::Settings, job: &Job
-    // ) -> Result<Option<String>, Box<dyn Error>> {
-    //     let (steps, _) = self.create_steps(&job::Command::Job);
-    //     self.run_steps(shell, shell_settings, &shell::inherit_env(), &steps)
-    // }
     fn step_runner_command(name: &str) -> String {
         format!("deplo run {} steps", name)
     }
@@ -148,7 +142,7 @@ impl<'a> Runner<'a> {
         let (steps, main_command) = self.create_steps(&command);
         if exec.remote {
             log::debug!(
-                "force running job {} on remote with steps {} at {}", 
+                "force running job '{}' on remote with steps {} at {}",
                 job.name, job::StepsDumper{steps: &steps}, exec.revision.as_ref().unwrap_or(&"".to_string())
             );
             let ci = job.ci(&config);
@@ -199,7 +193,10 @@ impl<'a> Runner<'a> {
                                 image.as_str(),
                                 // if main_command is none, we need to run steps in single container.
                                 // so we execute `deplo ci steps $job_name` to run steps of $job_name.
-                                &main_command.map_or_else(|| Self::step_runner_command(&job.name), |v| v.to_string()),
+                                &main_command.map_or_else(|| Self::step_runner_command(&job.name), |v| match sh {
+                                    Some(sh) => sh.resolve(),
+                                    None => v.to_string()
+                                }),
                                 &sh.as_ref().map(|v| v.resolve()), shell::ctoa(job.env(&config, runtime_workflow_config)),
                                 &job.workdir, mounts.bind(hashmap!{
                                     path.as_os_str() => &path_target
@@ -213,7 +210,7 @@ impl<'a> Runner<'a> {
                     // runner os is not linux and not same as current os, and no fallback container specified.
                     // need to run in CI.
                     log::debug!(
-                        "running job {} on remote with steps {} at {}: its target os={} which cannot fallback to local execution", 
+                        "running job '{}' on remote with steps {} at {}: its target os={} which cannot fallback to local execution",
                         job.name, job::StepsDumper{steps: &steps}, exec.revision.as_ref().unwrap_or(&"".to_string()), os
                     );
                     let ci = job.ci(&config);
@@ -221,7 +218,7 @@ impl<'a> Runner<'a> {
     
                 }
             },
-            job::Runner::Container{ ref image, ref inputs } => {
+            job::Runner::Container{ ref image, .. } => {
                 if config::Config::is_running_on_ci() {
                     // already run inside container `image`, run command directly here
                     // no need to setup_deplo_cli because CI should already setup it
@@ -279,7 +276,7 @@ impl<'a> Runner<'a> {
                 }
             },
             None => { 
-                log::debug!("no commit settings for workflow '{}'", runtime_workflow_config.name);
+                log::debug!("no commit settings for job '{}' in workflow '{}'", job.name, runtime_workflow_config.name);
             }
         };
         let ci = job.ci(&config);

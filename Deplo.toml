@@ -288,6 +288,9 @@ steps = [{
     fi
     """,
 }]
+tasks = {
+    test = "echo \"[${AWS_ACCESS_KEY}]\""
+}
 caches.cargo = {
     keys = [
         "deploy-build-${{ runner.os }}-v1-${{ hashFiles('**/Cargo.lock') }}",
