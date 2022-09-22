@@ -135,7 +135,7 @@ macro_rules! format_internal_args {
     };
 }
 
-pub fn ctoa<'a, I, K, V: 'a>(collection: I) -> Vec<(K, Arg<'a>)>
+pub fn mctoa<'a, I, K, V: 'a>(collection: I) -> Vec<(K, Arg<'a>)>
 where 
     I: IntoIterator<Item = (K, V)>, K: AsRef<OsStr>, V: ArgTrait {
     let mut h = vec![];

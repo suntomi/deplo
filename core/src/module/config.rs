@@ -25,13 +25,10 @@ pub struct Author {
     pub email: config::Value
 }
 #[derive(Serialize, Deserialize)]
-pub enum EntryPoint {
-    Args(Vec<config::Value>),
-    Script(config::Value)
-}
+pub struct EntryPoint(Vec<config::Value>);
 impl EntryPoint {
-    pub fn run(
-        &self, shell: S, settings: shell::Settings, cwd: &Option<P>, args: A, envs: E
+    pub fn run<'a>(
+        &'a self, shell: S, settings: shell::Settings, cwd: &Option<P>, args: A, envs: E
     ) where
         A: IntoIterator<Item = Arg<'a>>,
         E: IntoIterator<Item = (K, Arg<'a>)>,
@@ -39,10 +36,13 @@ impl EntryPoint {
         S: shell::Shell,
         K: AsRef<OsStr>
     -> Result<String, Box<dyn Error>> {
-        Ok(match self {
-            Args(a) => return shell.exec(args, envs, cwd, settings)?,
-            Script(shell) => return shell.eval(code, shell::sheban_of(code, "bash"), envs, cwd, settings)?
-        })
+        match self {
+            let mut exec_command = self.0.iter().map(|c| shell::arg!(c)).collect();
+            for a in args.into_iter() {
+                exec_command.push(a)
+            }
+            return shell.exec(exec_command, envs, cwd, settings)?
+        }
     }
 }
 #[derive(Serialize, Deserialize)]

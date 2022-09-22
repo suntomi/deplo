@@ -191,37 +191,52 @@ impl Commit {
     }
 }
 #[derive(Serialize, Deserialize, Clone)]
-pub struct StepExtension {
-    pub name: Option<String>,
-}
-#[derive(Serialize, Deserialize, Clone)]
 #[serde(untagged)]
-pub enum Step {
-    Command {
+pub enum StepCommand {
+    Eval {
         command: config::Value,
-        name: Option<config::Value>,
         env: Option<HashMap<String, config::Value>>,
         shell: Option<config::Value>,
         workdir: Option<config::Value>,
     },
-    Module(config::module::ConfigFor<crate::step::Module, StepExtension>)
+    Exec {
+        exec: Vec<config::Value>,
+        env: Option<HashMap<String, config::Value>>,
+        workdir: Option<config::Value>,
+    },
+    Module(config::module::ConfigFor<crate::step::Module>)
+}
+#[derive(Serialize, Deserialize, Clone)]
+pub struct Step {
+    pub name: Option<String>,
+    #[serde(flatten)]
+    pub command: StepCommand,
 }
 impl fmt::Display for Step {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Step::Command{
-                command, env, shell, workdir, name
-            } => write!(f, 
-                "Step::Command{{name:{}, cmd:{}, env:{}, shell:{}, workdir:{}}}", 
-                name.as_ref().map_or_else(|| "".to_string(), |s| s.to_string()),
-                command, 
+        match &self.command {
+            StepCommand::Eval{
+                command, env, shell, workdir
+            } => write!(f,
+                "Step::Command{{name:{}, command:{}, env:{}, shell:{}, workdir:{}}}",
+                self.name.as_ref().map_or_else(|| "".to_string(), |s| s.to_string()),
+                command,
                 env.as_ref().map_or_else(|| "None".to_string(), |e| format!("{:?}", e)),
                 shell.as_ref().map_or_else(|| "None".to_string(), |e| format!("{:?}", e)),
                 workdir.as_ref().map_or_else(|| "None".to_string(), |e| format!("{:?}", e)),
             ),
-            Step::Module(c) => c.value(|v| write!(f, 
-                "Step::Module{{name:{}, uses:{}, with:{}", 
-                c.ext().name.as_ref().map_or_else(|| "".to_string(), |s| s.to_string()),
+            StepCommand::Exec{
+                exec, env, workdir
+            } => write!(f,
+                "Step::Command{{name:{}, exec:{:?}, env:{}, workdir:{}}}",
+                self.name.as_ref().map_or_else(|| "".to_string(), |s| s.to_string()),
+                exec,
+                env.as_ref().map_or_else(|| "None".to_string(), |e| format!("{:?}", e)),
+                workdir.as_ref().map_or_else(|| "None".to_string(), |e| format!("{:?}", e)),
+            ),
+            StepCommand::Module(c) => c.value(|v| write!(f,
+                "Step::Module{{name:{}, uses:{}, with:{}",
+                self.name.as_ref().map_or_else(|| "".to_string(), |s| s.to_string()),
                 v.uses,
                 v.with.as_ref().map_or_else(|| "None".to_string(), |e| format!("{:?}", e))
             ))
