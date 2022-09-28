@@ -205,13 +205,11 @@ impl Commit {
 pub enum StepCommand {
     Eval {
         command: config::Value,
-        env: Option<HashMap<String, config::Value>>,
         shell: Option<config::Value>,
         workdir: Option<config::Value>,
     },
     Exec {
         exec: Vec<config::Value>,
-        env: Option<HashMap<String, config::Value>>,
         workdir: Option<config::Value>,
     },
     Module(config::module::ConfigFor<crate::step::ModuleDescription>)
@@ -219,6 +217,7 @@ pub enum StepCommand {
 #[derive(Serialize, Deserialize, Clone)]
 pub struct Step {
     pub name: Option<String>,
+    pub env: Option<HashMap<String, config::Value>>,
     #[serde(flatten)]
     pub command: StepCommand,
 }
@@ -226,22 +225,22 @@ impl fmt::Display for Step {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match &self.command {
             StepCommand::Eval{
-                command, env, shell, workdir
+                command, shell, workdir
             } => write!(f,
                 "Step::Command{{name:{}, command:{}, env:{}, shell:{}, workdir:{}}}",
                 self.name.as_ref().map_or_else(|| "".to_string(), |s| s.to_string()),
                 command,
-                env.as_ref().map_or_else(|| "None".to_string(), |e| format!("{:?}", e)),
+                self.env.as_ref().map_or_else(|| "None".to_string(), |e| format!("{:?}", e)),
                 shell.as_ref().map_or_else(|| "None".to_string(), |e| format!("{:?}", e)),
                 workdir.as_ref().map_or_else(|| "None".to_string(), |e| format!("{:?}", e)),
             ),
             StepCommand::Exec{
-                exec, env, workdir
+                exec, workdir
             } => write!(f,
                 "Step::Command{{name:{}, exec:{:?}, env:{}, workdir:{}}}",
                 self.name.as_ref().map_or_else(|| "".to_string(), |s| s.to_string()),
                 exec,
-                env.as_ref().map_or_else(|| "None".to_string(), |e| format!("{:?}", e)),
+                self.env.as_ref().map_or_else(|| "None".to_string(), |e| format!("{:?}", e)),
                 workdir.as_ref().map_or_else(|| "None".to_string(), |e| format!("{:?}", e)),
             ),
             StepCommand::Module(c) => c.value(|v| write!(f,

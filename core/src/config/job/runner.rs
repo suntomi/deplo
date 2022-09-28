@@ -56,9 +56,9 @@ impl<'a> Runner<'a> {
             job::Command::Adhoc(ref c) => {
                 (vec![job::Step{
                     name: None,
+                    env: None,
                     command: job::StepCommand::Eval{
                         command: config::Value::new(c),
-                        env: None,
                         workdir: None,
                         shell: job.shell.clone()
                     }
@@ -69,9 +69,9 @@ impl<'a> Runner<'a> {
             } else if let Some(ref c) = &job.command {
                 (vec![job::Step{
                     name: None,
+                    env: None,
                     command: job::StepCommand::Eval{
                         command: c.clone(),
-                        env: None,
                         workdir: None,
                         shell: job.shell.clone()
                     }
@@ -83,9 +83,9 @@ impl<'a> Runner<'a> {
                 let c = job.shell.as_ref().map_or_else(|| config::Value::new("bash"), |v| v.clone());
                 (vec![job::Step{
                     name: None,
+                    env: None,
                     command: job::StepCommand::Eval{
                         command: c.clone(),
-                        env: None,
                         workdir: None,
                         shell: job.shell.clone()
                     }
@@ -108,18 +108,18 @@ impl<'a> Runner<'a> {
         let job_envs = job.env(self.config, runtime_workflow_config);
         for step in steps {
             match &step.command {
-                job::StepCommand::Eval{shell: sh, command, env, workdir} => {
+                job::StepCommand::Eval{shell: sh, command, workdir} => {
                     shell.eval(
                         command.as_str(),
                         &sh.as_ref().map_or_else(|| job.shell.as_ref().map(|v| v.resolve()), |v| Some(v.as_str().to_string())),
-                        shell::mctoa(merge_hashmap(&job_envs, env.as_ref().map_or_else(|| &empty_envs, |v| v))),
+                        shell::mctoa(merge_hashmap(&job_envs, step.env.as_ref().map_or_else(|| &empty_envs, |v| v))),
                         &workdir.as_ref().map_or_else(|| job.workdir.as_ref(), |v| Some(&v)),
                         shell_settings
                     )?;
                 },
-                job::StepCommand::Exec{exec, env, workdir} => {
+                job::StepCommand::Exec{exec, workdir} => {
                     shell.exec(exec.iter().map(|v| shell::arg!(v)),
-                        shell::mctoa(merge_hashmap(&job_envs, env.as_ref().map_or_else(|| &empty_envs, |v| v))),
+                        shell::mctoa(merge_hashmap(&job_envs, step.env.as_ref().map_or_else(|| &empty_envs, |v| v))),
                         &workdir.as_ref().map_or_else(|| job.workdir.as_ref(), |v| Some(&v)),
                         shell_settings
                     )?;

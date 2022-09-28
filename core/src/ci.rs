@@ -54,7 +54,7 @@ pub trait CI {
 #[derive(Clone)]
 pub struct ModuleDescription;
 impl module::Description for ModuleDescription {
-    fn ty() -> config::module::Type { return config::module::Type::Ci; }
+    fn ty() -> config::module::Type { return config::module::Type::CI; }
 }
 
 #[derive(Debug)]

@@ -2,7 +2,6 @@ use std::collections::HashMap;
 use std::error::Error;
 use std::ffi::OsStr;
 use std::fmt;
-use std::hash::Hash;
 use std::path::Path;
 
 use maplit::hashmap;
@@ -42,53 +41,7 @@ pub struct Author {
     pub name: Option<config::Value>,
     pub email: config::Value
 }
-#[derive(Serialize, Deserialize, Hash, PartialEq, Eq)]
-// this annotation and below impl TryFrom<String> are 
-// required because EntryPointType is used as HashMap key.
-// see https://stackoverflow.com/a/68580953/1982282 for detail
-#[serde(try_from = "String")]
-pub enum EntryPointType {
-    #[serde(rename = "ci")]
-    CI,
-    #[serde(rename = "vcs")]
-    VCS,
-    #[serde(rename = "step")]
-    Step,
-    #[serde(rename = "workflow")]
-    Workflow,
-    #[serde(rename = "jobhook")]
-    JobHook,
-    #[serde(rename = "secret")]
-    Secret,
-}
-impl fmt::Display for EntryPointType {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", match self {
-            Self::CI => "ci",
-            Self::VCS => "vcs",
-            Self::Step => "step",
-            Self::Workflow => "workflow",
-            Self::JobHook => "jobhook",
-            Self::Secret => "secret"
-        })
-    }
-}
-impl TryFrom<String> for EntryPointType {
-    type Error = Box<dyn Error>;
-    fn try_from(s: String) -> Result<Self, Self::Error> {
-        match s.as_str() {
-            "ci" => Ok(Self::CI),
-            "vcs" => Ok(Self::VCS),
-            "step" => Ok(Self::Step),
-            "workflow" => Ok(Self::Workflow),
-            "jobhook" => Ok(Self::JobHook),
-            "secret" => Ok(Self::Secret),
-            _ => escalate!(Box::new(ModuleError{
-                cause: format!("no such module entrypoint: {}", s)
-            })),
-        }
-    }
-}
+pub type EntryPointType = config::module::Type;
 #[derive(Serialize, Deserialize)]
 pub struct EntryPoint(HashMap<config::job::RunnerOS, Vec<config::Value>>);
 impl EntryPoint {

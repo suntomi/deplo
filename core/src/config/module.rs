@@ -1,30 +1,59 @@
 use std::collections::{HashMap};
+use std::error::Error;
 use std::fmt;
 use std::sync::RwLock;
 
 use maplit::hashmap;
-use serde::{Deserialize, de::DeserializeOwned, Serialize, Deserializer};
+use serde::{Deserialize, Deserializer, de::DeserializeOwned, Serialize, de::Error as DeserializeError};
 
 use crate::config;
 use crate::module;
+use crate::util::{escalate};
 
-#[derive(Eq,PartialEq,Hash)]
+#[derive(Serialize, Deserialize, Hash, PartialEq, Eq)]
+// this annotation and below impl TryFrom<String> are 
+// required because EntryPointType is used as HashMap key.
+// see https://stackoverflow.com/a/68580953/1982282 for detail
+#[serde(try_from = "String")]
 pub enum Type {
-    Ci,
-    Secret,
+    #[serde(rename = "ci")]
+    CI,
+    #[serde(rename = "vcs")]
+    VCS,
+    #[serde(rename = "step")]
     Step,
-    Vcs,
+    #[serde(rename = "workflow")]
     Workflow,
+    #[serde(rename = "jobhook")]
+    JobHook,
+    #[serde(rename = "secret")]
+    Secret,
 }
-
-impl fmt::Debug for Type {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::Ci => write!(f, "Ci"),
-            Self::Secret => write!(f, "Secret"),
-            Self::Step => write!(f, "Step"),
-            Self::Vcs => write!(f, "Vcs"),
-            Self::Workflow => write!(f, "Workflow"),
+impl fmt::Display for Type {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", match self {
+            Self::CI => "ci",
+            Self::VCS => "vcs",
+            Self::Step => "step",
+            Self::Workflow => "workflow",
+            Self::JobHook => "jobhook",
+            Self::Secret => "secret"
+        })
+    }
+}
+impl TryFrom<String> for Type {
+    type Error = Box<dyn Error>;
+    fn try_from(s: String) -> Result<Self, Self::Error> {
+        match s.as_str() {
+            "ci" => Ok(Self::CI),
+            "vcs" => Ok(Self::VCS),
+            "step" => Ok(Self::Step),
+            "workflow" => Ok(Self::Workflow),
+            "jobhook" => Ok(Self::JobHook),
+            "secret" => Ok(Self::Secret),
+            _ => escalate!(Box::new(crate::config::ConfigError{
+                cause: format!("no such module entrypoint: {}", s)
+            })),
         }
     }
 }
@@ -68,9 +97,23 @@ impl<'de, T: module::Description + Clone, E: DeserializeOwned + Clone> Deseriali
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where D: Deserializer<'de> {
         let v = config::AnyValue::deserialize(deserializer)?;
-        let src = toml::to_string(&v).unwrap();
-        let c = toml::from_str::<DeserializeWrapper<Config>>(&src).unwrap();
-        let e = toml::from_str::<DeserializeWrapper<E>>(&src).unwrap();
+        let src = toml::to_string(&v).map_err(D::Error::custom)?;
+        let c = match toml::from_str::<DeserializeWrapper<Config>>(&src) {
+            Ok(v) => v,
+            Err(e) => {
+                let cause = e.to_string();
+                log::error!("module config deserialize error:'{}', src='{}'", cause, src);
+                return Err(D::Error::custom(cause))
+            }
+        };
+        let e = match toml::from_str::<DeserializeWrapper<E>>(&src) {
+            Ok(v) => v,
+            Err(e) => {
+                let cause = e.to_string();
+                log::error!("module ext deserialize error:'{}', src='{}'", cause, src);
+                return Err(D::Error::custom(cause))
+            }
+        };
         set_config_for::<T>(c.value);
         config_for::<T, _, Self, D::Error>(|v| {
             Ok(Self { 
