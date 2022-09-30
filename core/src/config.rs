@@ -300,9 +300,7 @@ impl Config {
     pub fn project_name(&self) -> String {
         self.project_name.resolve()
     }
-    pub fn deplo_data_path(&self) -> Result<PathBuf, Box<dyn Error>> {
-        let base = self.data_dir();
-        let path = make_absolute(base, self.modules.vcs().repository_root()?);
+    fn check_and_create_dir(&self, path: PathBuf) -> Result<PathBuf, Box<dyn Error>> {
         match fs::metadata(&path) {
             Ok(mata) => {
                 if !mata.is_dir() {
@@ -316,6 +314,16 @@ impl Config {
             }
         };
         Ok(path)
+    }
+    pub fn deplo_data_path(&self) -> Result<PathBuf, Box<dyn Error>> {
+        let base = self.data_dir();
+        let path = make_absolute(base, self.modules.vcs().repository_root()?);
+        self.check_and_create_dir(path)
+    }
+    pub fn deplo_module_root_path(&self) -> Result<PathBuf, Box<dyn Error>> {
+        let path = self.deplo_data_path()?;
+        let path = path_join(vec![path, PathBuf::from("modules")]);
+        self.check_and_create_dir(path)
     }
     pub fn generate_wrapper_script<S: shell::Shell>(
         &self, shell: &S, data_path: &PathBuf

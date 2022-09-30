@@ -61,7 +61,7 @@ pub struct FallbackContainer {
     pub caches: Option<Vec<config::Value>>
 }
 /// configuration of os of machine type runner
-#[derive(Serialize, Deserialize, Clone, Copy, Eq, PartialEq)]
+#[derive(Serialize, Deserialize, Clone, Copy, Eq, PartialEq, Hash)]
 pub enum RunnerOS {
     #[serde(rename = "linux")]
     Linux,

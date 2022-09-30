@@ -11,7 +11,7 @@ pub trait Workflow {
 }
 #[derive(Clone)]
 pub struct Module;
-impl module::Module for Module {
+impl module::Description for Module {
     fn ty() -> config::module::Type { return config::module::Type::Workflow; }
 }
 

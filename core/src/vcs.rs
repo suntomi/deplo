@@ -109,7 +109,7 @@ pub trait VCS {
 }
 #[derive(Clone)]
 pub struct Module;
-impl module::Module for Module {
+impl module::Description for Module {
     fn ty() -> config::module::Type { return config::module::Type::Vcs; }
 }
 
