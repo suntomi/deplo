@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::error::Error;
 
 use crate::config;
@@ -11,8 +12,17 @@ pub trait Workflow {
         config: &config::Container,
         module_key: String
     ) -> Result<Self, Box<dyn Error>> where Self : Sized;
-    fn listen(&self) -> Result<(), Box<dyn Error>>;
-    fn matches(&self, event: &str, params: &str) -> Result<bool, Box<dyn Error>>;
+    fn listen(
+        &self,
+        shell_settings: &shell::Settings,
+        with: &Option<HashMap<String, config::AnyValue>>
+    ) -> Result<(), Box<dyn Error>>;
+    fn matches(
+        &self, 
+        shell_settings: &shell::Settings,
+        event: &str,
+        with: &Option<HashMap<String, config::AnyValue>>
+    ) -> Result<bool, Box<dyn Error>>;
 }
 #[derive(Clone)]
 pub struct ModuleDescription;

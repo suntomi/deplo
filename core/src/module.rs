@@ -52,8 +52,8 @@ pub enum EntryPointType {
     Step,
     #[serde(rename = "workflow")]
     Workflow,
-    #[serde(rename = "job")]
-    Job,
+    #[serde(rename = "jobhook")]
+    JobHook,
     #[serde(rename = "secret")]
     Secret,
 }
@@ -64,7 +64,7 @@ impl fmt::Display for EntryPointType {
             Self::VCS => "vcs",
             Self::Step => "step",
             Self::Workflow => "workflow",
-            Self::Job => "job",
+            Self::JobHook => "jobhook",
             Self::Secret => "secret"
         })
     }
@@ -204,4 +204,8 @@ impl Module {
             }))
         }
     }
+}
+
+pub fn empty_env<'a>() -> HashMap<String, shell::Arg<'a>> {
+    HashMap::new()
 }
