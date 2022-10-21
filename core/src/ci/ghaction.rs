@@ -688,8 +688,20 @@ impl<S: shell::Shell> ci::CI for GhAction<S> {
                                 panic!("event payload type does not match {}", workflow_event.event);
                             }
                         },
-                        config::workflow::Workflow::Module(_c) => {
-                            panic!("not implemented yet")
+                        config::workflow::Workflow::Module(c) => {
+                            if let Some(event_payload) = c.value(|v| {
+                                let event = match &workflow_event.event {
+                                    EventPayload::RepositoryDispatch{client_payload,..} => serde_json::to_string(client_payload)?,
+                                    _ => panic!("event payload type does not match {}", workflow_event.event),
+                                };
+                                config.modules.workflow(&v.uses).matches(
+                                    &shell::no_capture(), &event, &v.with
+                                )
+                            })? {
+                                matches.push(config::runtime::Workflow::with_context(
+                                    name, serde_json::from_str(&event_payload)?
+                                ));
+                            }
                         }
                     }
                 }

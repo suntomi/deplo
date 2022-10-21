@@ -22,7 +22,7 @@ pub trait Workflow {
         shell_settings: &shell::Settings,
         event: &str,
         with: &Option<HashMap<String, config::AnyValue>>
-    ) -> Result<bool, Box<dyn Error>>;
+    ) -> Result<Option<String>, Box<dyn Error>>;
 }
 #[derive(Clone)]
 pub struct ModuleDescription;

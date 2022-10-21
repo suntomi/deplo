@@ -40,7 +40,7 @@ impl<S: shell::Shell> workflow::Workflow for ModuleRunner<S> {
         shell_settings: &shell::Settings,
         event: &str,
         with: &Option<HashMap<String, config::AnyValue>>
-    ) -> Result<bool, Box<dyn Error>> {
+    ) -> Result<Option<String>, Box<dyn Error>> {
         let c = self.config.borrow();
         let module = c.modules.repos().get(&self.module_key);
         match module.run(
@@ -49,10 +49,10 @@ impl<S: shell::Shell> workflow::Workflow for ModuleRunner<S> {
             shell::args!["check-matches", event], 
             module::empty_env(), with
         ) {
-            Ok(_) => Ok(true),
+            Ok(v) => Ok(Some(v)),
             Err(e) => {
                 log::debug!("workflow {} does not match by error {:?}", self.module_key, e);
-                Ok(false)
+                Ok(None)
             }
         }
     }

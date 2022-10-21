@@ -88,7 +88,11 @@ impl Modules {
     }
     pub fn step(&self, src: &crate::module::Source) -> &Box<dyn crate::step::Step> {
         let key = src.to_string();
-        self.steps.get(&key).expect(&format!("module {} should exists", &key))
+        self.steps.get(&key).expect(&format!("step module {} should exists", &key))
+    }
+    pub fn workflow(&self, src: &crate::module::Source) -> &Box<dyn crate::workflow::Workflow> {
+        let key = src.to_string();
+        self.workflows.get(&key).expect(&format!("workflow module {} should exists", &key))
     }
     pub fn repos(&self) -> &ModuleRepository {
         self.repos.as_ref().unwrap()
