@@ -166,10 +166,6 @@ impl<S: shell::Shell> Git<S> {
             return Ok((vcs::RefType::Commit, self.commit_hash(None)?))
         }
     }
-    // TODO: I'm sure that rust has smarter way to do this, rewrite with that way
-    fn to_str_vec<'a>(vec: &'a Vec<String>) -> Vec<&'a str> {
-        vec.iter().map(|v| v.as_str()).collect()
-    }
 }
 
 impl<S: shell::Shell> GitFeatures<S> for Git<S> {

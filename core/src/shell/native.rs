@@ -230,7 +230,7 @@ impl Native {
         }
     }
     fn read_stdout_or_empty(
-        cmd: &Command, stdout: Option<ChildStdout>, ct: &mut Option<CaptureTarget>, cmdstr: &str
+        _cmd: &Command, stdout: Option<ChildStdout>, ct: &mut Option<CaptureTarget>, cmdstr: &str
     ) -> Result<String, shell::ShellError> {
         let mut buf = String::new();
         match ct {

@@ -121,9 +121,13 @@ impl<'a> Runner<'a> {
                         shell_settings
                     )?;
                 },
-                job::StepCommand::Module(c) => c.value(|v| {
-                    panic!("TODO: running step by module {} with {:?}", v.uses, v.with)
-                })
+                job::StepCommand::Module(c) => {
+                    c.value(|v| {
+                        self.config.modules.step(&v.uses).run(
+                            shell_settings, &job_envs, &v.with
+                        )
+                    })?;
+                }
             }
         };
         Ok(None)

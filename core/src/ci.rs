@@ -52,8 +52,8 @@ pub trait CI {
     fn job_output(&self, job_name: &str, kind: OutputKind, key: &str) -> Result<Option<String>, Box<dyn Error>>;
 }
 #[derive(Clone)]
-pub struct Module;
-impl module::Description for Module {
+pub struct ModuleDescription;
+impl module::Description for ModuleDescription {
     fn ty() -> config::module::Type { return config::module::Type::Ci; }
 }
 

@@ -38,7 +38,7 @@ lazy_static! {
 
 #[derive(Serialize, Deserialize)]
 pub struct Config {
-    pub uses: config::Value,
+    pub uses: module::Source,
     pub with: Option<HashMap<String, config::AnyValue>>,
 }
 #[derive(Serialize, Deserialize, Clone)]

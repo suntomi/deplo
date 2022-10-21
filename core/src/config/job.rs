@@ -204,7 +204,7 @@ pub enum StepCommand {
         env: Option<HashMap<String, config::Value>>,
         workdir: Option<config::Value>,
     },
-    Module(config::module::ConfigFor<crate::step::Module>)
+    Module(config::module::ConfigFor<crate::step::ModuleDescription>)
 }
 #[derive(Serialize, Deserialize, Clone)]
 pub struct Step {
@@ -237,7 +237,7 @@ impl fmt::Display for Step {
             StepCommand::Module(c) => c.value(|v| write!(f,
                 "Step::Module{{name:{}, uses:{}, with:{}",
                 self.name.as_ref().map_or_else(|| "".to_string(), |s| s.to_string()),
-                v.uses,
+                v.uses.to_string(),
                 v.with.as_ref().map_or_else(|| "None".to_string(), |e| format!("{:?}", e))
             ))
         }
@@ -876,9 +876,9 @@ impl Jobs {
         log::info!("remote job {} id={} finished", job_name, job_id);
         Ok(())
     }
-    pub fn run<S>(
-        &self, config: &config::Config, runtime_workflow_config: &config::runtime::Workflow, shell: &S
-    ) -> Result<(), Box<dyn Error>> where S: shell::Shell {
+    pub fn run(
+        &self, config: &config::Config, runtime_workflow_config: &config::runtime::Workflow, shell: &impl shell::Shell
+    ) -> Result<(), Box<dyn Error>> {
         let job_name = &runtime_workflow_config.job.as_ref().expect("should have job setting").name;
         if runtime_workflow_config.exec.follow_dependency {
             self.as_dg().traverse(Some(job_name), |name, job| {
@@ -905,9 +905,9 @@ impl Jobs {
         }
         Ok(())
     }
-    pub fn boot<S>(
-        &self, config: &config::Config, runtime_workflow_config: &config::runtime::Workflow, shell: &S
-    ) -> Result<(), Box<dyn Error>> where S: shell::Shell {
+    pub fn boot(
+        &self, config: &config::Config, runtime_workflow_config: &config::runtime::Workflow, shell: &impl shell::Shell
+    ) -> Result<(), Box<dyn Error>> {
         let modules = &config.modules;
         let (_, ci) = modules.ci_by_env();
         // TODO: support follow_dependency of remote job running.

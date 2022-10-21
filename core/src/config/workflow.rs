@@ -22,7 +22,7 @@ pub enum Workflow {
     Repository {
         events: HashMap<String, Vec<config::Value>>
     },
-    Module(config::module::ConfigFor<crate::workflow::Module, WorkflowExtension>)
+    Module(config::module::ConfigFor<crate::workflow::ModuleDescription, WorkflowExtension>)
 }
 impl fmt::Display for Workflow {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -31,7 +31,7 @@ impl fmt::Display for Workflow {
             Self::Integrate => write!(f, "integrate"),
             Self::Cron{schedules} => write!(f, "cron:{:?}", schedules),
             Self::Repository{events} => write!(f, "repository:{:?}", events),
-            Self::Module(m) => m.value(|v| write!(f, "{}({:?})", v.uses, v.with))
+            Self::Module(m) => m.value(|v| write!(f, "{}({:?})", v.uses.to_string(), v.with))
         }
     }
 }
