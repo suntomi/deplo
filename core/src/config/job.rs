@@ -62,6 +62,10 @@ pub struct FallbackContainer {
 }
 /// configuration of os of machine type runner
 #[derive(Serialize, Deserialize, Clone, Copy, Eq, PartialEq, Hash)]
+// this annotation and below impl TryFrom<String> are 
+// required because RunnerOS is used as HashMap key.
+// see https://stackoverflow.com/a/68580953/1982282 for detail
+#[serde(try_from = "String")]
 pub enum RunnerOS {
     #[serde(rename = "linux")]
     Linux,
@@ -71,12 +75,12 @@ pub enum RunnerOS {
     MacOS,
 }
 impl RunnerOS {
-    pub fn from_str(s: &str) -> Result<Self, &'static str> {
+    pub fn from_str(s: &str) -> Result<Self, Box<dyn Error>> {
         match s {
             "linux" => Ok(Self::Linux),
             "windows" => Ok(Self::Windows),
             "macos" => Ok(Self::MacOS),
-            _ => Err("unknown OS"),
+            _ => escalate!(Box::new(config::ConfigError{cause: format!("no such os: [{}]", s)})),
         }
     }
     pub fn uname(&self) -> &'static str {
@@ -101,6 +105,12 @@ impl fmt::Display for RunnerOS {
             Self::Windows{..} => write!(f, "Windows"),
             Self::MacOS{..} => write!(f, "MacOS"),
         }
+    }
+}
+impl TryFrom<String> for RunnerOS {
+    type Error = Box<dyn Error>;
+    fn try_from(s: String) -> Result<Self, Self::Error> {
+        RunnerOS::from_str(s.as_str())
     }
 }
 /// configuration for runner of the job.

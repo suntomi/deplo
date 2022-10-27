@@ -180,28 +180,30 @@ impl Container {
         Ok(())
     }
     pub fn setup_modules(&self, repos: &mut ModuleRepository) -> Result<(), Box<dyn Error>> {
-        // borrow config
-        let config = self.borrow();
-        // load step modules
         let mut steps = hashmap!{};
-        module::config_for::<crate::step::ModuleDescription, _, (), Box<dyn Error>>(|configs| {
-            for c in configs {
-                steps.insert(c.uses.to_string(), crate::step::factory(
-                    self, repos.load(&config, &c.uses)?
-                )?);
-            }
-            Ok(())
-        })?;
-        // load workflow modules
         let mut workflows = hashmap!{};
-        module::config_for::<crate::workflow::ModuleDescription, _, (), Box<dyn Error>>(|configs| {
-            for c in configs {
-                workflows.insert(c.uses.to_string(), crate::workflow::factory(
-                    self, repos.load(&config, &c.uses)?
-                )?);
-            }
-            Ok(())
-        })?;
+        {
+            // borrow config
+            let config = self.borrow();
+            // load step modules
+            module::config_for::<crate::step::ModuleDescription, _, (), Box<dyn Error>>(|configs| {
+                for c in configs {
+                    steps.insert(c.uses.to_string(), crate::step::factory(
+                        self, repos.load(&config, &c.uses)?
+                    )?);
+                }
+                Ok(())
+            })?;
+            // load workflow modules
+            module::config_for::<crate::workflow::ModuleDescription, _, (), Box<dyn Error>>(|configs| {
+                for c in configs {
+                    workflows.insert(c.uses.to_string(), crate::workflow::factory(
+                        self, repos.load(&config, &c.uses)?
+                    )?);
+                }
+                Ok(())
+            })?;
+        }
         // store modules
         let mut c = self.borrow_mut();
         c.modules.steps = steps;

@@ -30,7 +30,7 @@ impl<S: shell::Shell> workflow::Workflow for ModuleRunner<S> {
         module.run(
             module::EntryPointType::Workflow,
             &self.shell, shell_settings,
-            shell::args!["listen-trigger"],
+            shell::args!["listen"],
             module::empty_env(), with
         )?;
         Ok(())
@@ -46,7 +46,7 @@ impl<S: shell::Shell> workflow::Workflow for ModuleRunner<S> {
         match module.run(
             module::EntryPointType::Workflow,
             &self.shell, shell_settings,
-            shell::args!["check-matches", event], 
+            shell::args!["matches", event], 
             module::empty_env(), with
         ) {
             Ok(v) => Ok(Some(v)),

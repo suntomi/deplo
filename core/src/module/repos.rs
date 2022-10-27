@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 use std::error::Error;
 use std::fs;
+use std::path::PathBuf;
 
 use maplit::hashmap;
 use regex::Regex;
@@ -10,6 +11,8 @@ use crate::config;
 use crate::module;
 use crate::shell;
 use crate::util::{escalate};
+
+pub const DEPLO_MODULE_CONFIG_FILE_NAME: &'static str = "Deplo.Module.toml";
 
 enum Version {
     Hash(String),
@@ -45,7 +48,7 @@ impl<S: shell::Shell> Repository<S> {
         let mut module_path = config.deplo_module_root_path()?;
         let (url, ver) = match src {
             module::Source::Std(name) => {
-                let re = Regex::new(r"([^/@]+)/([^/@]+)@([^/@])").unwrap();
+                let re = Regex::new(r"([^/@]+)/([^/@]+)@([^/@]+)").unwrap();
                 match re.captures(&name.resolve()) {
                     Some(c) => {
                         let (user, name, version) = (
@@ -102,7 +105,9 @@ impl<S: shell::Shell> Repository<S> {
                 }))
             },
             module::Source::Local{path} => {
-                return module::Module::with(&path.resolve())
+                let mut p = PathBuf::from(&path.resolve());
+                p.push(module::repos::DEPLO_MODULE_CONFIG_FILE_NAME);
+                return module::Module::with(&p.to_string_lossy().to_string());
             }
         };
         let shell_opts = if config.runtime.verbosity > 2 {
@@ -132,7 +137,7 @@ impl<S: shell::Shell> Repository<S> {
                 }
             }
         };
-        module_path.push("Deplo.Module.toml");
+        module_path.push(DEPLO_MODULE_CONFIG_FILE_NAME);
         module::Module::with(&module_path.to_string_lossy().to_string())
     }
 }

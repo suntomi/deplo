@@ -43,6 +43,10 @@ pub struct Author {
     pub email: config::Value
 }
 #[derive(Serialize, Deserialize, Hash, PartialEq, Eq)]
+// this annotation and below impl TryFrom<String> are 
+// required because EntryPointType is used as HashMap key.
+// see https://stackoverflow.com/a/68580953/1982282 for detail
+#[serde(try_from = "String")]
 pub enum EntryPointType {
     #[serde(rename = "ci")]
     CI,
@@ -69,11 +73,28 @@ impl fmt::Display for EntryPointType {
         })
     }
 }
+impl TryFrom<String> for EntryPointType {
+    type Error = Box<dyn Error>;
+    fn try_from(s: String) -> Result<Self, Self::Error> {
+        match s.as_str() {
+            "ci" => Ok(Self::CI),
+            "vcs" => Ok(Self::VCS),
+            "step" => Ok(Self::Step),
+            "workflow" => Ok(Self::Workflow),
+            "jobhook" => Ok(Self::JobHook),
+            "secret" => Ok(Self::Secret),
+            _ => escalate!(Box::new(ModuleError{
+                cause: format!("no such module entrypoint: {}", s)
+            })),
+        }
+    }
+}
 #[derive(Serialize, Deserialize)]
 pub struct EntryPoint(HashMap<config::job::RunnerOS, Vec<config::Value>>);
 impl EntryPoint {
     pub fn run<'a,A,E,P,S,K>(
-        &'a self, shell: &S, settings: &shell::Settings, cwd: &Option<P>, args: A, envs: E
+        &'a self, ty: EntryPointType, shell: &S, settings: &shell::Settings,
+        cwd: &Option<P>, args: A, envs: E
     ) -> Result<String, Box<dyn Error>> 
     where
         A: IntoIterator<Item = shell::Arg<'a>>,
@@ -86,6 +107,7 @@ impl EntryPoint {
         match self.0.get(&os) {
             Some(ep_args) => {
                 let mut cmd: Vec<shell::Arg<'a>> = ep_args.iter().map(|c| shell::arg!(c)).collect();
+                cmd.push(shell::arg!(ty.to_string()));
                 for a in args.into_iter() {
                     cmd.push(a)
                 }
@@ -106,6 +128,7 @@ pub enum OptionFormat {
     Toml,
 }
 #[derive(Serialize, Deserialize)]
+#[serde(untagged)]
 pub enum Source {
     Std(config::Value),
     Git{ git: config::Value, rev: Option<config::Value>, tag: Option<config::Value> },
@@ -200,7 +223,10 @@ impl Module {
         K: AsRef<OsStr>
     {
         match self.entrypoints.get(&ep) {
-            Some(e) => e.run(shell, settings, &self.workdir, args, self.embed_option_to_env(envs, option)?),
+            Some(e) => e.run(
+                ep, shell, settings, &self.workdir, args,
+                self.embed_option_to_env(envs, option)?
+            ),
             None => escalate!(Box::new(ModuleError{
                 cause: format!("module {} does not have entrypoint for {}", self.name, ep)
             }))

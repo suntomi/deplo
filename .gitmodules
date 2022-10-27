@@ -4,3 +4,9 @@
 [submodule "tools/images"]
 	path = tools/images
 	url = https://github.com/suntomi/images.git
+[submodule "tools/modules/discord"]
+	path = tools/modules/discord
+	url = https://github.com/suntomi/discord
+[submodule "tools/modules/slack"]
+	path = tools/modules/slack
+	url = https://github.com/suntomi/slack
