@@ -93,8 +93,11 @@ impl<'a> Runner<'a> {
             }
         }
     }
-    fn step_runner_command(name: &str) -> String {
-        format!("deplo run {} steps", name)
+    fn step_runner_command(job_name: &str, task_name: &Option<String>) -> String {
+        match task_name {
+            Some(v) => format!("deplo run {} steps @{}", job_name, v),
+            None => format!("deplo run {} steps", job_name)
+        }
     }
     fn run_steps(
         &self, shell: &impl shell::Shell, shell_settings: &shell::Settings,
@@ -214,7 +217,7 @@ impl<'a> Runner<'a> {
                                 image.as_str(),
                                 // if main_command is none, we need to run steps in single container.
                                 // so we execute `deplo ci steps $job_name` to run steps of $job_name.
-                                &main_command.map_or_else(|| Self::step_runner_command(&job.name), |v| match sh {
+                                &main_command.map_or_else(|| Self::step_runner_command(&job.name, &None), |v| match sh {
                                     // if command is shell command and local fallback has dedicate shell setting,
                                     // override shell setting with local_fallback's one.
                                     Some(sh) => match command {
@@ -258,7 +261,7 @@ impl<'a> Runner<'a> {
                         image.as_str(),
                         // if main_command is none, we need to run steps in single container. 
                         // so we execute `deplo ci steps $job_name` to run steps of $job_name.
-                        &main_command.map_or_else(|| Self::step_runner_command(&job.name), |v| v.to_string()),
+                        &main_command.map_or_else(|| Self::step_runner_command(&job.name, &None), |v| v.to_string()),
                         &job.shell.as_ref().map(|v| v.resolve()), shell::mctoa(job.env(&config, runtime_workflow_config)),
                         &job.workdir, mounts.bind(hashmap!{
                             path.as_os_str() => &path_target

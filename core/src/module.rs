@@ -109,7 +109,8 @@ pub enum OptionFormat {
 pub enum Source {
     Std(config::Value),
     Git{ git: config::Value, rev: Option<config::Value>, tag: Option<config::Value> },
-    File{ url: config::Value }
+    Package{ url: config::Value },
+    Local{ path: config::Value },
 }
 impl Source {
     pub fn to_string(&self) -> String {
@@ -122,7 +123,8 @@ impl Source {
                     None => panic!("git source but neither rev nor tag specified")
                 }
             },
-            Self::File{url} => format!("file:{}", url)
+            Self::Package{url} => format!("package:{}", url),
+            Self::Local{path} => format!("local:{}", path)
         }
     }
 }

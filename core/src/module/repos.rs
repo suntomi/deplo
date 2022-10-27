@@ -96,10 +96,13 @@ impl<S: shell::Shell> Repository<S> {
                     }
                 })
             },
-            module::Source::File{url} => {
+            module::Source::Package{url} => {
                 return escalate!(Box::new(module::ModuleError{
                     cause: format!("donwload tarball from {} does not support", url)
                 }))
+            },
+            module::Source::Local{path} => {
+                return module::Module::with(&path.resolve())
             }
         };
         let shell_opts = if config.runtime.verbosity > 2 {
