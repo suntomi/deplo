@@ -106,6 +106,7 @@ pub enum OptionFormat {
     Toml,
 }
 #[derive(Serialize, Deserialize)]
+#[serde(untagged)]
 pub enum Source {
     Std(config::Value),
     Git{ git: config::Value, rev: Option<config::Value>, tag: Option<config::Value> },

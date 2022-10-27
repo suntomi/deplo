@@ -45,7 +45,7 @@ impl<S: shell::Shell> Repository<S> {
         let mut module_path = config.deplo_module_root_path()?;
         let (url, ver) = match src {
             module::Source::Std(name) => {
-                let re = Regex::new(r"([^/@]+)/([^/@]+)@([^/@])").unwrap();
+                let re = Regex::new(r"([^/@]+)/([^/@]+)@([^/@]+)").unwrap();
                 match re.captures(&name.resolve()) {
                     Some(c) => {
                         let (user, name, version) = (

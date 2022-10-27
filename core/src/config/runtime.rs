@@ -33,7 +33,7 @@ impl ExecOptions {
             follow_dependency: false,
             silent: false,
             timeout: None,
-        }        
+        }
     }
     pub fn new<A: Args>(args: &A, config: &config::Container, has_job_config: bool) -> Result<Self, Box<dyn Error>> {
         let mut instance = Self::default();
