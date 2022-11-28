@@ -31,6 +31,7 @@ pub const DEPLO_RELEASE_URL_BASE: &'static str = "https://github.com/suntomi/dep
 pub const DEPLO_REMOTE_JOB_EVENT_TYPE: &'static str = "deplo-run-remote-job";
 pub const DEPLO_MODULE_EVENT_TYPE: &'static str = "deplo-send-module-payload";
 pub const DEPLO_VCS_TEMPORARY_WORKSPACE_NAME: &'static str = "deplo-tmp-workspace";
+pub const DEPLO_RUNNING_ON_CI_ENV_KEY: &'static str = "CI";
 
 pub type Value = value::Value;
 pub type AnyValue = value::Any;
@@ -323,7 +324,7 @@ impl Config {
         return Ok(c);
     }
     pub fn is_running_on_ci() -> bool {
-        match std::env::var("CI") {
+        match std::env::var(DEPLO_RUNNING_ON_CI_ENV_KEY) {
             Ok(v) => !v.is_empty(),
             Err(_) => false
         }

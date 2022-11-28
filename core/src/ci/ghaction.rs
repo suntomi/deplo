@@ -1005,8 +1005,11 @@ impl<S: shell::Shell> ci::CI for GhAction<S> {
         let config = self.config.borrow();
         let vcs = config.modules.vcs();
         let mut envs = hashmap!{
-            "DEPLO_CI_TYPE" => "GhAction".to_string()
+            "DEPLO_CI_TYPE" => "GhAction".to_string(),
         };
+        if config::Config::is_running_on_ci() {
+            envs.insert(config::DEPLO_RUNNING_ON_CI_ENV_KEY, "true".to_string());
+        }
         // get from env
         for (src, target) in hashmap!{
             "DEPLO_CI_ID" => "DEPLO_GHACTION_CI_ID",
