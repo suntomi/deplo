@@ -6,9 +6,9 @@ use std::collections::{HashMap};
 use maplit::hashmap;
 
 use crate::config;
-use crate::ci;
+use crate::ci::{self, CheckoutOption};
 use crate::shell;
-use crate::util::{escalate,MultilineFormatString,rm,maphash};
+use crate::util::{escalate,MultilineFormatString,rm};
 
 pub struct CircleCI<S: shell::Shell = shell::Default> {
     pub config: config::Container,
@@ -44,22 +44,9 @@ impl<S: shell::Shell> CircleCI<S> {
     fn generate_workdir_setting<'a>(&self, job: &'a config::job::Job) -> String {
         return job.workdir.as_ref().map_or_else(|| "".to_string(), |wd| format!("workdir: {}", wd));
     }
-    fn generate_checkout_steps(&self, _: &str, options: &Option<HashMap<String, config::Value>>) -> String {
-        let mut checkout_opts = options.as_ref().map_or_else(
-            || Vec::new(), 
-            |v| v.iter().map(|(k,v)| {
-                return if k == "lfs" {
-                    format!("{}: {}", k, v)
-                } else {
-                    log::warn!("deplo only support lfs options for github action checkout but {}({}) is specified", k, v);
-                    "".to_string()
-                }
-            }).collect::<Vec<String>>()
-        );
-        checkout_opts.push(format!("opts_hash: {}", options.as_ref().map_or_else(
-            || "".to_string(), 
-            |v| maphash(v)
-        )));
+    fn generate_checkout_steps(&self, _: &str, options: &Option<config::job::CheckoutOption>) -> String {
+        let mut checkout_opts = options.as_ref().map_or_else(|| Vec::new(), |v| v.opt_str());
+        checkout_opts.push(format!("opts_hash: {}", options.as_ref().map_or_else(|| "".to_string(), |v| v.hash())));
         format!(
             include_str!("../../res/ci/circleci/checkout.yml.tmpl"), 
             checkout_opts = MultilineFormatString{

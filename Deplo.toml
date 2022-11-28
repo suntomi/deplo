@@ -64,17 +64,44 @@ key = "${SUNTOMI_VCS_APP_PKEY}"
 # 2. deploy workflow. which is trigger when release target is created or updated
 # you can add new builtin workflow like repository event (eg. issue opened), cron job, etc. 
 # or using 3rd party module to receive event from another system (planed at 0.6.0)
-cron = { schedules = { hourly = "30 * * * *", daily = "30 0 * * *" } } # cron workflow from cron event source.
+
+# cron workflow from cron event source.
+cron = { schedules = { daily = "30 0 * * *", monthly = "30 0 1 * *" } }
 # repository workflow from repository event source.
 repository = { 
     events = { 
-        issue_change = ["issue.opened", "issue.closed"], 
-        manual = ["workflow_dispatch"],
-        from_external_service = ["repository_dispatch.from_external_service"]
+        issue_change = ["issues.opened", "issues.closed"],
+        milestone_change = ["milestone.created", "milestone.opened", "milestone.closed"],
+        wiki_edit = ["gollum"]
+    }
+}
+webapi_dispatch = {
+    manual = false,
+    inputs = {
+        foo = { type = "number", required = true },
+        piyo = {
+            schema = [
+                { type = "number" },
+                { type = "list", schema = { type = "string" }}
+            ]
+        },
+        fuga = {
+            schema = {
+                foo = { type = "bool" },
+                bar = { schema = { baz = { type = "string" } } }
+            }
+        }
+    }
+}
+manual_dispatch = {
+    manual = true,
+    inputs = {
+        foo = { type = "string", required = true }
     }
 }
 slack = {
-    uses = "suntomi/slack@0.2.0",
+    # uses = "suntomi/slack@0.1.0",
+    uses = { path = "./tools/modules/slack" },
     release_taget = "nightly",
     with = {
         webhook = "https://hooks.slack.com/services/T0J5QJQ0P/B0J5QJQ0P/X0J5QJQ0P",
@@ -84,7 +111,8 @@ slack = {
     }
 }
 discord = {
-    uses = "suntomi/discord@0.3.0",
+    # uses = "suntomi/discord@0.1.0",
+    uses = { path = "./tools/modules/discord" },
     release_taget = "nightly",
     with = {
         key = "${SUNTOMI_DISCORD_KEY}",
@@ -288,6 +316,9 @@ steps = [{
     fi
     """,
 }]
+tasks = {
+    test = "echo \"[${AWS_ACCESS_KEY}]\""
+}
 caches.cargo = {
     keys = [
         "deploy-build-${{ runner.os }}-v1-${{ hashFiles('**/Cargo.lock') }}",
