@@ -4,6 +4,7 @@ version = 1
 # ---------------
 project_name = "deplo"
 debug = { ghaction_deplo_debugger = "on", ghaction_job_debugger = "on" }
+checkout = { submodule = true }
 
 # release target branch settings
 [release_targets]
@@ -99,25 +100,25 @@ manual_dispatch = {
         foo = { type = "string", required = true }
     }
 }
-slack = {
-    # uses = "suntomi/slack@0.1.0",
-    uses = { path = "./tools/modules/slack" },
-    release_taget = "nightly",
-    with = {
-        webhook = "https://hooks.slack.com/services/T0J5QJQ0P/B0J5QJQ0P/X0J5QJQ0P",
-        channel = "#suntomi",
-        username = "suntomi",
-        icon_url = "https://avatars.slack-edge.com/2018-09-18/5b9b8f8f9d8f8a3f7f8b8b8f-192.png"
-    }
-}
-discord = {
-    # uses = "suntomi/discord@0.1.0",
-    uses = { path = "./tools/modules/discord" },
-    release_taget = "nightly",
-    with = {
-        key = "${SUNTOMI_DISCORD_KEY}",
-    }
-}
+# slack = {
+#     # uses = "suntomi/slack@0.1.0",
+#     uses = { path = "./tools/modules/slack" },
+#     release_taget = "nightly",
+#     with = {
+#         webhook = "https://hooks.slack.com/services/T0J5QJQ0P/B0J5QJQ0P/X0J5QJQ0P",
+#         channel = "#suntomi",
+#         username = "suntomi",
+#         icon_url = "https://avatars.slack-edge.com/2018-09-18/5b9b8f8f9d8f8a3f7f8b8b8f-192.png"
+#     }
+# }
+# discord = {
+#     # uses = "suntomi/discord@0.1.0",
+#     uses = { path = "./tools/modules/discord" },
+#     release_taget = "nightly",
+#     with = {
+#         key = "${SUNTOMI_DISCORD_KEY}",
+#     }
+# }
 
 
 # ------------
