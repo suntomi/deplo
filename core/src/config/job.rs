@@ -424,6 +424,7 @@ impl Trigger {
     }
 }
 #[derive(Serialize, Deserialize, Clone)]
+#[serde(untagged)]
 pub enum SubmoduleCheckoutType {
     Checkout(bool),
     #[serde(rename = "recursive")]
