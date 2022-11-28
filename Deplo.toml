@@ -289,6 +289,7 @@ steps = [{
     set -e
     . tools/scripts/setup_release_env.sh
     cargo build --release
+    export CI=true
     deplo vcs release-assets ${DEPLO_RELEASE_TAG} target/release/cli --replace -o name=deplo-Darwin
     # deploy-mac depends on deploy-product, so can use its output
     if [ "$(deplo job output product foo)" != "bar" ]; then
@@ -336,6 +337,7 @@ command = """
 set -e
 . tools/scripts/setup_release_env.sh
 cargo build --release
+export CI=true
 deplo vcs release-assets ${DEPLO_RELEASE_TAG} target/release/cli.exe --replace -o name=deplo-Windows.exe
 deplo vcs release-assets ${DEPLO_RELEASE_TAG} target/release/cli.pdb --replace -o name=deplo-Windows.pdb
 # job 'win' depends on job 'product', so can use its output

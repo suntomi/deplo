@@ -166,6 +166,9 @@ impl<'a, S: shell::Shell> ci::CI for CircleCI<S> {
         let mut envs = hashmap!{
             "DEPLO_CI_TYPE" => "CircleCI".to_string(),
         };
+        if config::Config::is_running_on_ci() {
+            envs.insert(config::DEPLO_RUNNING_ON_CI_ENV_KEY, "true".to_string());
+        }
         // get from env
         for (target, src) in hashmap!{
             "DEPLO_CI_ID" => "CIRCLE_WORKFLOW_ID",
