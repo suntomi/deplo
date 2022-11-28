@@ -10,3 +10,6 @@
 [submodule "tools/modules/slack"]
 	path = tools/modules/slack
 	url = https://github.com/suntomi/slack
+[submodule "tools/modules/sample"]
+	path = tools/modules/sample
+	url = https://github.com/suntomi/module-sample
