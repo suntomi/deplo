@@ -30,6 +30,7 @@ tempfile = "3.2.0"
 # strfmt = "0.2.2"
 formatx = "0.1.4"
 petgraph = { version = "0.6.2", features = ["graphmap"] }
+url = "2.3.1"
 
 [features]
 default = []

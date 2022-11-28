@@ -1,14 +1,22 @@
 {
     "version": "0.2.0",
     "configurations": [
-
+    {
+        "name": "Steps",
+        "type": "lldb",
+        "request": "launch",
+        "program": "${workspaceFolder}/target/debug/cli",
+        "args": [
+            "-v=3", "run", "mac", "steps"
+        ]
+    },        
     {
         "name": "Run",
         "type": "lldb",
         "request": "launch",
         "program": "${workspaceFolder}/target/debug/cli",
         "args": [
-            "-v=3", "i", "test"
+            "-v=3", "i", "builder", "sh", "@long_running"
         ]
     },    
     {

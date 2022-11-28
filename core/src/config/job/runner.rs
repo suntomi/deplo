@@ -54,65 +54,83 @@ impl<'a> Runner<'a> {
         let job = self.job;
         match command {
             job::Command::Adhoc(ref c) => {
-                (vec![job::Step::Command{
+                (vec![job::Step{
                     name: None,
-                    command: config::Value::new(c),
                     env: None,
-                    workdir: None,
-                    shell: job.shell.clone()
+                    command: job::StepCommand::Eval{
+                        command: config::Value::new(c),
+                        workdir: None,
+                        shell: job.shell.clone()
+                    }
                 }], Some(c.to_string()))
             },
             job::Command::Job => if let Some(steps) = &job.steps {
                 (steps.to_vec(), None)
             } else if let Some(ref c) = &job.command {
-                (vec![job::Step::Command{
+                (vec![job::Step{
                     name: None,
-                    command: c.clone(),
                     env: None,
-                    workdir: None,
-                    shell: job.shell.clone()
+                    command: job::StepCommand::Eval{
+                        command: c.clone(),
+                        workdir: None,
+                        shell: job.shell.clone()
+                    }
                 }], Some(c.to_string()))
             } else {
                 panic!("neither job.command nor job.steps specified");
             },
             job::Command::Shell => {
                 let c = job.shell.as_ref().map_or_else(|| config::Value::new("bash"), |v| v.clone());
-                (vec![job::Step::Command{
+                (vec![job::Step{
                     name: None,
-                    command: c.clone(),
                     env: None,
-                    workdir: None,
-                    shell: job.shell.clone()
+                    command: job::StepCommand::Eval{
+                        command: c.clone(),
+                        workdir: None,
+                        shell: job.shell.clone()
+                    }
                 }], Some(c.to_string()))
             }
         }
     }
-    // pub fn run_job_steps(
-    //     &self, shell: &impl shell::Shell, shell_settings: &shell::Settings, job: &Job
-    // ) -> Result<Option<String>, Box<dyn Error>> {
-    //     let (steps, _) = self.create_steps(&job::Command::Job);
-    //     self.run_steps(shell, shell_settings, &shell::inherit_env(), &steps)
-    // }
-    fn step_runner_command(name: &str) -> String {
-        format!("deplo run {} steps", name)
+    fn step_runner_command(job_name: &str, task_name: &Option<String>) -> String {
+        match task_name {
+            Some(v) => format!("deplo run {} steps @{}", job_name, v),
+            None => format!("deplo run {} steps", job_name)
+        }
     }
     fn run_steps(
         &self, shell: &impl shell::Shell, shell_settings: &shell::Settings,
-        base_envs: &HashMap<String, config::Value>, steps: &Vec<job::Step>
+        runtime_workflow_config: &config::runtime::Workflow,
+        job: &config::job::Job, steps: &Vec<job::Step>
     ) -> Result<Option<String>, Box<dyn Error>> {
         let empty_envs = hashmap!{};
+        let job_envs = job.env(self.config, runtime_workflow_config);
         for step in steps {
-            match step {
-                job::Step::Command{shell: sh, command, env, workdir, name:_} => {
+            match &step.command {
+                job::StepCommand::Eval{shell: sh, command, workdir} => {
                     shell.eval(
-                        command.as_str(), &sh.as_ref().map(|v| v.as_str().to_string()),
-                        shell::ctoa(merge_hashmap(base_envs, env.as_ref().map_or_else(|| &empty_envs, |v| v))),
-                        workdir, shell_settings
+                        command.as_str(),
+                        &sh.as_ref().map_or_else(|| job.shell.as_ref().map(|v| v.resolve()), |v| Some(v.as_str().to_string())),
+                        shell::mctoa(merge_hashmap(&job_envs, step.env.as_ref().map_or_else(|| &empty_envs, |v| v))),
+                        &workdir.as_ref().map_or_else(|| job.workdir.as_ref(), |v| Some(&v)),
+                        shell_settings
                     )?;
                 },
-                job::Step::Module(c) => c.value(|v| {
-                    panic!("TODO: running step by module {} with {:?}", v.uses, v.with)
-                })
+                job::StepCommand::Exec{exec, workdir} => {
+                    shell.exec(exec.iter().map(|v| shell::arg!(v)),
+                        shell::mctoa(merge_hashmap(&job_envs, step.env.as_ref().map_or_else(|| &empty_envs, |v| v))),
+                        &workdir.as_ref().map_or_else(|| job.workdir.as_ref(), |v| Some(&v)),
+                        shell_settings
+                    )?;
+                },
+                job::StepCommand::Module(c) => {
+                    c.value(|v| {
+                        self.config.modules.step(&v.uses).run(
+                            shell_settings, &job_envs, &v.with
+                        )
+                    })?;
+                }
             }
         };
         Ok(None)
@@ -148,7 +166,7 @@ impl<'a> Runner<'a> {
         let (steps, main_command) = self.create_steps(&command);
         if exec.remote {
             log::debug!(
-                "force running job {} on remote with steps {} at {}", 
+                "force running job '{}' on remote with steps {} at {}",
                 job.name, job::StepsDumper{steps: &steps}, exec.revision.as_ref().unwrap_or(&"".to_string())
             );
             let ci = job.ci(&config);
@@ -163,7 +181,7 @@ impl<'a> Runner<'a> {
                         shell_settings.paths(vec![parent.to_string_lossy().to_string()]);
                     };
                     // run command directly here, add path to locally downloaded cli.
-                    self.run_steps(shell, &shell_settings, &job.env(&config, runtime_workflow_config), &steps)?;
+                    self.run_steps(shell, &shell_settings, runtime_workflow_config, job, &steps)?;
                     self.post_run(runtime_workflow_config)?;
                 } else {
                     log::debug!("runner os '{}' is different from current os '{}'", os, current_os);
@@ -199,8 +217,16 @@ impl<'a> Runner<'a> {
                                 image.as_str(),
                                 // if main_command is none, we need to run steps in single container.
                                 // so we execute `deplo ci steps $job_name` to run steps of $job_name.
-                                &main_command.map_or_else(|| Self::step_runner_command(&job.name), |v| v.to_string()),
-                                &sh.as_ref().map(|v| v.resolve()), shell::ctoa(job.env(&config, runtime_workflow_config)),
+                                &main_command.map_or_else(|| Self::step_runner_command(&job.name, &None), |v| match sh {
+                                    // if command is shell command and local fallback has dedicate shell setting,
+                                    // override shell setting with local_fallback's one.
+                                    Some(sh) => match command {
+                                        job::Command::Shell => sh.resolve(),
+                                        _ => v.to_string(),
+                                    },
+                                    None => v.to_string()
+                                }),
+                                &sh.as_ref().map(|v| v.resolve()), shell::mctoa(job.env(&config, runtime_workflow_config)),
                                 &job.workdir, mounts.bind(hashmap!{
                                     path.as_os_str() => &path_target
                                 }), &shell_settings
@@ -213,7 +239,7 @@ impl<'a> Runner<'a> {
                     // runner os is not linux and not same as current os, and no fallback container specified.
                     // need to run in CI.
                     log::debug!(
-                        "running job {} on remote with steps {} at {}: its target os={} which cannot fallback to local execution", 
+                        "running job '{}' on remote with steps {} at {}: its target os={} which cannot fallback to local execution",
                         job.name, job::StepsDumper{steps: &steps}, exec.revision.as_ref().unwrap_or(&"".to_string()), os
                     );
                     let ci = job.ci(&config);
@@ -221,11 +247,11 @@ impl<'a> Runner<'a> {
     
                 }
             },
-            job::Runner::Container{ ref image, ref inputs } => {
+            job::Runner::Container{ ref image, .. } => {
                 if config::Config::is_running_on_ci() {
                     // already run inside container `image`, run command directly here
                     // no need to setup_deplo_cli because CI should already setup it
-                    self.run_steps(shell, &shell_settings, &job.env(&config, &runtime_workflow_config), &steps)?;
+                    self.run_steps(shell, &shell_settings, runtime_workflow_config, job, &steps)?;
                 } else {
                     let path = &config.setup_deplo_cli(job::RunnerOS::Linux, shell)?.expect("path should return because not running on CI");
                     let path_target = config::Value::new("/usr/local/bin/deplo");
@@ -235,8 +261,8 @@ impl<'a> Runner<'a> {
                         image.as_str(),
                         // if main_command is none, we need to run steps in single container. 
                         // so we execute `deplo ci steps $job_name` to run steps of $job_name.
-                        &main_command.map_or_else(|| Self::step_runner_command(&job.name), |v| v.to_string()),
-                        &job.shell.as_ref().map(|v| v.resolve()), shell::ctoa(job.env(&config, runtime_workflow_config)),
+                        &main_command.map_or_else(|| Self::step_runner_command(&job.name, &None), |v| v.to_string()),
+                        &job.shell.as_ref().map(|v| v.resolve()), shell::mctoa(job.env(&config, runtime_workflow_config)),
                         &job.workdir, mounts.bind(hashmap!{
                             path.as_os_str() => &path_target
                         }), &shell_settings
@@ -279,7 +305,7 @@ impl<'a> Runner<'a> {
                 }
             },
             None => { 
-                log::debug!("no commit settings for workflow '{}'", runtime_workflow_config.name);
+                log::debug!("no commit settings for job '{}' in workflow '{}'", job.name, runtime_workflow_config.name);
             }
         };
         let ci = job.ci(&config);

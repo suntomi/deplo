@@ -11,6 +11,7 @@ use maplit::hashmap;
 
 use crate::args;
 use crate::shell;
+use crate::module::repos::Repository as ModuleRepository;
 use crate::util::{make_absolute, escalate, path_join, randombytes_as_string};
 
 pub mod ci;
@@ -50,11 +51,16 @@ impl Error for ConfigError {
 }
 #[derive(Default)]
 pub struct Modules {
+    /// ci/vcs modules.
+    /// all implementation of ci/vcs contained in deplo itself.
+    /// TODO: after module system get stable, move these implementation out of deplo
     ci: HashMap<String, Box<dyn crate::ci::CI>>,
-    // TODO: better way to have uninitialized box variables?
     vcs: Option<Box<dyn crate::vcs::VCS>>,
+    /// step/workflow modules. these implementation already move to module system
     steps: HashMap<String, Box<dyn crate::step::Step>>,
     workflows: HashMap<String, Box<dyn crate::workflow::Workflow>>,
+    /// module repository
+    repos: Option<ModuleRepository>,
 }
 impl Modules {
     pub fn vcs(&self) -> &Box<dyn crate::vcs::VCS> {
@@ -79,6 +85,17 @@ impl Modules {
             }
         }
         return ("default", self.ci_by_default());
+    }
+    pub fn step(&self, src: &crate::module::Source) -> &Box<dyn crate::step::Step> {
+        let key = src.to_string();
+        self.steps.get(&key).expect(&format!("step module {} should exists", &key))
+    }
+    pub fn workflow(&self, src: &crate::module::Source) -> &Box<dyn crate::workflow::Workflow> {
+        let key = src.to_string();
+        self.workflows.get(&key).expect(&format!("workflow module {} should exists", &key))
+    }
+    pub fn repos(&self) -> &ModuleRepository {
+        self.repos.as_ref().unwrap()
     }
 }
 pub type ConfigVersion = u64;
@@ -121,7 +138,13 @@ impl Container {
     pub fn borrow_mut(&self) -> RefMut<'_> {
         self.ptr.borrow_mut()
     }
-    pub fn load_vcs_modules(&self) -> Result<(), Box<dyn Error>> {
+    pub fn create_module_repos(&self) -> Result<(), Box<dyn Error>> {
+        let repos = ModuleRepository::new(self);
+        let mut c = self.borrow_mut();
+        c.modules.repos = Some(repos);
+        Ok(())
+    }
+    pub fn setup_vcs_modules(&self, _repos: &mut ModuleRepository) -> Result<(), Box<dyn Error>> {
         let vcs = crate::vcs::factory(self)?;
         {
             let mut c = self.borrow_mut();
@@ -137,7 +160,7 @@ impl Container {
         }
         Ok(())
     }
-    pub fn load_ci_modules(&self) -> Result<(), Box<dyn Error>> {
+    pub fn setup_ci_modules(&self, _repos: &mut ModuleRepository) -> Result<(), Box<dyn Error>> {
         let mut ci = hashmap!{};
         for (k, _) in self.borrow().ci.as_map() {
             ci.insert(k.to_string(), crate::ci::factory(self, &k)?);
@@ -156,23 +179,31 @@ impl Container {
         }
         Ok(())
     }
-    pub fn load_modules(&self) -> Result<(), Box<dyn Error>> {
-        // load step modules
+    pub fn setup_modules(&self, repos: &mut ModuleRepository) -> Result<(), Box<dyn Error>> {
         let mut steps = hashmap!{};
-        module::config_for::<crate::step::Module, _, (), Box<dyn Error>>(|configs| {
-            for c in configs {
-                steps.insert(c.uses.resolve().to_string(), crate::step::factory(self, &c.uses, &c.with)?);
-            }
-            Ok(())
-        })?;
-        // load workflow modules
         let mut workflows = hashmap!{};
-        module::config_for::<crate::workflow::Module, _, (), Box<dyn Error>>(|configs| {
-            for c in configs {
-                workflows.insert(c.uses.resolve().to_string(), crate::workflow::factory(self, &c.uses, &c.with)?);
-            }
-            Ok(())
-        })?;
+        {
+            // borrow config
+            let config = self.borrow();
+            // load step modules
+            module::config_for::<crate::step::ModuleDescription, _, (), Box<dyn Error>>(|configs| {
+                for c in configs {
+                    steps.insert(c.uses.to_string(), crate::step::factory(
+                        self, repos.load(&config, &c.uses)?
+                    )?);
+                }
+                Ok(())
+            })?;
+            // load workflow modules
+            module::config_for::<crate::workflow::ModuleDescription, _, (), Box<dyn Error>>(|configs| {
+                for c in configs {
+                    workflows.insert(c.uses.to_string(), crate::workflow::factory(
+                        self, repos.load(&config, &c.uses)?
+                    )?);
+                }
+                Ok(())
+            })?;
+        }
         // store modules
         let mut c = self.borrow_mut();
         c.modules.steps = steps;
@@ -197,14 +228,14 @@ impl Container {
 
 impl Config {
     // static factory methods 
-    pub fn containerize(c: Config) -> Container {
+    pub fn wrap(c: Config) -> Container {
         Container{ ptr: Rc::new(RefCell::new(c)) }
     }
     pub fn with(src: Option<&str>) -> Result<Container, Box<dyn Error>> {
         let src = source::Source::Memory(src.unwrap_or(include_str!("../res/test/dummy-Deplo.toml")));
         let mut c = src.load_as::<Config>()?;
         c.runtime = runtime::Config::default();
-        return Ok(Self::containerize(c));
+        return Ok(Self::wrap(c));
     }
     fn setup(&mut self) {
         self.workflows.setup();
@@ -276,13 +307,18 @@ impl Config {
             let mut config = src.load_as::<Config>()?;
             config.runtime = runtime_config;
             config.setup();
-            Self::containerize(config)
+            Self::wrap(config)
         };
+        let mut repos = ModuleRepository::new(&c);
         // 3. load modules phase 1 (necessary for setup other modules)
-        c.load_vcs_modules()?;
-        c.load_ci_modules()?;
+        c.setup_vcs_modules(&mut repos)?;
+        c.setup_ci_modules(&mut repos)?;
         // 4. load modules phase 2 (modules not loaded during phase 1)
-        c.load_modules()?;
+        c.setup_modules(&mut repos)?;
+        {
+            let mut config = c.borrow_mut();
+            config.modules.repos = Some(repos);
+        }
         return Ok(c);
     }
     pub fn is_running_on_ci() -> bool {
@@ -300,9 +336,7 @@ impl Config {
     pub fn project_name(&self) -> String {
         self.project_name.resolve()
     }
-    pub fn deplo_data_path(&self) -> Result<PathBuf, Box<dyn Error>> {
-        let base = self.data_dir();
-        let path = make_absolute(base, self.modules.vcs().repository_root()?);
+    fn check_and_create_dir(&self, path: PathBuf) -> Result<PathBuf, Box<dyn Error>> {
         match fs::metadata(&path) {
             Ok(mata) => {
                 if !mata.is_dir() {
@@ -316,6 +350,16 @@ impl Config {
             }
         };
         Ok(path)
+    }
+    pub fn deplo_data_path(&self) -> Result<PathBuf, Box<dyn Error>> {
+        let base = self.data_dir();
+        let path = make_absolute(base, self.modules.vcs().repository_root()?);
+        self.check_and_create_dir(path)
+    }
+    pub fn deplo_module_root_path(&self) -> Result<PathBuf, Box<dyn Error>> {
+        let path = self.deplo_data_path()?;
+        let path = path_join(vec![path, PathBuf::from("modules")]);
+        self.check_and_create_dir(path)
     }
     pub fn generate_wrapper_script<S: shell::Shell>(
         &self, shell: &S, data_path: &PathBuf

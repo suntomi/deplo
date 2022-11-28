@@ -61,7 +61,11 @@ pub struct FallbackContainer {
     pub caches: Option<Vec<config::Value>>
 }
 /// configuration of os of machine type runner
-#[derive(Serialize, Deserialize, Clone, Copy, Eq, PartialEq)]
+#[derive(Serialize, Deserialize, Clone, Copy, Eq, PartialEq, Hash)]
+// this annotation and below impl TryFrom<String> are 
+// required because RunnerOS is used as HashMap key.
+// see https://stackoverflow.com/a/68580953/1982282 for detail
+#[serde(try_from = "String")]
 pub enum RunnerOS {
     #[serde(rename = "linux")]
     Linux,
@@ -71,12 +75,12 @@ pub enum RunnerOS {
     MacOS,
 }
 impl RunnerOS {
-    pub fn from_str(s: &str) -> Result<Self, &'static str> {
+    pub fn from_str(s: &str) -> Result<Self, Box<dyn Error>> {
         match s {
             "linux" => Ok(Self::Linux),
             "windows" => Ok(Self::Windows),
             "macos" => Ok(Self::MacOS),
-            _ => Err("unknown OS"),
+            _ => escalate!(Box::new(config::ConfigError{cause: format!("no such os: [{}]", s)})),
         }
     }
     pub fn uname(&self) -> &'static str {
@@ -101,6 +105,12 @@ impl fmt::Display for RunnerOS {
             Self::Windows{..} => write!(f, "Windows"),
             Self::MacOS{..} => write!(f, "MacOS"),
         }
+    }
+}
+impl TryFrom<String> for RunnerOS {
+    type Error = Box<dyn Error>;
+    fn try_from(s: String) -> Result<Self, Self::Error> {
+        RunnerOS::from_str(s.as_str())
     }
 }
 /// configuration for runner of the job.
@@ -191,38 +201,52 @@ impl Commit {
     }
 }
 #[derive(Serialize, Deserialize, Clone)]
-pub struct StepExtension {
-    pub name: Option<String>,
-}
-#[derive(Serialize, Deserialize, Clone)]
 #[serde(untagged)]
-pub enum Step {
-    Command {
+pub enum StepCommand {
+    Eval {
         command: config::Value,
-        name: Option<config::Value>,
-        env: Option<HashMap<String, config::Value>>,
         shell: Option<config::Value>,
         workdir: Option<config::Value>,
     },
-    Module(config::module::ConfigFor<crate::step::Module, StepExtension>)
+    Exec {
+        exec: Vec<config::Value>,
+        workdir: Option<config::Value>,
+    },
+    Module(config::module::ConfigFor<crate::step::ModuleDescription>)
+}
+#[derive(Serialize, Deserialize, Clone)]
+pub struct Step {
+    pub name: Option<String>,
+    pub env: Option<HashMap<String, config::Value>>,
+    #[serde(flatten)]
+    pub command: StepCommand,
 }
 impl fmt::Display for Step {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Step::Command{
-                command, env, shell, workdir, name
-            } => write!(f, 
-                "Step::Command{{name:{}, cmd:{}, env:{}, shell:{}, workdir:{}}}", 
-                name.as_ref().map_or_else(|| "".to_string(), |s| s.to_string()),
-                command, 
-                env.as_ref().map_or_else(|| "None".to_string(), |e| format!("{:?}", e)),
+        match &self.command {
+            StepCommand::Eval{
+                command, shell, workdir
+            } => write!(f,
+                "Step::Command{{name:{}, command:{}, env:{}, shell:{}, workdir:{}}}",
+                self.name.as_ref().map_or_else(|| "".to_string(), |s| s.to_string()),
+                command,
+                self.env.as_ref().map_or_else(|| "None".to_string(), |e| format!("{:?}", e)),
                 shell.as_ref().map_or_else(|| "None".to_string(), |e| format!("{:?}", e)),
                 workdir.as_ref().map_or_else(|| "None".to_string(), |e| format!("{:?}", e)),
             ),
-            Step::Module(c) => c.value(|v| write!(f, 
-                "Step::Module{{name:{}, uses:{}, with:{}", 
-                c.ext().name.as_ref().map_or_else(|| "".to_string(), |s| s.to_string()),
-                v.uses,
+            StepCommand::Exec{
+                exec, workdir
+            } => write!(f,
+                "Step::Command{{name:{}, exec:{:?}, env:{}, workdir:{}}}",
+                self.name.as_ref().map_or_else(|| "".to_string(), |s| s.to_string()),
+                exec,
+                self.env.as_ref().map_or_else(|| "None".to_string(), |e| format!("{:?}", e)),
+                workdir.as_ref().map_or_else(|| "None".to_string(), |e| format!("{:?}", e)),
+            ),
+            StepCommand::Module(c) => c.value(|v| write!(f,
+                "Step::Module{{name:{}, uses:{}, with:{}",
+                self.name.as_ref().map_or_else(|| "".to_string(), |s| s.to_string()),
+                v.uses.to_string(),
                 v.with.as_ref().map_or_else(|| "None".to_string(), |e| format!("{:?}", e))
             ))
         }
@@ -861,9 +885,9 @@ impl Jobs {
         log::info!("remote job {} id={} finished", job_name, job_id);
         Ok(())
     }
-    pub fn run<S>(
-        &self, config: &config::Config, runtime_workflow_config: &config::runtime::Workflow, shell: &S
-    ) -> Result<(), Box<dyn Error>> where S: shell::Shell {
+    pub fn run(
+        &self, config: &config::Config, runtime_workflow_config: &config::runtime::Workflow, shell: &impl shell::Shell
+    ) -> Result<(), Box<dyn Error>> {
         let job_name = &runtime_workflow_config.job.as_ref().expect("should have job setting").name;
         if runtime_workflow_config.exec.follow_dependency {
             self.as_dg().traverse(Some(job_name), |name, job| {
@@ -890,9 +914,9 @@ impl Jobs {
         }
         Ok(())
     }
-    pub fn boot<S>(
-        &self, config: &config::Config, runtime_workflow_config: &config::runtime::Workflow, shell: &S
-    ) -> Result<(), Box<dyn Error>> where S: shell::Shell {
+    pub fn boot(
+        &self, config: &config::Config, runtime_workflow_config: &config::runtime::Workflow, shell: &impl shell::Shell
+    ) -> Result<(), Box<dyn Error>> {
         let modules = &config.modules;
         let (_, ci) = modules.ci_by_env();
         // TODO: support follow_dependency of remote job running.

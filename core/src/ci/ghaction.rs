@@ -37,6 +37,9 @@ enum EventPayload {
         action: String,
         client_payload: JsonValue
     },
+    WorkflowDispatch {
+        inputs: JsonValue
+    },
     Repository {
         action: Option<String>
     }
@@ -49,6 +52,9 @@ impl fmt::Display for EventPayload {
                 let a = if action.is_none() { "None" } else { action.as_ref().unwrap().as_str() };          
                 write!(f, "repository:{}", a)
             },
+            Self::WorkflowDispatch{inputs} => {
+                write!(f, "workflow_dispatch:{}", inputs)
+            }
             Self::RepositoryDispatch{action,..} => write!(f, "repository_dispatch:{}", action)
         }
     }
@@ -124,7 +130,28 @@ impl<S: shell::Shell> GhAction<S> {
             kind.to_str().to_uppercase(), job_name.replace("-", "_").to_uppercase()
         )
     }
-    fn generate_entrypoint<'a>(&self, config: &'a config::Config) -> Vec<String> {
+    fn generate_manual_dispatch(&self, schemas: &config::workflow::InputSchemaSet) -> Vec<String> {
+        let mut input_configs = vec![];
+        for (name, schema) in schemas.as_map() {
+            let mut options = vec![];
+            if schema.description.is_some() {
+                options.push(format!("description: '{}'", schema.description.as_ref().unwrap()));
+            }
+            if schema.required.is_some() {
+                options.push(format!("required: '{}'", schema.required.unwrap()));
+            }
+            input_configs.push(format!(
+                include_str!("../../res/ci/ghaction/key_and_values.yml.tmpl"),
+                key = name,
+                values = MultilineFormatString{
+                    strings: &options,
+                    postfix: None
+                }
+            ).split("\n").map(|s| s.to_string()).collect::<Vec<String>>());
+        }
+        input_configs.concat()
+    }
+    fn generate_entrypoints<'a>(&self, config: &'a config::Config) -> HashMap<String, Vec<String>> {
         // get target branch
         let target_branches = sorted_key_iter(&config.release_targets)
             .filter(|v| v.1.is_branch())
@@ -136,7 +163,73 @@ impl<S: shell::Shell> GhAction<S> {
             .collect::<Vec<_>>().concat();
         let branches = if target_branches.len() > 0 { vec![format!("branches: [\"{}\"]", target_branches.join("\",\""))] } else { vec![] };
         let tags = if target_tags.len() > 0 { vec![format!("tags: [\"{}\"]", target_tags.join("\",\""))] } else { vec![] };
-        format!(
+        // get other repository events
+        let mut event_entries = hashmap!{};
+        let mut workflow_dispatch_entries = hashmap!{};
+        let mut repository_dispatches = vec![
+            config::DEPLO_REMOTE_JOB_EVENT_TYPE.to_string(),
+            config::DEPLO_MODULE_EVENT_TYPE.to_string()
+        ];
+        let mut schedule_entries = vec![];
+        for (name, v) in sorted_key_iter(config.workflows.as_map()) {
+            match v {
+                config::workflow::Workflow::Repository { events } => {
+                    for (_, event_names) in events {
+                        for event_name in event_names {
+                            let name = event_name.resolve();
+                            let components: Vec<&'_ str> = name.split(".").collect();
+                            match components.len() {
+                                1 => { event_entries.entry(components[0].to_string()).or_insert(vec![]); },
+                                2 => {
+                                    event_entries.
+                                        entry(components[0].to_string()).
+                                        or_insert(vec![]).
+                                        push(components[1].to_string())
+                                },
+                                _ => panic!("invalid event specifier '{}', should be form of 'category.event'", event_name)
+                            }
+                        }
+                    }
+                },
+                config::workflow::Workflow::Cron { schedules } => {
+                    schedule_entries.push(sorted_key_iter(schedules).map(|(_,v)| { format!("- cron: {}", v) }).collect::<Vec<_>>())
+                },
+                config::workflow::Workflow::Deploy|config::workflow::Workflow::Integrate => {},
+                config::workflow::Workflow::Dispatch{inputs,manual} => {
+                    if manual.unwrap_or(false) {
+                        if name == "main" {
+                            panic!("deplo does not allow manual dispatch name 'main'")
+                        }
+                        workflow_dispatch_entries.entry(name).or_insert(self.generate_manual_dispatch(inputs));
+                    } else {
+                        repository_dispatches.push(name.replace("_", "-"));
+                    }
+                },
+                config::workflow::Workflow::Module(_) => {}
+            }
+        }
+        let schedules = format!(
+            include_str!("../../res/ci/ghaction/key_and_values.yml.tmpl"),
+            key = "schedule",
+            values = MultilineFormatString{
+                strings: &schedule_entries.concat(),
+                postfix: None
+            }
+        ).split("\n").map(|s| s.to_string()).collect::<Vec<String>>();
+        let events = sorted_key_iter(&event_entries).map(|(k,v)| {
+            if v.len() <= 0 {
+                vec![format!("{}:", k)]
+            } else {
+                format!("{}:\n{:>2}", 
+                    k, MultilineFormatString{
+                        strings: &vec![format!("types: [{}]", v.join(","))],
+                        postfix: None
+                    }
+                ).split("\n").map(|s| s.to_string()).collect::<Vec<String>>()
+            }
+        }).collect::<Vec<Vec<String>>>().concat();
+        let mut results = hashmap!{};
+        results.insert("main".to_string(), format!(
             include_str!("../../res/ci/ghaction/entrypoint.yml.tmpl"), 
             branches = MultilineFormatString{
                 strings: &branches,
@@ -146,7 +239,26 @@ impl<S: shell::Shell> GhAction<S> {
                 strings: &tags,
                 postfix: None
             },
-        ).split("\n").map(|s| s.to_string()).collect()
+            schedules = MultilineFormatString{
+                strings: &schedules,
+                postfix: None
+            },
+            repository_dispatches = repository_dispatches.join(","),
+            events = MultilineFormatString{
+                strings: &events,
+                postfix: None
+            }
+        ).split("\n").map(|s| s.to_string()).collect());
+        for (dispatch_name, lines) in workflow_dispatch_entries {
+            results.insert(dispatch_name.replace("_", "-"), format!(
+                include_str!("../../res/ci/ghaction/workflow_entrypoint.yml.tmpl"), 
+                inputs = MultilineFormatString{
+                    strings: &lines,
+                    postfix: None
+                }
+            ).split("\n").map(|s| s.to_string()).collect());
+        }
+        results
     }
     fn generate_outputs(&self, jobs: &HashMap<String, config::job::Job>) -> Vec<String> {
         sorted_key_iter(jobs).map(|(v,_)| {
@@ -399,10 +511,10 @@ impl<S: shell::Shell> ci::CI for GhAction<S> {
         let config = self.config.borrow();
         let repository_root = config.modules.vcs().repository_root()?;
         // TODO_PATH: use Path to generate path of /.github/...
-        let workflow_yml_path = format!("{}/.github/workflows/deplo-main.yml", repository_root);
+        let main_workflow_yml_path = format!("{}/.github/workflows/deplo-main.yml", repository_root);
         let create_main = config.ci.is_main("GhAction");
         fs::create_dir_all(&format!("{}/.github/workflows", repository_root))?;
-        let previously_no_file = !rm(&workflow_yml_path);
+        let previously_no_file = !rm(&main_workflow_yml_path);
         // inject secrets from dotenv file
         let mut secrets = vec!();
         for (k, v) in sorted_key_iter(&config::secret::vars()?) {
@@ -488,56 +600,64 @@ impl<S: shell::Shell> ci::CI for GhAction<S> {
                 }
             }
         }
-        fs::write(&workflow_yml_path,
-            format!(
-                include_str!("../../res/ci/ghaction/main.yml.tmpl"), 
-                remote_job_dispatch_type = config::DEPLO_REMOTE_JOB_EVENT_TYPE,
-                entrypoint = MultilineFormatString{ 
-                    strings: &(if create_main { self.generate_entrypoint(&config) } else { vec![] }),
-                    postfix: None
-                },
-                secrets = MultilineFormatString{ strings: &secrets, postfix: None },
-                outputs = MultilineFormatString{ 
-                    strings: &self.generate_outputs(jobs),
-                    postfix: None
-                },
-                fetchcli = MultilineFormatString{
-                    strings: &self.generate_fetchcli_steps(&config::job::Runner::Machine{
-                        os: config::job::RunnerOS::Linux, image: None, class: None, local_fallback: None }
-                    ),
-                    postfix: None
-                },
-                kick_checkout = MultilineFormatString{
-                    strings: &self.generate_checkout_steps("main", &None, &Some(hashmap!{
-                        "fetch-depth".to_string() => config::Value::new("2"),
-                        "ref".to_string() => config::Value::new("${{ github.event.client_payload.commit }}")
-                    })),
-                    postfix: None
-                },
-                fin_checkout = MultilineFormatString{
-                    strings: &self.generate_checkout_steps("main", &None, &Some(hashmap!{
-                        "fetch-depth".to_string() => config::Value::new("2"),
-                        "ref".to_string() => config::Value::new("${{ github.event.client_payload.commit }}"),
-                        "lfs".to_string() => config::Value::new(&lfs.to_string())
-                    })),
-                    postfix: None
-                },
-                jobs = MultilineFormatString{
-                    strings: &job_descs,
-                    postfix: None
-                },
-                debugger = MultilineFormatString{
-                    strings: &self.generate_debugger(None, &config),
-                    postfix: None
-                },
-                need_cleanups = &self.generate_need_cleanups(jobs),
-                cleanup_envs = MultilineFormatString{
-                    strings: &self.generate_cleanup_envs(jobs),
-                    postfix: None
-                },
-                needs = format!("\"{}\"", all_job_names.join("\",\""))
-            )
-        )?;
+        let entrypoints = self.generate_entrypoints(&config);
+        for (name, entrypoint) in entrypoints {
+            let workflow_yml_path = format!("{}/.github/workflows/deplo-{}.yml", repository_root, name);
+            fs::write(&workflow_yml_path,
+                format!(
+                    include_str!("../../res/ci/ghaction/main.yml.tmpl"), 
+                    workflow_name = if name == "main" {
+                        "Deplo Workflow Runner"
+                    } else {
+                        &name
+                    },
+                    entrypoint = MultilineFormatString{ 
+                        strings: &(if create_main { entrypoint } else { vec![] }),
+                        postfix: None
+                    },
+                    secrets = MultilineFormatString{ strings: &secrets, postfix: None },
+                    outputs = MultilineFormatString{ 
+                        strings: &self.generate_outputs(jobs),
+                        postfix: None
+                    },
+                    fetchcli = MultilineFormatString{
+                        strings: &self.generate_fetchcli_steps(&config::job::Runner::Machine{
+                            os: config::job::RunnerOS::Linux, image: None, class: None, local_fallback: None }
+                        ),
+                        postfix: None
+                    },
+                    boot_checkout = MultilineFormatString{
+                        strings: &self.generate_checkout_steps("main", &None, &Some(hashmap!{
+                            "fetch-depth".to_string() => config::Value::new("2"),
+                            "ref".to_string() => config::Value::new("${{ github.event.client_payload.exec.revision }}")
+                        })),
+                        postfix: None
+                    },
+                    halt_checkout = MultilineFormatString{
+                        strings: &self.generate_checkout_steps("main", &None, &Some(hashmap!{
+                            "fetch-depth".to_string() => config::Value::new("2"),
+                            "ref".to_string() => config::Value::new("${{ github.event.client_payload.exec.revision }}"),
+                            "lfs".to_string() => config::Value::new(&lfs.to_string())
+                        })),
+                        postfix: None
+                    },
+                    jobs = MultilineFormatString{
+                        strings: &job_descs,
+                        postfix: None
+                    },
+                    debugger = MultilineFormatString{
+                        strings: &self.generate_debugger(None, &config),
+                        postfix: None
+                    },
+                    need_cleanups = &self.generate_need_cleanups(jobs),
+                    cleanup_envs = MultilineFormatString{
+                        strings: &self.generate_cleanup_envs(jobs),
+                        postfix: None
+                    },
+                    needs = format!("\"{}\"", all_job_names.join("\",\""))
+                )
+            )?;
+        }
         Ok(())
     }
     fn overwrite_commit(&self, commit: &str) -> Result<String, Box<dyn Error>> {
@@ -628,11 +748,25 @@ impl<S: shell::Shell> ci::CI for GhAction<S> {
                                     log::warn!("TODO: should check current workflow is matched for the module?");
                                     matched_names.push(name);
                                 }
-                            } else if let config::workflow::Workflow::Repository{..} = v {
-                                matched_names.push(name);
+                            } else if let config::workflow::Workflow::Dispatch{..} = v {
+                                if *action == name {
+                                    matched_names.push(name);
+                                } else {
+                                    log::debug!("repository dispatch name does not match {} != {}", action, name)
+                                }
                             }
                         } else {
                             panic!("event payload type does not match {}", workflow_event.event);
+                        },
+                        "workflow_dispatch" => if let config::workflow::Workflow::Dispatch{..} = v {
+                            let dispatch_name = std::env::var("DEPLO_GHACTION_WORKFLOW_NAME").expect(
+                                &format!("DEPLO_GHACTION_WORKFLOW_NAME should set")
+                            );
+                            if name.replace("_", "-") == dispatch_name {
+                                matched_names.push(name);
+                            } else {
+                                log::debug!("workflow dispatch name does not match {} != {}", dispatch_name, name)
+                            }
                         },
                         _ => match v {
                             config::workflow::Workflow::Repository{..} => matched_names.push(name),
@@ -688,8 +822,37 @@ impl<S: shell::Shell> ci::CI for GhAction<S> {
                                 panic!("event payload type does not match {}", workflow_event.event);
                             }
                         },
-                        config::workflow::Workflow::Module(_c) => {
-                            panic!("not implemented yet")
+                        config::workflow::Workflow::Dispatch{inputs,manual} => {
+                            match &workflow_event.event {
+                                EventPayload::RepositoryDispatch{client_payload,action} => if !manual.unwrap_or(false) {
+                                    inputs.verify(&client_payload); // panic!s when schema does not matched
+                                    matches.push(config::runtime::Workflow::with_context(
+                                        action.to_string(), serde_json::from_str(&serde_json::to_string(&client_payload)?)?
+                                    ));
+                                },
+                                EventPayload::WorkflowDispatch{inputs: client_payload} => if manual.unwrap_or(false) {
+                                    inputs.verify(&client_payload); // panic!s when schema does not matched
+                                    matches.push(config::runtime::Workflow::with_context(
+                                        name, serde_json::from_str(&serde_json::to_string(&client_payload)?)?
+                                    ));
+                                },
+                                _ => { panic!("event payload type does not match {}", workflow_event.event); }
+                            }
+                        },
+                        config::workflow::Workflow::Module(c) => {
+                            if let Some(event_payload) = c.value(|v| {
+                                let event = match &workflow_event.event {
+                                    EventPayload::RepositoryDispatch{client_payload,..} => serde_json::to_string(client_payload)?,
+                                    _ => panic!("event payload type does not match {}", workflow_event.event),
+                                };
+                                config.modules.workflow(&v.uses).matches(
+                                    &shell::no_capture(), &event, &v.with
+                                )
+                            })? {
+                                matches.push(config::runtime::Workflow::with_context(
+                                    name, serde_json::from_str(&event_payload)?
+                                ));
+                            }
                         }
                     }
                 }

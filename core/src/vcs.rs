@@ -43,11 +43,9 @@ pub trait VCS {
     fn squash_branch(&self, n: usize) -> Result<(), Box<dyn Error>>;
     fn commit_hash(&self, expr: Option<&str>) -> Result<String, Box<dyn Error>>;
     fn checkout(&self, commit: &str, branch_name: Option<&str>) -> Result<(), Box<dyn Error>>;
-    fn checkout_previous(&self) -> Result<(), Box<dyn Error>> { self.checkout("-", None) }
     fn repository_root(&self) -> Result<String, Box<dyn Error>>;
     fn rebase_with_remote_counterpart(&self, branch: &str) -> Result<(), Box<dyn Error>>;
     fn pick_ref(&self, target: &str) -> Result<(), Box<dyn Error>>;
-    fn pick_fetched_head(&self) -> Result<(), Box<dyn Error>> { self.pick_ref("FETCH_HEAD") }
     fn push_branch(
         &self, local_ref: &str, remote_branch: &str, option: &HashMap<&str, &str>
     ) -> Result<(), Box<dyn Error>>;
@@ -68,6 +66,10 @@ pub trait VCS {
         &self, remote_branch: &str, msg: &str, patterns: &Vec<&str>, option: &HashMap<&str, &str>
     ) -> Result<bool, Box<dyn Error>>;
     fn diff<'b>(&'b self) -> &'b Vec<String>;
+
+    // derived interfaces
+    fn pick_fetched_head(&self) -> Result<(), Box<dyn Error>> { self.pick_ref("FETCH_HEAD") }
+    fn checkout_previous(&self) -> Result<(), Box<dyn Error>> { self.checkout("-", None) }
     fn changed<'b>(&'b self, matcher: &DiffMatcher) -> bool {
         let difflines = self.diff();
         if difflines.len() == 1 && difflines[0] == "*" {
@@ -108,9 +110,9 @@ pub trait VCS {
     }
 }
 #[derive(Clone)]
-pub struct Module;
-impl module::Module for Module {
-    fn ty() -> config::module::Type { return config::module::Type::Vcs; }
+pub struct ModuleDescription;
+impl module::Description for ModuleDescription {
+    fn ty() -> config::module::Type { return config::module::Type::VCS; }
 }
 
 #[derive(Debug)]

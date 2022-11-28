@@ -19,14 +19,12 @@ pub enum Account {
         key: config::Value,
     },
     #[serde(rename = "module")]
-    Module(config::module::ConfigFor<crate::ci::Module>)
+    Module(config::module::ConfigFor<crate::ci::ModuleDescription>)
 }
 impl Account {
     pub fn type_matched(&self, t: &str) -> bool {
         match self {
-            Self::Module(c) => if c.value(|v| v.uses.resolve().starts_with(t)) {
-                return true
-            }
+            Self::Module(c) => return c.value(|v| v.uses.to_string().starts_with(t)),
             _ => {}
         }
         return t == self.type_as_str()
@@ -44,7 +42,7 @@ impl fmt::Display for Account {
         match self {
             Self::GhAction{..} => write!(f, "ghaction"),
             Self::CircleCI{..} => write!(f, "circleci"),
-            Self::Module(c) => c.value(|v| write!(f, "module {}", v.uses)),
+            Self::Module(c) => c.value(|v| write!(f, "module {}", v.uses.to_string())),
         }
     }    
 }

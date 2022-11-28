@@ -20,14 +20,14 @@ pub enum Account {
         key: config::Value
     },
     #[serde(rename = "module")]
-    Module(config::module::ConfigFor<crate::vcs::Module>)
+    Module(config::module::ConfigFor<crate::vcs::ModuleDescription>)
 }
 impl fmt::Display for Account {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::Github{..} => write!(f, "github"),
             Self::Gitlab{..} => write!(f, "gitlab"),
-            Self::Module(c) => c.value(|v| write!(f, "module {}", v.uses)),
+            Self::Module(c) => c.value(|v| write!(f, "module {}", v.uses.to_string())),
         }
     }    
 }
