@@ -423,6 +423,57 @@ impl Trigger {
         return true
     }
 }
+#[derive(Serialize, Deserialize, Clone)]
+#[serde(untagged)]
+pub enum SubmoduleCheckoutType {
+    Checkout(bool),
+    #[serde(rename = "recursive")]
+    Recursive,
+}
+#[derive(Serialize, Deserialize, Clone)]
+pub struct CheckoutOption {
+    pub lfs: Option<bool>,
+    pub submodule: Option<SubmoduleCheckoutType>,
+    pub fetch_depth: Option<u64>,
+    #[serde(rename = "ref")]
+    pub revision: Option<String>,
+    pub token: Option<String>
+}
+impl CheckoutOption {
+    pub fn default() -> Self {
+        Self {
+            lfs: None,
+            submodule: None,
+            fetch_depth: None,
+            revision: None,
+            token: None
+        }
+    }
+    pub fn merge(&self, with: &Self) -> Self {
+        Self {
+            lfs: match with.lfs {
+                Some(v) => Some(v),
+                None => self.lfs
+            },
+            submodule: match with.submodule {
+                Some(ref v) => Some(v.clone()),
+                None => self.submodule.clone()
+            },
+            fetch_depth: match with.fetch_depth {
+                Some(ref v) => Some(*v),
+                None => self.fetch_depth
+            },
+            revision: match with.revision {
+                Some(ref v) => Some(v.clone()),
+                None => self.revision.clone()
+            },
+            token: match with.token {
+                Some(ref v) => Some(v.clone()),
+                None => self.token.clone()
+            },
+        }
+    }
+}
 #[derive(Serialize, Deserialize)]
 pub struct Job {
     #[serde(skip, default)]
@@ -435,7 +486,7 @@ pub struct Job {
     pub steps: Option<Vec<Step>>,
     pub env: Option<HashMap<String, config::Value>>,
     pub workdir: Option<config::Value>,
-    pub checkout: Option<HashMap<String, config::Value>>,
+    pub checkout: Option<CheckoutOption>,
     pub caches: Option<HashMap<String, Cache>>,
     pub depends: Option<Vec<config::Value>>,
     pub commit: Option<UnitOrListOf<Commit>>,

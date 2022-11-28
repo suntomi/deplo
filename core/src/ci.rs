@@ -4,6 +4,7 @@ use std::fmt;
 
 use crate::config;
 use crate::module;
+use crate::util::{strhash};
 
 pub enum OutputKind {
     System,
@@ -26,6 +27,14 @@ impl WorkflowTrigger {
         match self {
             Self::EventPayload(payload) => format!("EventPayload({})", payload),
         }
+    }
+}
+
+pub trait CheckoutOption {
+    fn opt_str(&self) -> Vec<String>;
+    fn hash(&self) -> String {
+        let src = self.opt_str().join(",");
+        strhash(&src)
     }
 }
 

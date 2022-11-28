@@ -13,15 +13,13 @@ use serde::{Deserialize, Serialize};
 use serde_json::{Value as JsonValue};
 
 use crate::config;
-use crate::ci;
+use crate::ci::{self, CheckoutOption};
 use crate::shell;
 use crate::vcs;
 use crate::util::{
     escalate,seal,
     MultilineFormatString,rm,
-    maphash,
     sorted_key_iter,
-    merge_hashmap,
     randombytes_as_string
 };
 
@@ -78,6 +76,40 @@ impl ClientPayload {
             job_id: randombytes_as_string!(16),
             job_config: job_config.clone()
         }
+    }
+}
+
+impl ci::CheckoutOption for config::job::CheckoutOption {
+    fn opt_str(&self) -> Vec<String> {
+        let mut r = vec![];
+        match self.fetch_depth {
+            Some(ref v) => r.push(format!("fetch-depth: {}", v)),
+            None => {}
+        } 
+        match self.lfs {
+            Some(ref v) => r.push(format!("lfs: {}", v)),
+            None => {}
+        }
+        match self.revision {
+            Some(ref v) => r.push(format!("ref: {}", v)),
+            None => {}
+        }
+        match self.submodule {
+            Some(ref v) => match v {
+                config::job::SubmoduleCheckoutType::Checkout(b) => if *b {
+                    r.push(format!("submodule: {}", b))
+                },
+                config::job::SubmoduleCheckoutType::Recursive => {
+                    r.push("submodule: recursive".to_string())
+                }
+            },
+            None => {}
+        }
+        match self.token {
+            Some(ref v) => r.push(format!("token: {}", v)),
+            None => {}
+        }        
+        return r
     }
 }
 
@@ -432,25 +464,25 @@ impl<S: shell::Shell> GhAction<S> {
         ).split("\n").map(|s| s.to_string()).collect()
     }
     fn generate_checkout_steps<'a>(
-        &self, _: &'a str, options: &'a Option<HashMap<String, config::Value>>, defaults: &Option<HashMap<String, config::Value>>
+        &self, _: &'a str, options: &'a Option<config::job::CheckoutOption>, defaults: &Option<config::job::CheckoutOption>
     ) -> Vec<String> {
-        let merged_opts: HashMap<String, config::Value> = options.as_ref().map_or_else(
-            || defaults.clone().unwrap_or(HashMap::new()),
-            |v| merge_hashmap(v, &defaults.clone().unwrap_or(HashMap::new()))
-        );
-        let checkout_opts = sorted_key_iter(&merged_opts).map(|(k,v)| {
-            return if vec!["fetch-depth", "lfs", "ref", "token"].contains(&k.as_str()) {
-                format!("{}: {}", k, v)
-            } else {
-                format!("# warning: deplo only support lfs/fetch-depth options for github action checkout but {}({}) is specified", k, v)
+        let merged_opts = match options.as_ref() {
+            Some(v) => match defaults.as_ref() {
+                Some(vv) => vv.merge(v),
+                None => v.clone()
+            },
+            None => match defaults.as_ref() {
+                Some(v) => v.clone(),
+                None => config::job::CheckoutOption::default()
             }
-        }).collect::<Vec<String>>();
+        };
+        let checkout_opts = merged_opts.opt_str();
         // hash value for separating repository cache according to checkout options
         let opts_hash = options.as_ref().map_or_else(
             || "".to_string(), 
-            |v| { format!("-{}", maphash(v)) }
+            |v| { format!("-{}", v.hash()) }
         );
-        if merged_opts.get("fetch-depth").map_or_else(|| false, |v| v.resolve().parse::<i32>().unwrap_or(-1) == 0) {
+        if merged_opts.fetch_depth.map_or_else(|| false, |v| v == 0) {
             format!(
                 include_str!("../../res/ci/ghaction/cached_checkout.yml.tmpl"),
                 checkout_opts = MultilineFormatString{
@@ -567,23 +599,30 @@ impl<S: shell::Shell> ci::CI for GhAction<S> {
                     postfix: None
                 },
                 checkout = MultilineFormatString{
-                    strings: &self.generate_checkout_steps(&name, &job.checkout, &Some(merge_hashmap(
-                        &hashmap!{
-                            "ref".to_string() => config::Value::new("${{ github.event.client_payload.exec.revision }}"),
-                            "fetch-depth".to_string() => config::Value::new("2")
-                        }, &job.checkout.as_ref().map_or_else(
-                            || if job.commit.is_some() {
-                                hashmap!{ "fetch-depth".to_string() => config::Value::new("0") }
-                            } else {
-                                hashmap!{}
-                            },
-                            |v| if v.get("lfs").is_some() || job.commit.is_some() {
-                                hashmap!{ "fetch-depth".to_string() => config::Value::new("0") }
-                            } else {
-                                hashmap!{}
-                            }
-                        )))
-                    ),
+                    strings: &self.generate_checkout_steps(&name, &match config.checkout.as_ref() {
+                        Some(v) => match job.checkout.as_ref() {
+                            Some(vv) => Some(v.merge(vv)),
+                            None => Some(v.clone())
+                        },
+                        None => job.checkout.clone()
+                    }, &Some(config::job::CheckoutOption {
+                            revision: Some("${{ github.event.client_payload.exec.revision }}".to_string()),
+                            fetch_depth: Some(2),
+                            lfs: None, token: None, submodule: None
+                        }.merge(
+                            &job.checkout.as_ref().map_or_else(
+                                || config::job::CheckoutOption::default(),
+                                // for lfs, set fetch_depth to 0 to pull all commits and using cache
+                                |v| if v.lfs.unwrap_or(false) {
+                                    config::job::CheckoutOption {
+                                        fetch_depth: Some(0), lfs: None, token: None, submodule: None, revision: None
+                                    }
+                                } else {
+                                    config::job::CheckoutOption::default()
+                                }
+                            )
+                        )
+                    )),
                     postfix: None
                 },
                 debugger = MultilineFormatString{
@@ -594,7 +633,7 @@ impl<S: shell::Shell> ci::CI for GhAction<S> {
             job_descs = job_descs.into_iter().chain(lines.into_iter()).collect();
             // check if lfs is enabled
             if !lfs {
-                lfs = job.checkout.as_ref().map_or_else(|| false, |v| v.get("lfs").is_some() && job.commit.is_some());
+                lfs = job.checkout.as_ref().map_or_else(|| false, |v| v.lfs.unwrap_or(false) && job.commit.is_some());
                 if lfs {
                     log::debug!("there is an job {}, that has commits option and does lfs checkout. enable lfs for deplo fin", name);
                 }
@@ -627,17 +666,16 @@ impl<S: shell::Shell> ci::CI for GhAction<S> {
                         postfix: None
                     },
                     boot_checkout = MultilineFormatString{
-                        strings: &self.generate_checkout_steps("main", &None, &Some(hashmap!{
-                            "fetch-depth".to_string() => config::Value::new("2"),
-                            "ref".to_string() => config::Value::new("${{ github.event.client_payload.exec.revision }}")
+                        strings: &self.generate_checkout_steps("main", &config.checkout, &Some(config::job::CheckoutOption {
+                            fetch_depth: Some(2), lfs: None, token: None, submodule: None,
+                            revision: Some("${{ github.event.client_payload.exec.revision }}".to_string()),
                         })),
                         postfix: None
                     },
                     halt_checkout = MultilineFormatString{
-                        strings: &self.generate_checkout_steps("main", &None, &Some(hashmap!{
-                            "fetch-depth".to_string() => config::Value::new("2"),
-                            "ref".to_string() => config::Value::new("${{ github.event.client_payload.exec.revision }}"),
-                            "lfs".to_string() => config::Value::new(&lfs.to_string())
+                        strings: &self.generate_checkout_steps("main", &config.checkout, &Some(config::job::CheckoutOption {
+                            fetch_depth: Some(2), lfs: Some(lfs), token: None, submodule: None,
+                            revision: Some("${{ github.event.client_payload.exec.revision }}".to_string()),
                         })),
                         postfix: None
                     },

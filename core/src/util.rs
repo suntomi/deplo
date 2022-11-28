@@ -437,12 +437,20 @@ pub fn sorted_key_iter<K: std::cmp::Ord,V>(h: &HashMap<K, V>) -> impl Iterator<I
 pub fn merge_hashmap<K: std::cmp::Eq + std::hash::Hash + Clone, V: Clone>(h1: &HashMap<K, V>, h2: &HashMap<K, V>) -> HashMap<K, V> {
     let mut ret = HashMap::new();
     for (k, v) in h1.into_iter() {
-        ret.entry(k.clone()).or_insert(v.clone());
+        ret.insert(k.clone(), v.clone());
     }
     for (k, v) in h2.into_iter() {
-        ret.entry(k.clone()).or_insert(v.clone());
+        ret.insert(k.clone(), v.clone());
     }
     return ret;
+}
+
+// strhash
+pub fn strhash(src: &str) -> String {
+    // hash value for separating repository cache according to checkout options
+    let mut digest = CRC_64.digest();
+    digest.update(src.as_bytes());
+    format!("{:X}", digest.finalize())
 }
 
 // vec

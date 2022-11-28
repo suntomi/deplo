@@ -108,6 +108,7 @@ pub struct Config {
     pub project_name: Value,
     pub data_dir: Option<Value>,
     pub debug: Option<HashMap<String, Value>>,
+    pub checkout: Option<job::CheckoutOption>,
     pub release_targets: HashMap<String, release_target::ReleaseTarget>,
     pub vcs: vcs::Account,
     pub ci: ci::Accounts,
