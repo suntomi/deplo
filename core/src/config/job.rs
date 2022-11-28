@@ -562,6 +562,18 @@ impl Job {
                 None => hashmap!{}
             }
         });
+        let mut depend_envs = hashmap!{};
+        match &self.depends {
+            Some(ds) => {
+                for d in ds {
+                    let envkey = ci::OutputKind::User.env_name_for_job(&d.resolve());
+                    let envval = config::Value::new(&std::env::var(&envkey).expect(&format!("{} should set", &envkey)));
+                    depend_envs.insert(envkey, envval);
+                }
+            },
+            None => {}
+        };
+        envs_list.push(&depend_envs);
         envs_list.push(&common_envs);
         let jenvs = ci.job_env();
         envs_list.push(&jenvs);
