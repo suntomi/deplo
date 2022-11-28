@@ -156,12 +156,6 @@ pub struct GhAction<S: shell::Shell = shell::Default> {
 }
 
 impl<S: shell::Shell> GhAction<S> {
-    fn job_output_env_name(kind: ci::OutputKind, job_name: &str) -> String {
-        format!(
-            "DEPLO_JOB_{}_OUTPUT_{}",
-            kind.to_str().to_uppercase(), job_name.replace("-", "_").to_uppercase()
-        )
-    }
     fn generate_manual_dispatch(&self, schemas: &config::workflow::InputSchemaSet) -> Vec<String> {
         let mut input_configs = vec![];
         for (name, schema) in schemas.as_map() {
@@ -305,7 +299,7 @@ impl<S: shell::Shell> GhAction<S> {
     fn generate_cleanup_envs<'a>(&self, jobs: &HashMap<String, config::job::Job>) -> Vec<String> {
         let envs = sorted_key_iter(jobs).map(|(v,_)| {
             format!("{env_name}: ${{{{ needs.{job_name}.outputs.system }}}}",
-                env_name = Self::job_output_env_name(ci::OutputKind::System, &v),
+                env_name = ci::OutputKind::System.env_name_for_job(&v),
                 job_name = v
             )
         }).collect::<Vec<String>>();
@@ -400,7 +394,7 @@ impl<S: shell::Shell> GhAction<S> {
                 for d in depends {
                     envs.push(format!(
                         "{}: ${{{{ needs.{}.outputs.user }}}}",
-                        Self::job_output_env_name(ci::OutputKind::User, &d.resolve()),
+                        ci::OutputKind::User.env_name_for_job(&d.resolve()),
                         d
                     ));
                 }
@@ -525,6 +519,14 @@ impl<S: shell::Shell> GhAction<S> {
                 cause: "should have ghaction CI config but other config provided".to_string()
             }))
         })
+    }
+    fn set_output(&self, key: &str, val: &str) -> Result<(), Box<dyn Error>> {
+        self.shell.eval(
+            &format!("echo \"{key}={val}\" >> $GITHUB_OUTPUT", key = key, val = val),
+            &None, hashmap!{"GITHUB_OUTPUT" => shell::arg!(std::env::var("GITHUB_OUTPUT")?)},
+            shell::no_cwd(), &shell::no_capture()
+        )?;
+        Ok(())
     }
 }
 
@@ -715,12 +717,11 @@ impl<S: shell::Shell> ci::CI for GhAction<S> {
         }
     }
     fn schedule_job(&self, job_name: &str) -> Result<(), Box<dyn Error>> {
-        println!("::set-output name={}::true", job_name);
-        Ok(())
+        self.set_output(job_name, "true")
     }
     fn mark_need_cleanup(&self, job_name: &str) -> Result<(), Box<dyn Error>> {
         if config::Config::is_running_on_ci() {
-            println!("::set-output name=need-cleanup::true");
+            self.set_output("need-cleanup", "true")?;
         } else {
             log::debug!("mark_need_cleanup: {}", job_name);
         }
@@ -979,7 +980,7 @@ impl<S: shell::Shell> ci::CI for GhAction<S> {
         return Ok(Some(parsed.status));
     }
     fn job_output(&self, job_name: &str, kind: ci::OutputKind, key: &str) -> Result<Option<String>, Box<dyn Error>> {
-        match std::env::var(&Self::job_output_env_name(kind, job_name)) {
+        match std::env::var(&kind.env_name_for_job(job_name)) {
             Ok(value) => {
                 if value.is_empty() {
                     return Ok(None);
@@ -995,9 +996,9 @@ impl<S: shell::Shell> ci::CI for GhAction<S> {
     fn set_job_output(&self, job_name: &str, kind: ci::OutputKind, outputs: HashMap<&str, &str>) -> Result<(), Box<dyn Error>> {
         let text = serde_json::to_string(&outputs)?;
         if config::Config::is_running_on_ci() {
-            println!("::set-output name={}::{}", kind.to_str(), text);
+            self.set_output(kind.to_str(), &text)?;
         } else {
-            std::env::set_var(&Self::job_output_env_name(kind, job_name), &text);
+            std::env::set_var(&kind.env_name_for_job(job_name), &text);
         }
         Ok(())
     }
@@ -1009,6 +1010,16 @@ impl<S: shell::Shell> ci::CI for GhAction<S> {
         };
         if config::Config::is_running_on_ci() {
             envs.insert(config::DEPLO_RUNNING_ON_CI_ENV_KEY, "true".to_string());
+        }
+        for key in vec!["GITHUB_OUTPUT", "GITHUB_ENV"] {
+            match std::env::var(key) {
+                Ok(v) => {
+                    envs.insert(key, v);
+                },
+                Err(_) => if config::Config::is_running_on_ci(){
+                    panic!("{} should set on CI env", key);
+                }
+            }
         }
         // get from env
         for (src, target) in hashmap!{

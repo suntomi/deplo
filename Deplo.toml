@@ -197,7 +197,7 @@ on = { workflows = ["integrate"], changed = ["Deplo.toml"] }
 # local_fallback can be path to docker file. if you specify docker file path, deplo automatically build corresponding image
 # and use it as local fallback container image.
 runner = { os = "linux", local_fallback = { path = "tools/docker/Dockerfile.vmfb", shell = "sh" } }
-command = "echo 'deplo init'"
+command = "deplo init"
 # commit settings. if path of files that changed after the job finish running are matched patterns in 'files', 
 # deplo push or made pull request such a changes to repoisitory after all jobs finish running, in 'Cleanup CI' job.
 commit = [
@@ -289,7 +289,6 @@ steps = [{
     set -e
     . tools/scripts/setup_release_env.sh
     cargo build --release
-    export CI=true
     deplo vcs release-assets ${DEPLO_RELEASE_TAG} target/release/cli --replace -o name=deplo-Darwin
     # deploy-mac depends on deploy-product, so can use its output
     if [ "$(deplo job output product foo)" != "bar" ]; then
@@ -337,7 +336,6 @@ command = """
 set -e
 . tools/scripts/setup_release_env.sh
 cargo build --release
-export CI=true
 deplo vcs release-assets ${DEPLO_RELEASE_TAG} target/release/cli.exe --replace -o name=deplo-Windows.exe
 deplo vcs release-assets ${DEPLO_RELEASE_TAG} target/release/cli.pdb --replace -o name=deplo-Windows.pdb
 # job 'win' depends on job 'product', so can use its output

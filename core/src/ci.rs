@@ -17,6 +17,13 @@ impl OutputKind {
             Self::User => "user",
         }
     }
+    pub fn env_name_for_job(&self, job_name: &str) -> String {
+        format!(
+            "DEPLO_JOB_{}_OUTPUT_{}",
+            self.to_str().to_uppercase(), job_name.replace("-", "_").to_uppercase()
+        )
+    }
+
 }
 pub enum WorkflowTrigger {
     /// payload from CI service (github, circleci, etc...)
