@@ -94,13 +94,13 @@ impl ci::CheckoutOption for config::job::CheckoutOption {
             Some(ref v) => r.push(format!("ref: {}", v)),
             None => {}
         }
-        match self.submodule {
+        match self.submodules {
             Some(ref v) => match v {
                 config::job::SubmoduleCheckoutType::Checkout(b) => if *b {
-                    r.push(format!("submodule: {}", b))
+                    r.push(format!("submodules: {}", b))
                 },
                 config::job::SubmoduleCheckoutType::Recursive => {
-                    r.push("submodule: recursive".to_string())
+                    r.push("submodules: recursive".to_string())
                 }
             },
             None => {}
@@ -610,14 +610,14 @@ impl<S: shell::Shell> ci::CI for GhAction<S> {
                     }, &Some(config::job::CheckoutOption {
                             revision: Some("${{ github.event.client_payload.exec.revision }}".to_string()),
                             fetch_depth: Some(2),
-                            lfs: None, token: None, submodule: None
+                            lfs: None, token: None, submodules: None
                         }.merge(
                             &job.checkout.as_ref().map_or_else(
                                 || config::job::CheckoutOption::default(),
                                 // for lfs, set fetch_depth to 0 to pull all commits and using cache
                                 |v| if v.lfs.unwrap_or(false) {
                                     config::job::CheckoutOption {
-                                        fetch_depth: Some(0), lfs: None, token: None, submodule: None, revision: None
+                                        fetch_depth: Some(0), lfs: None, token: None, submodules: None, revision: None
                                     }
                                 } else {
                                     config::job::CheckoutOption::default()
@@ -669,14 +669,14 @@ impl<S: shell::Shell> ci::CI for GhAction<S> {
                     },
                     boot_checkout = MultilineFormatString{
                         strings: &self.generate_checkout_steps("main", &config.checkout, &Some(config::job::CheckoutOption {
-                            fetch_depth: Some(2), lfs: None, token: None, submodule: None,
+                            fetch_depth: Some(2), lfs: None, token: None, submodules: None,
                             revision: Some("${{ github.event.client_payload.exec.revision }}".to_string()),
                         })),
                         postfix: None
                     },
                     halt_checkout = MultilineFormatString{
                         strings: &self.generate_checkout_steps("main", &config.checkout, &Some(config::job::CheckoutOption {
-                            fetch_depth: Some(2), lfs: Some(lfs), token: None, submodule: None,
+                            fetch_depth: Some(2), lfs: Some(lfs), token: None, submodules: None,
                             revision: Some("${{ github.event.client_payload.exec.revision }}".to_string()),
                         })),
                         postfix: None

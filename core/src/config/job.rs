@@ -433,7 +433,7 @@ pub enum SubmoduleCheckoutType {
 #[derive(Serialize, Deserialize, Clone)]
 pub struct CheckoutOption {
     pub lfs: Option<bool>,
-    pub submodule: Option<SubmoduleCheckoutType>,
+    pub submodules: Option<SubmoduleCheckoutType>,
     pub fetch_depth: Option<u64>,
     #[serde(rename = "ref")]
     pub revision: Option<String>,
@@ -443,7 +443,7 @@ impl CheckoutOption {
     pub fn default() -> Self {
         Self {
             lfs: None,
-            submodule: None,
+            submodules: None,
             fetch_depth: None,
             revision: None,
             token: None
@@ -455,9 +455,9 @@ impl CheckoutOption {
                 Some(v) => Some(v),
                 None => self.lfs
             },
-            submodule: match with.submodule {
+            submodules: match with.submodules {
                 Some(ref v) => Some(v.clone()),
-                None => self.submodule.clone()
+                None => self.submodules.clone()
             },
             fetch_depth: match with.fetch_depth {
                 Some(ref v) => Some(*v),

@@ -169,6 +169,10 @@ impl Settings {
         self.env_inherit = true;
         self
     }
+    pub fn clear_env(&mut self) -> &mut Self {
+        self.env_inherit = false;
+        self
+    }
 }
 
 #[cfg(test)]
@@ -507,17 +511,24 @@ pub fn default<'a>() -> &'a Option<String> {
     return &None;
 }
 
+// tools in windows runner seems to depend on preset environment variables,
+// so we have to inherit them because its hard to know which environment variables are required.
+#[cfg(windows)]
+pub const ENV_INHERIT_DEFAULT: bool = true;
+#[cfg(not(windows))]
+pub const ENV_INHERIT_DEFAULT: bool = false;
+
 pub fn capture() -> Settings {
-    return Settings{ capture: true, interactive: false, silent: false, env_inherit: false, paths: None };
+    return Settings{ capture: true, interactive: false, silent: false, env_inherit: ENV_INHERIT_DEFAULT, paths: None };
 }
 pub fn no_capture() -> Settings {
-    return Settings{ capture: false, interactive: false, silent: false, env_inherit: false, paths: None };
+    return Settings{ capture: false, interactive: false, silent: false, env_inherit: ENV_INHERIT_DEFAULT, paths: None };
 }
 pub fn interactive() -> Settings {
-    return Settings{ capture: false, interactive: true, silent: false, env_inherit: false, paths: None };
+    return Settings{ capture: false, interactive: true, silent: false, env_inherit: ENV_INHERIT_DEFAULT, paths: None };
 }
 pub fn silent() -> Settings {
-    return Settings{ capture: true, interactive: false, silent: true, env_inherit: false, paths: None };
+    return Settings{ capture: true, interactive: false, silent: true, env_inherit: ENV_INHERIT_DEFAULT, paths: None };
 }
 
 pub fn sheban_of<'a>(script: &'a str, fallback: &'a str) -> &'a str {
