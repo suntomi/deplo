@@ -353,3 +353,10 @@ caches = {
         paths = ["target", "~/.cargo/bin", "~/.cargo/registry/cache", "~/.cargo/registry/index", "~/.cargo/git/db"]
     }
 }
+
+[jobs.dispatched]
+on = { workflows = ["manual_dispatch"] }
+runner = { os = "linux" }
+command = """
+echo "foo = "
+"""
