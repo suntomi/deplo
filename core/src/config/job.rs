@@ -555,6 +555,15 @@ impl Job {
         let common_envs = merge_hashmap(&hashmap!{
             "DEPLO_CI_JOB_NAME".to_string() => config::Value::new(&self.name),
             "DEPLO_CI_WORKFLOW_NAME".to_string() => config::Value::new(&runtime_workflow_config.name),
+            "DEPLO_CI_WORKFLOW_CONTEXT".to_string() => config::Value::new(
+                &match serde_json::to_string(&runtime_workflow_config.context) {
+                    Ok(v) => v,
+                    Err(e) => panic!(
+                        "workflow context does not have valid form {:?} err:{:?}",
+                        runtime_workflow_config.context, e
+                    )
+                }
+            ),
         }, &match runtime_workflow_config.exec.release_target {
             Some(ref v) => hashmap!{"DEPLO_CI_RELEASE_TARGET".to_string() => config::Value::new(v)},
             None => match vcs.release_target() {

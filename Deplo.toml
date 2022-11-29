@@ -355,8 +355,19 @@ caches = {
 }
 
 [jobs.dispatched]
-on = { workflows = ["manual_dispatch"] }
-runner = { os = "linux" }
+on = { workflows = ["manual_dispatch", "webapi_dispatch"] }
+runner = { os = "linux", local_fallback = { path = "tools/docker/Dockerfile.vmfb", shell = "sh" } }
 command = """
-echo "foo = "
+echo "======================="
+echo "dispatch context = ${DEPLO_CI_WORKFLOW_CONTEXT}"
+echo "======================="
+"""
+
+[jobs.repository]
+on = { workflows = ["repository"] }
+runner = { os = "linux", local_fallback = { path = "tools/docker/Dockerfile.vmfb", shell = "sh" } }
+command = """
+echo "======================="
+echo "repository context = ${DEPLO_CI_WORKFLOW_CONTEXT}"
+echo "======================="
 """
