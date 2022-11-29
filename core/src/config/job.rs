@@ -260,13 +260,9 @@ impl<'a> fmt::Display for StepsDumper<'a> {
         write!(f, "[{}]", self.steps.iter().map(|v| format!("{}", v)).collect::<Vec<_>>().join(","))
     }
 }
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Debug)]
 #[serde(untagged)]
 pub enum TriggerCondition {
-    Commit {
-        changed: Option<Vec<config::Value>>,
-        diff_matcher: Option<config::Value>,
-    },
     Cron {
         schedules: Vec<config::Value>,
     },
@@ -276,7 +272,13 @@ pub enum TriggerCondition {
     Module {
         when: HashMap<String, config::AnyValue>,
     },
-    Nop
+    Commit {
+        changed: Vec<config::Value>,
+        diff_matcher: Option<config::Value>,
+    },
+    Any {
+        any: Option<()>
+    }
 }
 impl TriggerCondition {
     fn check_workflow_type(&self, w: &config::workflow::Workflow) -> bool {
@@ -303,8 +305,8 @@ impl TriggerCondition {
             } else {
                 false
             },
-            Self::Nop => false
-        
+            // no workflow type specific condition. always returns true
+            Self::Any{..} => true        
         }
     }
 }
@@ -372,6 +374,7 @@ impl Trigger {
         }        
         if !self.condition.check_workflow_type(workflow) {
             log::debug!("workflow '{}' does not match for trigger condition of '{}'", workflow, job.name);
+            return false;
         }
         if !opts.check_condition {
             log::debug!("skip condition check for job '{}' in workflow '{}'", job.name, workflow);
@@ -379,16 +382,14 @@ impl Trigger {
         }
         match &self.condition {
             TriggerCondition::Commit{ changed, diff_matcher } => {
-                if let Some(ch) = changed {
-                    // diff pattern matches
-                    let dm = Self::diff_matcher(diff_matcher, ch);
-                    if !config.modules.vcs().changed(&dm) {
-                        log::trace!(
-                            "workflow '{}' job '{}' diff pattern {:?} does not match any of changed files in last commit", 
-                            workflow, job.name, changed
-                        );
-                        return false;
-                    }
+                // diff pattern matches
+                let dm = Self::diff_matcher(diff_matcher, changed);
+                if !config.modules.vcs().changed(&dm) {
+                    log::trace!(
+                        "workflow '{}' job '{}' diff pattern {:?} does not match any of changed files in last commit", 
+                        workflow, job.name, changed
+                    );
+                    return false;
                 }
             },
             TriggerCondition::Cron{ schedules } => {
@@ -418,8 +419,9 @@ impl Trigger {
                     workflow, job.name, when
                 );
             },
-            TriggerCondition::Nop => {},
+            TriggerCondition::Any{..} => {},
         }
+        log::trace!("trigger condition {:?} matches with workflow {}", self.condition, workflow);
         return true
     }
 }
