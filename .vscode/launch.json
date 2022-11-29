@@ -56,12 +56,12 @@
         ]
     },
     {
-        "name": "Stop",
+        "name": "Halt",
         "type": "lldb",
         "request": "launch",
         "program": "${workspaceFolder}/target/debug/cli",
         "args": [
-            "-v=3", "stop", "-r=nightly", "-w=integrate"
+            "-v=3", "halt", "-r=nightly", "-w=integrate"
         ]
     },
     {
