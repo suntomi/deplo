@@ -522,7 +522,7 @@ impl<S: shell::Shell> GhAction<S> {
     }
     fn set_output(&self, key: &str, val: &str) -> Result<(), Box<dyn Error>> {
         self.shell.eval(
-            &format!("echo \"'{key}'='{val}'\" >> $GITHUB_OUTPUT", key = key, val = val),
+            &format!("echo \"{key}='{val}'\" >> $GITHUB_OUTPUT", key = key, val = val),
             &None, hashmap!{"GITHUB_OUTPUT" => shell::arg!(std::env::var("GITHUB_OUTPUT")?)},
             shell::no_cwd(), &shell::no_capture()
         )?;
