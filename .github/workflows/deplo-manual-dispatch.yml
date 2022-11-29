@@ -3,9 +3,8 @@ name: manual-dispatch
 
 on: 
   workflow_dispatch:
-    inputs:
-      foo:
-        required: 'true'
+    foo:
+      required: 'true'
   
 
 env:
