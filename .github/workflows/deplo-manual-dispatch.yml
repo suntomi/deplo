@@ -3,8 +3,9 @@ name: manual-dispatch
 
 on: 
   workflow_dispatch:
-    foo:
-      required: 'true'
+    inputs:
+      foo:
+        required: 'true'
   
 
 env:
@@ -25,9 +26,11 @@ jobs:
       base: ${{ steps.deplo-main.outputs.base }}
       builder: ${{ steps.deplo-main.outputs.builder }}
       config: ${{ steps.deplo-main.outputs.config }}
+      dispatched: ${{ steps.deplo-main.outputs.dispatched }}
       latest: ${{ steps.deplo-main.outputs.latest }}
       mac: ${{ steps.deplo-main.outputs.mac }}
       product: ${{ steps.deplo-main.outputs.product }}
+      repository: ${{ steps.deplo-main.outputs.repository }}
       test: ${{ steps.deplo-main.outputs.test }}
       win: ${{ steps.deplo-main.outputs.win }}
     steps:
@@ -52,16 +55,18 @@ jobs:
           sudo: true
   deplo-halt:
     name: Cleanup CI
-    if: ${{ !failure() && (needs.base.outputs.need-cleanup || needs.builder.outputs.need-cleanup || needs.config.outputs.need-cleanup || needs.latest.outputs.need-cleanup || needs.mac.outputs.need-cleanup || needs.product.outputs.need-cleanup || needs.test.outputs.need-cleanup || needs.win.outputs.need-cleanup) }}
-    needs: ["deplo-main","base","builder","config","latest","mac","product","test","win"]
+    if: ${{ !failure() && (needs.base.outputs.need-cleanup || needs.builder.outputs.need-cleanup || needs.config.outputs.need-cleanup || needs.dispatched.outputs.need-cleanup || needs.latest.outputs.need-cleanup || needs.mac.outputs.need-cleanup || needs.product.outputs.need-cleanup || needs.repository.outputs.need-cleanup || needs.test.outputs.need-cleanup || needs.win.outputs.need-cleanup) }}
+    needs: ["deplo-main","base","builder","config","dispatched","latest","mac","product","repository","test","win"]
     runs-on: ubuntu-latest
     env:
       DEPLO_JOB_SYSTEM_OUTPUT_BASE: ${{ needs.base.outputs.system }}
       DEPLO_JOB_SYSTEM_OUTPUT_BUILDER: ${{ needs.builder.outputs.system }}
       DEPLO_JOB_SYSTEM_OUTPUT_CONFIG: ${{ needs.config.outputs.system }}
+      DEPLO_JOB_SYSTEM_OUTPUT_DISPATCHED: ${{ needs.dispatched.outputs.system }}
       DEPLO_JOB_SYSTEM_OUTPUT_LATEST: ${{ needs.latest.outputs.system }}
       DEPLO_JOB_SYSTEM_OUTPUT_MAC: ${{ needs.mac.outputs.system }}
       DEPLO_JOB_SYSTEM_OUTPUT_PRODUCT: ${{ needs.product.outputs.system }}
+      DEPLO_JOB_SYSTEM_OUTPUT_REPOSITORY: ${{ needs.repository.outputs.system }}
       DEPLO_JOB_SYSTEM_OUTPUT_TEST: ${{ needs.test.outputs.system }}
       DEPLO_JOB_SYSTEM_OUTPUT_WIN: ${{ needs.win.outputs.system }}
     steps:
@@ -181,6 +186,38 @@ jobs:
         uses: mxschmitt/action-tmate@v3
         with:
           sudo: true
+  dispatched:
+    needs: [deplo-main]
+    if: ${{ needs.deplo-main.outputs.dispatched && !failure() }}
+    name: Running job dispatched
+    runs-on: ubuntu-latest
+  
+  
+    outputs:
+      need-cleanup: ${{ steps.deplo-job-dispatched.outputs.need-cleanup }}
+      system: ${{ steps.deplo-job-dispatched.outputs.system }}
+      user: ${{ steps.deplo-job-dispatched.outputs.user }}
+    steps:
+      - name: Fetch deplo cli
+        run: |
+          curl -L https://github.com/suntomi/deplo/releases/download/nightly/deplo-Linux -o /usr/local/bin/deplo
+          chmod +x /usr/local/bin/deplo
+      - name: Checkout
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 2
+          ref: ${{ github.event.client_payload.exec.revision }}
+          submodules: true
+          token: ${{ secrets.SUNTOMI_VCS_ACCOUNT_KEY }}
+  
+      - name: dispatched
+        id: deplo-job-dispatched
+        run: deplo run dispatched
+      - name: Setup ssh session to debug
+        if: ${{ failure() }}
+        uses: mxschmitt/action-tmate@v3
+        with:
+          sudo: true
   latest:
     needs: ["product","deplo-main"]
     if: ${{ needs.deplo-main.outputs.latest && !failure() }}
@@ -291,6 +328,38 @@ jobs:
       - name: product
         id: deplo-job-product
         run: deplo run product
+      - name: Setup ssh session to debug
+        if: ${{ failure() }}
+        uses: mxschmitt/action-tmate@v3
+        with:
+          sudo: true
+  repository:
+    needs: [deplo-main]
+    if: ${{ needs.deplo-main.outputs.repository && !failure() }}
+    name: Running job repository
+    runs-on: ubuntu-latest
+  
+  
+    outputs:
+      need-cleanup: ${{ steps.deplo-job-repository.outputs.need-cleanup }}
+      system: ${{ steps.deplo-job-repository.outputs.system }}
+      user: ${{ steps.deplo-job-repository.outputs.user }}
+    steps:
+      - name: Fetch deplo cli
+        run: |
+          curl -L https://github.com/suntomi/deplo/releases/download/nightly/deplo-Linux -o /usr/local/bin/deplo
+          chmod +x /usr/local/bin/deplo
+      - name: Checkout
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 2
+          ref: ${{ github.event.client_payload.exec.revision }}
+          submodules: true
+          token: ${{ secrets.SUNTOMI_VCS_ACCOUNT_KEY }}
+  
+      - name: repository
+        id: deplo-job-repository
+        run: deplo run repository
       - name: Setup ssh session to debug
         if: ${{ failure() }}
         uses: mxschmitt/action-tmate@v3

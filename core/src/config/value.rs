@@ -3,7 +3,7 @@ use std::borrow::Cow;
 use std::fmt;
 
 use regex::{Regex};
-use serde::{de, Deserialize, Serialize, Deserializer};
+use serde::{de, Deserialize, Serialize, Deserializer, Serializer};
 //use strfmt::strfmt;
 
 use crate::config;
@@ -44,10 +44,9 @@ fn resolver_to_name(resolver: ValueResolver) -> &'static str {
     else { panic!("unknown resolver {}", sz) }
 }
 
-#[derive(Serialize, Clone)]
+#[derive(Clone)]
 pub struct Value {
     pub value: String,
-    #[serde(skip)]
     pub resolver: Option<ValueResolver>,
 }
 impl Value {
@@ -111,6 +110,13 @@ impl<'de> de::Visitor<'de> for Visitor {
         Ok(Value {value: value.to_string(), resolver})
     }
 }
+impl Serialize for Value {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer {
+        self.value.serialize(serializer)
+    }
+}
 impl<'de> Deserialize<'de> for Value {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where D: Deserializer<'de> {
@@ -169,11 +175,17 @@ impl crate::shell::ArgTrait for &Value {
 }
 
 
-#[derive(Serialize, Clone)]
+#[derive(Clone)]
 pub struct Any {
     pub value: AnyValue,
-    #[serde(skip)]
     pub resolver: Option<ValueResolver>,
+}
+impl Serialize for Any {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer {
+        self.value.serialize(serializer)
+    }
 }
 impl<'de> Deserialize<'de> for Any {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>

@@ -89,16 +89,12 @@ impl<'de, T: module::Description + Clone, E: DeserializeOwned + Clone> ConfigFor
         &self.ext
     }
 }
-#[derive(Deserialize)]
-struct DeserializeWrapper<T> {
-    value: T,
-}
 impl<'de, T: module::Description + Clone, E: DeserializeOwned + Clone> Deserialize<'de> for ConfigFor<T,E> {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where D: Deserializer<'de> {
         let v = config::AnyValue::deserialize(deserializer)?;
         let src = toml::to_string(&v).map_err(D::Error::custom)?;
-        let c = match toml::from_str::<DeserializeWrapper<Config>>(&src) {
+        let c = match toml::from_str::<Config>(&src) {
             Ok(v) => v,
             Err(e) => {
                 let cause = e.to_string();
@@ -106,7 +102,7 @@ impl<'de, T: module::Description + Clone, E: DeserializeOwned + Clone> Deseriali
                 return Err(D::Error::custom(cause))
             }
         };
-        let e = match toml::from_str::<DeserializeWrapper<E>>(&src) {
+        let e = match toml::from_str::<E>(&src) {
             Ok(v) => v,
             Err(e) => {
                 let cause = e.to_string();
@@ -114,11 +110,11 @@ impl<'de, T: module::Description + Clone, E: DeserializeOwned + Clone> Deseriali
                 return Err(D::Error::custom(cause))
             }
         };
-        set_config_for::<T>(c.value);
+        set_config_for::<T>(c);
         config_for::<T, _, Self, D::Error>(|v| {
             Ok(Self { 
                 index: v.len() - 1,
-                ext: e.value.clone(),
+                ext: e.clone(),
                 anchor: std::marker::PhantomData
             })
         })
