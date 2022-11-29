@@ -76,6 +76,15 @@ impl Value {
     pub fn to_arg<'a>(&self) -> crate::shell::Arg<'a> {
         Box::new(self.clone())
     }
+    pub fn raw_value(&self) -> String {
+        self.value.clone()
+    }
+    pub fn is_secret(&self) -> bool {
+        match self.resolver {
+            Some(r) => resolver_to_name(r) == "secret",
+            None => false
+        }
+    }
     // for map operation
     pub fn resolve_to_string(value: &Self) -> String {
         value.resolve()
@@ -205,6 +214,15 @@ impl Any {
         match self.value {
             AnyValue::String(ref s) => Some(s),
             _ => None
+        }
+    }
+    pub fn raw_value(&self) -> String {
+        self.value.to_string()
+    }
+    pub fn is_secret(&self) -> bool {
+        match self.resolver {
+            Some(r) => resolver_to_name(r) == "secret",
+            None => false
         }
     }
     pub fn at(&self, i: usize) -> Option<Any> {

@@ -436,8 +436,8 @@ pub struct CheckoutOption {
     pub submodules: Option<SubmoduleCheckoutType>,
     pub fetch_depth: Option<u64>,
     #[serde(rename = "ref")]
-    pub revision: Option<String>,
-    pub token: Option<String>
+    pub revision: Option<config::Value>,
+    pub token: Option<config::Value>
 }
 impl CheckoutOption {
     pub fn default() -> Self {

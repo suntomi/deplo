@@ -4,7 +4,7 @@ version = 1
 # ---------------
 project_name = "deplo"
 debug = { ghaction_deplo_debugger = "on", ghaction_job_debugger = "on" }
-checkout = { submodules = true }
+checkout = { submodules = true, token = "${SUNTOMI_VCS_ACCOUNT_KEY}" }
 
 # release target branch settings
 [release_targets]
