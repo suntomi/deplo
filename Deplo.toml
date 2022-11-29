@@ -333,7 +333,7 @@ on = { workflows = ["deploy"], changed = [".*/src/.*", 'Cargo\.*'], diff_matcher
 depends = ["product"]
 runner = { os = "windows" }
 command = """
-set -e
+set -eo pipefail
 . tools/scripts/setup_release_env.sh
 cargo build --release
 deplo vcs release-assets ${DEPLO_RELEASE_TAG} target/release/cli.exe --replace -o name=deplo-Windows.exe
