@@ -368,9 +368,15 @@ impl<GIT: git::GitFeatures<S>, S: shell::Shell> vcs::VCS for Github<GIT, S> {
                 }
             },
             (vcs::RefType::Commit, ref_name) => {
-                return escalate!(Box::new(vcs::VCSError {
-                    cause: format!("current head does not branch or tag {}", ref_name)
-                }))
+                match self.git.diff_paths("HEAD^") {
+                    Ok(v) => v,
+                    Err(e) => return escalate!(Box::new(vcs::VCSError {
+                        cause: format!(
+                            "current head does not branch or tag {} and cannot get diff with HEAD^ {:?}", 
+                            ref_name, e
+                        )
+                    }))
+                }
             }
         };
         Ok(diff)
