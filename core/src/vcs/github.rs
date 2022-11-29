@@ -108,7 +108,9 @@ impl<GIT: git::GitFeatures<S>, S: shell::Shell> Github<GIT, S> {
                 "curl", "-s", "-H", shell::fmtargs!("Authorization: token {}", key), 
                 "-H", "Accept: application/vnd.github.v3+json", api_url
             ], shell::no_env(), shell::no_cwd(), &shell::capture())?;
-            Ok(jsonpath(&output, json_path)?.unwrap_or("".to_string()))    
+            Ok(jsonpath(&output, json_path)
+                .expect(&format!("malform pulls response: {:?} for json_path {}", &output, json_path))
+                .unwrap_or("".to_string()))    
         } else {
             panic!("vcs account is not for github {}", &self.config.borrow().vcs)
         }
@@ -280,7 +282,9 @@ impl<GIT: git::GitFeatures<S>, S: shell::Shell> vcs::VCS for Github<GIT, S> {
                 "-d", serde_json::to_string(&body)?
                 ], shell::no_env(), shell::no_cwd(), &shell::capture()
             )?;
-            let issues_api_url = jsonpath(&response, "$.issue_url")?.expect(&format!("no issue_url in response: {:?}", &response));
+            let issues_api_url = jsonpath(&response, "$.issue_url")
+                .expect(&format!("malform pulls response: {:?}", &response))
+                .expect(&format!("no issue_url in response: {:?}", &response));
             match options.get("labels") {
                 Some(labels) => {
                     log::debug!("attach labels({}) to PR via {}", labels, issues_api_url);

@@ -40,7 +40,8 @@ jobs:
         with:
           fetch-depth: 2
           ref: ${{ github.event.client_payload.exec.revision }}
-          submodule: true
+          submodules: true
+          token: ${{ secrets.SUNTOMI_VCS_ACCOUNT_KEY }}
       - name: Boot deplo
         id: deplo-main
         run: deplo boot
@@ -74,7 +75,8 @@ jobs:
           fetch-depth: 2
           lfs: false
           ref: ${{ github.event.client_payload.exec.revision }}
-          submodule: true
+          submodules: true
+          token: ${{ secrets.SUNTOMI_VCS_ACCOUNT_KEY }}
       - name: Halt deplo
         id: deplo-halt
         run: deplo halt
@@ -104,7 +106,8 @@ jobs:
         with:
           fetch-depth: 2
           ref: ${{ github.event.client_payload.exec.revision }}
-          submodule: true
+          submodules: true
+          token: ${{ secrets.SUNTOMI_VCS_ACCOUNT_KEY }}
   
       - name: base
         id: deplo-job-base
@@ -135,7 +138,8 @@ jobs:
         with:
           fetch-depth: 2
           ref: ${{ github.event.client_payload.exec.revision }}
-          submodule: true
+          submodules: true
+          token: ${{ secrets.SUNTOMI_VCS_ACCOUNT_KEY }}
   
       - name: builder
         id: deplo-job-builder
@@ -166,7 +170,8 @@ jobs:
         with:
           fetch-depth: 2
           ref: ${{ github.event.client_payload.exec.revision }}
-          submodule: true
+          submodules: true
+          token: ${{ secrets.SUNTOMI_VCS_ACCOUNT_KEY }}
   
       - name: config
         id: deplo-job-config
@@ -198,7 +203,8 @@ jobs:
         with:
           fetch-depth: 2
           ref: ${{ github.event.client_payload.exec.revision }}
-          submodule: true
+          submodules: true
+          token: ${{ secrets.SUNTOMI_VCS_ACCOUNT_KEY }}
   
       - name: latest
         id: deplo-job-latest
@@ -230,7 +236,8 @@ jobs:
         with:
           fetch-depth: 2
           ref: ${{ github.event.client_payload.exec.revision }}
-          submodule: true
+          submodules: true
+          token: ${{ secrets.SUNTOMI_VCS_ACCOUNT_KEY }}
       - name: Cache cargo
         id: deplo-cache-cargo
         uses: actions/cache@v2
@@ -278,7 +285,8 @@ jobs:
         with:
           fetch-depth: 2
           ref: ${{ github.event.client_payload.exec.revision }}
-          submodule: true
+          submodules: true
+          token: ${{ secrets.SUNTOMI_VCS_ACCOUNT_KEY }}
   
       - name: product
         id: deplo-job-product
@@ -309,7 +317,8 @@ jobs:
         with:
           fetch-depth: 2
           ref: ${{ github.event.client_payload.exec.revision }}
-          submodule: true
+          submodules: true
+          token: ${{ secrets.SUNTOMI_VCS_ACCOUNT_KEY }}
       - name: Cache cargo
         id: deplo-cache-cargo
         uses: actions/cache@v2
@@ -356,7 +365,8 @@ jobs:
         with:
           fetch-depth: 2
           ref: ${{ github.event.client_payload.exec.revision }}
-          submodule: true
+          submodules: true
+          token: ${{ secrets.SUNTOMI_VCS_ACCOUNT_KEY }}
       - name: Cache cargo
         id: deplo-cache-cargo
         uses: actions/cache@v2
