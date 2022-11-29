@@ -39,6 +39,7 @@ impl WorkflowTrigger {
 
 pub trait CheckoutOption {
     fn opt_str(&self) -> Vec<String>;
+    fn to_yaml_config(value: &config::Value) -> String;
     fn hash(&self) -> String {
         let src = self.opt_str().join(",");
         strhash(&src)
