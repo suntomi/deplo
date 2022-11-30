@@ -167,7 +167,7 @@ done
 on = [
     { workflows = ["integrate"], changed = ["*/src/*", "Cargo.*"] },
     { workflows = ["cron"], schedules = ["daily"] },
-    { workflows = ["repository"], events = ["manual"] },
+    { workflows = ["repository"], events = ["intentionally_specify_invalid_event"] },
     { workflows = ["slack"], when = { message_matches = ['.*test\sit.*'] } }
 ]
 runner = {

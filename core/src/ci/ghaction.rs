@@ -879,13 +879,15 @@ impl<S: shell::Shell> ci::CI for GhAction<S> {
                                     }
                                     v.join(".")
                                 };
-                                match events.iter().find_map(|(k, vs)| {
-                                    if vs.iter().find(|t| t == &key).is_some() { Some(k) } else { None }
-                                }) {
-                                    Some(event_name) => matches.push(config::runtime::Workflow::with_context(
-                                        name, hashmap!{ "event".to_string() => config::AnyValue::new(event_name) }
-                                    )),
-                                    None => {}
+                                let matched_events = events.iter()
+                                    .filter(|(_,vs)| vs.iter().find(|t| t == &key).is_some())
+                                    .map(|(k,_)| k.as_str()).collect::<Vec<&str>>();
+                                if matched_events.len() > 0 {
+                                    matches.push(config::runtime::Workflow::with_context(
+                                        name, hashmap!{ 
+                                            "events".to_string() => config::AnyValue::new_from_vec(&matched_events) 
+                                        }
+                                    ))
                                 }
                             } else {
                                 panic!("event payload type does not match {}", workflow_event.event);

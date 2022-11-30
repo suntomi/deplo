@@ -403,11 +403,18 @@ impl Trigger {
                 }
             },
             TriggerCondition::Repository{ events } => {
-                let event = runtime_workflow_config.context.get("event").unwrap();
-                if !events.iter().find(|e| { e.resolve() == event.resolve() }).is_some() {
+                let repository_events = runtime_workflow_config.context.get("events").unwrap();
+                if !repository_events.is_array() {
+                    panic!("repository events not array {}", repository_events);
+                }
+                if !events.iter().find(|e| { 
+                    repository_events.iter(|rev| {
+                        if rev.resolve() == e.resolve() { Some(()) } else { None }
+                    }).is_some()
+                }).is_some() {
                     log::trace!(
-                        "workflow '{}' job '{}' event {} does not match any of events {:?}",
-                        workflow, job.name, event.resolve(), events
+                        "workflow '{}' job '{}' repository events {:?} does not match any of events {:?}",
+                        workflow, job.name, repository_events, events
                     );
                     return false;
                 }
