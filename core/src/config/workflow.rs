@@ -40,6 +40,9 @@ pub enum InputSchemaClass {
         #[serde(rename = "type")]
         ty: InputValueType
     },
+    Enum{
+        options: Vec<String>
+    },
     Tuple{schema: Vec<Box<InputSchema>>},
     Object{schema: HashMap<String, Box<InputSchema>>}
 }
@@ -48,7 +51,8 @@ pub struct InputSchema {
     #[serde(flatten)]
     pub class: InputSchemaClass,
     pub required: Option<bool>,
-    pub description: Option<String>
+    pub description: Option<String>,
+    pub default: Option<String>
 }
 impl InputSchema {
     pub fn verify(&self, _inputs: &serde_json::Value) {

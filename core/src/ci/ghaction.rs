@@ -171,7 +171,30 @@ impl<S: shell::Shell> GhAction<S> {
                 options.push(format!("description: '{}'", schema.description.as_ref().unwrap()));
             }
             if schema.required.is_some() {
-                options.push(format!("required: '{}'", schema.required.unwrap()));
+                options.push(format!("required: {}", schema.required.unwrap()));
+            }
+            if schema.default.is_some() {
+                options.push(format!("default: {}", schema.default.as_ref().unwrap()));
+            }
+            match &schema.class {
+                config::workflow::InputSchemaClass::Value{ty,..} => match ty {
+                    config::workflow::InputValueType::Bool => options.push(format!("type: boolean")),
+                    _ => {},
+                },
+                config::workflow::InputSchemaClass::Enum{options: opts} => {
+                    options.push(format!("type: choice"));
+                    for line in format!(
+                        include_str!("../../res/ci/ghaction/key_and_values.yml.tmpl"),
+                        key = "options",
+                        values = MultilineFormatString{
+                            strings: opts,
+                            postfix: None
+                        }
+                    ).split("\n").map(|s| s.to_string()).collect::<Vec<String>>() {
+                        options.push(line);
+                    }
+                },
+                _ => {}
             }
             input_configs.push(format!(
                 include_str!("../../res/ci/ghaction/key_and_values.yml.tmpl"),
