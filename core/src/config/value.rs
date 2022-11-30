@@ -207,6 +207,14 @@ impl Any {
             resolver: None,
         }
     }
+    pub fn new_from_vec<V: AsRef<str>>(vec: &Vec<V>) -> Self {
+        Self {
+            value: AnyValue::Array(
+                vec.iter().map(|v| AnyValue::String(v.as_ref().to_string())).collect()
+            ),
+            resolver: None,
+        }
+    }
     pub fn resolve(&self) -> String {
         if self.resolver.is_some() {
             // should always be string (see initialization code above)
@@ -235,6 +243,24 @@ impl Any {
         match self.resolver {
             Some(r) => resolver_to_name(r) == "secret",
             None => false
+        }
+    }
+    pub fn is_array(&self) -> bool {
+        self.value.is_array()
+    }
+    pub fn iter<F,R>(&self, proc: F) -> Option<R> 
+        where F: Fn(&Self) -> Option<R> {
+        match &self.value {
+            AnyValue::Array(a) => {
+                for e in a {
+                    match proc(&Self { value: e.clone(), resolver: None }) {
+                        Some(r) => return Some(r),
+                        None => {},
+                    }
+                };
+                None
+            },
+            _ => None
         }
     }
     pub fn at(&self, i: usize) -> Option<Any> {
