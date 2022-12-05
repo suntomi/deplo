@@ -821,16 +821,12 @@ impl<S: shell::Shell> ci::CI for GhAction<S> {
                     }
                 }
                 let mut matches = vec![];
-                let vcs = config.modules.vcs();
                 for n in matched_names {
                     let name = n.to_string();
                     match config.workflows.get(&name).expect(&format!("workflow {} not found", name)) {
                         config::workflow::Workflow::Deploy|config::workflow::Workflow::Integrate => {
-                            let target = vcs.release_target();
                             matches.push(config::runtime::Workflow::with_context(
-                                name, if target.is_none() { hashmap!{} } else { hashmap!{
-                                    "release_target".to_string() => config::AnyValue::new(&target.unwrap())
-                                }}
+                                name, hashmap!{}
                             ))
                         },
                         config::workflow::Workflow::Cron{schedules} => {

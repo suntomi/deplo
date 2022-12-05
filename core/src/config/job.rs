@@ -357,7 +357,10 @@ impl Trigger {
             // if more than 1 workflows specified, runtime_workflow_config.name should match any of them
             |v| v.iter().find(|v| { let s: &str = &v.resolve(); s == runtime_workflow_config.name }).is_some()
         ) {
-            log::debug!("workflow '{}' does not match for trigger of '{}'", runtime_workflow_config.name, job.name);
+            log::debug!(
+                "workflow '{}' does not match for trigger workflow '{:?}' of '{}'", 
+                runtime_workflow_config.name, self.workflows, job.name
+            );
             return false;
         }
         if !self.release_targets.as_ref().map_or_else(
@@ -370,10 +373,15 @@ impl Trigger {
                 None => false
             }
         ) {
+            log::debug!("workflow '{}' does not match for release target '{:?}' of '{}'. current release target is '{:?}'", 
+                workflow, self.release_targets, job.name, runtime_workflow_config.exec.release_target);
             return false;
         }        
         if !self.condition.check_workflow_type(workflow) {
-            log::debug!("workflow '{}' does not match for trigger condition of '{}'", workflow, job.name);
+            log::debug!(
+                "workflow '{}' does not match for trigger condition type '{:?}' of '{}'",
+                workflow, self.condition, job.name
+            );
             return false;
         }
         if !opts.check_condition {
@@ -549,7 +557,6 @@ impl Job {
         runtime_workflow_config: &config::runtime::Workflow
     ) -> HashMap<String, config::Value> {
         let ci = self.ci(config);
-        let vcs = config.modules.vcs();
         let secrets = config::secret::as_config_values();
         let mut envs_list = vec![];
         envs_list.push(&config.envs);
@@ -568,10 +575,7 @@ impl Job {
             ),
         }, &match runtime_workflow_config.exec.release_target {
             Some(ref v) => hashmap!{"DEPLO_CI_RELEASE_TARGET".to_string() => config::Value::new(v)},
-            None => match vcs.release_target() {
-                Some(v) => hashmap!{"DEPLO_CI_RELEASE_TARGET".to_string() => config::Value::new(&v)},
-                None => hashmap!{}
-            }
+            None => hashmap!{}
         });
         let mut depend_envs = hashmap!{};
         if config::Config::is_running_on_ci() {

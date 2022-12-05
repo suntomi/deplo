@@ -52,7 +52,7 @@
         "request": "launch",
         "program": "${workspaceFolder}/target/debug/cli",
         "args": [
-            "-v=3", "boot", "-p=payload.json"
+            "-v=3", "-d=dryrun", "boot", "-p=payload.json"
         ]
     },
     {
