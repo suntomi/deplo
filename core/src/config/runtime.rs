@@ -42,18 +42,21 @@ impl ExecOptions {
         // on remote running on CI, verbosity should configured with same value as cli specified,
         // via envvar DEPLO_OVERWRITE_VERBOSITY
         instance.verbosity = config.borrow().runtime.verbosity;
-        instance.apply(args, has_job_config);
+        instance.apply(args, config, has_job_config);
         Ok(instance)
     }
-    pub fn apply<A: Args>(&mut self, args: &A, has_job_config: bool) {
+    pub fn apply<A: Args>(&mut self, args: &A, config: &config::Container, has_job_config: bool) {
         self.envs = merge_hashmap(&self.envs, &args.map_of("env"));
         match args.value_of("revision") {
             Some(v) => self.revision = Some(v.to_string()),
             None => {}
         };
-        match args.value_of("release_target") {
-            Some(v) => self.release_target = Some(v.to_string()),
-            None => {}
+        self.release_target = match args.value_of("release_target") {
+            Some(v) => Some(v.to_string()),
+            None => {
+                let c = config.borrow();
+                c.modules.vcs().release_target()
+            }
         };
         match args.value_of("timeout") {
             Some(v) => self.timeout = Some(v.parse().expect(
@@ -198,7 +201,7 @@ impl Workflow {
         Ok(serde_json::from_str(payload)?)
     }
     pub fn apply<A: Args>(&mut self, args: &A, config: &config::Container, has_job_config: bool) {
-        self.exec.apply(args, has_job_config);
+        self.exec.apply(args, config, has_job_config);
         if has_job_config { 
             match self.job.as_mut() {
                 Some(j) => j.apply(args, config),
