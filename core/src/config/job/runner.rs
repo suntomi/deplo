@@ -50,7 +50,7 @@ impl<'a> Runner<'a> {
         }
         Ok(())
     }
-    fn create_steps(&self, command: &job::Command) -> (Vec<job::Step>, Option<String>) {   
+    pub fn create_steps(&self, command: &job::Command) -> (Vec<job::Step>, Option<String>) {   
         let job = self.job;
         match command {
             job::Command::Adhoc(ref c) => {
@@ -93,13 +93,19 @@ impl<'a> Runner<'a> {
             }
         }
     }
-    fn step_runner_command(job_name: &str, task_name: &Option<String>) -> String {
+    fn step_runner_command(
+        job_name: &str, runtime_workflow_config: &config::runtime::Workflow, task_name: &Option<String>
+    ) -> String {
+        let payload = serde_json::to_string(runtime_workflow_config).expect(
+            &format!("fail to get json string from runtime_workflow_config for {}", job_name)
+        );
         match task_name {
-            Some(v) => format!("deplo run {} steps @{}", job_name, v),
-            None => format!("deplo run {} steps", job_name)
+            // TODO: able to specify steps for tasks
+            Some(v) => format!("deplo job run-steps {} -p '{}' --task={}", job_name, payload, v),
+            None => format!("deplo job run-steps {} -p '{}'", job_name, payload)
         }
     }
-    fn run_steps(
+    pub fn run_steps(
         &self, shell: &impl shell::Shell, shell_settings: &shell::Settings,
         runtime_workflow_config: &config::runtime::Workflow,
         job: &config::job::Job, steps: &Vec<job::Step>
@@ -163,7 +169,7 @@ impl<'a> Runner<'a> {
                 shell::no_capture()
             }
         };
-        let (steps, main_command) = self.create_steps(&command);
+        let (steps, cmd_for_container) = self.create_steps(&command);
         if exec.remote {
             log::debug!(
                 "force running job '{}' on remote with steps {} at {}",
@@ -216,8 +222,10 @@ impl<'a> Runner<'a> {
                             shell.eval_on_container(
                                 image.as_str(),
                                 // if main_command is none, we need to run steps in single container.
-                                // so we execute `deplo ci steps $job_name` to run steps of $job_name.
-                                &main_command.map_or_else(|| Self::step_runner_command(&job.name, &None), |v| match sh {
+                                // so we execute `deplo job $job_name steps` to run steps of $job_name.
+                                &cmd_for_container.map_or_else(|| Self::step_runner_command(
+                                    &job.name, runtime_workflow_config, &None
+                                ), |v| match sh {
                                     // if command is shell command and local fallback has dedicate shell setting,
                                     // override shell setting with local_fallback's one.
                                     Some(sh) => match command {
@@ -260,8 +268,10 @@ impl<'a> Runner<'a> {
                     shell.eval_on_container(
                         image.as_str(),
                         // if main_command is none, we need to run steps in single container. 
-                        // so we execute `deplo ci steps $job_name` to run steps of $job_name.
-                        &main_command.map_or_else(|| Self::step_runner_command(&job.name, &None), |v| v.to_string()),
+                        // so we execute `deplo job $job_name steps` to run steps of $job_name.
+                        &cmd_for_container.map_or_else(|| Self::step_runner_command(
+                            &job.name, runtime_workflow_config, &None
+                        ), |v| v.to_string()),
                         &job.shell.as_ref().map(|v| v.resolve()), shell::mctoa(job.env(&config, runtime_workflow_config)),
                         &job.workdir, mounts.bind(hashmap!{
                             path.as_os_str() => &path_target

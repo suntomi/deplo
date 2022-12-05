@@ -123,7 +123,11 @@ impl Module {
         let src = config::source::Source::File(path);
         let mut ret = src.load_as::<Self>()?;
         if ret.workdir.is_none() {
-            ret.workdir = Some(path.to_string())
+            let p = Path::new(path);
+            ret.workdir = Some(match p.parent() {
+                Some(v) => v.to_string_lossy().to_string(),
+                None => "/".to_string()
+            })
         } else {
             let relpath = ret.workdir.unwrap();
             let p = Path::new(path);

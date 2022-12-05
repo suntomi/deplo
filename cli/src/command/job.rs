@@ -29,6 +29,15 @@ impl<S: shell::Shell> Job<S> {
         config.jobs.set_user_output(&config, key, value)?;
         Ok(())
     }
+    fn steps<A: args::Args>(&self, args: &A) -> Result<(), Box<dyn Error>> {
+        let config = self.config.borrow();
+        let parent_workflow = args.value_or_die("parent_workflow");
+        let job = args.value_or_die("job");
+        let task = args.value_of("task");
+        let workflow = config::runtime::Workflow::with_payload(parent_workflow)?;
+        config.jobs.run_steps(&config, &self.shell, &workflow, job, task)?;
+        Ok(())
+    }
 }
 
 impl<S: shell::Shell, A: args::Args> command::Command<A> for Job<S> {
@@ -42,6 +51,7 @@ impl<S: shell::Shell, A: args::Args> command::Command<A> for Job<S> {
         match args.subcommand() {
             Some(("output", subargs)) => return self.output(&subargs),
             Some(("set-output", subargs)) => return self.set_output(&subargs),
+            Some(("run-steps", subargs)) => return self.steps(&subargs),
             Some((name, _)) => return escalate!(args.error(
                 &format!("no such subcommand: [{}]", name) 
             )),
