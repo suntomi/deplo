@@ -29,6 +29,7 @@ jobs:
       dispatched: ${{ steps.deplo-main.outputs.dispatched }}
       latest: ${{ steps.deplo-main.outputs.latest }}
       mac: ${{ steps.deplo-main.outputs.mac }}
+      module_test: ${{ steps.deplo-main.outputs.module_test }}
       product: ${{ steps.deplo-main.outputs.product }}
       repository: ${{ steps.deplo-main.outputs.repository }}
       test: ${{ steps.deplo-main.outputs.test }}
@@ -55,8 +56,8 @@ jobs:
           sudo: true
   deplo-halt:
     name: Cleanup CI
-    if: ${{ !failure() && (needs.base.outputs.need-cleanup || needs.builder.outputs.need-cleanup || needs.config.outputs.need-cleanup || needs.dispatched.outputs.need-cleanup || needs.latest.outputs.need-cleanup || needs.mac.outputs.need-cleanup || needs.product.outputs.need-cleanup || needs.repository.outputs.need-cleanup || needs.test.outputs.need-cleanup || needs.win.outputs.need-cleanup) }}
-    needs: ["deplo-main","base","builder","config","dispatched","latest","mac","product","repository","test","win"]
+    if: ${{ !failure() && (needs.base.outputs.need-cleanup || needs.builder.outputs.need-cleanup || needs.config.outputs.need-cleanup || needs.dispatched.outputs.need-cleanup || needs.latest.outputs.need-cleanup || needs.mac.outputs.need-cleanup || needs.module_test.outputs.need-cleanup || needs.product.outputs.need-cleanup || needs.repository.outputs.need-cleanup || needs.test.outputs.need-cleanup || needs.win.outputs.need-cleanup) }}
+    needs: ["deplo-main","base","builder","config","dispatched","latest","mac","module_test","product","repository","test","win"]
     runs-on: ubuntu-latest
     env:
       DEPLO_JOB_SYSTEM_OUTPUT_BASE: ${{ needs.base.outputs.system }}
@@ -65,6 +66,7 @@ jobs:
       DEPLO_JOB_SYSTEM_OUTPUT_DISPATCHED: ${{ needs.dispatched.outputs.system }}
       DEPLO_JOB_SYSTEM_OUTPUT_LATEST: ${{ needs.latest.outputs.system }}
       DEPLO_JOB_SYSTEM_OUTPUT_MAC: ${{ needs.mac.outputs.system }}
+      DEPLO_JOB_SYSTEM_OUTPUT_MODULE_TEST: ${{ needs.module_test.outputs.system }}
       DEPLO_JOB_SYSTEM_OUTPUT_PRODUCT: ${{ needs.product.outputs.system }}
       DEPLO_JOB_SYSTEM_OUTPUT_REPOSITORY: ${{ needs.repository.outputs.system }}
       DEPLO_JOB_SYSTEM_OUTPUT_TEST: ${{ needs.test.outputs.system }}
@@ -295,6 +297,38 @@ jobs:
       - name: mac
         id: deplo-job-mac
         run: deplo run mac
+      - name: Setup ssh session to debug
+        if: ${{ failure() }}
+        uses: mxschmitt/action-tmate@v3
+        with:
+          sudo: true
+  module_test:
+    needs: [deplo-main]
+    if: ${{ needs.deplo-main.outputs.module_test && !failure() }}
+    name: Running job module_test
+    runs-on: ubuntu-latest
+  
+  
+    outputs:
+      need-cleanup: ${{ steps.deplo-job-module_test.outputs.need-cleanup }}
+      system: ${{ steps.deplo-job-module_test.outputs.system }}
+      user: ${{ steps.deplo-job-module_test.outputs.user }}
+    steps:
+      - name: Fetch deplo cli
+        run: |
+          curl -L https://github.com/suntomi/deplo/releases/download/nightly/deplo-Linux -o /usr/local/bin/deplo
+          chmod +x /usr/local/bin/deplo
+      - name: Checkout
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 2
+          ref: ${{ github.event.client_payload.exec.revision }}
+          submodules: true
+          token: ${{ secrets.SUNTOMI_VCS_ACCOUNT_KEY }}
+  
+      - name: module_test
+        id: deplo-job-module_test
+        run: deplo run module_test
       - name: Setup ssh session to debug
         if: ${{ failure() }}
         uses: mxschmitt/action-tmate@v3
