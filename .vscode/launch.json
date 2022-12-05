@@ -16,7 +16,7 @@
         "request": "launch",
         "program": "${workspaceFolder}/target/debug/cli",
         "args": [
-            "-v=3", "i", "builder", "sh", "@long_running"
+            "-v=3", "d", "product"
         ]
     },    
     {
