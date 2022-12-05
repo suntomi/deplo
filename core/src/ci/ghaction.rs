@@ -264,14 +264,18 @@ impl<S: shell::Shell> GhAction<S> {
                 config::workflow::Workflow::Module(_) => {}
             }
         }
-        let schedules = format!(
-            include_str!("../../res/ci/ghaction/key_and_values.yml.tmpl"),
-            key = "schedule",
-            values = MultilineFormatString{
-                strings: &schedule_entries.concat(),
-                postfix: None
-            }
-        ).split("\n").map(|s| s.to_string()).collect::<Vec<String>>();
+        let schedules = if schedule_entries.len() > 0 { 
+            format!(
+                include_str!("../../res/ci/ghaction/key_and_values.yml.tmpl"),
+                key = "schedule",
+                values = MultilineFormatString{
+                    strings: &schedule_entries.concat(),
+                    postfix: None
+                }
+            ).split("\n").map(|s| s.to_string()).collect::<Vec<String>>()
+        } else {
+            vec![]
+        };
         let events = sorted_key_iter(&event_entries).map(|(k,v)| {
             if v.len() <= 0 {
                 vec![format!("{}:", k)]

@@ -814,7 +814,13 @@ impl Jobs {
     ) -> Result<(), Box<dyn Error>> {
         let vcs = config.modules.vcs();
         let job_id = std::env::var("DEPLO_CI_ID").unwrap();
-        let current_branch = std::env::var("DEPLO_CI_BRANCH_NAME").unwrap();
+        let current_branch = match std::env::var("DEPLO_CI_BRANCH_NAME") {
+            Ok(v) => v,
+            Err(_) => {
+                log::debug!("current HEAD is not branch. skip push_job_result_branches");
+                return Ok(())
+            }
+        };
         let current_ref = std::env::var("DEPLO_CI_CURRENT_COMMIT_ID").unwrap();
         let (name, branches, options) = branches_and_options;
         if branches.len() > 0 {
