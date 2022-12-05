@@ -155,9 +155,6 @@ fn run_command_options(
                 .index(1)
                 .required(true)
                 .takes_value(true)))
-        .subcommand(
-            App::new("steps")
-            .about("run all steps of the job. designed to be used by deplo itself, you seldom can utilize this command"))
 }
 
 lazy_static! {
@@ -302,6 +299,24 @@ lazy_static! {
                     .help("key to get value")
                     .index(2)
                     .required(true)))
+            .subcommand(
+                App::new("run-steps")
+                .about("run all steps of the job. designed to be used by deplo itself, you seldom can utilize this command")
+                .arg(Arg::new("job")
+                    .help("job name to get data. values of jobs only dependency of current job, can be retrieved")
+                    .index(1)
+                    .required(true))
+                .arg(Arg::new("parent_workflow")
+                    .help("runtime workflow config of parent deplo process")
+                    .short('p')
+                    .long("parent_workflow")
+                    .takes_value(true)
+                    .required(true))
+                .arg(Arg::new("task")
+                    .help("task name of job")
+                    .long("task")
+                    .takes_value(true)
+                    .required(false)))
         )
         .subcommand(
             App::new("ci")
