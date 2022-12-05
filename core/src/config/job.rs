@@ -500,6 +500,7 @@ pub struct Job {
     pub depends: Option<Vec<config::Value>>,
     pub commit: Option<UnitOrListOf<Commit>>,
     pub options: Option<HashMap<String, config::AnyValue>>,
+    // TODO: able to specify steps for tasks
     pub tasks: Option<HashMap<String, config::Value>>,
 }
 impl Job {
@@ -747,6 +748,18 @@ impl Jobs {
         &'a self
     ) -> DependencyGraph<'a> {
         DependencyGraph::<'a>::new(self)
+    }
+    pub fn run_steps(
+        &self, config: &config::Config, shell: &impl shell::Shell, 
+        runtime_workflow_config: &config::runtime::Workflow, job_name: &str, task: Option<&str>
+    ) -> Result<Option<String>, Box<dyn Error>> {
+        let job = self.as_map().get(job_name).expect(&format!("job {} does not exist", job_name));
+        let runner = runner::Runner::new(job, config);
+        runner.run_steps(shell, &shell::no_capture(), runtime_workflow_config,
+            job, &runner.create_steps(&match task {
+                Some(v) => panic!("steps for tasks ({}) are not supported yet", v),
+                None => config::job::Command::Job
+        }).0)
     }
     pub fn user_output(
         &self, config: &config::Config, job_name: &str, key: &str

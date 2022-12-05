@@ -242,6 +242,7 @@ set -e
 mkdir -p tools/docker/bin
 . tools/scripts/setup_release_env.sh
 sh tools/scripts/build_linux.sh
+cp tools/docker/bin/cli .deplo/cli/${DEPLO_RELEASE_NAME}/Linux/deplo 
 """
 }
 
@@ -371,3 +372,10 @@ echo "======================="
 echo "repository context = ${DEPLO_CI_WORKFLOW_CONTEXT}"
 echo "======================="
 """
+
+[jobs.module_test]
+on = { workflows = ["integrate"] }
+runner = { os = "linux", local_fallback = { path = "tools/docker/Dockerfile.vmfb", shell = "sh" } }
+steps = [{
+    uses = { path = "./tools/modules/sample" }
+}]
