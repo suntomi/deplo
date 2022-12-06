@@ -97,8 +97,18 @@ webapi_dispatch = {
 manual_dispatch = {
     manual = true,
     inputs = {
-        foo = { type = "string", required = true }
-    }
+        target = { 
+            required = true
+            default = "dev"
+            options = [
+                "stage",
+                "dev",
+                "prod",
+                "qa",
+                "review"
+            ]
+        }
+    }    
 }
 slack = {
     # uses = "suntomi/slack@0.1.0",
