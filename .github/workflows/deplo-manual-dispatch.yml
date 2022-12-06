@@ -4,8 +4,15 @@ name: manual-dispatch
 on: 
   workflow_dispatch:
     inputs:
-      foo:
+      target:
         required: true
+        type: choice
+        options:
+          - stage
+          - dev
+          - prod
+          - qa
+          - review
   
 
 env:

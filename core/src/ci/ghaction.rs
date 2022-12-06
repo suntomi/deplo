@@ -187,7 +187,7 @@ impl<S: shell::Shell> GhAction<S> {
                         include_str!("../../res/ci/ghaction/key_and_values.yml.tmpl"),
                         key = "options",
                         values = MultilineFormatString{
-                            strings: opts,
+                            strings: &opts.iter().map(|o| format!("- {}", o)).collect::<Vec<String>>(),
                             postfix: None
                         }
                     ).split("\n").map(|s| s.to_string()).collect::<Vec<String>>() {
