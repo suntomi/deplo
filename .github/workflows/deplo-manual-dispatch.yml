@@ -8,11 +8,11 @@ on:
         required: true
         type: choice
         options:
-          - stage
-          - dev
-          - prod
-          - qa
-          - review
+          stage
+          dev
+          prod
+          qa
+          review
   
 
 env:
