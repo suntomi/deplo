@@ -39,7 +39,7 @@ Deploは[toml](https://github.com/alexcrichton/toml-rs)という、簡潔で現�
 
 しかし、これらのモジュールを使い始めると、ジョブがローカルなテスト性を失ってしまうという大きな欠点があります。なぜなら、これらのモジュールは自社サービス以外の環境で動作するように設計されていないからです。すでに説明したように、ローカルテストの可能性を失うと、CI/CD開発の反復期間が大幅に遅くなってしまいます。
 
-Deplo(0.3.0で提供予定)は、サークルCIやgithubアクションと同じ機能を持ちながら、各CIサービスにロックされず、ローカルに実行できる新しいモジュールシステムを提供し、CI/CD開発に必要なローカルなテスト容易性を失わずに再利用性を確保します。
+Deploは、サークルCIやgithubアクションと同じ機能を持ちながら、各CIサービスにロックされず、ローカルに実行できる新しいモジュールシステムを提供し、CI/CD開発に必要なローカルなテスト容易性を失わずに再利用性を確保します。
 
 
 
@@ -55,10 +55,10 @@ Deplo(0.3.0で提供予定)は、サークルCIやgithubアクションと同じ
 - `ジョブ` `リリースターゲット` や `開発ブランチ` が作成されたり更新されたときに実行されるシェルスクリプトです。ジョブは `リリースターゲット` や `開発ブランチ` が更新されたときに起動されるかどうかによって `デプロイジョブ` と `統合ジョブ` に分類され、チェンジセットのコンテンツでフィルタされます。例えば、このリポジトリでは `tools/docker/Dockerfile.builder` がいずれかの `リリースターゲット` に対して更新されて初めて、 `deploy.builder` ジョブが起動することになります。
 
 - `デプロイワークフロー` `リリースターゲット`が更新されたときに実行される`ジョブ`のセットです。
-- `デプロイジョブ` `デプロイワークフロー`に関連する`ジョブ`。Deplo.toml の `[jobs.deploy.$name]` のようなセクションで定義する。
+- `デプロイジョブ` `デプロイワークフロー`に関連する`ジョブ`。Deplo.toml の `[jobs.$name]` のようなセクションと`on = { workflows = ["deploy"],... }`のようなトリガー条件で定義する。
 
 - `統合ワークフロー` `開発ブランチ` が作成または更新されたときに実行されるジョブのセットです。
-- `統合ジョブ` `統合ワークフロー` に関連する`ジョブ`。Deplo.toml の `[jobs.integrate.$name]` のようなセクションで定義する。
+- `統合ジョブ` `統合ワークフロー` に関連する`ジョブ`。Deplo.toml の `[jobs.$name]` のようなセクションと`on = { workflows = ["integrate"],... }`のようなトリガー条件で定義する。
 
 
 ### Install Deplo
@@ -96,7 +96,7 @@ chmod +x /usr/bin/deplo
 - 説明は設定ファイルのコメントをご覧ください
 
 #### .envの作成
-deploは、環境変数として機密性の高い値を注入するための.envファイルをサポートしています。ローカルホストで実行する場合は、`Deplo.toml`に直接secretを記述する代わりに、これを使用することを強くお勧めします。deploは自動的にリポジトリのルートから.envを検索し(または`-e`オプションでパスを指定)、それをsecretの注入に使用します。CIサービス上で動作させる場合、`deplo init` または `deplo ci setenv` が起動されると、各CIサービスのsecretとして .env の内容をアップロードします。
+deploは、環境変数として機密性の高い値を注入するための.envファイルをサポートしています。ローカルホストで実行する場合は、`Deplo.toml`に直接secretを記述する代わりに、これを使用することを強くお勧めします。deploは自動的にリポジトリのルートから.envを検索し(または`-e`オプションでパスを指定)、`Deplo.toml`の中で環境変数名を参照する形でsecretの注入に使用します。CIサービス上で動作させる場合、`deplo init` または `deplo ci setenv` が起動されると、各CIサービスのsecretとして .env の内容をアップロードします。
 
 #### deplo initの実行
 - すでにdeploをインストールしている場合
@@ -127,27 +127,27 @@ deploは、環境変数として機密性の高い値を注入するための.en
 
 #### from CI
 おそらく皆さんにとって最も身近なものでしょう。`リリース対象`に対して push または pull リクエストがあると、github actions または circle ci がワークフローを開始します。
-ワークフローでは、 `deplo ci kick` が実行され、Deplo.toml で定義された `ジョブ` が、push または pull request に含まれる `変更セット` に従って実行されます。
+ワークフローでは、 `deplo boot` が実行され、Deplo.toml で定義された `ジョブ` が、push または pull request に含まれる `変更セット` に従って実行されます。
 
-ローカル環境でも `deplo ci kick` を実行することができますが、`リリースターゲット` にいない場合は、`deplo -r nightly ci kick` のように `-r` オプションを指定することを忘れないようにしてください。
+ローカル環境でも `deplo boot` を実行することができますが、`リリースターゲット` にいない場合は、`deplo -r nightly boot` のように `-r` オプションを指定することを忘れないようにしてください。
 
 #### from command line (Local)
-Deplo.tomlで定義された各ジョブは、 `deplo i $job_name` (`統合ジョブ`) または `deplo d $job_name` (`デプロイジョブ`) を使用して個別に実行することができます。
-また、対応するジョブを実行する環境と様々なやりとりをすることができます。
+Deplo.tomlで定義された各ジョブは、 `deplo i -r $release_target $job_name` (`統合ジョブ`) または `deplo d -r $release_target $job_name` (`デプロイジョブ`) を使用して個別に実行することができます。`-r $release_target` はinfraの更新やdeployなどの`デプロイジョブ`では更新する対象を指定する必要があるので必須ですが、ドキュメントの生成など、リリースターゲットを必要としない場合には省略できます。
+また、対応するジョブを実行する環境と様々な形でやりとりをすることができます。
 
-シェルにログイン: `deplo i $job_name sh`
+シェルにログイン: `deplo i -r $release_target $job_name sh`
 
-任意のコマンドの実行: `deplo i $job_name sh ${adhoc command args}`
+任意のコマンドの実行: `deplo i -r $release_target $job_name sh ${adhoc command args}`
 
-あらかじめ定義されたコマンドライン引数の実行: `deplo i $job_name sh @task_anme`
+あらかじめ定義されたコマンドライン引数の実行: `deplo i -r $release_target $job_name sh @task_anme`
 
-任意の環境変数も追加で設定できます: `deplo i $job_name -e ENV1=VAR1`。
+任意の環境変数も追加で設定できます: `deplo i -r $release_target $job_name -e ENV1=VAR1`。
 
-またはコミットSHAを指定してジョブを実行します: `deplo i $job_name --ref efc6d3e2c1a1d875517bf81fb3ac193541050398`
+またはコミットSHAを指定してジョブを実行します: `deplo i -r $release_target $job_name --ref efc6d3e2c1a1d875517bf81fb3ac193541050398`
 
 #### from command line (Remote)
 __実際のCIサービス環境__でジョブを実行するには、`--remote`を使用します。
-コマンド `${adhoc command args}` を `$job_name` の CI サービス環境上でリモートから実行する: `deplo i $job_name --remote sh ${adhoc command args}`
+コマンド `${adhoc command args}` を `$job_name` の CI サービス環境上でリモートから実行する: `deplo i -r $release_target $job_name --remote sh ${adhoc command args}`
 
 
 ### Roadmap
