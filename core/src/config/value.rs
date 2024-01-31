@@ -75,6 +75,12 @@ impl Value {
             resolver: Some(secret_resolver)
         }
     }
+    pub fn new_env(key: &str) -> Self {
+        Self {
+            value: key.to_string(),
+            resolver: Some(envref_resolver)
+        }
+    }
     pub fn as_str(&self) -> &str {
         self.value.as_str()
     }

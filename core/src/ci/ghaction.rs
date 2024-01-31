@@ -2,7 +2,7 @@ use std::fs;
 use std::fmt;
 use std::error::Error;
 use std::result::Result;
-use std::collections::{HashMap};
+use std::collections::HashMap;
 use std::thread::sleep;
 use std::time::Duration as StdDuration;
 
@@ -10,7 +10,7 @@ use chrono::{Utc, Duration};
 use log;
 use maplit::hashmap;
 use serde::{Deserialize, Serialize};
-use serde_json::{Value as JsonValue};
+use serde_json::Value as JsonValue;
 
 use crate::config;
 use crate::ci::{self, CheckoutOption};
@@ -20,6 +20,7 @@ use crate::util::{
     escalate,seal,
     MultilineFormatString,rm,
     sorted_key_iter,
+    merge_hashmap,
     randombytes_as_string
 };
 
@@ -1110,7 +1111,21 @@ impl<S: shell::Shell> ci::CI for GhAction<S> {
         Ok(envs)
     }
     fn job_env(&self) -> HashMap<String, config::Value> {
-        hashmap!{}
+        merge_hashmap(
+            &match std::env::var("ACTIONS_ID_TOKEN_REQUEST_URL") {
+                Ok(_) => hashmap!{
+                    "ACTIONS_ID_TOKEN_REQUEST_URL".to_string() => 
+                        config::value::Value::new_env("ACTIONS_ID_TOKEN_REQUEST_URL")
+                },
+                Err(_) => hashmap!{}
+            }, &match std::env::var("ACTIONS_ID_TOKEN_REQUEST_TOKEN") {
+                Ok(_) => hashmap!{
+                    "ACTIONS_ID_TOKEN_REQUEST_TOKEN".to_string() => 
+                        config::value::Value::new_env("ACTIONS_ID_TOKEN_REQUEST_TOKEN")
+                },
+                Err(_) => hashmap!{}
+            }
+        )
     }
     fn list_secret_name(&self) -> Result<Vec<String>, Box<dyn Error>> {
         let token = self.get_token()?;
