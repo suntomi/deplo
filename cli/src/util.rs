@@ -21,4 +21,3 @@ macro_rules! macro_defer {
         };
     )
 }
-pub use macro_defer as defer;

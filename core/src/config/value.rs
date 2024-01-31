@@ -2,7 +2,7 @@ use std::cmp::PartialEq;
 use std::borrow::Cow;
 use std::fmt;
 
-use regex::{Regex};
+use regex::Regex;
 use serde::{de, Deserialize, Serialize, Deserializer, Serializer};
 //use strfmt::strfmt;
 
@@ -17,10 +17,21 @@ pub fn is_secret_name(s: &str) -> bool {
     let re = Regex::new(SECRET_NAME_REGEX).unwrap();
     re.is_match(s)
 }
+const ENVREF_NAME_REGEX: &str = r"^env:([[:alpha:]_][[:alpha:]_0-9]*$)";
+pub fn is_envref_name<'a>(s: &'a str) -> Option<&'a str> {
+    let re = Regex::new(ENVREF_NAME_REGEX).unwrap();
+    re.captures(s).map(|c| c.get(1).unwrap().as_str())
+}
 fn secret_resolver(s: &str) -> String {
     match config::secret::var(s) {
         Some(r) => r,
         None => format!("${{{}}}", s),
+    }
+}
+fn envref_resolver(s: &str) -> String {
+    match std::env::var(s) {
+        Ok(r) => r,
+        Err(_) => format!("${{env:{}}}", s),
     }
 }
 fn detect_value_ref(s: &str) -> (&str, Option<ValueResolver>) {
@@ -30,6 +41,8 @@ fn detect_value_ref(s: &str) -> (&str, Option<ValueResolver>) {
             let key = captures.get(1).unwrap().as_str();
             if is_secret_name(key) {
                 (key, Some(secret_resolver))
+            } else if let Some(k) = is_envref_name(key) {
+                (k, Some(envref_resolver))
             } else {
                 panic!("invalid secret name: {} should match {}", key, SECRET_NAME_REGEX)
             }
