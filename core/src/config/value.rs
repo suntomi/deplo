@@ -17,7 +17,7 @@ pub fn is_secret_name(s: &str) -> bool {
     let re = Regex::new(SECRET_NAME_REGEX).unwrap();
     re.is_match(s)
 }
-const ENVREF_NAME_REGEX: &str = r"^env:([[:alpha:]_][[:alpha:]_0-9]*$)";
+const ENVREF_NAME_REGEX: &str = r"^env:([[:alpha:]_][[:alpha:]_0-9]*)$";
 pub fn is_envref_name<'a>(s: &'a str) -> Option<&'a str> {
     let re = Regex::new(ENVREF_NAME_REGEX).unwrap();
     re.captures(s).map(|c| c.get(1).unwrap().as_str())
@@ -44,7 +44,9 @@ fn detect_value_ref(s: &str) -> (&str, Option<ValueResolver>) {
             } else if let Some(k) = is_envref_name(key) {
                 (k, Some(envref_resolver))
             } else {
-                panic!("invalid secret name: {} should match {}", key, SECRET_NAME_REGEX)
+                panic!("invalid value ref: {} should match [{}]", key, vec![
+                    SECRET_NAME_REGEX, ENVREF_NAME_REGEX
+                ].join(" or "))
             }
         }
         None => (s, None)
@@ -267,6 +269,9 @@ impl Any {
     pub fn is_array(&self) -> bool {
         self.value.is_array()
     }
+    pub fn is_table(&self) -> bool {
+        self.value.is_table()
+    }
     pub fn iter<F,R>(&self, proc: F) -> Option<R> 
         where F: Fn(&Self) -> Option<R> {
         match &self.value {
@@ -300,6 +305,9 @@ impl Any {
             }
             _ => None
         }
+    }
+    pub fn as_yaml(&self) -> String {
+        serde_yaml::to_string(&self.value).unwrap()
     }
 }
 impl fmt::Display for Any {

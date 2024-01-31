@@ -455,6 +455,20 @@ impl<S: shell::Shell> GhAction<S> {
                 format!("\"{}\"", vs.join("\",\""))
             })
     }
+    fn generate_native_configs<'a>(&self, job: &config::job::Job) -> Vec<String> {
+        match job.options {
+            Some(ref o) => match o.get("native_configs") {
+                Some(v) => if v.is_table() {
+                    v.as_yaml().split("\n").map(|s| s.to_string()).collect::<Vec<String>>()
+                } else {
+                    log::warn!("native_configs option should be a table. ignore it");
+                    vec![]
+                }
+                None => vec![]
+            },
+            None => vec![]
+        }
+    }
     fn generate_container_setting<'a>(&self, runner: &'a config::job::Runner) -> Vec<String> {
         match runner {
             config::job::Runner::Machine{ .. } => vec![],
@@ -614,6 +628,10 @@ impl<S: shell::Shell> ci::CI for GhAction<S> {
                         }).to_string()
                     },
                     config::job::Runner::Container{..} => "ubuntu-latest".to_string(),
+                },
+                native_configs = MultilineFormatString{
+                    strings: &self.generate_native_configs(&job),
+                    postfix: None
                 },
                 caches = MultilineFormatString{
                     strings: &self.generate_caches(&job),

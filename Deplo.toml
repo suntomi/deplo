@@ -367,11 +367,34 @@ caches = {
 
 [jobs.dispatched]
 on = { workflows = ["manual_dispatch", "webapi_dispatch"] }
-runner = { os = "linux", local_fallback = { path = "tools/docker/Dockerfile.vmfb", shell = "sh" } }
+options = {
+    # keys in native_configs are directly added to generated job declaration in workflow file
+    native_configs = {
+        permissions = { "id-token" = "write", "contents" = "read" }
+    }
+}
+env = { TEST_ID_TOKEN_REQUEST_URL = "${env:ACTIONS_ID_TOKEN_REQUEST_URL}", TEST_ID_TOKEN_REQUEST_TOKEN = "${env:ACTIONS_ID_TOKEN_REQUEST_TOKEN}" }
+runner = { os = "linux", local_fallback = { image = "ghcr.io/suntomi/images:aws", shell = "sh" } }
 command = """
+set -e
 echo "======================="
 echo "dispatch context = ${DEPLO_CI_WORKFLOW_CONTEXT}"
 echo "======================="
+if [ -z "${ACTIONS_ID_TOKEN_REQUEST_TOKEN}" ]; then
+    echo "ACTIONS_ID_TOKEN_REQUEST_TOKEN is not set"
+    exit 1
+fi
+if [ "${TEST_ID_TOKEN_REQUEST_URL}" != "${ACTIONS_ID_TOKEN_REQUEST_URL}" ]; then
+    echo "TEST_ID_TOKEN_REQUEST_URL is not correctly imported"
+    exit 1
+fi
+if [ "${TEST_ID_TOKEN_REQUEST_TOKEN}" != "${ACTIONS_ID_TOKEN_REQUEST_TOKEN}" ]; then
+    echo "TEST_ID_TOKEN_REQUEST_TOKEN is not correctly imported"
+    exit 1
+fi
+deplo ci token oidc --aud "sts.amazonaws.com" --out /tmp/token.json
+eval $(bash tools/scripts/aws_credentials.sh /tmp/token.json)
+aws sts get-caller-identity
 """
 
 [jobs.repository]

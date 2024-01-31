@@ -109,6 +109,7 @@ jobs:
     runs-on: ubuntu-latest
   
   
+  
     outputs:
       need-cleanup: ${{ steps.deplo-job-base.outputs.need-cleanup }}
       system: ${{ steps.deplo-job-base.outputs.system }}
@@ -139,6 +140,7 @@ jobs:
     if: ${{ needs.deplo-main.outputs.builder && !failure() }}
     name: Running job builder
     runs-on: ubuntu-latest
+  
   
   
     outputs:
@@ -173,6 +175,7 @@ jobs:
     runs-on: ubuntu-latest
   
   
+  
     outputs:
       need-cleanup: ${{ steps.deplo-job-config.outputs.need-cleanup }}
       system: ${{ steps.deplo-job-config.outputs.system }}
@@ -203,6 +206,10 @@ jobs:
     if: ${{ needs.deplo-main.outputs.dispatched && !failure() }}
     name: Running job dispatched
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    
   
   
     outputs:
@@ -235,6 +242,7 @@ jobs:
     if: ${{ needs.deplo-main.outputs.latest && !failure() }}
     name: Running job latest
     runs-on: ubuntu-latest
+  
     env:
       DEPLO_JOB_USER_OUTPUT_PRODUCT: ${{ needs.product.outputs.user }}
   
@@ -268,6 +276,7 @@ jobs:
     if: ${{ needs.deplo-main.outputs.mac && !failure() }}
     name: Running job mac
     runs-on: macos-latest
+  
     env:
       DEPLO_JOB_USER_OUTPUT_PRODUCT: ${{ needs.product.outputs.user }}
   
@@ -319,6 +328,7 @@ jobs:
     runs-on: ubuntu-latest
   
   
+  
     outputs:
       need-cleanup: ${{ steps.deplo-job-module_test.outputs.need-cleanup }}
       system: ${{ steps.deplo-job-module_test.outputs.system }}
@@ -349,6 +359,7 @@ jobs:
     if: ${{ needs.deplo-main.outputs.product && !failure() }}
     name: Running job product
     runs-on: ubuntu-latest
+  
     env:
       DEPLO_JOB_USER_OUTPUT_BUILDER: ${{ needs.builder.outputs.user }}
   
@@ -384,6 +395,7 @@ jobs:
     runs-on: ubuntu-latest
   
   
+  
     outputs:
       need-cleanup: ${{ steps.deplo-job-repository.outputs.need-cleanup }}
       system: ${{ steps.deplo-job-repository.outputs.system }}
@@ -414,6 +426,7 @@ jobs:
     if: ${{ needs.deplo-main.outputs.test && !failure() }}
     name: Running job test
     runs-on: ubuntu-latest
+  
   
   
     outputs:
@@ -460,6 +473,7 @@ jobs:
     if: ${{ needs.deplo-main.outputs.win && !failure() }}
     name: Running job win
     runs-on: windows-latest
+  
     env:
       DEPLO_JOB_USER_OUTPUT_PRODUCT: ${{ needs.product.outputs.user }}
   
