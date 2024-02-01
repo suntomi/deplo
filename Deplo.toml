@@ -140,9 +140,9 @@ discord = {
 on = { workflows = ["deploy", "integrate"], changed = ["tools/docker/Dockerfile.base"] }
 # you can set local_fallback container image. if its set, command will be executed on container of `local_fallback.image`,
 # with using shell `local_fallback.shell`, if local machine's OS does not matched runner.os.
-runner = { os = "linux", local_fallback = { image = "docker:20.10", shell = "sh" } }
+runner = { os = "linux", local_fallback = { image = "docker:25.0.1", shell = "sh" } }
 command = """
-docker build -t ghcr.io/suntomi/deplo:base -f tools/docker/Dockerfile.base tools/docker
+docker buildx build --platform linux/amd64,linux/arm64 -t ghcr.io/suntomi/deplo:base -f tools/docker/Dockerfile.base tools/docker
 if [ "${DEPLO_CI_WORKFLOW_NAME}" = "deploy" ]; then
     echo ${SUNTOMI_VCS_ACCOUNT_KEY} | docker login ghcr.io -u ${SUNTOMI_VCS_ACCOUNT} --password-stdin
     docker push ghcr.io/suntomi/deplo:base
@@ -152,10 +152,10 @@ fi
 [jobs.builder]
 # if workflows is opmitted, use ["deploy", "integrate"] by default.
 on = { changed = ["tools/docker/Dockerfile.builder", "Cargo.*"] }
-runner = { os = "linux", local_fallback = { image = "docker:20.10", shell = "sh" } }
+runner = { os = "linux", local_fallback = { image = "docker:25.0.1", shell = "sh" } }
 command = """
 sh tools/scripts/copy_manifests.sh
-docker build -t ghcr.io/suntomi/deplo:builder -f tools/docker/Dockerfile.builder tools/docker
+docker buildx build --platform linux/amd64,linux/arm64 -t ghcr.io/suntomi/deplo:builder -f tools/docker/Dockerfile.builder tools/docker
 if [ "${DEPLO_CI_WORKFLOW_NAME}" = "deploy" ]; then
     echo ${SUNTOMI_VCS_ACCOUNT_KEY} | docker login ghcr.io -u ${SUNTOMI_VCS_ACCOUNT} --password-stdin
     docker push ghcr.io/suntomi/deplo:builder
@@ -233,7 +233,7 @@ set -e
 mkdir -p tools/docker/bin
 . tools/scripts/setup_release_env.sh
 sh tools/scripts/build_linux.sh
-docker build -t ghcr.io/suntomi/deplo:${DEPLO_RELEASE_VERSION} -f tools/docker/Dockerfile tools/docker
+docker buildx --platform linux/amd64,linux/arm64 -t ghcr.io/suntomi/deplo:${DEPLO_RELEASE_VERSION} -f tools/docker/Dockerfile tools/docker
 echo ${SUNTOMI_VCS_ACCOUNT_KEY} | docker login ghcr.io -u ${SUNTOMI_VCS_ACCOUNT} --password-stdin
 docker push ghcr.io/suntomi/deplo:${DEPLO_RELEASE_VERSION}
 
@@ -269,7 +269,7 @@ on = { workflows = ["deploy"], release_targets = ["prod"], changed = ["*/src/*",
 # prohibit to run from cli
 options = { only_from_ci = true }
 depends = ["product"]
-runner = { os = "linux", local_fallback = { image = "docker:20.10", shell = "sh" } }
+runner = { os = "linux", local_fallback = { image = "docker:25.0.1", shell = "sh" } }
 command = """
 . tools/scripts/setup_release_env.sh
 echo ${SUNTOMI_VCS_ACCOUNT_KEY} | docker login ghcr.io -u ${SUNTOMI_VCS_ACCOUNT} --password-stdin

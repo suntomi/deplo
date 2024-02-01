@@ -98,7 +98,7 @@ discord = {
 on = { workflows = ["deploy", "integrate"], changed = ["tools/docker/Dockerfile.base"] }
 # you can set local_fallback container image. if its set, command will be executed on container of `local_fallback.image`,
 # with using shell `local_fallback.shell`, if local machine's OS does not matched runner.os.
-runner = { type = "machine", os = "Linux", local_fallback = { image = "docker:20.10", shell = "sh" } }
+runner = { type = "machine", os = "Linux", local_fallback = { image = "docker:25.0.1", shell = "sh" } }
 command = """
 docker build -t ghcr.io/suntomi/deplo:base -f tools/docker/Dockerfile.base tools/docker
 if [ "${DEPLO_CI_WORKFLOW_NAME}" = "deploy" ]; then
@@ -110,7 +110,7 @@ fi
 [jobs.builder]
 # if workflows is opmitted, use ["deploy", "integrate"] by default.
 on = { changed = ["tools/docker/Dockerfile.builder", "Cargo.*"] }
-runner = { type = "machine", os = "Linux", local_fallback = { image = "docker:20.10", shell = "sh" } }
+runner = { type = "machine", os = "Linux", local_fallback = { image = "docker:25.0.1", shell = "sh" } }
 command = """
 sh tools/scripts/copy_manifests.sh
 docker build -t ghcr.io/suntomi/deplo:builder -f tools/docker/Dockerfile.builder tools/docker
@@ -205,7 +205,7 @@ on = { workflows = ["deploy"], targets = ["prod"], changed = ["*/src/*", "Cargo.
 # prohibit to run from cli
 options = { only_from_ci = true }
 depends = ["product"]
-runner = { os = "Linux", local_fallback = { image = "docker:20.10", shell = "sh" } }
+runner = { os = "Linux", local_fallback = { image = "docker:25.0.1", shell = "sh" } }
 command = """
 . tools/scripts/setup_release_env.sh
 echo ${SUNTOMI_VCS_ACCOUNT_KEY} | docker login ghcr.io -u ${SUNTOMI_VCS_ACCOUNT} --password-stdin
