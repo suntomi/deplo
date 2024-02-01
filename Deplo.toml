@@ -142,11 +142,13 @@ on = { workflows = ["deploy", "integrate"], changed = ["tools/docker/Dockerfile.
 # with using shell `local_fallback.shell`, if local machine's OS does not matched runner.os.
 runner = { os = "linux", local_fallback = { image = "docker:25.0.1", shell = "sh" } }
 command = """
-docker buildx build --platform linux/amd64,linux/arm64 -t ghcr.io/suntomi/deplo:base -f tools/docker/Dockerfile.base tools/docker
+docker buildx create --name mp --bootstrap --use
+push_opt=""
 if [ "${DEPLO_CI_WORKFLOW_NAME}" = "deploy" ]; then
     echo ${SUNTOMI_VCS_ACCOUNT_KEY} | docker login ghcr.io -u ${SUNTOMI_VCS_ACCOUNT} --password-stdin
-    docker push ghcr.io/suntomi/deplo:base
+    push_opt="--push"
 fi
+docker buildx build ${push_opt} --platform linux/amd64,linux/arm64 -t ghcr.io/suntomi/deplo:base -f tools/docker/Dockerfile.base tools/docker
 """
 
 [jobs.builder]
@@ -155,11 +157,13 @@ on = { changed = ["tools/docker/Dockerfile.builder", "Cargo.*"] }
 runner = { os = "linux", local_fallback = { image = "docker:25.0.1", shell = "sh" } }
 command = """
 sh tools/scripts/copy_manifests.sh
-docker buildx build --platform linux/amd64,linux/arm64 -t ghcr.io/suntomi/deplo:builder -f tools/docker/Dockerfile.builder tools/docker
+docker buildx create --name mp --bootstrap --use
+push_opt=""
 if [ "${DEPLO_CI_WORKFLOW_NAME}" = "deploy" ]; then
     echo ${SUNTOMI_VCS_ACCOUNT_KEY} | docker login ghcr.io -u ${SUNTOMI_VCS_ACCOUNT} --password-stdin
-    docker push ghcr.io/suntomi/deplo:builder
+    push_opt="--push"
 fi
+docker buildx build ${push_opt} --platform linux/arm64 -t ghcr.io/suntomi/deplo:builder -f tools/docker/Dockerfile.builder tools/docker
 """
 # tasks. task is a pre-defined command to be executed in same environment as job.
 # you can use tasks to use deplo like repository of utility command, like make or rake.
@@ -233,9 +237,9 @@ set -e
 mkdir -p tools/docker/bin
 . tools/scripts/setup_release_env.sh
 sh tools/scripts/build_linux.sh
-docker buildx --platform linux/amd64,linux/arm64 -t ghcr.io/suntomi/deplo:${DEPLO_RELEASE_VERSION} -f tools/docker/Dockerfile tools/docker
 echo ${SUNTOMI_VCS_ACCOUNT_KEY} | docker login ghcr.io -u ${SUNTOMI_VCS_ACCOUNT} --password-stdin
-docker push ghcr.io/suntomi/deplo:${DEPLO_RELEASE_VERSION}
+docker buildx create --name mp --bootstrap --use
+docker buildx build --push --platform linux/amd64,linux/arm64 -t ghcr.io/suntomi/deplo:${DEPLO_RELEASE_VERSION} -f tools/docker/Dockerfile tools/docker
 
 # deplo provides unified command for controlling vcs. 
 # `deplo vcs release` and `deplo vcs release-assets` are used for creating release of vcs like github/gitlab
