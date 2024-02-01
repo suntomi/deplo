@@ -1,10 +1,10 @@
-use std::collections::{HashMap};
+use std::collections::HashMap;
 use std::error::Error;
 use std::fmt;
 
 use crate::config;
 use crate::module;
-use crate::util::{strhash};
+use crate::util::strhash;
 
 pub enum OutputKind {
     System,
@@ -37,6 +37,10 @@ impl WorkflowTrigger {
     }
 }
 
+pub enum TokenConfig {
+    OIDC{audience: String},
+}
+
 pub trait CheckoutOption {
     fn opt_str(&self) -> Vec<String>;
     fn to_yaml_config(value: &config::Value) -> String;
@@ -62,6 +66,7 @@ pub trait CI {
     fn list_secret_name(&self) -> Result<Vec<String>, Box<dyn Error>>;
     fn job_env(&self) -> HashMap<String, config::Value>;
     fn process_env(&self) -> Result<HashMap<&str, String>, Box<dyn Error>>;
+    fn generate_token(&self, token_config: &TokenConfig) -> Result<String, Box<dyn Error>>;
     fn filter_workflows(
         &self, trigger: Option<WorkflowTrigger>
     ) -> Result<Vec<config::runtime::Workflow>, Box<dyn Error>>;

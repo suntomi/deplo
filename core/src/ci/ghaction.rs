@@ -13,6 +13,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value as JsonValue;
 
 use crate::config;
+use crate::config::value;
 use crate::ci::{self, CheckoutOption};
 use crate::shell;
 use crate::vcs;
@@ -42,6 +43,11 @@ enum EventPayload {
     Repository {
         action: Option<String>
     }
+}
+#[derive(Deserialize)]
+struct WebIdentityTokenResponse {
+    // count: u64,
+    value: String
 }
 impl fmt::Display for EventPayload {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -1127,6 +1133,20 @@ impl<S: shell::Shell> ci::CI for GhAction<S> {
             }
         };
         Ok(envs)
+    }
+    fn generate_token(&self, token_config: &ci::TokenConfig) -> Result<String, Box<dyn Error>> {
+        match token_config {
+            ci::TokenConfig::OIDC{audience: aud} => {
+                let response = self.shell.exec(shell::args![
+                    "curl", "-H",
+                    shell::fmtargs!("Authorization: token {}", value::Value::new_env("ACTIONS_ID_TOKEN_REQUEST_TOKEN")),
+                    "-H", "Accept: application/vnd.github.v3+json",
+                    shell::fmtargs!("{}&audience={}", value::Value::new_env("ACTIONS_ID_TOKEN_REQUEST_URL"), aud)
+                ], shell::no_env(), shell::no_cwd(), &shell::capture())?;
+                let parsed = serde_json::from_str::<WebIdentityTokenResponse>(&response)?;
+                Ok(parsed.value)
+            }
+        }
     }
     fn job_env(&self) -> HashMap<String, config::Value> {
         merge_hashmap(

@@ -184,6 +184,11 @@ impl<'a, S: shell::Shell> ci::CI for CircleCI<S> {
         };
         Ok(envs)
     }
+    fn generate_token(&self, _token_config: &ci::TokenConfig) -> Result<String, Box<dyn Error>> {
+        return escalate!(Box::new(ci::CIError {
+            cause: format!("TODO: support token generation")
+        }));
+    }
     fn job_env(&self) -> HashMap<String, config::Value> {
         hashmap!{}
     }
