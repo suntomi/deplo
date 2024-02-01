@@ -206,10 +206,7 @@ jobs:
     if: ${{ needs.deplo-main.outputs.dispatched && !failure() }}
     name: Running job dispatched
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      id-token: write
-    
+  
   
   
     outputs:
@@ -426,7 +423,10 @@ jobs:
     if: ${{ needs.deplo-main.outputs.test && !failure() }}
     name: Running job test
     runs-on: ubuntu-latest
-  
+    permissions:
+      contents: read
+      id-token: write
+    
   
   
     outputs:

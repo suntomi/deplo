@@ -1,10 +1,11 @@
 #!/bin/bash
 
 token_file_path=$1
+role_arn=$2
 
 response=$(aws sts assume-role-with-web-identity --role-arn ${role_arn} \
-    --region ${region} \
-    --role-session-name "ghaction" \
+    --region ap-northeast-1 \
+    --role-session-name "deplo-ghaction" \
     --web-identity-token $(cat ${token_file_path}) \
     --duration-seconds 120)
 
