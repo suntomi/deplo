@@ -2,7 +2,8 @@ FROM --platform=${BUILDPLATFORM} rust:alpine
 
 ARG TARGETARCH
 ENV TARGETARCH=${TARGETARCH}
-RUN apk add --update --no-cache musl-dev openssl-dev openssl-libs-static
+RUN apk add --update --no-cache musl-dev openssl-dev openssl-libs-static && \
+    ln /usr/bin/gcc /usr/bin/musl-gcc
 RUN if [ "${TARGETARCH}" = "arm64" ]; then export ARCH="aarch64"; else export ARCH="x86_64"; fi && \
     rustup target add ${ARCH}-unknown-linux-musl
 

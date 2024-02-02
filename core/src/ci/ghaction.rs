@@ -512,6 +512,16 @@ impl<S: shell::Shell> GhAction<S> {
             }
         ).split("\n").map(|s| s.to_string()).collect()
     }
+    fn generate_cache_restore_cmds(&self, options: &config::job::CheckoutOption) -> String {
+        let mut cmds = vec!["git reset --hard HEAD"];
+        if options.submodules.as_ref().map_or_else(|| false, |v| match v {
+            config::job::SubmoduleCheckoutType::Checkout(b) => *b,
+            config::job::SubmoduleCheckoutType::Recursive => true
+        }) {
+            cmds.push("git submodule update --init --recursive");
+        }
+        cmds.join(" && ")
+    }
     fn generate_checkout_steps<'a>(
         &self, _: &'a str, options: &'a Option<config::job::CheckoutOption>, defaults: &Option<config::job::CheckoutOption>
     ) -> Vec<String> {
@@ -537,7 +547,7 @@ impl<S: shell::Shell> GhAction<S> {
                 checkout_opts = MultilineFormatString{
                     strings: &self.generate_checkout_opts(&checkout_opts),
                     postfix: None
-                }, opts_hash = opts_hash
+                }, opts_hash = opts_hash, restore_commands = &self.generate_cache_restore_cmds(&merged_opts)
             ).split("\n").map(|s| s.to_string()).collect()
         } else {
             format!(
