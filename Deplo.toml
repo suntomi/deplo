@@ -3,7 +3,7 @@ version = 1
 # common settings
 # ---------------
 project_name = "deplo"
-debug = { ghaction_deplo_debugger = "on", ghaction_job_debugger = "on" }
+# debug = { ghaction_deplo_debugger = "on", ghaction_job_debugger = "on" }
 checkout = { submodules = true, token = "${SUNTOMI_VCS_ACCOUNT_KEY}" }
 
 # release target branch settings
@@ -137,7 +137,7 @@ discord = {
 [jobs.base]
 # git's changeset pattern to invoke the job. that is, integrate.base only invoked when tools/docker/Dockerfile.base is
 # changed by commit.
-on = { workflows = ["deploy", "integrate"], changed = ["tools/docker/Dockerfile.base"] }
+on = { workflows = ["deploy"], changed = ["tools/docker/Dockerfile.base"] }
 # you can set local_fallback container image. if its set, command will be executed on container of `local_fallback.image`,
 # with using shell `local_fallback.shell`, if local machine's OS does not matched runner.os.
 runner = { os = "linux", local_fallback = { image = "docker:25.0.1", shell = "sh" } }
@@ -154,7 +154,7 @@ docker buildx build ${push_opt} --platform linux/amd64,linux/arm64 -t ghcr.io/su
 
 [jobs.builder]
 # if workflows is opmitted, use ["deploy", "integrate"] by default.
-on = { changed = ["tools/docker/Dockerfile.builder", "Cargo.*"] }
+on = { workflows = ["deploy"], changed = ["tools/docker/Dockerfile.builder", "Cargo.*"] }
 runner = { os = "linux", local_fallback = { image = "docker:25.0.1", shell = "sh" } }
 command = """
 set -e
