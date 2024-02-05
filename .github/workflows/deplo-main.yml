@@ -23,6 +23,7 @@ env:
   DEPLO_GHACTION_EVENT_DATA: ${{ toJson(github) }}
   DEPLO_GHACTION_WORKFLOW_NAME: ${{ github.workflow }}
   DEPLO_OVERWRITE_VERBOSITY: ${{ github.event.client_payload.exec.verbosity }}
+  SUNTOMI_AWS_ROLE: ${{ secrets.SUNTOMI_AWS_ROLE }}
   SUNTOMI_VCS_ACCOUNT: ${{ secrets.SUNTOMI_VCS_ACCOUNT }}
   SUNTOMI_VCS_ACCOUNT_EMAIL: ${{ secrets.SUNTOMI_VCS_ACCOUNT_EMAIL }}
   SUNTOMI_VCS_ACCOUNT_KEY: ${{ secrets.SUNTOMI_VCS_ACCOUNT_KEY }}
@@ -47,7 +48,7 @@ jobs:
     steps:
       - name: Fetch deplo cli
         run: |
-          curl -L https://github.com/suntomi/deplo/releases/download/nightly/deplo-Linux -o /usr/local/bin/deplo
+          curl -L https://github.com/suntomi/deplo/releases/download/nightly/deplo-Linux-$(uname -m) -o /usr/local/bin/deplo
           chmod +x /usr/local/bin/deplo
       - name: Checkout
         uses: actions/checkout@v3
@@ -84,7 +85,7 @@ jobs:
     steps:
       - name: Fetch deplo cli
         run: |
-          curl -L https://github.com/suntomi/deplo/releases/download/nightly/deplo-Linux -o /usr/local/bin/deplo
+          curl -L https://github.com/suntomi/deplo/releases/download/nightly/deplo-Linux-$(uname -m) -o /usr/local/bin/deplo
           chmod +x /usr/local/bin/deplo
       - name: Checkout
         uses: actions/checkout@v3
@@ -109,6 +110,7 @@ jobs:
     runs-on: ubuntu-latest
   
   
+  
     outputs:
       need-cleanup: ${{ steps.deplo-job-base.outputs.need-cleanup }}
       system: ${{ steps.deplo-job-base.outputs.system }}
@@ -116,7 +118,7 @@ jobs:
     steps:
       - name: Fetch deplo cli
         run: |
-          curl -L https://github.com/suntomi/deplo/releases/download/nightly/deplo-Linux -o /usr/local/bin/deplo
+          curl -L https://github.com/suntomi/deplo/releases/download/nightly/deplo-Linux-$(uname -m) -o /usr/local/bin/deplo
           chmod +x /usr/local/bin/deplo
       - name: Checkout
         uses: actions/checkout@v3
@@ -141,6 +143,7 @@ jobs:
     runs-on: ubuntu-latest
   
   
+  
     outputs:
       need-cleanup: ${{ steps.deplo-job-builder.outputs.need-cleanup }}
       system: ${{ steps.deplo-job-builder.outputs.system }}
@@ -148,7 +151,7 @@ jobs:
     steps:
       - name: Fetch deplo cli
         run: |
-          curl -L https://github.com/suntomi/deplo/releases/download/nightly/deplo-Linux -o /usr/local/bin/deplo
+          curl -L https://github.com/suntomi/deplo/releases/download/nightly/deplo-Linux-$(uname -m) -o /usr/local/bin/deplo
           chmod +x /usr/local/bin/deplo
       - name: Checkout
         uses: actions/checkout@v3
@@ -173,6 +176,7 @@ jobs:
     runs-on: ubuntu-latest
   
   
+  
     outputs:
       need-cleanup: ${{ steps.deplo-job-config.outputs.need-cleanup }}
       system: ${{ steps.deplo-job-config.outputs.system }}
@@ -180,7 +184,7 @@ jobs:
     steps:
       - name: Fetch deplo cli
         run: |
-          curl -L https://github.com/suntomi/deplo/releases/download/nightly/deplo-Linux -o /usr/local/bin/deplo
+          curl -L https://github.com/suntomi/deplo/releases/download/nightly/deplo-Linux-$(uname -m) -o /usr/local/bin/deplo
           chmod +x /usr/local/bin/deplo
       - name: Checkout
         uses: actions/checkout@v3
@@ -205,6 +209,7 @@ jobs:
     runs-on: ubuntu-latest
   
   
+  
     outputs:
       need-cleanup: ${{ steps.deplo-job-dispatched.outputs.need-cleanup }}
       system: ${{ steps.deplo-job-dispatched.outputs.system }}
@@ -212,7 +217,7 @@ jobs:
     steps:
       - name: Fetch deplo cli
         run: |
-          curl -L https://github.com/suntomi/deplo/releases/download/nightly/deplo-Linux -o /usr/local/bin/deplo
+          curl -L https://github.com/suntomi/deplo/releases/download/nightly/deplo-Linux-$(uname -m) -o /usr/local/bin/deplo
           chmod +x /usr/local/bin/deplo
       - name: Checkout
         uses: actions/checkout@v3
@@ -235,6 +240,7 @@ jobs:
     if: ${{ needs.deplo-main.outputs.latest && !failure() }}
     name: Running job latest
     runs-on: ubuntu-latest
+  
     env:
       DEPLO_JOB_USER_OUTPUT_PRODUCT: ${{ needs.product.outputs.user }}
   
@@ -245,7 +251,7 @@ jobs:
     steps:
       - name: Fetch deplo cli
         run: |
-          curl -L https://github.com/suntomi/deplo/releases/download/nightly/deplo-Linux -o /usr/local/bin/deplo
+          curl -L https://github.com/suntomi/deplo/releases/download/nightly/deplo-Linux-$(uname -m) -o /usr/local/bin/deplo
           chmod +x /usr/local/bin/deplo
       - name: Checkout
         uses: actions/checkout@v3
@@ -268,6 +274,7 @@ jobs:
     if: ${{ needs.deplo-main.outputs.mac && !failure() }}
     name: Running job mac
     runs-on: macos-latest
+  
     env:
       DEPLO_JOB_USER_OUTPUT_PRODUCT: ${{ needs.product.outputs.user }}
   
@@ -319,6 +326,7 @@ jobs:
     runs-on: ubuntu-latest
   
   
+  
     outputs:
       need-cleanup: ${{ steps.deplo-job-module_test.outputs.need-cleanup }}
       system: ${{ steps.deplo-job-module_test.outputs.system }}
@@ -326,7 +334,7 @@ jobs:
     steps:
       - name: Fetch deplo cli
         run: |
-          curl -L https://github.com/suntomi/deplo/releases/download/nightly/deplo-Linux -o /usr/local/bin/deplo
+          curl -L https://github.com/suntomi/deplo/releases/download/nightly/deplo-Linux-$(uname -m) -o /usr/local/bin/deplo
           chmod +x /usr/local/bin/deplo
       - name: Checkout
         uses: actions/checkout@v3
@@ -349,6 +357,7 @@ jobs:
     if: ${{ needs.deplo-main.outputs.product && !failure() }}
     name: Running job product
     runs-on: ubuntu-latest
+  
     env:
       DEPLO_JOB_USER_OUTPUT_BUILDER: ${{ needs.builder.outputs.user }}
   
@@ -359,7 +368,7 @@ jobs:
     steps:
       - name: Fetch deplo cli
         run: |
-          curl -L https://github.com/suntomi/deplo/releases/download/nightly/deplo-Linux -o /usr/local/bin/deplo
+          curl -L https://github.com/suntomi/deplo/releases/download/nightly/deplo-Linux-$(uname -m) -o /usr/local/bin/deplo
           chmod +x /usr/local/bin/deplo
       - name: Checkout
         uses: actions/checkout@v3
@@ -384,6 +393,7 @@ jobs:
     runs-on: ubuntu-latest
   
   
+  
     outputs:
       need-cleanup: ${{ steps.deplo-job-repository.outputs.need-cleanup }}
       system: ${{ steps.deplo-job-repository.outputs.system }}
@@ -391,7 +401,7 @@ jobs:
     steps:
       - name: Fetch deplo cli
         run: |
-          curl -L https://github.com/suntomi/deplo/releases/download/nightly/deplo-Linux -o /usr/local/bin/deplo
+          curl -L https://github.com/suntomi/deplo/releases/download/nightly/deplo-Linux-$(uname -m) -o /usr/local/bin/deplo
           chmod +x /usr/local/bin/deplo
       - name: Checkout
         uses: actions/checkout@v3
@@ -414,6 +424,10 @@ jobs:
     if: ${{ needs.deplo-main.outputs.test && !failure() }}
     name: Running job test
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    
   
   
     outputs:
@@ -423,7 +437,7 @@ jobs:
     steps:
       - name: Fetch deplo cli
         run: |
-          curl -L https://github.com/suntomi/deplo/releases/download/nightly/deplo-Linux -o /usr/local/bin/deplo
+          curl -L https://github.com/suntomi/deplo/releases/download/nightly/deplo-Linux-$(uname -m) -o /usr/local/bin/deplo
           chmod +x /usr/local/bin/deplo
       - name: Checkout
         uses: actions/checkout@v3
@@ -460,6 +474,7 @@ jobs:
     if: ${{ needs.deplo-main.outputs.win && !failure() }}
     name: Running job win
     runs-on: windows-latest
+  
     env:
       DEPLO_JOB_USER_OUTPUT_PRODUCT: ${{ needs.product.outputs.user }}
   

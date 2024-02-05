@@ -8,9 +8,9 @@ pub mod shell;
 pub mod util;
 pub mod step;
 pub mod vcs;
+pub mod ci;
 pub mod workflow;
 
-mod ci;
 mod module;
 
 #[cfg(test)]

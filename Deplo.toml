@@ -25,6 +25,7 @@ SUNTOMI_VCS_ACCOUNT_EMAIL = { env = "SUNTOMI_VCS_ACCOUNT_EMAIL" }
 SUNTOMI_VCS_ACCOUNT_KEY = { env = "SUNTOMI_VCS_ACCOUNT_KEY" }
 SUNTOMI_VCS_APP_ID = { env = "SUNTOMI_VCS_APP_ID" }
 SUNTOMI_VCS_APP_PKEY = { path = "./.secrets/ghapp.pem" }
+SUNTOMI_AWS_ROLE = { env = "SUNTOMI_AWS_ROLE" }
 
 
 # ------------
@@ -137,29 +138,35 @@ discord = {
 [jobs.base]
 # git's changeset pattern to invoke the job. that is, integrate.base only invoked when tools/docker/Dockerfile.base is
 # changed by commit.
-on = { workflows = ["deploy", "integrate"], changed = ["tools/docker/Dockerfile.base"] }
+on = { workflows = ["deploy"], changed = ["tools/docker/Dockerfile.base"] }
 # you can set local_fallback container image. if its set, command will be executed on container of `local_fallback.image`,
 # with using shell `local_fallback.shell`, if local machine's OS does not matched runner.os.
-runner = { os = "linux", local_fallback = { image = "docker:20.10", shell = "sh" } }
+runner = { os = "linux", local_fallback = { image = "docker:25.0.1", shell = "sh" } }
 command = """
-docker build -t ghcr.io/suntomi/deplo:base -f tools/docker/Dockerfile.base tools/docker
+set -e
+docker buildx create --name mp --bootstrap --use
+push_opt=""
 if [ "${DEPLO_CI_WORKFLOW_NAME}" = "deploy" ]; then
     echo ${SUNTOMI_VCS_ACCOUNT_KEY} | docker login ghcr.io -u ${SUNTOMI_VCS_ACCOUNT} --password-stdin
-    docker push ghcr.io/suntomi/deplo:base
+    push_opt="--push"
 fi
+docker buildx build ${push_opt} --platform linux/amd64,linux/arm64 -t ghcr.io/suntomi/deplo:base -f tools/docker/Dockerfile.base tools/docker
 """
 
 [jobs.builder]
 # if workflows is opmitted, use ["deploy", "integrate"] by default.
-on = { changed = ["tools/docker/Dockerfile.builder", "Cargo.*"] }
-runner = { os = "linux", local_fallback = { image = "docker:20.10", shell = "sh" } }
+on = { workflows = ["deploy"], changed = ["tools/docker/Dockerfile.builder", "Cargo.*"] }
+runner = { os = "linux", local_fallback = { image = "docker:25.0.1", shell = "sh" } }
 command = """
+set -e
 sh tools/scripts/copy_manifests.sh
-docker build -t ghcr.io/suntomi/deplo:builder -f tools/docker/Dockerfile.builder tools/docker
+docker buildx create --name mp --bootstrap --use
+push_opt=""
 if [ "${DEPLO_CI_WORKFLOW_NAME}" = "deploy" ]; then
     echo ${SUNTOMI_VCS_ACCOUNT_KEY} | docker login ghcr.io -u ${SUNTOMI_VCS_ACCOUNT} --password-stdin
-    docker push ghcr.io/suntomi/deplo:builder
+    push_opt="--push"
 fi
+docker buildx build ${push_opt} --platform linux/amd64,linux/arm64 -t ghcr.io/suntomi/deplo:builder -f tools/docker/Dockerfile.builder tools/docker
 """
 # tasks. task is a pre-defined command to be executed in same environment as job.
 # you can use tasks to use deplo like repository of utility command, like make or rake.
@@ -183,11 +190,26 @@ on = [
 runner = {
     os = "linux", local_fallback = {
         image = "ghcr.io/suntomi/deplo:builder",
-        inputs = ["core", "cli", "Cargo.*"],
-        caches = ["/tmp/target"]
+        inputs = ["core", "cli", "Cargo.*", "tools/scripts"],
+        caches = ["/tmp/target"],
+        shell = "sh"
     }
 }
-command = "cargo test"
+options = {
+    # keys in native_configs are directly added to generated job declaration in workflow file
+    native_configs = {
+        permissions = { "id-token" = "write", "contents" = "read" }
+    }
+}
+env = { 
+    SUNTOMI_AWS_ROLE = "${SUNTOMI_AWS_ROLE}",
+    # without region, aws sts get-caller-identity in tools/scripts/test.sh will fail
+    # by trying to access IMDS endpoint.
+    AWS_DEFAULT_REGION = "ap-northeast-1",
+    TEST_ID_TOKEN_REQUEST_URL = "${env:ACTIONS_ID_TOKEN_REQUEST_URL}",
+    TEST_ID_TOKEN_REQUEST_TOKEN = "${env:ACTIONS_ID_TOKEN_REQUEST_TOKEN}"
+}
+command = "sh tools/scripts/test.sh"
 tasks = { test = "cargo test", home = "echo ${HOME}" }
 # cache settings. file paths that is listed in paths will be preserved with tha key `keys[0]`.
 # if you specify multiple keys, `keys[1..]` are used as fallback keys to search similar caches 
@@ -226,22 +248,22 @@ set -e
 mkdir -p tools/docker/bin
 . tools/scripts/setup_release_env.sh
 sh tools/scripts/build_linux.sh
-docker build -t ghcr.io/suntomi/deplo:${DEPLO_RELEASE_VERSION} -f tools/docker/Dockerfile tools/docker
-echo ${SUNTOMI_VCS_ACCOUNT_KEY} | docker login ghcr.io -u ${SUNTOMI_VCS_ACCOUNT} --password-stdin
-docker push ghcr.io/suntomi/deplo:${DEPLO_RELEASE_VERSION}
 
 # deplo provides unified command for controlling vcs. 
 # `deplo vcs release` and `deplo vcs release-assets` are used for creating release of vcs like github/gitlab
 # with unified interface.
-deplo vcs release ${DEPLO_RELEASE_TAG} -o name=${DEPLO_RELEASE_NAME}
-deplo vcs release-assets ${DEPLO_RELEASE_TAG} tools/docker/bin/cli --replace -o name=deplo-Linux
+arch=$(uname -m)
+deplo_bin=tools/docker/bin/${arch}/cli
+${deplo_bin} vcs release ${DEPLO_RELEASE_TAG} -o name=${DEPLO_RELEASE_NAME}
+${deplo_bin} vcs release-assets ${DEPLO_RELEASE_TAG} tools/docker/bin/x86_64/cli --replace -o name=deplo-Linux-x86_64
+${deplo_bin} vcs release-assets ${DEPLO_RELEASE_TAG} tools/docker/bin/aarch64/cli --replace -o name=deplo-Linux-aarch64
 
 # deplo provides dyanamically generated job output. you can use value for 'foo' and 'fuga' in jobs that depends on the job. 
-deplo job set-output foo bar
-deplo job set-output fuga hoge
+${deplo_bin} job set-output foo bar
+${deplo_bin} job set-output fuga hoge
 
 # job output can be used in the job that originally create output.
-if [ $(deplo job output product foo) != "bar" ]; then
+if [ $(${deplo_bin} job output product foo) != "bar" ]; then
     echo "failed to get output from job 'product' locally"
     exit 1
 fi
@@ -262,7 +284,7 @@ on = { workflows = ["deploy"], release_targets = ["prod"], changed = ["*/src/*",
 # prohibit to run from cli
 options = { only_from_ci = true }
 depends = ["product"]
-runner = { os = "linux", local_fallback = { image = "docker:20.10", shell = "sh" } }
+runner = { os = "linux", local_fallback = { image = "docker:25.0.1", shell = "sh" } }
 command = """
 . tools/scripts/setup_release_env.sh
 echo ${SUNTOMI_VCS_ACCOUNT_KEY} | docker login ghcr.io -u ${SUNTOMI_VCS_ACCOUNT} --password-stdin
@@ -367,8 +389,9 @@ caches = {
 
 [jobs.dispatched]
 on = { workflows = ["manual_dispatch", "webapi_dispatch"] }
-runner = { os = "linux", local_fallback = { path = "tools/docker/Dockerfile.vmfb", shell = "sh" } }
+runner = { os = "linux", local_fallback = { image = "ghcr.io/suntomi/images:aws", shell = "sh" } }
 command = """
+set -e
 echo "======================="
 echo "dispatch context = ${DEPLO_CI_WORKFLOW_CONTEXT}"
 echo "======================="

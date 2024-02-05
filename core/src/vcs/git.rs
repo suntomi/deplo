@@ -274,7 +274,7 @@ impl<S: shell::Shell> GitFeatures<S> for Git<S> {
     }
     fn tags(&self) -> Result<Vec<String>, Box<dyn Error>> {
         self.shell.exec(shell::args!(
-            "git", "fetch", "--tags"
+            "git", "fetch", "--tags", "--recurse-submodules=no"
         ), shell::no_env(), shell::no_cwd(), &shell::capture())?;
         Ok(self.shell.output_of(shell::args!(
             "git", "tag"

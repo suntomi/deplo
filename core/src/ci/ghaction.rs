@@ -2,7 +2,7 @@ use std::fs;
 use std::fmt;
 use std::error::Error;
 use std::result::Result;
-use std::collections::{HashMap};
+use std::collections::HashMap;
 use std::thread::sleep;
 use std::time::Duration as StdDuration;
 
@@ -10,9 +10,10 @@ use chrono::{Utc, Duration};
 use log;
 use maplit::hashmap;
 use serde::{Deserialize, Serialize};
-use serde_json::{Value as JsonValue};
+use serde_json::Value as JsonValue;
 
 use crate::config;
+use crate::config::value;
 use crate::ci::{self, CheckoutOption};
 use crate::shell;
 use crate::vcs;
@@ -20,6 +21,7 @@ use crate::util::{
     escalate,seal,
     MultilineFormatString,rm,
     sorted_key_iter,
+    merge_hashmap,
     randombytes_as_string
 };
 
@@ -41,6 +43,11 @@ enum EventPayload {
     Repository {
         action: Option<String>
     }
+}
+#[derive(Deserialize)]
+struct WebIdentityTokenResponse {
+    // count: u64,
+    value: String
 }
 impl fmt::Display for EventPayload {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -454,6 +461,20 @@ impl<S: shell::Shell> GhAction<S> {
                 format!("\"{}\"", vs.join("\",\""))
             })
     }
+    fn generate_native_configs<'a>(&self, job: &config::job::Job) -> Vec<String> {
+        match job.options {
+            Some(ref o) => match o.get("native_configs") {
+                Some(v) => if v.is_table() {
+                    v.as_yaml().split("\n").map(|s| s.to_string()).collect::<Vec<String>>()
+                } else {
+                    log::warn!("native_configs option should be a table. ignore it");
+                    vec![]
+                }
+                None => vec![]
+            },
+            None => vec![]
+        }
+    }
     fn generate_container_setting<'a>(&self, runner: &'a config::job::Runner) -> Vec<String> {
         match runner {
             config::job::Runner::Machine{ .. } => vec![],
@@ -464,6 +485,7 @@ impl<S: shell::Shell> GhAction<S> {
         let (path, uname, ext, shell) = match runner {
             config::job::Runner::Machine{ref os, ..} => match os {
                 config::job::RunnerOS::Windows => ("/usr/bin/deplo", "Windows", ".exe", "shell: bash"),
+                config::job::RunnerOS::Linux => ("/usr/local/bin/deplo", "Linux-$(uname -m)", "", ""),
                 v => ("/usr/local/bin/deplo", v.uname(), "", "")
             },
             config::job::Runner::Container{..} => ("/usr/local/bin/deplo", "Linux", "", "")
@@ -491,6 +513,16 @@ impl<S: shell::Shell> GhAction<S> {
             }
         ).split("\n").map(|s| s.to_string()).collect()
     }
+    fn generate_cache_restore_cmds(&self, options: &config::job::CheckoutOption) -> String {
+        let mut cmds = vec!["git reset --hard HEAD"];
+        if options.submodules.as_ref().map_or_else(|| false, |v| match v {
+            config::job::SubmoduleCheckoutType::Checkout(b) => *b,
+            config::job::SubmoduleCheckoutType::Recursive => true
+        }) {
+            cmds.push("git submodule update --init --recursive");
+        }
+        cmds.join(" && ")
+    }
     fn generate_checkout_steps<'a>(
         &self, _: &'a str, options: &'a Option<config::job::CheckoutOption>, defaults: &Option<config::job::CheckoutOption>
     ) -> Vec<String> {
@@ -516,7 +548,7 @@ impl<S: shell::Shell> GhAction<S> {
                 checkout_opts = MultilineFormatString{
                     strings: &self.generate_checkout_opts(&checkout_opts),
                     postfix: None
-                }, opts_hash = opts_hash
+                }, opts_hash = opts_hash, restore_commands = &self.generate_cache_restore_cmds(&merged_opts)
             ).split("\n").map(|s| s.to_string()).collect()
         } else {
             format!(
@@ -613,6 +645,10 @@ impl<S: shell::Shell> ci::CI for GhAction<S> {
                         }).to_string()
                     },
                     config::job::Runner::Container{..} => "ubuntu-latest".to_string(),
+                },
+                native_configs = MultilineFormatString{
+                    strings: &self.generate_native_configs(&job),
+                    postfix: None
                 },
                 caches = MultilineFormatString{
                     strings: &self.generate_caches(&job),
@@ -1109,8 +1145,36 @@ impl<S: shell::Shell> ci::CI for GhAction<S> {
         };
         Ok(envs)
     }
+    fn generate_token(&self, token_config: &ci::TokenConfig) -> Result<String, Box<dyn Error>> {
+        match token_config {
+            ci::TokenConfig::OIDC{audience: aud} => {
+                let response = self.shell.exec(shell::args![
+                    "curl", "-H",
+                    shell::fmtargs!("Authorization: Bearer {}", value::Value::new_env("ACTIONS_ID_TOKEN_REQUEST_TOKEN")),
+                    "-H", "Accept: application/vnd.github.v3+json",
+                    shell::fmtargs!("{}&audience={}", value::Value::new_env("ACTIONS_ID_TOKEN_REQUEST_URL"), aud)
+                ], shell::no_env(), shell::no_cwd(), &shell::capture())?;
+                let parsed = serde_json::from_str::<WebIdentityTokenResponse>(&response)?;
+                Ok(parsed.value)
+            }
+        }
+    }
     fn job_env(&self) -> HashMap<String, config::Value> {
-        hashmap!{}
+        merge_hashmap(
+            &match std::env::var("ACTIONS_ID_TOKEN_REQUEST_URL") {
+                Ok(_) => hashmap!{
+                    "ACTIONS_ID_TOKEN_REQUEST_URL".to_string() => 
+                        config::value::Value::new_env("ACTIONS_ID_TOKEN_REQUEST_URL")
+                },
+                Err(_) => hashmap!{}
+            }, &match std::env::var("ACTIONS_ID_TOKEN_REQUEST_TOKEN") {
+                Ok(_) => hashmap!{
+                    "ACTIONS_ID_TOKEN_REQUEST_TOKEN".to_string() => 
+                        config::value::Value::new_env("ACTIONS_ID_TOKEN_REQUEST_TOKEN")
+                },
+                Err(_) => hashmap!{}
+            }
+        )
     }
     fn list_secret_name(&self) -> Result<Vec<String>, Box<dyn Error>> {
         let token = self.get_token()?;

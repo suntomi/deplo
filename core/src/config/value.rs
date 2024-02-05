@@ -2,7 +2,7 @@ use std::cmp::PartialEq;
 use std::borrow::Cow;
 use std::fmt;
 
-use regex::{Regex};
+use regex::Regex;
 use serde::{de, Deserialize, Serialize, Deserializer, Serializer};
 //use strfmt::strfmt;
 
@@ -17,10 +17,21 @@ pub fn is_secret_name(s: &str) -> bool {
     let re = Regex::new(SECRET_NAME_REGEX).unwrap();
     re.is_match(s)
 }
+const ENVREF_NAME_REGEX: &str = r"^env:([[:alpha:]_][[:alpha:]_0-9]*)$";
+pub fn is_envref_name<'a>(s: &'a str) -> Option<&'a str> {
+    let re = Regex::new(ENVREF_NAME_REGEX).unwrap();
+    re.captures(s).map(|c| c.get(1).unwrap().as_str())
+}
 fn secret_resolver(s: &str) -> String {
     match config::secret::var(s) {
         Some(r) => r,
         None => format!("${{{}}}", s),
+    }
+}
+fn envref_resolver(s: &str) -> String {
+    match std::env::var(s) {
+        Ok(r) => r,
+        Err(_) => format!("${{env:{}}}", s),
     }
 }
 fn detect_value_ref(s: &str) -> (&str, Option<ValueResolver>) {
@@ -30,8 +41,12 @@ fn detect_value_ref(s: &str) -> (&str, Option<ValueResolver>) {
             let key = captures.get(1).unwrap().as_str();
             if is_secret_name(key) {
                 (key, Some(secret_resolver))
+            } else if let Some(k) = is_envref_name(key) {
+                (k, Some(envref_resolver))
             } else {
-                panic!("invalid secret name: {} should match {}", key, SECRET_NAME_REGEX)
+                panic!("invalid value ref: {} should match [{}]", key, vec![
+                    SECRET_NAME_REGEX, ENVREF_NAME_REGEX
+                ].join(" or "))
             }
         }
         None => (s, None)
@@ -41,6 +56,7 @@ fn detect_value_ref(s: &str) -> (&str, Option<ValueResolver>) {
 fn resolver_to_name(resolver: ValueResolver) -> &'static str {
     let sz = resolver as usize;
     if sz == (secret_resolver as usize) { "secret" }
+    else if sz == (envref_resolver as usize) { "envref" }
     else { panic!("unknown resolver {}", sz) }
 }
 
@@ -60,6 +76,12 @@ impl Value {
         Self {
             value: key.to_string(),
             resolver: Some(secret_resolver)
+        }
+    }
+    pub fn new_env(key: &str) -> Self {
+        Self {
+            value: key.to_string(),
+            resolver: Some(envref_resolver)
         }
     }
     pub fn as_str(&self) -> &str {
@@ -248,6 +270,9 @@ impl Any {
     pub fn is_array(&self) -> bool {
         self.value.is_array()
     }
+    pub fn is_table(&self) -> bool {
+        self.value.is_table()
+    }
     pub fn iter<F,R>(&self, proc: F) -> Option<R> 
         where F: Fn(&Self) -> Option<R> {
         match &self.value {
@@ -281,6 +306,9 @@ impl Any {
             }
             _ => None
         }
+    }
+    pub fn as_yaml(&self) -> String {
+        serde_yaml::to_string(&self.value).unwrap()
     }
 }
 impl fmt::Display for Any {

@@ -12,4 +12,4 @@
 {checkout_opts:>2}
 - name: Restore repository from cache
   if: steps.fetch-repository-cache.outputs.cache-hit == 'true'
-  run: git reset --hard HEAD
+  run: {restore_commands}

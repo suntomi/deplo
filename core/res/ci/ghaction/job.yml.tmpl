@@ -3,6 +3,7 @@
   if: ${{{{ needs.deplo-main.outputs.{name} && !failure() }}}}
   name: Running job {name}
   runs-on: {machine}
+{native_configs:>2}
 {job_envs:>2}
 {container:>2}
   outputs:

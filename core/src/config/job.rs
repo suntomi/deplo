@@ -92,7 +92,11 @@ impl RunnerOS {
     }
     pub fn cli_download_postfix(&self) -> &'static str {
         match self {
-            Self::Linux => "Linux",
+            Self::Linux => match std::env::consts::ARCH {
+                "x86_64"|"amd64" => "Linux-x86_64",
+                "aarch64"|"arm64" => "Linux-aarch64",
+                _ => panic!("unsupported cpu arch {}", std::env::consts::ARCH)
+            },
             Self::Windows => "Windows.exe",
             Self::MacOS => "Darwin",
         }
