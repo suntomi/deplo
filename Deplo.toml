@@ -25,6 +25,7 @@ SUNTOMI_VCS_ACCOUNT_EMAIL = { env = "SUNTOMI_VCS_ACCOUNT_EMAIL" }
 SUNTOMI_VCS_ACCOUNT_KEY = { env = "SUNTOMI_VCS_ACCOUNT_KEY" }
 SUNTOMI_VCS_APP_ID = { env = "SUNTOMI_VCS_APP_ID" }
 SUNTOMI_VCS_APP_PKEY = { path = "./.secrets/ghapp.pem" }
+SUNTOMI_AWS_ROLE = { env = "SUNTOMI_AWS_ROLE" }
 
 
 # ------------
@@ -200,7 +201,11 @@ options = {
         permissions = { "id-token" = "write", "contents" = "read" }
     }
 }
-env = { TEST_ID_TOKEN_REQUEST_URL = "${env:ACTIONS_ID_TOKEN_REQUEST_URL}", TEST_ID_TOKEN_REQUEST_TOKEN = "${env:ACTIONS_ID_TOKEN_REQUEST_TOKEN}" }
+env = { 
+    SUNTOMI_AWS_ROLE = "${SUNTOMI_AWS_ROLE}",
+    TEST_ID_TOKEN_REQUEST_URL = "${env:ACTIONS_ID_TOKEN_REQUEST_URL}",
+    TEST_ID_TOKEN_REQUEST_TOKEN = "${env:ACTIONS_ID_TOKEN_REQUEST_TOKEN}"
+}
 command = "sh tools/scripts/test.sh"
 tasks = { test = "cargo test", home = "echo ${HOME}" }
 # cache settings. file paths that is listed in paths will be preserved with tha key `keys[0]`.

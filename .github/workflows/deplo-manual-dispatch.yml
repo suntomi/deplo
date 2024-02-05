@@ -21,6 +21,7 @@ env:
   DEPLO_GHACTION_EVENT_DATA: ${{ toJson(github) }}
   DEPLO_GHACTION_WORKFLOW_NAME: ${{ github.workflow }}
   DEPLO_OVERWRITE_VERBOSITY: ${{ github.event.client_payload.exec.verbosity }}
+  SUNTOMI_AWS_ROLE: ${{ secrets.SUNTOMI_AWS_ROLE }}
   SUNTOMI_VCS_ACCOUNT: ${{ secrets.SUNTOMI_VCS_ACCOUNT }}
   SUNTOMI_VCS_ACCOUNT_EMAIL: ${{ secrets.SUNTOMI_VCS_ACCOUNT_EMAIL }}
   SUNTOMI_VCS_ACCOUNT_KEY: ${{ secrets.SUNTOMI_VCS_ACCOUNT_KEY }}

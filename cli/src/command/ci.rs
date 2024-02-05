@@ -27,7 +27,7 @@ impl<S: shell::Shell> CI<S> {
         let config = self.config.borrow();
         let (_, ci) = config.modules.ci_by_env();
         match args.subcommand() {
-            Some(("odic", subargs)) => {
+            Some(("oidc", subargs)) => {
                 let output = match subargs.value_of("output") {
                     Some(v) => v,
                     None => return escalate!(args.error("ci token oidc: must specify output"))
