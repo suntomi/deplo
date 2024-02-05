@@ -244,16 +244,17 @@ sh tools/scripts/build_linux.sh
 # `deplo vcs release` and `deplo vcs release-assets` are used for creating release of vcs like github/gitlab
 # with unified interface.
 arch=$(uname -m)
-tools/docker/bin/${arch}/cli vcs release ${DEPLO_RELEASE_TAG} -o name=${DEPLO_RELEASE_NAME}
-tools/docker/bin/${arch}/cli vcs release-assets ${DEPLO_RELEASE_TAG} tools/docker/bin/x86_64/cli --replace -o name=deplo-Linux-x86_64
-tools/docker/bin/${arch}/cli vcs release-assets ${DEPLO_RELEASE_TAG} tools/docker/bin/aarch64/cli --replace -o name=deplo-Linux-aarch64
+deplo_bin=tools/docker/bin/${arch}/cli
+${deplo_bin} vcs release ${DEPLO_RELEASE_TAG} -o name=${DEPLO_RELEASE_NAME}
+${deplo_bin} vcs release-assets ${DEPLO_RELEASE_TAG} tools/docker/bin/x86_64/cli --replace -o name=deplo-Linux-x86_64
+${deplo_bin} vcs release-assets ${DEPLO_RELEASE_TAG} tools/docker/bin/aarch64/cli --replace -o name=deplo-Linux-aarch64
 
 # deplo provides dyanamically generated job output. you can use value for 'foo' and 'fuga' in jobs that depends on the job. 
-deplo job set-output foo bar
-deplo job set-output fuga hoge
+${deplo_bin} job set-output foo bar
+${deplo_bin} job set-output fuga hoge
 
 # job output can be used in the job that originally create output.
-if [ $(deplo job output product foo) != "bar" ]; then
+if [ $(${deplo_bin} job output product foo) != "bar" ]; then
     echo "failed to get output from job 'product' locally"
     exit 1
 fi
