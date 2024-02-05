@@ -3,7 +3,8 @@ FROM rust:slim
 ARG TARGETARCH
 ENV TARGETARCH=${TARGETARCH}
 RUN apt update && apt install -y git musl-tools musl-dev curl perl make xz-utils
-ENV ZIG_VERSION="0.11.0"
+# 0.11.0 has lfs64 linker error with cargo-zigbuild https://github.com/ziglang/zig/issues/15610
+ENV ZIG_VERSION="0.10.1"
 RUN if [ "${TARGETARCH}" = "arm64" ]; then export ARCH="aarch64"; else export ARCH="x86_64"; fi && \
     curl -LO https://ziglang.org/download/${ZIG_VERSION}/zig-linux-${ARCH}-${ZIG_VERSION}.tar.xz && \
     tar -xf zig-linux-${ARCH}-${ZIG_VERSION}.tar.xz && \
@@ -14,7 +15,7 @@ ENV OPENSSL_VERSION="3.2.1"
 RUN if [ "${TARGETARCH}" = "arm64" ]; then export ARCH="aarch64"; else export ARCH="x86_64"; fi && \
     curl -L https://github.com/openssl/openssl/releases/download/openssl-${OPENSSL_VERSION}/openssl-${OPENSSL_VERSION}.tar.gz \
     -o /tmp/opensslg.tgz && tar -zxvf /tmp/opensslg.tgz -C /tmp && cd /tmp/openssl-${OPENSSL_VERSION} && \
-    CC="zig cc" AR="zig ar" ./Configure no-shared no-async linux-${ARCH} && \
+    CC="zig cc -target ${ARCH}-linux-musl" AR="zig ar" ./Configure no-shared no-async linux-${ARCH} && \
     make depend && make -j$(nproc) && make install_sw && \
     rm -f /tmp/opensslg.tgz && rm -rf /tmp/openssl-${OPENSSL_VERSION}    
 RUN if [ "${TARGETARCH}" = "arm64" ]; then export ARCH="aarch64"; else export ARCH="x86_64"; fi && \
