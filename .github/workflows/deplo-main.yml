@@ -419,6 +419,11 @@ jobs:
       - name: test
         id: deplo-job-test
         run: deplo run test
+      - name: Setup ssh session to debug
+        if: ${{ failure() }}
+        uses: mxschmitt/action-tmate@v3
+        with:
+          sudo: true
   
   win:
     needs: ["product","deplo-main"]
