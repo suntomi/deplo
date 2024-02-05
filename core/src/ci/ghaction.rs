@@ -485,6 +485,7 @@ impl<S: shell::Shell> GhAction<S> {
         let (path, uname, ext, shell) = match runner {
             config::job::Runner::Machine{ref os, ..} => match os {
                 config::job::RunnerOS::Windows => ("/usr/bin/deplo", "Windows", ".exe", "shell: bash"),
+                config::job::RunnerOS::Linux => ("/usr/local/bin/deplo", "Linux-$(uname -m)", "", ""),
                 v => ("/usr/local/bin/deplo", v.uname(), "", "")
             },
             config::job::Runner::Container{..} => ("/usr/local/bin/deplo", "Linux", "", "")

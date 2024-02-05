@@ -189,8 +189,9 @@ on = [
 runner = {
     os = "linux", local_fallback = {
         image = "ghcr.io/suntomi/deplo:builder",
-        inputs = ["core", "cli", "Cargo.*"],
-        caches = ["/tmp/target"]
+        inputs = ["core", "cli", "Cargo.*", "tools/scripts"],
+        caches = ["/tmp/target"],
+        shell = "sh"
     }
 }
 options = {
@@ -200,7 +201,7 @@ options = {
     }
 }
 env = { TEST_ID_TOKEN_REQUEST_URL = "${env:ACTIONS_ID_TOKEN_REQUEST_URL}", TEST_ID_TOKEN_REQUEST_TOKEN = "${env:ACTIONS_ID_TOKEN_REQUEST_TOKEN}" }
-command = "bash tools/scripts/test.sh"
+command = "sh tools/scripts/test.sh"
 tasks = { test = "cargo test", home = "echo ${HOME}" }
 # cache settings. file paths that is listed in paths will be preserved with tha key `keys[0]`.
 # if you specify multiple keys, `keys[1..]` are used as fallback keys to search similar caches 

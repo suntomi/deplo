@@ -45,7 +45,7 @@ jobs:
     steps:
       - name: Fetch deplo cli
         run: |
-          curl -L https://github.com/suntomi/deplo/releases/download/nightly/deplo-Linux -o /usr/local/bin/deplo
+          curl -L https://github.com/suntomi/deplo/releases/download/nightly/deplo-Linux-$(uname -m) -o /usr/local/bin/deplo
           chmod +x /usr/local/bin/deplo
       - name: Checkout
         uses: actions/checkout@v3
@@ -82,7 +82,7 @@ jobs:
     steps:
       - name: Fetch deplo cli
         run: |
-          curl -L https://github.com/suntomi/deplo/releases/download/nightly/deplo-Linux -o /usr/local/bin/deplo
+          curl -L https://github.com/suntomi/deplo/releases/download/nightly/deplo-Linux-$(uname -m) -o /usr/local/bin/deplo
           chmod +x /usr/local/bin/deplo
       - name: Checkout
         uses: actions/checkout@v3
@@ -115,7 +115,7 @@ jobs:
     steps:
       - name: Fetch deplo cli
         run: |
-          curl -L https://github.com/suntomi/deplo/releases/download/nightly/deplo-Linux -o /usr/local/bin/deplo
+          curl -L https://github.com/suntomi/deplo/releases/download/nightly/deplo-Linux-$(uname -m) -o /usr/local/bin/deplo
           chmod +x /usr/local/bin/deplo
       - name: Checkout
         uses: actions/checkout@v3
@@ -148,7 +148,7 @@ jobs:
     steps:
       - name: Fetch deplo cli
         run: |
-          curl -L https://github.com/suntomi/deplo/releases/download/nightly/deplo-Linux -o /usr/local/bin/deplo
+          curl -L https://github.com/suntomi/deplo/releases/download/nightly/deplo-Linux-$(uname -m) -o /usr/local/bin/deplo
           chmod +x /usr/local/bin/deplo
       - name: Checkout
         uses: actions/checkout@v3
@@ -181,7 +181,7 @@ jobs:
     steps:
       - name: Fetch deplo cli
         run: |
-          curl -L https://github.com/suntomi/deplo/releases/download/nightly/deplo-Linux -o /usr/local/bin/deplo
+          curl -L https://github.com/suntomi/deplo/releases/download/nightly/deplo-Linux-$(uname -m) -o /usr/local/bin/deplo
           chmod +x /usr/local/bin/deplo
       - name: Checkout
         uses: actions/checkout@v3
@@ -214,7 +214,7 @@ jobs:
     steps:
       - name: Fetch deplo cli
         run: |
-          curl -L https://github.com/suntomi/deplo/releases/download/nightly/deplo-Linux -o /usr/local/bin/deplo
+          curl -L https://github.com/suntomi/deplo/releases/download/nightly/deplo-Linux-$(uname -m) -o /usr/local/bin/deplo
           chmod +x /usr/local/bin/deplo
       - name: Checkout
         uses: actions/checkout@v3
@@ -248,7 +248,7 @@ jobs:
     steps:
       - name: Fetch deplo cli
         run: |
-          curl -L https://github.com/suntomi/deplo/releases/download/nightly/deplo-Linux -o /usr/local/bin/deplo
+          curl -L https://github.com/suntomi/deplo/releases/download/nightly/deplo-Linux-$(uname -m) -o /usr/local/bin/deplo
           chmod +x /usr/local/bin/deplo
       - name: Checkout
         uses: actions/checkout@v3
@@ -331,7 +331,7 @@ jobs:
     steps:
       - name: Fetch deplo cli
         run: |
-          curl -L https://github.com/suntomi/deplo/releases/download/nightly/deplo-Linux -o /usr/local/bin/deplo
+          curl -L https://github.com/suntomi/deplo/releases/download/nightly/deplo-Linux-$(uname -m) -o /usr/local/bin/deplo
           chmod +x /usr/local/bin/deplo
       - name: Checkout
         uses: actions/checkout@v3
@@ -365,7 +365,7 @@ jobs:
     steps:
       - name: Fetch deplo cli
         run: |
-          curl -L https://github.com/suntomi/deplo/releases/download/nightly/deplo-Linux -o /usr/local/bin/deplo
+          curl -L https://github.com/suntomi/deplo/releases/download/nightly/deplo-Linux-$(uname -m) -o /usr/local/bin/deplo
           chmod +x /usr/local/bin/deplo
       - name: Checkout
         uses: actions/checkout@v3
@@ -398,7 +398,7 @@ jobs:
     steps:
       - name: Fetch deplo cli
         run: |
-          curl -L https://github.com/suntomi/deplo/releases/download/nightly/deplo-Linux -o /usr/local/bin/deplo
+          curl -L https://github.com/suntomi/deplo/releases/download/nightly/deplo-Linux-$(uname -m) -o /usr/local/bin/deplo
           chmod +x /usr/local/bin/deplo
       - name: Checkout
         uses: actions/checkout@v3
@@ -434,7 +434,7 @@ jobs:
     steps:
       - name: Fetch deplo cli
         run: |
-          curl -L https://github.com/suntomi/deplo/releases/download/nightly/deplo-Linux -o /usr/local/bin/deplo
+          curl -L https://github.com/suntomi/deplo/releases/download/nightly/deplo-Linux-$(uname -m) -o /usr/local/bin/deplo
           chmod +x /usr/local/bin/deplo
       - name: Checkout
         uses: actions/checkout@v3

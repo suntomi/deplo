@@ -56,6 +56,7 @@ fn detect_value_ref(s: &str) -> (&str, Option<ValueResolver>) {
 fn resolver_to_name(resolver: ValueResolver) -> &'static str {
     let sz = resolver as usize;
     if sz == (secret_resolver as usize) { "secret" }
+    else if sz == (envref_resolver as usize) { "envref" }
     else { panic!("unknown resolver {}", sz) }
 }
 
