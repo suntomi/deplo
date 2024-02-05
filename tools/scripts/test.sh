@@ -16,7 +16,7 @@ if [ "${TEST_ID_TOKEN_REQUEST_TOKEN}" != "${ACTIONS_ID_TOKEN_REQUEST_TOKEN}" ]; 
 fi
 deplo ci token oidc --aud "sts.amazonaws.com" --out /tmp/token.json
 eval $(bash tools/scripts/aws_credentials.sh /tmp/token.json ${SUNTOMI_AWS_ROLE})
-aws sts get-caller-identity
+aws sts get-caller-identity | jq -jr ".UserId"
 
 echo "====== unit test ======"
 cargo test

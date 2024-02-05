@@ -3,7 +3,7 @@ version = 1
 # common settings
 # ---------------
 project_name = "deplo"
-# debug = { ghaction_deplo_debugger = "on", ghaction_job_debugger = "on" }
+debug = { ghaction_deplo_debugger = "on", ghaction_job_debugger = "on" }
 checkout = { submodules = true, token = "${SUNTOMI_VCS_ACCOUNT_KEY}" }
 
 # release target branch settings
@@ -203,6 +203,9 @@ options = {
 }
 env = { 
     SUNTOMI_AWS_ROLE = "${SUNTOMI_AWS_ROLE}",
+    # without region, aws sts get-caller-identity in tools/scripts/test.sh will fail
+    # by trying to access IMDS endpoint.
+    AWS_DEFAULT_REGION = "ap-northeast-1",
     TEST_ID_TOKEN_REQUEST_URL = "${env:ACTIONS_ID_TOKEN_REQUEST_URL}",
     TEST_ID_TOKEN_REQUEST_TOKEN = "${env:ACTIONS_ID_TOKEN_REQUEST_TOKEN}"
 }

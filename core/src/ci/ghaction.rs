@@ -1150,7 +1150,7 @@ impl<S: shell::Shell> ci::CI for GhAction<S> {
             ci::TokenConfig::OIDC{audience: aud} => {
                 let response = self.shell.exec(shell::args![
                     "curl", "-H",
-                    shell::fmtargs!("Authorization: token {}", value::Value::new_env("ACTIONS_ID_TOKEN_REQUEST_TOKEN")),
+                    shell::fmtargs!("Authorization: Bearer {}", value::Value::new_env("ACTIONS_ID_TOKEN_REQUEST_TOKEN")),
                     "-H", "Accept: application/vnd.github.v3+json",
                     shell::fmtargs!("{}&audience={}", value::Value::new_env("ACTIONS_ID_TOKEN_REQUEST_URL"), aud)
                 ], shell::no_env(), shell::no_cwd(), &shell::capture())?;
