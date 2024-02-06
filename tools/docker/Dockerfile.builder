@@ -12,7 +12,6 @@ RUN if [ "${BUILDPLATFORM}" = "arm64" ]; then export ARCH="aarch64"; else export
 FROM --platform=${BUILDPLATFORM} debian:bookworm-slim as builder-x86_64
 COPY --from=zig /opt/zig/zig /usr/local/bin/zig
 COPY --from=zig /opt/zig/lib /usr/local/bin/lib
-RUN ls -al /usr/local/bin
 RUN apt update && apt install -y curl perl make
 ENV OPENSSL_VERSION="3.2.1" ARCH="x86_64"
 RUN curl -L https://github.com/openssl/openssl/releases/download/openssl-${OPENSSL_VERSION}/openssl-${OPENSSL_VERSION}.tar.gz \
@@ -24,7 +23,6 @@ RUN curl -L https://github.com/openssl/openssl/releases/download/openssl-${OPENS
 FROM --platform=${BUILDPLATFORM} debian:bookworm-slim as builder-aarch64
 COPY --from=zig /opt/zig/zig /usr/local/bin/zig
 COPY --from=zig /opt/zig/lib /usr/local/bin/lib
-RUN ls -al /usr/local/bin
 RUN apt update && apt install -y curl perl make
 ENV OPENSSL_VERSION="3.2.1" ARCH="aarch64"
 RUN curl -L https://github.com/openssl/openssl/releases/download/openssl-${OPENSSL_VERSION}/openssl-${OPENSSL_VERSION}.tar.gz \

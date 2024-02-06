@@ -155,23 +155,22 @@ docker buildx build ${push_opt} --platform linux/amd64,linux/arm64 -t ghcr.io/su
 
 [jobs.builder]
 # if workflows is opmitted, use ["deploy", "integrate"] by default.
-on = { workflows = ["deploy","integrate"], changed = ["tools/docker/Dockerfile.builder", "Cargo.*"] }
+on = { workflows = ["deploy"], changed = ["tools/docker/Dockerfile.builder", "Cargo.*"] }
 runner = { os = "linux", local_fallback = { image = "docker:25.0.1", shell = "sh" } }
 command = """
 set -e
 sh tools/scripts/copy_manifests.sh
-docker buildx create --name mp --bootstrap --use
-push_opt=""
-if [ "${DEPLO_CI_WORKFLOW_NAME}" = "deploy" ]; then
-    echo ${SUNTOMI_VCS_ACCOUNT_KEY} | docker login ghcr.io -u ${SUNTOMI_VCS_ACCOUNT} --password-stdin
-    push_opt="--push"
-fi
 case "$(uname -m)" in
     x86_64) arch=amd64 ;;
     aarch64) arch=arm64 ;;
     *) echo "unsupported architecture"; exit 1 ;;
 esac
-docker buildx build ${push_opt} --platform linux/${arch} -t ghcr.io/suntomi/deplo:builder-${arch} -f tools/docker/Dockerfile.builder tools/docker
+docker build --platform linux/${arch} -t ghcr.io/suntomi/deplo:builder-${arch} -f tools/docker/Dockerfile.builder tools/docker
+if [ "${DEPLO_CI_WORKFLOW_NAME}" = "deploy" ]; then
+    echo ${SUNTOMI_VCS_ACCOUNT_KEY} | docker login ghcr.io -u ${SUNTOMI_VCS_ACCOUNT} --password-stdin
+    docker push ghcr.io/suntomi/deplo:builder-${arch}
+fi
+sh ./tools/scripts/merge_manifests.sh
 """
 # tasks. task is a pre-defined command to be executed in same environment as job.
 # you can use tasks to use deplo like repository of utility command, like make or rake.
@@ -182,7 +181,8 @@ for i in `seq 1 ${COUNT:-10}`; do
     sleep 1
 done
 """,
-    test = "sh ./tools/scripts/longrun.sh 5"
+    test = "sh ./tools/scripts/longrun.sh 5",
+    merge = "sh ./tools/scripts/merge_manifests.sh"
 }
 
 [jobs.test]
