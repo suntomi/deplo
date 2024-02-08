@@ -49,13 +49,25 @@ jobs:
         run: |
           curl -L https://github.com/suntomi/deplo/releases/download/nightly/deplo-Linux-$(uname -m) -o /usr/local/bin/deplo
           chmod +x /usr/local/bin/deplo
+      - name: Fetch repository cache
+        id: fetch-repository-cache
+        uses: actions/cache@v2
+        with:
+          path: .git
+          key: deplo-git-v1-40BFB0C55D506BC4-${{ github.sha }}
+          restore-keys:
+            deplo-git-v1-40BFB0C55D506BC4-
       - name: Checkout
+        if: steps.fetch-repository-cache.outputs.cache-hit != 'true'
         uses: actions/checkout@v3
         with:
-          fetch-depth: 2
+          fetch-depth: 0
           ref: ${{ github.event.client_payload.exec.revision }}
           submodules: true
           token: ${{ secrets.SUNTOMI_VCS_ACCOUNT_KEY }}
+      - name: Restore repository from cache
+        if: steps.fetch-repository-cache.outputs.cache-hit == 'true'
+        run: git reset --hard HEAD && git submodule update --init --recursive
       - name: Boot deplo
         id: deplo-main
         run: deplo boot
@@ -87,14 +99,26 @@ jobs:
         run: |
           curl -L https://github.com/suntomi/deplo/releases/download/nightly/deplo-Linux-$(uname -m) -o /usr/local/bin/deplo
           chmod +x /usr/local/bin/deplo
+      - name: Fetch repository cache
+        id: fetch-repository-cache
+        uses: actions/cache@v2
+        with:
+          path: .git
+          key: deplo-git-v1-40BFB0C55D506BC4-${{ github.sha }}
+          restore-keys:
+            deplo-git-v1-40BFB0C55D506BC4-
       - name: Checkout
+        if: steps.fetch-repository-cache.outputs.cache-hit != 'true'
         uses: actions/checkout@v3
         with:
-          fetch-depth: 2
+          fetch-depth: 0
           lfs: false
           ref: ${{ github.event.client_payload.exec.revision }}
           submodules: true
           token: ${{ secrets.SUNTOMI_VCS_ACCOUNT_KEY }}
+      - name: Restore repository from cache
+        if: steps.fetch-repository-cache.outputs.cache-hit == 'true'
+        run: git reset --hard HEAD && git submodule update --init --recursive
       - name: Halt deplo
         id: deplo-halt
         run: deplo halt
@@ -120,13 +144,25 @@ jobs:
         run: |
           curl -L https://github.com/suntomi/deplo/releases/download/nightly/deplo-Linux-$(uname -m) -o /usr/local/bin/deplo
           chmod +x /usr/local/bin/deplo
+      - name: Fetch repository cache
+        id: fetch-repository-cache
+        uses: actions/cache@v2
+        with:
+          path: .git
+          key: deplo-git-v1-40BFB0C55D506BC4-${{ github.sha }}
+          restore-keys:
+            deplo-git-v1-40BFB0C55D506BC4-
       - name: Checkout
+        if: steps.fetch-repository-cache.outputs.cache-hit != 'true'
         uses: actions/checkout@v3
         with:
-          fetch-depth: 2
+          fetch-depth: 0
           ref: ${{ github.event.client_payload.exec.revision }}
           submodules: true
           token: ${{ secrets.SUNTOMI_VCS_ACCOUNT_KEY }}
+      - name: Restore repository from cache
+        if: steps.fetch-repository-cache.outputs.cache-hit == 'true'
+        run: git reset --hard HEAD && git submodule update --init --recursive
   
       - name: base
         id: deplo-job-base
@@ -153,13 +189,25 @@ jobs:
         run: |
           curl -L https://github.com/suntomi/deplo/releases/download/nightly/deplo-Linux-$(uname -m) -o /usr/local/bin/deplo
           chmod +x /usr/local/bin/deplo
+      - name: Fetch repository cache
+        id: fetch-repository-cache
+        uses: actions/cache@v2
+        with:
+          path: .git
+          key: deplo-git-v1-40BFB0C55D506BC4-${{ github.sha }}
+          restore-keys:
+            deplo-git-v1-40BFB0C55D506BC4-
       - name: Checkout
+        if: steps.fetch-repository-cache.outputs.cache-hit != 'true'
         uses: actions/checkout@v3
         with:
-          fetch-depth: 2
+          fetch-depth: 0
           ref: ${{ github.event.client_payload.exec.revision }}
           submodules: true
           token: ${{ secrets.SUNTOMI_VCS_ACCOUNT_KEY }}
+      - name: Restore repository from cache
+        if: steps.fetch-repository-cache.outputs.cache-hit == 'true'
+        run: git reset --hard HEAD && git submodule update --init --recursive
   
       - name: builder
         id: deplo-job-builder
@@ -186,13 +234,25 @@ jobs:
         run: |
           curl -L https://github.com/suntomi/deplo/releases/download/nightly/deplo-Linux-$(uname -m) -o /usr/local/bin/deplo
           chmod +x /usr/local/bin/deplo
+      - name: Fetch repository cache
+        id: fetch-repository-cache
+        uses: actions/cache@v2
+        with:
+          path: .git
+          key: deplo-git-v1-40BFB0C55D506BC4-${{ github.sha }}
+          restore-keys:
+            deplo-git-v1-40BFB0C55D506BC4-
       - name: Checkout
+        if: steps.fetch-repository-cache.outputs.cache-hit != 'true'
         uses: actions/checkout@v3
         with:
-          fetch-depth: 2
+          fetch-depth: 0
           ref: ${{ github.event.client_payload.exec.revision }}
           submodules: true
           token: ${{ secrets.SUNTOMI_VCS_ACCOUNT_KEY }}
+      - name: Restore repository from cache
+        if: steps.fetch-repository-cache.outputs.cache-hit == 'true'
+        run: git reset --hard HEAD && git submodule update --init --recursive
   
       - name: config
         id: deplo-job-config
@@ -265,13 +325,25 @@ jobs:
         run: |
           curl -L https://github.com/suntomi/deplo/releases/download/nightly/deplo-Linux-$(uname -m) -o /usr/local/bin/deplo
           chmod +x /usr/local/bin/deplo
+      - name: Fetch repository cache
+        id: fetch-repository-cache
+        uses: actions/cache@v2
+        with:
+          path: .git
+          key: deplo-git-v1-40BFB0C55D506BC4-${{ github.sha }}
+          restore-keys:
+            deplo-git-v1-40BFB0C55D506BC4-
       - name: Checkout
+        if: steps.fetch-repository-cache.outputs.cache-hit != 'true'
         uses: actions/checkout@v3
         with:
-          fetch-depth: 2
+          fetch-depth: 0
           ref: ${{ github.event.client_payload.exec.revision }}
           submodules: true
           token: ${{ secrets.SUNTOMI_VCS_ACCOUNT_KEY }}
+      - name: Restore repository from cache
+        if: steps.fetch-repository-cache.outputs.cache-hit == 'true'
+        run: git reset --hard HEAD && git submodule update --init --recursive
   
       - name: latest
         id: deplo-job-latest
@@ -299,13 +371,25 @@ jobs:
         run: |
           curl -L https://github.com/suntomi/deplo/releases/download/nightly/deplo-Darwin -o /usr/local/bin/deplo
           chmod +x /usr/local/bin/deplo
+      - name: Fetch repository cache
+        id: fetch-repository-cache
+        uses: actions/cache@v2
+        with:
+          path: .git
+          key: deplo-git-v1-40BFB0C55D506BC4-${{ github.sha }}
+          restore-keys:
+            deplo-git-v1-40BFB0C55D506BC4-
       - name: Checkout
+        if: steps.fetch-repository-cache.outputs.cache-hit != 'true'
         uses: actions/checkout@v3
         with:
-          fetch-depth: 2
+          fetch-depth: 0
           ref: ${{ github.event.client_payload.exec.revision }}
           submodules: true
           token: ${{ secrets.SUNTOMI_VCS_ACCOUNT_KEY }}
+      - name: Restore repository from cache
+        if: steps.fetch-repository-cache.outputs.cache-hit == 'true'
+        run: git reset --hard HEAD && git submodule update --init --recursive
       - name: Cache cargo
         id: deplo-cache-cargo
         uses: actions/cache@v2
@@ -348,13 +432,25 @@ jobs:
         run: |
           curl -L https://github.com/suntomi/deplo/releases/download/nightly/deplo-Linux-$(uname -m) -o /usr/local/bin/deplo
           chmod +x /usr/local/bin/deplo
+      - name: Fetch repository cache
+        id: fetch-repository-cache
+        uses: actions/cache@v2
+        with:
+          path: .git
+          key: deplo-git-v1-40BFB0C55D506BC4-${{ github.sha }}
+          restore-keys:
+            deplo-git-v1-40BFB0C55D506BC4-
       - name: Checkout
+        if: steps.fetch-repository-cache.outputs.cache-hit != 'true'
         uses: actions/checkout@v3
         with:
-          fetch-depth: 2
+          fetch-depth: 0
           ref: ${{ github.event.client_payload.exec.revision }}
           submodules: true
           token: ${{ secrets.SUNTOMI_VCS_ACCOUNT_KEY }}
+      - name: Restore repository from cache
+        if: steps.fetch-repository-cache.outputs.cache-hit == 'true'
+        run: git reset --hard HEAD && git submodule update --init --recursive
   
       - name: module_test
         id: deplo-job-module_test
@@ -382,13 +478,25 @@ jobs:
         run: |
           curl -L https://github.com/suntomi/deplo/releases/download/nightly/deplo-Linux-$(uname -m) -o /usr/local/bin/deplo
           chmod +x /usr/local/bin/deplo
+      - name: Fetch repository cache
+        id: fetch-repository-cache
+        uses: actions/cache@v2
+        with:
+          path: .git
+          key: deplo-git-v1-40BFB0C55D506BC4-${{ github.sha }}
+          restore-keys:
+            deplo-git-v1-40BFB0C55D506BC4-
       - name: Checkout
+        if: steps.fetch-repository-cache.outputs.cache-hit != 'true'
         uses: actions/checkout@v3
         with:
-          fetch-depth: 2
+          fetch-depth: 0
           ref: ${{ github.event.client_payload.exec.revision }}
           submodules: true
           token: ${{ secrets.SUNTOMI_VCS_ACCOUNT_KEY }}
+      - name: Restore repository from cache
+        if: steps.fetch-repository-cache.outputs.cache-hit == 'true'
+        run: git reset --hard HEAD && git submodule update --init --recursive
   
       - name: product
         id: deplo-job-product
@@ -415,13 +523,25 @@ jobs:
         run: |
           curl -L https://github.com/suntomi/deplo/releases/download/nightly/deplo-Linux-$(uname -m) -o /usr/local/bin/deplo
           chmod +x /usr/local/bin/deplo
+      - name: Fetch repository cache
+        id: fetch-repository-cache
+        uses: actions/cache@v2
+        with:
+          path: .git
+          key: deplo-git-v1-40BFB0C55D506BC4-${{ github.sha }}
+          restore-keys:
+            deplo-git-v1-40BFB0C55D506BC4-
       - name: Checkout
+        if: steps.fetch-repository-cache.outputs.cache-hit != 'true'
         uses: actions/checkout@v3
         with:
-          fetch-depth: 2
+          fetch-depth: 0
           ref: ${{ github.event.client_payload.exec.revision }}
           submodules: true
           token: ${{ secrets.SUNTOMI_VCS_ACCOUNT_KEY }}
+      - name: Restore repository from cache
+        if: steps.fetch-repository-cache.outputs.cache-hit == 'true'
+        run: git reset --hard HEAD && git submodule update --init --recursive
   
       - name: repository
         id: deplo-job-repository
@@ -496,13 +616,25 @@ jobs:
         run: |
           curl -L https://github.com/suntomi/deplo/releases/download/nightly/deplo-Linux-$(uname -m) -o /usr/local/bin/deplo
           chmod +x /usr/local/bin/deplo
+      - name: Fetch repository cache
+        id: fetch-repository-cache
+        uses: actions/cache@v2
+        with:
+          path: .git
+          key: deplo-git-v1-40BFB0C55D506BC4-${{ github.sha }}
+          restore-keys:
+            deplo-git-v1-40BFB0C55D506BC4-
       - name: Checkout
+        if: steps.fetch-repository-cache.outputs.cache-hit != 'true'
         uses: actions/checkout@v3
         with:
-          fetch-depth: 2
+          fetch-depth: 0
           ref: ${{ github.event.client_payload.exec.revision }}
           submodules: true
           token: ${{ secrets.SUNTOMI_VCS_ACCOUNT_KEY }}
+      - name: Restore repository from cache
+        if: steps.fetch-repository-cache.outputs.cache-hit == 'true'
+        run: git reset --hard HEAD && git submodule update --init --recursive
       - name: Cache cargo
         id: deplo-cache-cargo
         uses: actions/cache@v2
@@ -545,13 +677,25 @@ jobs:
           curl -L https://github.com/suntomi/deplo/releases/download/nightly/deplo-Windows.exe -o /usr/bin/deplo
           chmod +x /usr/bin/deplo
         shell: bash
+      - name: Fetch repository cache
+        id: fetch-repository-cache
+        uses: actions/cache@v2
+        with:
+          path: .git
+          key: deplo-git-v1-40BFB0C55D506BC4-${{ github.sha }}
+          restore-keys:
+            deplo-git-v1-40BFB0C55D506BC4-
       - name: Checkout
+        if: steps.fetch-repository-cache.outputs.cache-hit != 'true'
         uses: actions/checkout@v3
         with:
-          fetch-depth: 2
+          fetch-depth: 0
           ref: ${{ github.event.client_payload.exec.revision }}
           submodules: true
           token: ${{ secrets.SUNTOMI_VCS_ACCOUNT_KEY }}
+      - name: Restore repository from cache
+        if: steps.fetch-repository-cache.outputs.cache-hit == 'true'
+        run: git reset --hard HEAD && git submodule update --init --recursive
       - name: Cache cargo
         id: deplo-cache-cargo
         uses: actions/cache@v2
