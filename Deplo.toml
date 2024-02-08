@@ -395,19 +395,10 @@ caches = {
 }
 
 [jobs.dispatched]
-on = { workflows = ["manual_dispatch", "webapi_dispatch", "taglab"] }
+on = { workflows = ["manual_dispatch", "webapi_dispatch"] }
 runner = { os = "linux", local_fallback = { image = "ghcr.io/suntomi/images:aws", shell = "sh" } }
 checkout = { fetch_depth = 0 }
 command = """
-set -e
-git branch -a
-git --no-pager log | head -20
-if [ "${DEPLO_CI_RELEASE_TARGET}" = "nightly" ]; then
-    echo "boom"
-    exit 1
-else
-    echo "ok: ${DEPLO_CI_RELEASE_TARGET}"
-fi
 echo "======================="
 echo "dispatch context = ${DEPLO_CI_WORKFLOW_CONTEXT}"
 echo "======================="
@@ -428,3 +419,19 @@ runner = { os = "linux", local_fallback = { path = "tools/docker/Dockerfile.vmfb
 steps = [{
     uses = { path = "./tools/modules/sample" }
 }]
+
+[jobs.taglab]
+on = { release_targets = ["taglab", "lab"], changed = ["README.md"] }
+runner = { os = "linux", local_fallback = { image = "ghcr.io/suntomi/images:aws", shell = "sh" } }
+checkout = { fetch_depth = 0 }
+command = """
+set -e
+git branch -a
+git --no-pager log | head -20
+if [ "${DEPLO_CI_RELEASE_TARGET}" != "taglab" ]; then
+    echo "boom: ${DEPLO_CI_RELEASE_TARGET}"
+    exit 1
+else
+    echo "ok: ${DEPLO_CI_RELEASE_TARGET}"
+fi
+"""

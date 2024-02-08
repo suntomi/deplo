@@ -41,6 +41,7 @@ jobs:
       module_test: ${{ steps.deplo-main.outputs.module_test }}
       product: ${{ steps.deplo-main.outputs.product }}
       repository: ${{ steps.deplo-main.outputs.repository }}
+      taglab: ${{ steps.deplo-main.outputs.taglab }}
       test: ${{ steps.deplo-main.outputs.test }}
       win: ${{ steps.deplo-main.outputs.win }}
     steps:
@@ -65,8 +66,8 @@ jobs:
           sudo: true
   deplo-halt:
     name: Cleanup CI
-    if: ${{ !failure() && (needs.base.outputs.need-cleanup || needs.builder.outputs.need-cleanup || needs.config.outputs.need-cleanup || needs.dispatched.outputs.need-cleanup || needs.latest.outputs.need-cleanup || needs.mac.outputs.need-cleanup || needs.module_test.outputs.need-cleanup || needs.product.outputs.need-cleanup || needs.repository.outputs.need-cleanup || needs.test.outputs.need-cleanup || needs.win.outputs.need-cleanup) }}
-    needs: ["deplo-main","base","builder","config","dispatched","latest","mac","module_test","product","repository","test","win"]
+    if: ${{ !failure() && (needs.base.outputs.need-cleanup || needs.builder.outputs.need-cleanup || needs.config.outputs.need-cleanup || needs.dispatched.outputs.need-cleanup || needs.latest.outputs.need-cleanup || needs.mac.outputs.need-cleanup || needs.module_test.outputs.need-cleanup || needs.product.outputs.need-cleanup || needs.repository.outputs.need-cleanup || needs.taglab.outputs.need-cleanup || needs.test.outputs.need-cleanup || needs.win.outputs.need-cleanup) }}
+    needs: ["deplo-main","base","builder","config","dispatched","latest","mac","module_test","product","repository","taglab","test","win"]
     runs-on: ubuntu-latest
     env:
       DEPLO_JOB_SYSTEM_OUTPUT_BASE: ${{ needs.base.outputs.system }}
@@ -78,6 +79,7 @@ jobs:
       DEPLO_JOB_SYSTEM_OUTPUT_MODULE_TEST: ${{ needs.module_test.outputs.system }}
       DEPLO_JOB_SYSTEM_OUTPUT_PRODUCT: ${{ needs.product.outputs.system }}
       DEPLO_JOB_SYSTEM_OUTPUT_REPOSITORY: ${{ needs.repository.outputs.system }}
+      DEPLO_JOB_SYSTEM_OUTPUT_TAGLAB: ${{ needs.taglab.outputs.system }}
       DEPLO_JOB_SYSTEM_OUTPUT_TEST: ${{ needs.test.outputs.system }}
       DEPLO_JOB_SYSTEM_OUTPUT_WIN: ${{ needs.win.outputs.system }}
     steps:
@@ -424,6 +426,51 @@ jobs:
       - name: repository
         id: deplo-job-repository
         run: deplo run repository
+      - name: Setup ssh session to debug
+        if: ${{ failure() }}
+        uses: mxschmitt/action-tmate@v3
+        with:
+          sudo: true
+  taglab:
+    needs: [deplo-main]
+    if: ${{ needs.deplo-main.outputs.taglab && !failure() }}
+    name: Running job taglab
+    runs-on: ubuntu-latest
+  
+  
+  
+    outputs:
+      need-cleanup: ${{ steps.deplo-job-taglab.outputs.need-cleanup }}
+      system: ${{ steps.deplo-job-taglab.outputs.system }}
+      user: ${{ steps.deplo-job-taglab.outputs.user }}
+    steps:
+      - name: Fetch deplo cli
+        run: |
+          curl -L https://github.com/suntomi/deplo/releases/download/nightly/deplo-Linux-$(uname -m) -o /usr/local/bin/deplo
+          chmod +x /usr/local/bin/deplo
+      - name: Fetch repository cache
+        id: fetch-repository-cache
+        uses: actions/cache@v2
+        with:
+          path: .git
+          key: deplo-git-v1-40BFB0C55D506BC4-${{ github.sha }}
+          restore-keys:
+            deplo-git-v1-40BFB0C55D506BC4-
+      - name: Checkout
+        if: steps.fetch-repository-cache.outputs.cache-hit != 'true'
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.client_payload.exec.revision }}
+          submodules: true
+          token: ${{ secrets.SUNTOMI_VCS_ACCOUNT_KEY }}
+      - name: Restore repository from cache
+        if: steps.fetch-repository-cache.outputs.cache-hit == 'true'
+        run: git reset --hard HEAD && git submodule update --init --recursive
+  
+      - name: taglab
+        id: deplo-job-taglab
+        run: deplo run taglab
       - name: Setup ssh session to debug
         if: ${{ failure() }}
         uses: mxschmitt/action-tmate@v3
