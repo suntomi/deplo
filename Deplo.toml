@@ -395,8 +395,11 @@ caches = {
 [jobs.dispatched]
 on = { workflows = ["manual_dispatch", "webapi_dispatch"] }
 runner = { os = "linux", local_fallback = { image = "ghcr.io/suntomi/images:aws", shell = "sh" } }
+checkout = { fetch_depth = 0 }
 command = """
 set -e
+git branch -a
+git log --no-pager
 echo "======================="
 echo "dispatch context = ${DEPLO_CI_WORKFLOW_CONTEXT}"
 echo "======================="
