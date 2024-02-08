@@ -374,10 +374,14 @@ impl<GIT: git::GitFeatures<S>, S: shell::Shell> vcs::VCS for Github<GIT, S> {
                     // this is first tag, so treat as it changes everyhing
                     "*".to_string()
                 } else {
+                    let (src, dst) = (
+                        &tags[index - 1][1].replace("^{}", ""), 
+                        &tags[index][1].replace("^{}", "")
+                    );
                     // fetch previous tag that does not usually fetched
-                    self.fetch_object(&tags[index - 1][0], &tags[index - 1][1])?;
+                    self.fetch_object(&tags[index - 1][0], src)?;
                     // diffing with previous tag
-                    self.git.diff_paths(&format!("{}..{}", &tags[index - 1][1], &tags[index][1]))?
+                    self.git.diff_paths(&format!("{}..{}", src, dst))?
                 }
             },
             (vcs::RefType::Commit, ref_name) => {
