@@ -67,7 +67,10 @@ impl<'a, S: shell::Shell> ci::CI for CircleCI<S> {
     }
     fn runs_on_service(&self) -> bool {
         std::env::var("CIRCLE_SHA1").is_ok()
-    }    
+    }
+    fn prepare(&self) -> Result<(), Box<dyn Error>> {
+        Ok(())
+    }
     fn generate_config(&self, reinit: bool) -> Result<(), Box<dyn Error>> {
         let config = self.config.borrow();
         let repository_root = config.modules.vcs().repository_root()?;
@@ -109,11 +112,6 @@ impl<'a, S: shell::Shell> ci::CI for CircleCI<S> {
         ))?;
         //TODO: we need to provide the way to embed user defined circle ci configuration with our generated config.yml
         Ok(())
-    }
-    fn overwrite_commit(&self, commit: &str) -> Result<String, Box<dyn Error>> {
-        let prev = std::env::var("CIRCLE_SHA1")?;
-        std::env::set_var("CIRCLE_SHA1", commit);
-        Ok(prev)
     }
     fn pr_url_from_env(&self) -> Result<Option<String>, Box<dyn Error>> {
         match std::env::var("CIRCLE_PULL_REQUEST") {

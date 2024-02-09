@@ -69,6 +69,12 @@ struct WorkflowEvent {
     pub event_name: String,
     pub event: EventPayload
 }
+#[derive(Deserialize)]
+struct RefSpec {
+    #[serde(rename = "ref")]
+    pub refspec: String,
+    pub sha: String
+}
 #[derive(Serialize, Deserialize)]
 pub struct ClientPayload {
     pub job_id: String,
@@ -607,6 +613,24 @@ impl<S: shell::Shell> ci::CI for GhAction<S> {
     fn runs_on_service(&self) -> bool {
         std::env::var("GITHUB_ACTION").is_ok()
     }
+    fn prepare(&self) -> Result<(), Box<dyn Error>> {
+        match std::env::var("DEPLO_GHACTION_EVENT_DATA") {
+            Ok(v) => {
+                // setup repository to ensure match with current ref
+                // when using cache, sometimes repository is not match with current ref
+                // eg. main repository cached and make tag with same commit of main HEAD, workflow invoked by the tag
+                // has same commit but wrong ref (refs/heads/main instead of, say, refs/tags/v0.1.0)                
+                let rs: RefSpec = serde_json::from_str(&v)?;
+                log::debug!("refspec: {}:{}", rs.sha, rs.refspec);
+                let config = self.config.borrow();
+                let vcs = config.modules.vcs();
+                vcs.fetch_object(&rs.sha, &rs.refspec)?;
+                vcs.checkout(&rs.refspec, None)?;
+            },
+            Err(_) => {}
+        }
+        Ok(())
+    }
     fn generate_config(&self, reinit: bool) -> Result<(), Box<dyn Error>> {
         let config = self.config.borrow();
         let repository_root = config.modules.vcs().repository_root()?;
@@ -769,11 +793,6 @@ impl<S: shell::Shell> ci::CI for GhAction<S> {
             )?;
         }
         Ok(())
-    }
-    fn overwrite_commit(&self, commit: &str) -> Result<String, Box<dyn Error>> {
-        let prev = std::env::var("GITHUB_SHA")?;
-        std::env::set_var("GITHUB_SHA", commit);
-        Ok(prev)
     }
     fn pr_url_from_env(&self) -> Result<Option<String>, Box<dyn Error>> {
         match std::env::var("DEPLO_GHACTION_PR_URL") {

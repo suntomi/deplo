@@ -242,13 +242,13 @@ impl<S: shell::Shell> GitFeatures<S> for Git<S> {
         ), shell::no_env(), shell::no_cwd(), &shell::no_capture())?;
         Ok(())
     }
-    fn checkout(&self, commit: &str, branch_name: Option<&str>) -> Result<(), Box<dyn Error>> {
+    fn checkout(&self, refspec: &str, branch_name: Option<&str>) -> Result<(), Box<dyn Error>> {
         match branch_name {
             Some(b) => self.shell.output_of(shell::args!(
-                "git", "checkout" , "-B", b, commit
+                "git", "checkout" , "-B", b, refspec
             ), shell::no_env(), shell::no_cwd())?,
             None => self.shell.output_of(shell::args!(
-                "git", "checkout", commit
+                "git", "checkout", "-f", refspec
             ), shell::no_env(), shell::no_cwd())?
         };
         Ok(())
