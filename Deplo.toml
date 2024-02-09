@@ -420,16 +420,23 @@ steps = [{
 }]
 
 [jobs.taglab]
-on = { release_targets = ["taglab", "lab"], changed = ["README.md"] }
+on = { release_targets = ["taglab", "nightly"], changed = ["README.md"] }
 runner = { os = "linux", local_fallback = { image = "ghcr.io/suntomi/images:aws", shell = "sh" } }
+env = { PAYLOAD = "${env:DEPLO_GHACTION_EVENT_DATA}" }
 command = """
 set -e
 git branch -a
 git --no-pager log | head -20
+git describe --all
 if [ "${DEPLO_CI_WORKFLOW_NAME}" = "deploy" ]; then
     if [ "${DEPLO_CI_RELEASE_TARGET}" != "taglab" ]; then
-        echo "boom: ${DEPLO_CI_RELEASE_TARGET}"
-        exit 1
+        ref=$(echo ${PAYLOAD} | jq -r '.ref')
+        if [ "${ref}" != "refs/heads/main" ]; then
+            echo "boom: ${DEPLO_CI_RELEASE_TARGET} at ${ref}"
+            exit 1
+        else
+            echo "release target ok: ${DEPLO_CI_RELEASE_TARGET} on ${ref}"
+        fi
     else
         echo "release target ok: ${DEPLO_CI_RELEASE_TARGET}"
     fi
