@@ -4,7 +4,7 @@ version = 1
 # ---------------
 project_name = "deplo"
 debug = { ghaction_deplo_debugger = "on", ghaction_job_debugger = "on" }
-checkout = { submodules = true, token = "${SUNTOMI_VCS_ACCOUNT_KEY}" }
+checkout = { submodules = true, fetch_depth = 0, token = "${SUNTOMI_VCS_ACCOUNT_KEY}" }
 
 # release target branch settings
 [release_targets]
@@ -14,6 +14,8 @@ nightly = { patterns = ["main"] }
 lab = { patterns = ["lab"] }
 # tag which name is started with numerals treated as release (eg. 0.1.10)
 prod = { tag = true, patterns = ["[0-9]*"] }
+# tag behaviour test
+taglab = { tag = true, patterns = ["test-[0-9]*"]}
 
 
 # ------------
@@ -244,7 +246,7 @@ commit = [
 ]
 
 [jobs.product]
-on = { workflows = ["deploy"], changed = ["*/src/*", "Cargo.*"] }
+on = { workflows = ["deploy"], release_targets = ["prod","nightly"], changed = ["*/src/*", "Cargo.*"] }
 # job dependencies. deploy.product only starts to run after deploy.builder finished.
 depends = ["builder"]
 runner = { os = "linux", local_fallback = { path = "tools/docker/Dockerfile.vmfb", shell = "sh" } }
@@ -299,7 +301,7 @@ docker push ghcr.io/suntomi/deplo:latest
 """
 
 [jobs.mac]
-on = { workflows = ["deploy"], changed = ["*/src/*", "Cargo.*"] }
+on = { workflows = ["deploy"], release_targets = ["prod","nightly"], changed = ["*/src/*", "Cargo.*"] }
 depends = ["product"]
 runner = { os = "macos" }
 steps = [{
@@ -367,7 +369,7 @@ caches.cargo = {
 }
 
 [jobs.win]
-on = { workflows = ["deploy"], changed = [".*/src/.*", 'Cargo\.*'], diff_matcher = "regex" }
+on = { workflows = ["deploy"], release_targets = ["prod","nightly"], changed = [".*/src/.*", 'Cargo\.*'], diff_matcher = "regex" }
 depends = ["product"]
 runner = { os = "windows" }
 command = """
@@ -396,7 +398,6 @@ caches = {
 on = { workflows = ["manual_dispatch", "webapi_dispatch"] }
 runner = { os = "linux", local_fallback = { image = "ghcr.io/suntomi/images:aws", shell = "sh" } }
 command = """
-set -e
 echo "======================="
 echo "dispatch context = ${DEPLO_CI_WORKFLOW_CONTEXT}"
 echo "======================="
@@ -417,3 +418,29 @@ runner = { os = "linux", local_fallback = { path = "tools/docker/Dockerfile.vmfb
 steps = [{
     uses = { path = "./tools/modules/sample" }
 }]
+
+[jobs.taglab]
+on = { release_targets = ["taglab", "nightly"], changed = ["README.md"] }
+runner = { os = "linux", local_fallback = { image = "ghcr.io/suntomi/images:aws", shell = "sh" } }
+env = { PAYLOAD = "${env:DEPLO_GHACTION_EVENT_DATA}" }
+command = """
+set -e
+git branch -a
+git --no-pager log | head -20
+git describe --all
+if [ "${DEPLO_CI_WORKFLOW_NAME}" = "deploy" ]; then
+    if [ "${DEPLO_CI_RELEASE_TARGET}" != "taglab" ]; then
+        ref=$(echo ${PAYLOAD} | jq -r '.ref')
+        if [ "${ref}" != "refs/heads/main" ]; then
+            echo "boom: ${DEPLO_CI_RELEASE_TARGET} at ${ref}"
+            exit 1
+        else
+            echo "release target ok: ${DEPLO_CI_RELEASE_TARGET} on ${ref}"
+        fi
+    else
+        echo "release target ok: ${DEPLO_CI_RELEASE_TARGET}"
+    fi
+else
+    echo "workflow name ok: ${DEPLO_CI_WORKFLOW_NAME}"
+fi
+"""

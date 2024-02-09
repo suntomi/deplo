@@ -245,6 +245,11 @@ impl<GIT: git::GitFeatures<S>, S: shell::Shell> vcs::VCS for Github<GIT, S> {
             self.git.fetch_branch(remote_url, branch_name)
         })
     }
+    fn fetch_object(&self, hash: &str, ref_name: &str) -> Result<(), Box<dyn Error>> {
+        self.with_remote_for_push(|remote_url| {
+            self.git.fetch_object(remote_url, hash, ref_name)
+        })
+    }
     fn squash_branch(&self, n: usize) -> Result<(), Box<dyn Error>> {
         self.git.squash_branch(n)
     }
@@ -358,7 +363,9 @@ impl<GIT: git::GitFeatures<S>, S: shell::Shell> vcs::VCS for Github<GIT, S> {
             },
             (vcs::RefType::Tag, ref_name) => {
                 let tags = self.git.tags()?;
-                let index = tags.iter().position(|tag| tag.as_str() == ref_name.as_str()).ok_or(
+                let index = tags.iter().position(|tag| 
+                    tag[1].replace("refs/tags/", "") == ref_name.as_str()
+                ).ok_or(
                     make_escalation!(Box::new(vcs::VCSError {
                         cause: format!("tag {} does not found for list {:?}", ref_name, tags)
                     }))
@@ -367,8 +374,14 @@ impl<GIT: git::GitFeatures<S>, S: shell::Shell> vcs::VCS for Github<GIT, S> {
                     // this is first tag, so treat as it changes everyhing
                     "*".to_string()
                 } else {
+                    let (src, dst) = (
+                        &tags[index - 1][1].replace("^{}", ""), 
+                        &tags[index][1].replace("^{}", "")
+                    );
+                    // fetch previous tag that does not usually fetched
+                    self.fetch_object(&tags[index - 1][0], src)?;
                     // diffing with previous tag
-                    self.git.diff_paths(&format!("{}..{}", &tags[index - 1], &tags[index]))?
+                    self.git.diff_paths(&format!("{}..{}", src, dst))?
                 }
             },
             (vcs::RefType::Commit, ref_name) => {

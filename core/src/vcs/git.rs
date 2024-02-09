@@ -117,6 +117,7 @@ pub trait GitFeatures<S: shell::Shell> {
     fn current_ref(&self) -> Result<(vcs::RefType, String), Box<dyn Error>>;
     fn delete_branch(&self, remote_url: &str, ref_type: vcs::RefType, ref_path: &str) -> Result<(), Box<dyn Error>>;
     fn fetch_branch(&self, remote_url: &str, branch_name: &str) -> Result<(), Box<dyn Error>>;
+    fn fetch_object(&self, remote_url: &str, hash: &str, ref_name: &str) -> Result<(), Box<dyn Error>>;
     fn squash_branch(&self, n: usize) -> Result<(), Box<dyn Error>>;
     fn commit_hash(&self, expr: Option<&str>) -> Result<String, Box<dyn Error>>;
     fn checkout(&self, commit: &str, branch_name: Option<&str>) -> Result<(), Box<dyn Error>>;
@@ -135,7 +136,7 @@ pub trait GitFeatures<S: shell::Shell> {
         &self, remote_url: &str, remote_branch: &str, msg: &str, 
         patterns: &Vec<&str>, options: &HashMap<&str, &str>
     ) -> Result<bool, Box<dyn Error>>;
-    fn tags(&self) -> Result<Vec<String>, Box<dyn Error>>;
+    fn tags(&self) -> Result<Vec<Vec<String>>, Box<dyn Error>>;
 }
 
 impl<S: shell::Shell> Git<S> {
@@ -228,6 +229,13 @@ impl<S: shell::Shell> GitFeatures<S> for Git<S> {
         ], remote_url)?, shell::no_env(), shell::no_cwd(), &shell::no_capture())?;
         Ok(())
     }
+    fn fetch_object(&self, remote_url: &str, hash: &str, ref_name: &str) -> Result<(), Box<dyn Error>> {
+        self.shell.exec(self.credential.authorize(vec![
+            "git", "fetch", "--no-tags", "--prune", "--force", "--no-recurse-submodules", "--depth=1",
+            remote_url, &format!("+{}:{}", hash, ref_name)
+        ], remote_url)?, shell::no_env(), shell::no_cwd(), &shell::no_capture())?;
+        Ok(())
+    }
     fn squash_branch(&self, n: usize) -> Result<(), Box<dyn Error>> {
         self.shell.exec(shell::args!(
             "git", "rebase", "-i", format!("HEAD~{}", n)
@@ -272,13 +280,12 @@ impl<S: shell::Shell> GitFeatures<S> for Git<S> {
             shell::no_env(), shell::no_cwd()
         )?)
     }
-    fn tags(&self) -> Result<Vec<String>, Box<dyn Error>> {
-        self.shell.exec(shell::args!(
-            "git", "fetch", "--tags", "--recurse-submodules=no"
-        ), shell::no_env(), shell::no_cwd(), &shell::capture())?;
+    fn tags(&self) -> Result<Vec<Vec<String>>, Box<dyn Error>> {
         Ok(self.shell.output_of(shell::args!(
-            "git", "tag"
-        ), shell::no_env(), shell::no_cwd())?.split('\n').map(|s| s.to_string()).collect())
+            "git", "ls-remote", "--tags", "origin"
+        ), shell::no_env(), shell::no_cwd())?.split('\n').map(|s| 
+            s.split_whitespace().collect::<Vec<&str>>().iter().map(|s| s.to_string()).collect::<Vec<String>>()
+        ).collect())
     }
     fn cherry_pick(&self, target: &str) -> Result<(), Box<dyn Error>> {
         self.shell.exec(shell::args!(
