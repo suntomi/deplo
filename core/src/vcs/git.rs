@@ -117,7 +117,7 @@ pub trait GitFeatures<S: shell::Shell> {
     fn current_ref(&self) -> Result<(vcs::RefType, String), Box<dyn Error>>;
     fn delete_branch(&self, remote_url: &str, ref_type: vcs::RefType, ref_path: &str) -> Result<(), Box<dyn Error>>;
     fn fetch_branch(&self, remote_url: &str, branch_name: &str) -> Result<(), Box<dyn Error>>;
-    fn fetch_object(&self, remote_url: &str, hash: &str, ref_name: &str) -> Result<(), Box<dyn Error>>;
+    fn fetch_object(&self, remote_url: &str, hash: &str, ref_name: &str, depth: Option<usize>) -> Result<(), Box<dyn Error>>;
     fn squash_branch(&self, n: usize) -> Result<(), Box<dyn Error>>;
     fn commit_hash(&self, expr: Option<&str>) -> Result<String, Box<dyn Error>>;
     fn checkout(&self, commit: &str, branch_name: Option<&str>) -> Result<(), Box<dyn Error>>;
@@ -229,11 +229,22 @@ impl<S: shell::Shell> GitFeatures<S> for Git<S> {
         ], remote_url)?, shell::no_env(), shell::no_cwd(), &shell::no_capture())?;
         Ok(())
     }
-    fn fetch_object(&self, remote_url: &str, hash: &str, ref_name: &str) -> Result<(), Box<dyn Error>> {
-        self.shell.exec(self.credential.authorize(vec![
-            "git", "fetch", "--no-tags", "--prune", "--force", "--no-recurse-submodules", "--depth=1",
-            remote_url, &format!("+{}:{}", hash, ref_name)
-        ], remote_url)?, shell::no_env(), shell::no_cwd(), &shell::no_capture())?;
+    fn fetch_object(&self, remote_url: &str, hash: &str, ref_name: &str, depth: Option<usize>) -> Result<(), Box<dyn Error>> {
+        let mut command = vec!["git", "fetch", "--no-tags", "--prune", "--force", "--no-recurse-submodules"];
+        let depth_opt: String;
+        match depth {
+            Some(d) => {
+                depth_opt = format!("--depth={}", d);
+                command.push(&depth_opt);
+            },
+            None => ()
+        };
+        command.push(remote_url);
+        let fetch_spec = format!("+{}:{}", hash, ref_name);
+        command.push(&fetch_spec);
+        self.shell.exec(self.credential.authorize(
+            command, remote_url
+        )?, shell::no_env(), shell::no_cwd(), &shell::no_capture())?;
         Ok(())
     }
     fn squash_branch(&self, n: usize) -> Result<(), Box<dyn Error>> {

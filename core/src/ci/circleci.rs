@@ -68,7 +68,7 @@ impl<'a, S: shell::Shell> ci::CI for CircleCI<S> {
     fn runs_on_service(&self) -> bool {
         std::env::var("CIRCLE_SHA1").is_ok()
     }
-    fn prepare(&self) -> Result<(), Box<dyn Error>> {
+    fn restore_cache(&self, _submodule: bool) -> Result<(), Box<dyn Error>> {
         Ok(())
     }
     fn generate_config(&self, reinit: bool) -> Result<(), Box<dyn Error>> {

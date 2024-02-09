@@ -245,9 +245,9 @@ impl<GIT: git::GitFeatures<S>, S: shell::Shell> vcs::VCS for Github<GIT, S> {
             self.git.fetch_branch(remote_url, branch_name)
         })
     }
-    fn fetch_object(&self, hash: &str, ref_name: &str) -> Result<(), Box<dyn Error>> {
+    fn fetch_object(&self, hash: &str, ref_name: &str, depth: Option<usize>) -> Result<(), Box<dyn Error>> {
         self.with_remote_for_push(|remote_url| {
-            self.git.fetch_object(remote_url, hash, ref_name)
+            self.git.fetch_object(remote_url, hash, ref_name, depth)
         })
     }
     fn squash_branch(&self, n: usize) -> Result<(), Box<dyn Error>> {
@@ -379,7 +379,7 @@ impl<GIT: git::GitFeatures<S>, S: shell::Shell> vcs::VCS for Github<GIT, S> {
                         &tags[index][1].replace("^{}", "")
                     );
                     // fetch previous tag that does not usually fetched
-                    self.fetch_object(&tags[index - 1][0], src)?;
+                    self.fetch_object(&tags[index - 1][0], src, Some(1))?;
                     // diffing with previous tag
                     self.git.diff_paths(&format!("{}..{}", src, dst))?
                 }

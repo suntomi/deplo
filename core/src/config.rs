@@ -213,12 +213,6 @@ impl Container {
         Ok(())
     }
     pub fn prepare_workflow(&self) -> Result<(), Box<dyn Error>> {
-        // ci: prepare workflow runs
-        {
-            let config = self.borrow();
-            let (_, ci) = config.modules.ci_by_env();
-            ci.prepare()?;
-        }
         // vcs: init diff data on the fly
         let diff = {
             let config = self.borrow();

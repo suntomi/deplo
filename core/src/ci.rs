@@ -55,7 +55,7 @@ pub trait CI {
         config: &config::Container, account_name: &str
     ) -> Result<Self, Box<dyn Error>> where Self : Sized;
     fn runs_on_service(&self) -> bool;
-    fn prepare(&self) -> Result<(), Box<dyn Error>>;
+    fn restore_cache(&self, submodule: bool) -> Result<(), Box<dyn Error>>;
     fn generate_config(&self, reinit: bool) -> Result<(), Box<dyn Error>>;
     fn pr_url_from_env(&self) -> Result<Option<String>, Box<dyn Error>>;
     fn schedule_job(&self, job_name: &str) -> Result<(), Box<dyn Error>>;

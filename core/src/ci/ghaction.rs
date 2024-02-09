@@ -526,6 +526,9 @@ impl<S: shell::Shell> GhAction<S> {
             config::job::SubmoduleCheckoutType::Recursive => true
         }) {
             cmds.push("git submodule update --init --recursive");
+            cmds.push("deplo -v=1 ci restore-cache --submodules");
+        } else {
+            cmds.push("deplo -v=1 ci restore-cache");
         }
         cmds.join(" && ")
     }
@@ -613,21 +616,49 @@ impl<S: shell::Shell> ci::CI for GhAction<S> {
     fn runs_on_service(&self) -> bool {
         std::env::var("GITHUB_ACTION").is_ok()
     }
-    fn prepare(&self) -> Result<(), Box<dyn Error>> {
+    fn restore_cache(&self, submodule: bool) -> Result<(), Box<dyn Error>> {
+        log::info!("restore cache: start submodule = {}", submodule);
         match std::env::var("DEPLO_GHACTION_EVENT_DATA") {
             Ok(v) => {
+                log::info!("restore cache: current HEAD => {}", self.shell.output_of(
+                    shell::args!["git", "describe", "--all"], shell::no_env(), shell::no_cwd()
+                )?);
                 // setup repository to ensure match with current ref
                 // when using cache, sometimes repository is not match with current ref
                 // eg. main repository cached and make tag with same commit of main HEAD, workflow invoked by the tag
                 // has same commit but wrong ref (refs/heads/main instead of, say, refs/tags/v0.1.0)                
                 let rs: RefSpec = serde_json::from_str(&v)?;
-                log::debug!("refspec: {}:{}", rs.sha, rs.refspec);
+                log::info!("refspec: {}:{}", rs.sha, rs.refspec);
                 let config = self.config.borrow();
                 let vcs = config.modules.vcs();
-                vcs.fetch_object(&rs.sha, &rs.refspec)?;
-                vcs.checkout(&rs.refspec, None)?;
+                let (refspec, branch) = match &rs.refspec {
+                    v if v.starts_with("refs/heads/") => {
+                        log::info!("restore heads ref");
+                        (format!("refs/remotes/orgin/{}", &rs.refspec[11..]), Some(&rs.refspec[11..]))
+                    },
+                    v if v.starts_with("refs/tags/") => {
+                        log::info!("restore tags ref");
+                        (v.clone(), None)
+                    },
+                    v if v.starts_with("refs/pull/") => {
+                        log::info!("restore pulls ref");
+                        (format!("refs/remotes/{}", &rs.refspec[5..]), None)
+                    },
+                    _ => panic!("invalid refspec {}", rs.refspec)
+                };
+                log::info!("restore with: sha={} ref={}", rs.sha, refspec);
+                vcs.fetch_object(&rs.sha, &refspec, None)?;
+                vcs.checkout(&refspec, branch)?;
+                if submodule {
+                    // init submodule
+                    log::info!("restore submodule");
+                    self.shell.exec(
+                        shell::args!["git", "submodule", "update", "--init", "--recursive"],
+                        shell::no_env(), shell::no_cwd(), &shell::capture()
+                    )?;
+                }
             },
-            Err(_) => {}
+            Err(_) => panic!("DEPLO_GHACTION_EVENT_DATA should set")
         }
         Ok(())
     }
