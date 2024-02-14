@@ -634,7 +634,7 @@ impl<S: shell::Shell> ci::CI for GhAction<S> {
                 let (refspec, branch) = match &rs.refspec {
                     v if v.starts_with("refs/heads/") => {
                         log::info!("restore heads ref");
-                        (format!("refs/remotes/orgin/{}", &rs.refspec[11..]), Some(&rs.refspec[11..]))
+                        (format!("refs/remotes/origin/{}", &rs.refspec[11..]), Some(&rs.refspec[11..]))
                     },
                     v if v.starts_with("refs/tags/") => {
                         log::info!("restore tags ref");
