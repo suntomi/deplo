@@ -67,7 +67,7 @@ jobs:
           token: ${{ secrets.SUNTOMI_VCS_ACCOUNT_KEY }}
       - name: Restore repository from cache
         if: steps.fetch-repository-cache.outputs.cache-hit == 'true'
-        run: git reset --hard HEAD && git submodule update --init --recursive
+        run: git reset --hard HEAD && git submodule update --init --recursive && deplo -v=1 ci restore-cache --submodules
       - name: Boot deplo
         id: deplo-main
         run: deplo boot
@@ -118,7 +118,7 @@ jobs:
           token: ${{ secrets.SUNTOMI_VCS_ACCOUNT_KEY }}
       - name: Restore repository from cache
         if: steps.fetch-repository-cache.outputs.cache-hit == 'true'
-        run: git reset --hard HEAD && git submodule update --init --recursive
+        run: git reset --hard HEAD && git submodule update --init --recursive && deplo -v=1 ci restore-cache --submodules
       - name: Halt deplo
         id: deplo-halt
         run: deplo halt
@@ -162,7 +162,7 @@ jobs:
           token: ${{ secrets.SUNTOMI_VCS_ACCOUNT_KEY }}
       - name: Restore repository from cache
         if: steps.fetch-repository-cache.outputs.cache-hit == 'true'
-        run: git reset --hard HEAD && git submodule update --init --recursive
+        run: git reset --hard HEAD && git submodule update --init --recursive && deplo -v=1 ci restore-cache --submodules
   
       - name: base
         id: deplo-job-base
@@ -207,7 +207,7 @@ jobs:
           token: ${{ secrets.SUNTOMI_VCS_ACCOUNT_KEY }}
       - name: Restore repository from cache
         if: steps.fetch-repository-cache.outputs.cache-hit == 'true'
-        run: git reset --hard HEAD && git submodule update --init --recursive
+        run: git reset --hard HEAD && git submodule update --init --recursive && deplo -v=1 ci restore-cache --submodules
   
       - name: builder
         id: deplo-job-builder
@@ -252,7 +252,7 @@ jobs:
           token: ${{ secrets.SUNTOMI_VCS_ACCOUNT_KEY }}
       - name: Restore repository from cache
         if: steps.fetch-repository-cache.outputs.cache-hit == 'true'
-        run: git reset --hard HEAD && git submodule update --init --recursive
+        run: git reset --hard HEAD && git submodule update --init --recursive && deplo -v=1 ci restore-cache --submodules
   
       - name: config
         id: deplo-job-config
@@ -297,7 +297,7 @@ jobs:
           token: ${{ secrets.SUNTOMI_VCS_ACCOUNT_KEY }}
       - name: Restore repository from cache
         if: steps.fetch-repository-cache.outputs.cache-hit == 'true'
-        run: git reset --hard HEAD && git submodule update --init --recursive
+        run: git reset --hard HEAD && git submodule update --init --recursive && deplo -v=1 ci restore-cache --submodules
   
       - name: dispatched
         id: deplo-job-dispatched
@@ -343,7 +343,7 @@ jobs:
           token: ${{ secrets.SUNTOMI_VCS_ACCOUNT_KEY }}
       - name: Restore repository from cache
         if: steps.fetch-repository-cache.outputs.cache-hit == 'true'
-        run: git reset --hard HEAD && git submodule update --init --recursive
+        run: git reset --hard HEAD && git submodule update --init --recursive && deplo -v=1 ci restore-cache --submodules
   
       - name: latest
         id: deplo-job-latest
@@ -389,7 +389,7 @@ jobs:
           token: ${{ secrets.SUNTOMI_VCS_ACCOUNT_KEY }}
       - name: Restore repository from cache
         if: steps.fetch-repository-cache.outputs.cache-hit == 'true'
-        run: git reset --hard HEAD && git submodule update --init --recursive
+        run: git reset --hard HEAD && git submodule update --init --recursive && deplo -v=1 ci restore-cache --submodules
       - name: Cache cargo
         id: deplo-cache-cargo
         uses: actions/cache@v2
@@ -450,7 +450,7 @@ jobs:
           token: ${{ secrets.SUNTOMI_VCS_ACCOUNT_KEY }}
       - name: Restore repository from cache
         if: steps.fetch-repository-cache.outputs.cache-hit == 'true'
-        run: git reset --hard HEAD && git submodule update --init --recursive
+        run: git reset --hard HEAD && git submodule update --init --recursive && deplo -v=1 ci restore-cache --submodules
   
       - name: module_test
         id: deplo-job-module_test
@@ -496,7 +496,7 @@ jobs:
           token: ${{ secrets.SUNTOMI_VCS_ACCOUNT_KEY }}
       - name: Restore repository from cache
         if: steps.fetch-repository-cache.outputs.cache-hit == 'true'
-        run: git reset --hard HEAD && git submodule update --init --recursive
+        run: git reset --hard HEAD && git submodule update --init --recursive && deplo -v=1 ci restore-cache --submodules
   
       - name: product
         id: deplo-job-product
@@ -541,7 +541,7 @@ jobs:
           token: ${{ secrets.SUNTOMI_VCS_ACCOUNT_KEY }}
       - name: Restore repository from cache
         if: steps.fetch-repository-cache.outputs.cache-hit == 'true'
-        run: git reset --hard HEAD && git submodule update --init --recursive
+        run: git reset --hard HEAD && git submodule update --init --recursive && deplo -v=1 ci restore-cache --submodules
   
       - name: repository
         id: deplo-job-repository
@@ -586,7 +586,7 @@ jobs:
           token: ${{ secrets.SUNTOMI_VCS_ACCOUNT_KEY }}
       - name: Restore repository from cache
         if: steps.fetch-repository-cache.outputs.cache-hit == 'true'
-        run: git reset --hard HEAD && git submodule update --init --recursive
+        run: git reset --hard HEAD && git submodule update --init --recursive && deplo -v=1 ci restore-cache --submodules
   
       - name: taglab
         id: deplo-job-taglab
@@ -634,7 +634,7 @@ jobs:
           token: ${{ secrets.SUNTOMI_VCS_ACCOUNT_KEY }}
       - name: Restore repository from cache
         if: steps.fetch-repository-cache.outputs.cache-hit == 'true'
-        run: git reset --hard HEAD && git submodule update --init --recursive
+        run: git reset --hard HEAD && git submodule update --init --recursive && deplo -v=1 ci restore-cache --submodules
       - name: Cache cargo
         id: deplo-cache-cargo
         uses: actions/cache@v2
@@ -695,7 +695,7 @@ jobs:
           token: ${{ secrets.SUNTOMI_VCS_ACCOUNT_KEY }}
       - name: Restore repository from cache
         if: steps.fetch-repository-cache.outputs.cache-hit == 'true'
-        run: git reset --hard HEAD && git submodule update --init --recursive
+        run: git reset --hard HEAD && git submodule update --init --recursive && deplo -v=1 ci restore-cache --submodules
       - name: Cache cargo
         id: deplo-cache-cargo
         uses: actions/cache@v2

@@ -326,6 +326,16 @@ lazy_static! {
                     .about("upload current .env contents as CI service secrets")
                 )
                 .subcommand(
+                    App::new("restore-cache")
+                    .about("restore cached repository to correct state")
+                    .arg(Arg::new("submodules")
+                        .help("task name of job")
+                        .short('s')
+                        .long("submodules")
+                        .takes_value(false)
+                        .required(false))
+                )
+                .subcommand(
                     App::new("token")
                     .about("generate temporary token of CI service like oidc jwt")
                     .subcommand(

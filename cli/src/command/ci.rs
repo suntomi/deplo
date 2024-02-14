@@ -54,6 +54,11 @@ impl<S: shell::Shell> CI<S> {
             None => return escalate!(args.error("ci token: no subcommand specified"))
         }
     }
+    fn restore_cache<A: args::Args>(&self, args: &A) -> Result<(), Box<dyn Error>> {
+        let config = self.config.borrow();
+        let (_, ci) = config.modules.ci_by_env();
+        ci.restore_cache(args.occurence_of("submodules") > 0)
+    }
 }
 
 impl<S: shell::Shell, A: args::Args> command::Command<A> for CI<S> {
@@ -67,6 +72,7 @@ impl<S: shell::Shell, A: args::Args> command::Command<A> for CI<S> {
         match args.subcommand() {
             Some(("setenv", subargs)) => return self.setenv(&subargs),
             Some(("token", subargs)) => return self.token(&subargs),
+            Some(("restore-cache", subargs)) => return self.restore_cache(&subargs),
             Some((name, _)) => return escalate!(args.error(
                 &format!("no such subcommand: [{}]", name) 
             )),

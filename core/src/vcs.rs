@@ -40,7 +40,7 @@ pub trait VCS {
     fn current_ref(&self) -> Result<(RefType, String), Box<dyn Error>>;
     fn delete_branch(&self, ref_type: RefType, ref_path: &str) -> Result<(), Box<dyn Error>>;
     fn fetch_branch(&self, branch_name: &str) -> Result<(), Box<dyn Error>>;
-    fn fetch_object(&self, hash: &str, ref_name: &str) -> Result<(), Box<dyn Error>>;
+    fn fetch_object(&self, hash: &str, ref_name: &str, depth: Option<usize>) -> Result<(), Box<dyn Error>>;
     fn squash_branch(&self, n: usize) -> Result<(), Box<dyn Error>>;
     fn commit_hash(&self, expr: Option<&str>) -> Result<String, Box<dyn Error>>;
     fn checkout(&self, commit: &str, branch_name: Option<&str>) -> Result<(), Box<dyn Error>>;
