@@ -136,7 +136,7 @@ pub trait GitFeatures<S: shell::Shell> {
         &self, remote_url: &str, remote_branch: &str, msg: &str, 
         patterns: &Vec<&str>, options: &HashMap<&str, &str>
     ) -> Result<bool, Box<dyn Error>>;
-    fn tags(&self) -> Result<Vec<Vec<String>>, Box<dyn Error>>;
+    fn tags(&self, remote_url: &str) -> Result<Vec<Vec<String>>, Box<dyn Error>>;
 }
 
 impl<S: shell::Shell> Git<S> {
@@ -291,10 +291,10 @@ impl<S: shell::Shell> GitFeatures<S> for Git<S> {
             shell::no_env(), shell::no_cwd()
         )?)
     }
-    fn tags(&self) -> Result<Vec<Vec<String>>, Box<dyn Error>> {
-        Ok(self.shell.output_of(shell::args!(
+    fn tags(&self, remote_url: &str) -> Result<Vec<Vec<String>>, Box<dyn Error>> {
+        Ok(self.shell.output_of(self.credential.authorize(vec![
             "git", "ls-remote", "--tags", "origin"
-        ), shell::no_env(), shell::no_cwd())?.split('\n').map(|s| 
+        ], remote_url)?, shell::no_env(), shell::no_cwd())?.split('\n').map(|s| 
             s.split_whitespace().collect::<Vec<&str>>().iter().map(|s| s.to_string()).collect::<Vec<String>>()
         ).collect())
     }

@@ -362,7 +362,9 @@ impl<GIT: git::GitFeatures<S>, S: shell::Shell> vcs::VCS for Github<GIT, S> {
                 self.git.diff_paths("HEAD^")?
             },
             (vcs::RefType::Tag, ref_name) => {
-                let tags = self.git.tags()?;
+                let tags = self.with_remote_for_push(|remote_url| {
+                    self.git.tags(remote_url)
+                })?;
                 let index = tags.iter().position(|tag| 
                     tag[1].replace("refs/tags/", "") == ref_name.as_str()
                 ).ok_or(
