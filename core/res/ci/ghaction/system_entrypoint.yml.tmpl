@@ -1,0 +1,18 @@
+workflow_dispatch:
+  inputs:
+    id: # unique id
+      required: true
+      type: string
+    workflow: # key of [workflows] and integrate/deploy
+      required: true
+      type: string
+    context: # due to workflow 
+      required: true
+    exec: # envs, verbosity, release_target, follow_dependency
+      required: true
+    job:
+      required: true
+      default: dev
+      type: choice
+      options:
+{jobs:>8}

@@ -322,6 +322,13 @@ impl<S: shell::Shell> GhAction<S> {
                 postfix: None
             }
         ).split("\n").map(|s| s.to_string()).collect());
+        results.insert("system".to_string(), format!(
+            include_str!("../../res/ci/ghaction/system_entrypoint.yml.tmpl"), 
+            jobs = MultilineFormatString{
+                strings: &config.jobs.as_map().keys().map(|v| format!("- {}", v)).collect::<Vec<String>>(),
+                postfix: None
+            },
+        ).split("\n").map(|s| s.to_string()).collect());
         for (dispatch_name, lines) in workflow_dispatch_entries {
             results.insert(dispatch_name.replace("_", "-"), format!(
                 include_str!("../../res/ci/ghaction/workflow_entrypoint.yml.tmpl"), 
@@ -772,12 +779,12 @@ impl<S: shell::Shell> ci::CI for GhAction<S> {
             fs::write(&workflow_yml_path,
                 format!(
                     include_str!("../../res/ci/ghaction/main.yml.tmpl"), 
-                    workflow_name = if name == "main" {
-                        "Deplo Workflow Runner"
-                    } else {
-                        &name
+                    workflow_name = match name.as_str() {
+                        "main" => "Deplo Workflow Runner",
+                        "system" => "Deplo System",
+                        _ => &name
                     },
-                    entrypoint = MultilineFormatString{ 
+                    entrypoint = MultilineFormatString{
                         strings: &(if create_main { entrypoint } else { vec![] }),
                         postfix: None
                     },
