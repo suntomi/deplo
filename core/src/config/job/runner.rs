@@ -155,10 +155,6 @@ impl<'a> Runner<'a> {
         }
         let exec = &runtime_workflow_config.exec;
         // apply exec settings to current workspace.
-        // verbosity is set via envvar DEPLO_OVERWRITE_VERBOSITY
-        // revision
-        self.adjust_commit_hash(&exec.revision.as_ref().map(|v| v.as_str()))?;
-        defer!{self.recover_branch().unwrap();};
         let command = runtime_workflow_config.command();
         // silent
         let shell_settings = &mut match command {
@@ -178,6 +174,9 @@ impl<'a> Runner<'a> {
             let ci = job.ci(&config);
             return Ok(Some(ci.run_job(&runtime_workflow_config)?));
         }
+        // adjust revision with command line argument
+        self.adjust_commit_hash(&exec.revision.as_ref().map(|v| v.as_str()))?;
+        defer!{self.recover_branch().unwrap();};
         match job.runner {
             job::Runner::Machine{os, ref local_fallback, ..} => {
                 let current_os = shell.detect_os()?;

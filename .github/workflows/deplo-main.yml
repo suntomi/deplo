@@ -22,7 +22,7 @@ env:
   DEPLO_GHACTION_CI_ID: ${{ github.run_id }}-${{ github.run_attempt }}
   DEPLO_GHACTION_EVENT_DATA: ${{ toJson(github) }}
   DEPLO_GHACTION_WORKFLOW_NAME: ${{ github.workflow }}
-  DEPLO_OVERWRITE_VERBOSITY: ${{ github.event.client_payload.exec.verbosity }}
+  DEPLO_OVERWRITE_EXEC_OPTIONS: ${{ github.event.inputs.exec }}
   SUNTOMI_AWS_ROLE: ${{ secrets.SUNTOMI_AWS_ROLE }}
   SUNTOMI_VCS_ACCOUNT: ${{ secrets.SUNTOMI_VCS_ACCOUNT }}
   SUNTOMI_VCS_ACCOUNT_EMAIL: ${{ secrets.SUNTOMI_VCS_ACCOUNT_EMAIL }}
@@ -31,7 +31,7 @@ env:
   SUNTOMI_VCS_APP_PKEY: ${{ secrets.SUNTOMI_VCS_APP_PKEY }}
 jobs:
   deplo-main:
-    name: Start CI ${{ github.event.client_payload.job_id }}
+    name: Start CI ${{ github.event.inputs.job_id }}
     runs-on: ubuntu-latest
     outputs:
       base: ${{ steps.deplo-main.outputs.base }}
@@ -64,7 +64,6 @@ jobs:
         uses: actions/checkout@v3
         with:
           fetch-depth: 0
-          ref: ${{ github.event.client_payload.exec.revision }}
           submodules: true
           token: ${{ secrets.SUNTOMI_VCS_ACCOUNT_KEY }}
       - name: Restore repository from cache
@@ -115,7 +114,6 @@ jobs:
         with:
           fetch-depth: 0
           lfs: false
-          ref: ${{ github.event.client_payload.exec.revision }}
           submodules: true
           token: ${{ secrets.SUNTOMI_VCS_ACCOUNT_KEY }}
       - name: Restore repository from cache
@@ -159,7 +157,6 @@ jobs:
         uses: actions/checkout@v3
         with:
           fetch-depth: 0
-          ref: ${{ github.event.client_payload.exec.revision }}
           submodules: true
           token: ${{ secrets.SUNTOMI_VCS_ACCOUNT_KEY }}
       - name: Restore repository from cache
@@ -204,7 +201,6 @@ jobs:
         uses: actions/checkout@v3
         with:
           fetch-depth: 0
-          ref: ${{ github.event.client_payload.exec.revision }}
           submodules: true
           token: ${{ secrets.SUNTOMI_VCS_ACCOUNT_KEY }}
       - name: Restore repository from cache
@@ -249,7 +245,6 @@ jobs:
         uses: actions/checkout@v3
         with:
           fetch-depth: 0
-          ref: ${{ github.event.client_payload.exec.revision }}
           submodules: true
           token: ${{ secrets.SUNTOMI_VCS_ACCOUNT_KEY }}
       - name: Restore repository from cache
@@ -294,7 +289,6 @@ jobs:
         uses: actions/checkout@v3
         with:
           fetch-depth: 0
-          ref: ${{ github.event.client_payload.exec.revision }}
           submodules: true
           token: ${{ secrets.SUNTOMI_VCS_ACCOUNT_KEY }}
       - name: Restore repository from cache
@@ -340,7 +334,6 @@ jobs:
         uses: actions/checkout@v3
         with:
           fetch-depth: 0
-          ref: ${{ github.event.client_payload.exec.revision }}
           submodules: true
           token: ${{ secrets.SUNTOMI_VCS_ACCOUNT_KEY }}
       - name: Restore repository from cache
@@ -386,7 +379,6 @@ jobs:
         uses: actions/checkout@v3
         with:
           fetch-depth: 0
-          ref: ${{ github.event.client_payload.exec.revision }}
           submodules: true
           token: ${{ secrets.SUNTOMI_VCS_ACCOUNT_KEY }}
       - name: Restore repository from cache
@@ -447,7 +439,6 @@ jobs:
         uses: actions/checkout@v3
         with:
           fetch-depth: 0
-          ref: ${{ github.event.client_payload.exec.revision }}
           submodules: true
           token: ${{ secrets.SUNTOMI_VCS_ACCOUNT_KEY }}
       - name: Restore repository from cache
@@ -493,7 +484,6 @@ jobs:
         uses: actions/checkout@v3
         with:
           fetch-depth: 0
-          ref: ${{ github.event.client_payload.exec.revision }}
           submodules: true
           token: ${{ secrets.SUNTOMI_VCS_ACCOUNT_KEY }}
       - name: Restore repository from cache
@@ -538,7 +528,6 @@ jobs:
         uses: actions/checkout@v3
         with:
           fetch-depth: 0
-          ref: ${{ github.event.client_payload.exec.revision }}
           submodules: true
           token: ${{ secrets.SUNTOMI_VCS_ACCOUNT_KEY }}
       - name: Restore repository from cache
@@ -583,7 +572,6 @@ jobs:
         uses: actions/checkout@v3
         with:
           fetch-depth: 0
-          ref: ${{ github.event.client_payload.exec.revision }}
           submodules: true
           token: ${{ secrets.SUNTOMI_VCS_ACCOUNT_KEY }}
       - name: Restore repository from cache
@@ -631,7 +619,6 @@ jobs:
         uses: actions/checkout@v3
         with:
           fetch-depth: 0
-          ref: ${{ github.event.client_payload.exec.revision }}
           submodules: true
           token: ${{ secrets.SUNTOMI_VCS_ACCOUNT_KEY }}
       - name: Restore repository from cache
@@ -692,7 +679,6 @@ jobs:
         uses: actions/checkout@v3
         with:
           fetch-depth: 0
-          ref: ${{ github.event.client_payload.exec.revision }}
           submodules: true
           token: ${{ secrets.SUNTOMI_VCS_ACCOUNT_KEY }}
       - name: Restore repository from cache

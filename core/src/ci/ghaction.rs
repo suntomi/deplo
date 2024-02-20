@@ -110,10 +110,6 @@ impl ci::CheckoutOption for config::job::CheckoutOption {
             Some(ref v) => r.push(format!("lfs: {}", v)),
             None => {}
         }
-        match self.revision {
-            Some(ref v) => r.push(format!("ref: {}", Self::to_yaml_config(v))),
-            None => {}
-        }
         match self.submodules {
             Some(ref v) => match v {
                 config::job::SubmoduleCheckoutType::Checkout(b) => if *b {
@@ -740,7 +736,6 @@ impl<S: shell::Shell> ci::CI for GhAction<S> {
                         },
                         None => job.checkout.clone()
                     }, &Some(config::job::CheckoutOption {
-                            revision: Some(config::Value::new("${{ github.event.client_payload.exec.revision }}")),
                             fetch_depth: Some(2),
                             lfs: None, token: None, submodules: None
                         }.merge(
@@ -749,7 +744,7 @@ impl<S: shell::Shell> ci::CI for GhAction<S> {
                                 // for lfs, set fetch_depth to 0 to pull all commits and using cache
                                 |v| if v.lfs.unwrap_or(false) {
                                     config::job::CheckoutOption {
-                                        fetch_depth: Some(0), lfs: None, token: None, submodules: None, revision: None
+                                        fetch_depth: Some(0), lfs: None, token: None, submodules: None
                                     }
                                 } else {
                                     config::job::CheckoutOption::default()
@@ -802,14 +797,12 @@ impl<S: shell::Shell> ci::CI for GhAction<S> {
                     boot_checkout = MultilineFormatString{
                         strings: &self.generate_checkout_steps("main", &config.checkout, &Some(config::job::CheckoutOption {
                             fetch_depth: Some(2), lfs: None, token: None, submodules: None,
-                            revision: Some(config::Value::new("${{ github.event.client_payload.exec.revision }}")),
                         })),
                         postfix: None
                     },
                     halt_checkout = MultilineFormatString{
                         strings: &self.generate_checkout_steps("main", &config.checkout, &Some(config::job::CheckoutOption {
                             fetch_depth: Some(2), lfs: Some(lfs), token: None, submodules: None,
-                            revision: Some(config::Value::new("${{ github.event.client_payload.exec.revision }}")),
                         })),
                         postfix: None
                     },

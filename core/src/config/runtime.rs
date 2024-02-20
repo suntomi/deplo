@@ -40,7 +40,7 @@ impl ExecOptions {
         // rust simple_logger's verbosity cannot be changed once it set, and here already configured.
         // so simply we override verbosity with process' verbosity.
         // on remote running on CI, verbosity should configured with same value as cli specified,
-        // via envvar DEPLO_OVERWRITE_VERBOSITY
+        // via envvar DEPLO_OVERWRITE_EXEC_OPTIONS(JSON)'s verbosity.
         instance.verbosity = config.borrow().runtime.verbosity;
         instance.apply(args, config, has_job_config);
         Ok(instance)
@@ -280,17 +280,7 @@ impl Config {
             },
             Err(_) => {},
         };
-        match simple_logger::init_with_level(match 
-            match std::env::var("DEPLO_OVERWRITE_VERBOSITY") {
-                Ok(v) => if !v.is_empty() {
-                    println!("overwrite log verbosity from {} to {}", verbosity, v);
-                    v.parse::<u64>().unwrap_or(verbosity)
-                } else {
-                    verbosity
-                },
-                Err(_) => verbosity
-            } 
-        {
+        match simple_logger::init_with_level(match verbosity {
             0 => log::Level::Warn,
             1 => log::Level::Info,
             2 => log::Level::Debug,
