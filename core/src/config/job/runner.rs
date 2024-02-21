@@ -210,7 +210,7 @@ impl<'a> Runner<'a> {
                                             "."
                                         ], shell::no_env(),
                                         &Some(path.parent().unwrap().to_string_lossy().to_string()),
-                                        &shell::capture()
+                                        &shell::capture_inherit()
                                     )?;
                                     (config::Value::new(&local_image), &f.shell)
                                 },

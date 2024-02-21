@@ -524,6 +524,9 @@ pub fn capture() -> Settings {
 pub fn no_capture() -> Settings {
     return Settings{ capture: false, interactive: false, silent: false, env_inherit: ENV_INHERIT_DEFAULT, paths: None };
 }
+pub fn capture_inherit() -> Settings {
+    return Settings{ capture: true, interactive: false, silent: false, env_inherit: true, paths: None };
+}
 pub fn interactive() -> Settings {
     return Settings{ capture: false, interactive: true, silent: false, env_inherit: ENV_INHERIT_DEFAULT, paths: None };
 }
