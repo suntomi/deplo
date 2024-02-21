@@ -1017,8 +1017,8 @@ impl<S: shell::Shell> ci::CI for GhAction<S> {
             "exec" => serde_json::to_string(&job_config.exec)?,
             "job" => job_config.name.clone()
         };
-        self.shell.exec(shell::args![
-            "curl", "-H", shell::fmtargs!("Authorization: token {}", &token), 
+        let response = self.shell.exec(shell::args![
+            "curl", "-f", "-H", shell::fmtargs!("Authorization: token {}", &token), 
             "-H", "Accept: application/vnd.github.v3+json", 
             format!(
                 "https://api.github.com/repos/{}/{}/actions/workflows/{}/dispatches", 
@@ -1035,6 +1035,7 @@ impl<S: shell::Shell> ci::CI for GhAction<S> {
                 inputs = serde_json::to_string(&inputs)?
             )
         ], shell::no_env(), shell::no_cwd(), &shell::capture())?;
+        log::trace!("response: [{}]", response);
         log::debug!("wait for remote job to start.");
         let mut count = 0;
         // we have 1 minutes buffer to search for created workflow
