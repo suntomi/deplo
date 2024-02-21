@@ -110,10 +110,6 @@ impl ci::CheckoutOption for config::job::CheckoutOption {
             Some(ref v) => r.push(format!("lfs: {}", v)),
             None => {}
         }
-        match self.revision {
-            Some(ref v) => r.push(format!("ref: {}", Self::to_yaml_config(v))),
-            None => {}
-        }
         match self.submodules {
             Some(ref v) => match v {
                 config::job::SubmoduleCheckoutType::Checkout(b) => if *b {
@@ -236,7 +232,6 @@ impl<S: shell::Shell> GhAction<S> {
         let mut event_entries = hashmap!{};
         let mut workflow_dispatch_entries = hashmap!{};
         let mut repository_dispatches = vec![
-            config::DEPLO_REMOTE_JOB_EVENT_TYPE.to_string(),
             config::DEPLO_MODULE_EVENT_TYPE.to_string()
         ];
         let mut schedule_entries = vec![];
@@ -321,6 +316,13 @@ impl<S: shell::Shell> GhAction<S> {
                 strings: &events,
                 postfix: None
             }
+        ).split("\n").map(|s| s.to_string()).collect());
+        results.insert("system".to_string(), format!(
+            include_str!("../../res/ci/ghaction/system_entrypoint.yml.tmpl"), 
+            jobs = MultilineFormatString{
+                strings: &config.jobs.as_map().keys().map(|v| format!("- {}", v)).collect::<Vec<String>>(),
+                postfix: None
+            },
         ).split("\n").map(|s| s.to_string()).collect());
         for (dispatch_name, lines) in workflow_dispatch_entries {
             results.insert(dispatch_name.replace("_", "-"), format!(
@@ -733,7 +735,6 @@ impl<S: shell::Shell> ci::CI for GhAction<S> {
                         },
                         None => job.checkout.clone()
                     }, &Some(config::job::CheckoutOption {
-                            revision: Some(config::Value::new("${{ github.event.client_payload.exec.revision }}")),
                             fetch_depth: Some(2),
                             lfs: None, token: None, submodules: None
                         }.merge(
@@ -742,7 +743,7 @@ impl<S: shell::Shell> ci::CI for GhAction<S> {
                                 // for lfs, set fetch_depth to 0 to pull all commits and using cache
                                 |v| if v.lfs.unwrap_or(false) {
                                     config::job::CheckoutOption {
-                                        fetch_depth: Some(0), lfs: None, token: None, submodules: None, revision: None
+                                        fetch_depth: Some(0), lfs: None, token: None, submodules: None
                                     }
                                 } else {
                                     config::job::CheckoutOption::default()
@@ -772,12 +773,12 @@ impl<S: shell::Shell> ci::CI for GhAction<S> {
             fs::write(&workflow_yml_path,
                 format!(
                     include_str!("../../res/ci/ghaction/main.yml.tmpl"), 
-                    workflow_name = if name == "main" {
-                        "Deplo Workflow Runner"
-                    } else {
-                        &name
+                    workflow_name = match name.as_str() {
+                        "main" => "Deplo Workflow Runner",
+                        "system" => "Deplo System",
+                        _ => &name
                     },
-                    entrypoint = MultilineFormatString{ 
+                    entrypoint = MultilineFormatString{
                         strings: &(if create_main { entrypoint } else { vec![] }),
                         postfix: None
                     },
@@ -795,14 +796,12 @@ impl<S: shell::Shell> ci::CI for GhAction<S> {
                     boot_checkout = MultilineFormatString{
                         strings: &self.generate_checkout_steps("main", &config.checkout, &Some(config::job::CheckoutOption {
                             fetch_depth: Some(2), lfs: None, token: None, submodules: None,
-                            revision: Some(config::Value::new("${{ github.event.client_payload.exec.revision }}")),
                         })),
                         postfix: None
                     },
                     halt_checkout = MultilineFormatString{
                         strings: &self.generate_checkout_steps("main", &config.checkout, &Some(config::job::CheckoutOption {
                             fetch_depth: Some(2), lfs: Some(lfs), token: None, submodules: None,
-                            revision: Some(config::Value::new("${{ github.event.client_payload.exec.revision }}")),
                         })),
                         postfix: None
                     },
@@ -881,28 +880,12 @@ impl<S: shell::Shell> ci::CI for GhAction<S> {
                             _ => {}
                         },
                         // repository_dispatch has a few possibility.
-                        // config::DEPLO_REMOTE_JOB_EVENT_TYPE => should contain workflow name in client_payload["name"]
                         // config::DEPLO_MODULE_EVENT_TYPE => Module workflow invocation
                         // others => Repository workflow invocation
                         "repository_dispatch" => if let EventPayload::RepositoryDispatch{
-                            action, client_payload
+                            action, ..
                         } = &workflow_event.event {
-                            if action == config::DEPLO_REMOTE_JOB_EVENT_TYPE {
-                                match &client_payload["name"] {
-                                    JsonValue::String(s) => {
-                                        let workflow_name = s.to_string();
-                                        if workflow_name == name {
-                                            return Ok(vec![config::runtime::Workflow::with_payload(
-                                                &serde_json::to_string(client_payload)?
-                                            )?]);
-                                        }
-                                    },
-                                    _ => panic!(
-                                        "{}: event payload invalid {}", 
-                                        config::DEPLO_REMOTE_JOB_EVENT_TYPE, client_payload
-                                    )
-                                }
-                            } else if action == config::DEPLO_MODULE_EVENT_TYPE {
+                            if action == config::DEPLO_MODULE_EVENT_TYPE {
                                 if let config::workflow::Workflow::Module(..) = v {
                                     log::warn!("TODO: should check current workflow is matched for the module?");
                                     matched_names.push(name);
@@ -921,7 +904,9 @@ impl<S: shell::Shell> ci::CI for GhAction<S> {
                             let dispatch_name = std::env::var("DEPLO_GHACTION_WORKFLOW_NAME").expect(
                                 &format!("DEPLO_GHACTION_WORKFLOW_NAME should set")
                             );
-                            if name.replace("_", "-") == dispatch_name {
+                            if dispatch_name == config::DEPLO_SYSTEM_WORKFLOW_NAME {
+                                matched_names.push(config::DEPLO_SYSTEM_WORKFLOW_NAME.to_string());
+                            } else if name.replace("_", "-") == dispatch_name {
                                 matched_names.push(name);
                             } else {
                                 log::debug!("workflow dispatch name does not match {} != {}", dispatch_name, name)
@@ -934,8 +919,7 @@ impl<S: shell::Shell> ci::CI for GhAction<S> {
                     }
                 }
                 let mut matches = vec![];
-                for n in matched_names {
-                    let name = n.to_string();
+                for name in matched_names {
                     match config.workflows.get(&name).expect(&format!("workflow {} not found", name)) {
                         config::workflow::Workflow::Deploy|config::workflow::Workflow::Integrate => {
                             matches.push(config::runtime::Workflow::with_context(
@@ -987,7 +971,11 @@ impl<S: shell::Shell> ci::CI for GhAction<S> {
                                         action.to_string(), serde_json::from_str(&serde_json::to_string(&client_payload)?)?
                                     ));
                                 },
-                                EventPayload::WorkflowDispatch{inputs: client_payload} => if manual.unwrap_or(false) {
+                                EventPayload::WorkflowDispatch{inputs: client_payload} => if name == config::DEPLO_SYSTEM_WORKFLOW_NAME {
+                                    matches.push(config::runtime::Workflow::with_system_dispatch(
+                                        &serde_json::from_str(&serde_json::to_string(&client_payload)?)?
+                                    ));
+                                } else if manual.unwrap_or(false) {
                                     inputs.verify(&client_payload); // panic!s when schema does not matched
                                     matches.push(config::runtime::Workflow::with_context(
                                         name, serde_json::from_str(&serde_json::to_string(&client_payload)?)?
@@ -1022,19 +1010,29 @@ impl<S: shell::Shell> ci::CI for GhAction<S> {
         let token = self.get_token()?;
         let user_and_repo = config.modules.vcs().user_and_repo()?;
         let payload = ClientPayload::new(job_config);
+        let inputs = hashmap!{
+            "id" => payload.job_id.clone(),
+            "workflow" => job_config.name.clone(),
+            "context" => serde_json::to_string(&job_config.context)?,
+            "exec" => serde_json::to_string(&job_config.exec)?,
+            "job" => job_config.name.clone()
+        };
         self.shell.exec(shell::args![
             "curl", "-H", shell::fmtargs!("Authorization: token {}", &token), 
             "-H", "Accept: application/vnd.github.v3+json", 
             format!(
-                "https://api.github.com/repos/{}/{}/dispatches", 
-                user_and_repo.0, user_and_repo.1
+                "https://api.github.com/repos/{}/{}/actions/workflows/{}/dispatches", 
+                user_and_repo.0, user_and_repo.1, config::DEPLO_SYSTEM_WORKFLOW_ID,
             ),
             "-d", format!(r#"{{
-                "event_type": "{job_name}",
-                "client_payload": {client_payload}
+                "ref": "{revision}",
+                "inputs": {inputs}
             }}"#, 
-                job_name = config::DEPLO_REMOTE_JOB_EVENT_TYPE,
-                client_payload = serde_json::to_string(&payload)?
+                revision = match &job_config.exec.revision {
+                    Some(v) => v.to_string(),
+                    None => config.modules.vcs().commit_hash(None)?
+                },
+                inputs = serde_json::to_string(&inputs)?
             )
         ], shell::no_env(), shell::no_cwd(), &shell::capture())?;
         log::debug!("wait for remote job to start.");
@@ -1047,7 +1045,7 @@ impl<S: shell::Shell> ci::CI for GhAction<S> {
                 "curl", "-H", shell::fmtargs!("Authorization: token {}", &token), 
                 "-H", "Accept: application/vnd.github.v3+json", 
                 format!(
-                    "https://api.github.com/repos/{}/{}/actions/runs?event=repository_dispatch&created={}",
+                    "https://api.github.com/repos/{}/{}/actions/runs?event=workflow_dispatch&created={}",
                     user_and_repo.0, user_and_repo.1,
                     format!(">{}", start.to_rfc3339())
                 )

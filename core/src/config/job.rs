@@ -456,8 +456,6 @@ pub struct CheckoutOption {
     pub lfs: Option<bool>,
     pub submodules: Option<SubmoduleCheckoutType>,
     pub fetch_depth: Option<u64>,
-    #[serde(rename = "ref")]
-    pub revision: Option<config::Value>,
     pub token: Option<config::Value>
 }
 impl CheckoutOption {
@@ -466,7 +464,6 @@ impl CheckoutOption {
             lfs: None,
             submodules: None,
             fetch_depth: None,
-            revision: None,
             token: None
         }
     }
@@ -483,10 +480,6 @@ impl CheckoutOption {
             fetch_depth: match with.fetch_depth {
                 Some(ref v) => Some(*v),
                 None => self.fetch_depth
-            },
-            revision: match with.revision {
-                Some(ref v) => Some(v.clone()),
-                None => self.revision.clone()
             },
             token: match with.token {
                 Some(ref v) => Some(v.clone()),

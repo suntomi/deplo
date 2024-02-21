@@ -1,5 +1,6 @@
 use std::collections::{HashMap};
 use std::error::Error;
+use std::fmt;
 use std::fs;
 use std::path::Path;
 
@@ -9,6 +10,25 @@ use serde::{Deserialize, Serialize};
 use crate::args::{Args};
 use crate::config;
 use crate::util::{merge_hashmap};
+
+/// remote execution payload
+#[derive(Deserialize)]
+pub struct SystemDispatchWorkflowPayload {
+    id: String,
+    workflow: String,
+    context: String,
+    exec: String,
+    job: String,
+    command: Option<String>,
+}
+// implement std::display::Display for SystemDispatchWorkflowPayload
+impl fmt::Display for SystemDispatchWorkflowPayload {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "id:{} workflow:{} context:{} exec:{} job:{}",
+            self.id, self.workflow, self.context, self.exec, self.job
+        )
+    }
+}
 
 /// runtime configuration for single job execution
 #[derive(Serialize, Deserialize, Clone)]
@@ -40,10 +60,13 @@ impl ExecOptions {
         // rust simple_logger's verbosity cannot be changed once it set, and here already configured.
         // so simply we override verbosity with process' verbosity.
         // on remote running on CI, verbosity should configured with same value as cli specified,
-        // via envvar DEPLO_OVERWRITE_VERBOSITY
+        // via envvar DEPLO_OVERWRITE_EXEC_OPTIONS(JSON)'s verbosity.
         instance.verbosity = config.borrow().runtime.verbosity;
         instance.apply(args, config, has_job_config);
         Ok(instance)
+    }
+    pub fn with_json(json: &str) -> Self {
+        serde_json::from_str(json).expect(&format!("exec options should be valid json but {}", json))
     }
     pub fn apply<A: Args>(&mut self, args: &A, config: &config::Container, has_job_config: bool) {
         self.envs = merge_hashmap(&self.envs, &args.map_of("env"));
@@ -95,6 +118,9 @@ impl Command {
             },
             None => None
         }
+    }
+    pub fn with_vec(args: Vec<String>) -> Self {
+        Self { args: Some(args) }
     }
 }
 
@@ -197,6 +223,19 @@ impl Workflow {
     pub fn with_context(name: String, context: HashMap<String, config::AnyValue>) -> Self {
         Self { name, context, job: None, exec: ExecOptions::default() }
     }
+    pub fn with_system_dispatch(payload: &SystemDispatchWorkflowPayload) -> Self {
+        Self {
+            name: payload.workflow.to_string(),
+            context: serde_json::from_str(&payload.context).expect(
+                &format!("context should be valid json but {}", payload.context)
+            ), // generate from payload.context
+            job: Some(Job{ name: payload.job.clone(), command: payload.command.as_ref().map(|v| {
+                Command::with_vec(v.split(" ").map(|v| v.to_string()).collect()) 
+            })}),
+            exec: ExecOptions::with_json(&payload.exec) // generate with payload.exec,
+
+        }
+    }
     pub fn with_payload(payload: &str) -> Result<Self, Box<dyn Error>> {
         Ok(serde_json::from_str(payload)?)
     }
@@ -280,17 +319,7 @@ impl Config {
             },
             Err(_) => {},
         };
-        match simple_logger::init_with_level(match 
-            match std::env::var("DEPLO_OVERWRITE_VERBOSITY") {
-                Ok(v) => if !v.is_empty() {
-                    println!("overwrite log verbosity from {} to {}", verbosity, v);
-                    v.parse::<u64>().unwrap_or(verbosity)
-                } else {
-                    verbosity
-                },
-                Err(_) => verbosity
-            } 
-        {
+        match simple_logger::init_with_level(match verbosity {
             0 => log::Level::Warn,
             1 => log::Level::Info,
             2 => log::Level::Debug,

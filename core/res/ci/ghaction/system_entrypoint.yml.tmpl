@@ -1,0 +1,17 @@
+workflow_dispatch:
+  inputs:
+    id: # unique id
+      required: true
+    workflow: # key of [workflows] and integrate/deploy
+      required: true
+    context: # due to workflow 
+      required: true
+    exec: # envs, verbosity, release_target, follow_dependency
+      required: true
+    command: # space separated command args for deplo run sh
+      required: false
+    job:
+      required: true
+      type: choice
+      options:
+{jobs:>8}
