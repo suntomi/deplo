@@ -10,7 +10,7 @@ on:
         required: true
       context: # due to workflow 
         required: true
-      exec: # envs, verbosity, release_target, follow_dependency, revision
+      exec: # envs, verbosity, release_target, follow_dependency
         required: true
       command: # space separated command args for deplo run sh
         required: false
@@ -18,18 +18,18 @@ on:
         required: true
         type: choice
         options:
-          - win
-          - test
-          - taglab
-          - builder
-          - latest
-          - product
-          - config
-          - repository
           - base
+          - builder
+          - config
           - dispatched
+          - latest
           - mac
           - module_test
+          - product
+          - repository
+          - taglab
+          - test
+          - win
   
 
 env:
@@ -45,7 +45,7 @@ env:
   SUNTOMI_VCS_APP_PKEY: ${{ secrets.SUNTOMI_VCS_APP_PKEY }}
 jobs:
   deplo-main:
-    name: Start CI ${{ github.event.inputs.job_id }}
+    name: Start CI ${{ github.event.inputs.id }}
     runs-on: ubuntu-latest
     outputs:
       base: ${{ steps.deplo-main.outputs.base }}

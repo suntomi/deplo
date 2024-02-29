@@ -29,7 +29,7 @@ env:
   SUNTOMI_VCS_APP_PKEY: ${{ secrets.SUNTOMI_VCS_APP_PKEY }}
 jobs:
   deplo-main:
-    name: Start CI ${{ github.event.inputs.job_id }}
+    name: Start CI ${{ github.event.inputs.id }}
     runs-on: ubuntu-latest
     outputs:
       base: ${{ steps.deplo-main.outputs.base }}

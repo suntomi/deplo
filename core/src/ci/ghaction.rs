@@ -265,7 +265,7 @@ impl<S: shell::Shell> GhAction<S> {
                             panic!("deplo does not allow manual dispatch name 'main'")
                         }
                         workflow_dispatch_entries.entry(name).or_insert(self.generate_manual_dispatch(inputs));
-                    } else {
+                    } else if name != config::DEPLO_SYSTEM_WORKFLOW_NAME {
                         repository_dispatches.push(name.replace("_", "-"));
                     }
                 },
@@ -317,10 +317,12 @@ impl<S: shell::Shell> GhAction<S> {
                 postfix: None
             }
         ).split("\n").map(|s| s.to_string()).collect());
+        let mut keys: Vec<_> = config.jobs.as_map().keys().collect();
+        keys.sort();
         results.insert("system".to_string(), format!(
             include_str!("../../res/ci/ghaction/system_entrypoint.yml.tmpl"), 
             jobs = MultilineFormatString{
-                strings: &config.jobs.as_map().keys().map(|v| format!("- {}", v)).collect::<Vec<String>>(),
+                strings: &keys.iter().map(|v| format!("- {}", v)).collect::<Vec<String>>(),
                 postfix: None
             },
         ).split("\n").map(|s| s.to_string()).collect());
@@ -904,7 +906,7 @@ impl<S: shell::Shell> ci::CI for GhAction<S> {
                             let dispatch_name = std::env::var("DEPLO_GHACTION_WORKFLOW_NAME").expect(
                                 &format!("DEPLO_GHACTION_WORKFLOW_NAME should set")
                             );
-                            if dispatch_name == config::DEPLO_SYSTEM_WORKFLOW_NAME {
+                            if dispatch_name == config::DEPLO_SYSTEM_WORKFLOW_NAME && name == config::DEPLO_SYSTEM_WORKFLOW_NAME {
                                 matched_names.push(config::DEPLO_SYSTEM_WORKFLOW_NAME.to_string());
                             } else if name.replace("_", "-") == dispatch_name {
                                 matched_names.push(name);
@@ -973,6 +975,7 @@ impl<S: shell::Shell> ci::CI for GhAction<S> {
                                 },
                                 EventPayload::WorkflowDispatch{inputs: client_payload} => if name == config::DEPLO_SYSTEM_WORKFLOW_NAME {
                                     matches.push(config::runtime::Workflow::with_system_dispatch(
+                                        // input format collectness is checked by this deserialize
                                         &serde_json::from_str(&serde_json::to_string(&client_payload)?)?
                                     ));
                                 } else if manual.unwrap_or(false) {
@@ -1010,19 +1013,29 @@ impl<S: shell::Shell> ci::CI for GhAction<S> {
         let token = self.get_token()?;
         let user_and_repo = config.modules.vcs().user_and_repo()?;
         let payload = ClientPayload::new(job_config);
-        let inputs = hashmap!{
+        let mut inputs = hashmap!{
             "id" => payload.job_id.clone(),
             "workflow" => job_config.name.clone(),
             "context" => serde_json::to_string(&job_config.context)?,
             "exec" => serde_json::to_string(&job_config.exec)?,
-            "job" => job_config.name.clone()
+            "job" => job_config.job.as_ref().unwrap().name.clone(),
         };
+        match job_config.job {
+            Some(ref j) => match j.command { 
+                Some(ref c) => match c.args {
+                    Some(ref a) => { inputs.insert("command", a.join(" ")); },
+                    None => {}
+                },
+                None => {} 
+            },
+            None => {}
+        }
         let commit = match &job_config.exec.revision {
             Some(v) => v.clone(),
             None => config.modules.vcs().commit_hash(None)?
         };
         let response = self.shell.exec(shell::args![
-            "curl", "-f", "-H", shell::fmtargs!("Authorization: token {}", &token), 
+            "curl", "-f", "-H", shell::fmtargs!("Authorization: token {}", &token),
             "-H", "Accept: application/vnd.github.v3+json", 
             format!(
                 "https://api.github.com/repos/{}/{}/actions/workflows/{}/dispatches", 

@@ -8,7 +8,7 @@ on:
   pull_request:
     branches: ["lab","main"]
   repository_dispatch:
-    types: [deplo-run-remote-job,deplo-send-module-payload,webapi-dispatch]
+    types: [deplo-send-module-payload,webapi-dispatch]
   schedule:
     - cron: 30 0 * * *
     - cron: 30 0 1 * *
@@ -31,7 +31,7 @@ env:
   SUNTOMI_VCS_APP_PKEY: ${{ secrets.SUNTOMI_VCS_APP_PKEY }}
 jobs:
   deplo-main:
-    name: Start CI ${{ github.event.inputs.job_id }}
+    name: Start CI ${{ github.event.inputs.id }}
     runs-on: ubuntu-latest
     outputs:
       base: ${{ steps.deplo-main.outputs.base }}
