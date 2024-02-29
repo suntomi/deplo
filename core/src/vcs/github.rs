@@ -232,6 +232,9 @@ impl<GIT: git::GitFeatures<S>, S: shell::Shell> vcs::VCS for Github<GIT, S> {
     fn rebase_with_remote_counterpart(&self, branch: &str) -> Result<(), Box<dyn Error>> {
         self.git.rebase_with_remote_counterpart(&self.pushable_remote_url()?, branch)
     }
+    fn search_remote_ref(&self, commit: &str) -> Result<Option<String>, Box<dyn Error>> {
+        self.git.search_remote_ref(commit)
+    }
     fn current_ref(&self) -> Result<(vcs::RefType, String), Box<dyn Error>> {
         self.git.current_ref()
     }

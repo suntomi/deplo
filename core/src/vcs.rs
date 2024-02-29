@@ -46,6 +46,7 @@ pub trait VCS {
     fn checkout(&self, commit: &str, branch_name: Option<&str>) -> Result<(), Box<dyn Error>>;
     fn repository_root(&self) -> Result<String, Box<dyn Error>>;
     fn rebase_with_remote_counterpart(&self, branch: &str) -> Result<(), Box<dyn Error>>;
+    fn search_remote_ref(&self, commit: &str) -> Result<Option<String>, Box<dyn Error>>;
     fn pick_ref(&self, target: &str) -> Result<(), Box<dyn Error>>;
     fn push_branch(
         &self, local_ref: &str, remote_branch: &str, option: &HashMap<&str, &str>

@@ -1017,6 +1017,10 @@ impl<S: shell::Shell> ci::CI for GhAction<S> {
             "exec" => serde_json::to_string(&job_config.exec)?,
             "job" => job_config.name.clone()
         };
+        let commit = match &job_config.exec.revision {
+            Some(v) => v.clone(),
+            None => config.modules.vcs().commit_hash(None)?
+        };
         let response = self.shell.exec(shell::args![
             "curl", "-f", "-H", shell::fmtargs!("Authorization: token {}", &token), 
             "-H", "Accept: application/vnd.github.v3+json", 
@@ -1025,12 +1029,14 @@ impl<S: shell::Shell> ci::CI for GhAction<S> {
                 user_and_repo.0, user_and_repo.1, config::DEPLO_SYSTEM_WORKFLOW_ID,
             ),
             "-d", format!(r#"{{
-                "ref": "{revision}",
+                "ref": "{remote_ref}",
                 "inputs": {inputs}
             }}"#, 
-                revision = match &job_config.exec.revision {
-                    Some(v) => v.to_string(),
-                    None => config.modules.vcs().commit_hash(None)?
+                remote_ref = match config.modules.vcs().search_remote_ref(&commit)? {
+                    Some(v) => v,
+                    None => return escalate!(Box::new(ci::CIError {
+                        cause: format!("remote ref for {} not found", commit),
+                    }))
                 },
                 inputs = serde_json::to_string(&inputs)?
             )
