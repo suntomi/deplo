@@ -1,6 +1,6 @@
 use std::collections::{HashMap};
 use std::error::Error;
-use std::fmt;
+use std::fmt::{self};
 use std::fs;
 use std::path::Path;
 
@@ -30,12 +30,56 @@ impl fmt::Display for SystemDispatchWorkflowPayload {
     }
 }
 
+/// when debugger runs after job is done
+#[derive(Serialize, Deserialize, Clone)]
+pub enum StartDebugOn {
+    #[serde(rename = "default")]
+    Default, // see env var DEPLO_CI_START_DEBUG_DEFAULT
+    #[serde(rename = "always")]
+    Always, // always
+    #[serde(rename = "failure")]
+    Failure, // on failure
+    #[serde(rename = "never")]
+    Never, // never
+}
+impl fmt::Display for StartDebugOn {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Default => write!(f, "default"),
+            Self::Always => write!(f, "always"),
+            Self::Failure => write!(f, "failure"),
+            Self::Never => write!(f, "never"),
+        }
+    }
+}
+impl StartDebugOn {
+    pub fn should_start(&self, job_failure: bool) -> bool {
+        match self {
+            Self::Default => std::env::var("DEPLO_CI_START_DEBUG_DEFAULT").map_or(false, |v| {
+                match v.as_str() {
+                    "always" => true,
+                    "failure" => job_failure,
+                    "never" => false,
+                    _ => {
+                        log::warn!("DEPLO_CI_START_DEBUG_DEFAULT should be one of always, failure, never but {}, fallback to behaviour of `failure`", v);
+                        job_failure
+                    }
+                }
+            }),
+            Self::Always => true,
+            Self::Failure => job_failure,
+            Self::Never => false
+        }
+    }
+}
+
 /// runtime configuration for single job execution
 #[derive(Serialize, Deserialize, Clone)]
 pub struct ExecOptions {
     pub envs: HashMap<String, String>,
     pub revision: Option<String>,
     pub release_target: Option<String>,
+    pub debug: StartDebugOn,
     pub verbosity: u64,
     pub remote: bool,
     pub follow_dependency: bool,
@@ -48,6 +92,7 @@ impl ExecOptions {
             envs: hashmap!{},
             revision: None,
             release_target: None,
+            debug: StartDebugOn::Default,
             verbosity: 0,
             remote: false,
             follow_dependency: false,
@@ -80,6 +125,15 @@ impl ExecOptions {
                 let c = config.borrow();
                 c.modules.vcs().release_target()
             }
+        };
+        self.debug = match args.value_of("debug") {
+            Some(v) => match v {
+                "always"|"a" => StartDebugOn::Always,
+                "failure"|"f" => StartDebugOn::Failure,
+                "never"|"n" => StartDebugOn::Never,
+                _ => StartDebugOn::Default
+            },
+            None => StartDebugOn::Default
         };
         match args.value_of("timeout") {
             Some(v) => self.timeout = Some(v.parse().expect(

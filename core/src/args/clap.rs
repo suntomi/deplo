@@ -121,6 +121,17 @@ fn workflow_command_options(
         .help("if set, run the job on the correspond remote CI service")
         .long("remote")
         .required(false))
+    .arg(Arg::new("debug")
+        .help(r#"if set, run debugger after finishing job. 
+there are 3 options.
+'always'(or 'a'): always start debugger after job,
+'failure'(or 'f'): start debugger only if job failed
+'never'( or 'n'): never start debugger"#)
+        .short('d')
+        .long("debug")
+        .takes_value(true)
+        .possible_values(&["always", "failure", "never", "a", "f", "n"])
+        .required(false))
 }
 fn run_command_options(
     name: &'static str,
