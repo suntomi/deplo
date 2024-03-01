@@ -73,7 +73,7 @@ jobs:
         id: deplo-main
         run: deplo boot
       - name: Setup ssh session to debug
-        if: ${{ failure() }}
+        if: ${{ failure() && (env.DEPLO_ENABLE_DEBUGGER != '') }}
         uses: mxschmitt/action-tmate@v3
         with:
           sudo: true
@@ -123,7 +123,7 @@ jobs:
         id: deplo-halt
         run: deplo halt
       - name: Setup ssh session to debug
-        if: ${{ failure() }}
+        if: ${{ failure() && (env.DEPLO_ENABLE_DEBUGGER != '') }}
         uses: mxschmitt/action-tmate@v3
         with:
           sudo: true
@@ -167,7 +167,7 @@ jobs:
         id: deplo-job-base
         run: deplo run base
       - name: Setup ssh session to debug
-        if: ${{ failure() }}
+        if: ${{ failure() && (env.DEPLO_ENABLE_DEBUGGER != '') }}
         uses: mxschmitt/action-tmate@v3
         with:
           sudo: true
@@ -211,7 +211,7 @@ jobs:
         id: deplo-job-builder
         run: deplo run builder
       - name: Setup ssh session to debug
-        if: ${{ failure() }}
+        if: ${{ failure() && (env.DEPLO_ENABLE_DEBUGGER != '') }}
         uses: mxschmitt/action-tmate@v3
         with:
           sudo: true
@@ -255,7 +255,7 @@ jobs:
         id: deplo-job-config
         run: deplo run config
       - name: Setup ssh session to debug
-        if: ${{ failure() }}
+        if: ${{ failure() && (env.DEPLO_ENABLE_DEBUGGER != '') }}
         uses: mxschmitt/action-tmate@v3
         with:
           sudo: true
@@ -299,7 +299,7 @@ jobs:
         id: deplo-job-dispatched
         run: deplo run dispatched
       - name: Setup ssh session to debug
-        if: ${{ failure() }}
+        if: ${{ failure() && (env.DEPLO_ENABLE_DEBUGGER != '') }}
         uses: mxschmitt/action-tmate@v3
         with:
           sudo: true
@@ -344,7 +344,7 @@ jobs:
         id: deplo-job-latest
         run: deplo run latest
       - name: Setup ssh session to debug
-        if: ${{ failure() }}
+        if: ${{ failure() && (env.DEPLO_ENABLE_DEBUGGER != '') }}
         uses: mxschmitt/action-tmate@v3
         with:
           sudo: true
@@ -405,7 +405,7 @@ jobs:
         id: deplo-job-mac
         run: deplo run mac
       - name: Setup ssh session to debug
-        if: ${{ failure() }}
+        if: ${{ failure() && (env.DEPLO_ENABLE_DEBUGGER != '') }}
         uses: mxschmitt/action-tmate@v3
         with:
           sudo: true
@@ -449,7 +449,7 @@ jobs:
         id: deplo-job-module_test
         run: deplo run module_test
       - name: Setup ssh session to debug
-        if: ${{ failure() }}
+        if: ${{ failure() && (env.DEPLO_ENABLE_DEBUGGER != '') }}
         uses: mxschmitt/action-tmate@v3
         with:
           sudo: true
@@ -494,7 +494,7 @@ jobs:
         id: deplo-job-product
         run: deplo run product
       - name: Setup ssh session to debug
-        if: ${{ failure() }}
+        if: ${{ failure() && (env.DEPLO_ENABLE_DEBUGGER != '') }}
         uses: mxschmitt/action-tmate@v3
         with:
           sudo: true
@@ -538,7 +538,7 @@ jobs:
         id: deplo-job-repository
         run: deplo run repository
       - name: Setup ssh session to debug
-        if: ${{ failure() }}
+        if: ${{ failure() && (env.DEPLO_ENABLE_DEBUGGER != '') }}
         uses: mxschmitt/action-tmate@v3
         with:
           sudo: true
@@ -582,7 +582,7 @@ jobs:
         id: deplo-job-taglab
         run: deplo run taglab
       - name: Setup ssh session to debug
-        if: ${{ failure() }}
+        if: ${{ failure() && (env.DEPLO_ENABLE_DEBUGGER != '') }}
         uses: mxschmitt/action-tmate@v3
         with:
           sudo: true
@@ -643,7 +643,7 @@ jobs:
         id: deplo-job-test
         run: deplo run test
       - name: Setup ssh session to debug
-        if: ${{ failure() }}
+        if: ${{ failure() && (env.DEPLO_ENABLE_DEBUGGER != '') }}
         uses: mxschmitt/action-tmate@v3
         with:
           sudo: true
@@ -706,7 +706,7 @@ jobs:
         run: deplo run win
         shell: bash
       - name: Setup ssh session to debug
-        if: ${{ failure() }}
+        if: ${{ failure() && (env.DEPLO_ENABLE_DEBUGGER != '') }}
         uses: mxschmitt/action-tmate@v3
         with:
           sudo: true
