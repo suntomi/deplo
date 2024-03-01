@@ -70,11 +70,7 @@ jobs:
       - name: Boot deplo
         id: deplo-main
         run: deplo boot
-      - name: Setup ssh session to debug
-        if: ${{ failure() && (env.DEPLO_ENABLE_DEBUGGER != '') }}
-        uses: mxschmitt/action-tmate@v3
-        with:
-          sudo: true
+
   deplo-halt:
     name: Cleanup CI
     if: ${{ !failure() && (needs.base.outputs.need-cleanup || needs.builder.outputs.need-cleanup || needs.config.outputs.need-cleanup || needs.dispatched.outputs.need-cleanup || needs.latest.outputs.need-cleanup || needs.mac.outputs.need-cleanup || needs.module_test.outputs.need-cleanup || needs.product.outputs.need-cleanup || needs.repository.outputs.need-cleanup || needs.taglab.outputs.need-cleanup || needs.test.outputs.need-cleanup || needs.win.outputs.need-cleanup) }}
@@ -120,11 +116,7 @@ jobs:
       - name: Halt deplo
         id: deplo-halt
         run: deplo halt
-      - name: Setup ssh session to debug
-        if: ${{ failure() && (env.DEPLO_ENABLE_DEBUGGER != '') }}
-        uses: mxschmitt/action-tmate@v3
-        with:
-          sudo: true
+
   base:
     needs: [deplo-main]
     if: ${{ needs.deplo-main.outputs.base && !failure() }}
@@ -164,11 +156,7 @@ jobs:
       - name: base
         id: deplo-job-base
         run: deplo run base
-      - name: Setup ssh session to debug
-        if: ${{ failure() && (env.DEPLO_ENABLE_DEBUGGER != '') }}
-        uses: mxschmitt/action-tmate@v3
-        with:
-          sudo: true
+  
   builder:
     needs: [deplo-main]
     if: ${{ needs.deplo-main.outputs.builder && !failure() }}
@@ -208,11 +196,7 @@ jobs:
       - name: builder
         id: deplo-job-builder
         run: deplo run builder
-      - name: Setup ssh session to debug
-        if: ${{ failure() && (env.DEPLO_ENABLE_DEBUGGER != '') }}
-        uses: mxschmitt/action-tmate@v3
-        with:
-          sudo: true
+  
   config:
     needs: [deplo-main]
     if: ${{ needs.deplo-main.outputs.config && !failure() }}
@@ -252,11 +236,7 @@ jobs:
       - name: config
         id: deplo-job-config
         run: deplo run config
-      - name: Setup ssh session to debug
-        if: ${{ failure() && (env.DEPLO_ENABLE_DEBUGGER != '') }}
-        uses: mxschmitt/action-tmate@v3
-        with:
-          sudo: true
+  
   dispatched:
     needs: [deplo-main]
     if: ${{ needs.deplo-main.outputs.dispatched && !failure() }}
@@ -296,11 +276,7 @@ jobs:
       - name: dispatched
         id: deplo-job-dispatched
         run: deplo run dispatched
-      - name: Setup ssh session to debug
-        if: ${{ failure() && (env.DEPLO_ENABLE_DEBUGGER != '') }}
-        uses: mxschmitt/action-tmate@v3
-        with:
-          sudo: true
+  
   latest:
     needs: ["product","deplo-main"]
     if: ${{ needs.deplo-main.outputs.latest && !failure() }}
@@ -341,11 +317,7 @@ jobs:
       - name: latest
         id: deplo-job-latest
         run: deplo run latest
-      - name: Setup ssh session to debug
-        if: ${{ failure() && (env.DEPLO_ENABLE_DEBUGGER != '') }}
-        uses: mxschmitt/action-tmate@v3
-        with:
-          sudo: true
+  
   mac:
     needs: ["product","deplo-main"]
     if: ${{ needs.deplo-main.outputs.mac && !failure() }}
@@ -402,11 +374,7 @@ jobs:
       - name: mac
         id: deplo-job-mac
         run: deplo run mac
-      - name: Setup ssh session to debug
-        if: ${{ failure() && (env.DEPLO_ENABLE_DEBUGGER != '') }}
-        uses: mxschmitt/action-tmate@v3
-        with:
-          sudo: true
+  
   module_test:
     needs: [deplo-main]
     if: ${{ needs.deplo-main.outputs.module_test && !failure() }}
@@ -446,11 +414,7 @@ jobs:
       - name: module_test
         id: deplo-job-module_test
         run: deplo run module_test
-      - name: Setup ssh session to debug
-        if: ${{ failure() && (env.DEPLO_ENABLE_DEBUGGER != '') }}
-        uses: mxschmitt/action-tmate@v3
-        with:
-          sudo: true
+  
   product:
     needs: ["builder","deplo-main"]
     if: ${{ needs.deplo-main.outputs.product && !failure() }}
@@ -491,11 +455,7 @@ jobs:
       - name: product
         id: deplo-job-product
         run: deplo run product
-      - name: Setup ssh session to debug
-        if: ${{ failure() && (env.DEPLO_ENABLE_DEBUGGER != '') }}
-        uses: mxschmitt/action-tmate@v3
-        with:
-          sudo: true
+  
   repository:
     needs: [deplo-main]
     if: ${{ needs.deplo-main.outputs.repository && !failure() }}
@@ -535,11 +495,7 @@ jobs:
       - name: repository
         id: deplo-job-repository
         run: deplo run repository
-      - name: Setup ssh session to debug
-        if: ${{ failure() && (env.DEPLO_ENABLE_DEBUGGER != '') }}
-        uses: mxschmitt/action-tmate@v3
-        with:
-          sudo: true
+  
   taglab:
     needs: [deplo-main]
     if: ${{ needs.deplo-main.outputs.taglab && !failure() }}
@@ -579,11 +535,7 @@ jobs:
       - name: taglab
         id: deplo-job-taglab
         run: deplo run taglab
-      - name: Setup ssh session to debug
-        if: ${{ failure() && (env.DEPLO_ENABLE_DEBUGGER != '') }}
-        uses: mxschmitt/action-tmate@v3
-        with:
-          sudo: true
+  
   test:
     needs: [deplo-main]
     if: ${{ needs.deplo-main.outputs.test && !failure() }}
@@ -640,11 +592,7 @@ jobs:
       - name: test
         id: deplo-job-test
         run: deplo run test
-      - name: Setup ssh session to debug
-        if: ${{ failure() && (env.DEPLO_ENABLE_DEBUGGER != '') }}
-        uses: mxschmitt/action-tmate@v3
-        with:
-          sudo: true
+  
   win:
     needs: ["product","deplo-main"]
     if: ${{ needs.deplo-main.outputs.win && !failure() }}
@@ -703,8 +651,4 @@ jobs:
         id: deplo-job-win
         run: deplo run win
         shell: bash
-      - name: Setup ssh session to debug
-        if: ${{ failure() && (env.DEPLO_ENABLE_DEBUGGER != '') }}
-        uses: mxschmitt/action-tmate@v3
-        with:
-          sudo: true
+  
