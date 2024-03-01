@@ -366,29 +366,43 @@ impl<S: shell::Shell> GhAction<S> {
         }
     }
     fn generate_debugger(&self, job: Option<&config::job::Job>, config: &config::Config) -> Vec<String> {
-        let sudo = match job {
+        let (sudo, always) = match job {
             Some(ref j) => {
-                if !config.debug.as_ref().map_or_else(|| false, |v| v.get("ghaction_job_debugger").is_some()) &&
-                    !j.options.as_ref().map_or_else(|| false, |v| v.get("debugger").is_some()) {
-                    return vec![];
-                }
+                let global_config = config.debug.as_ref().map_or_else(|| None, |v| v.get("ghaction_job_debugger"));
+                let job_config = j.options.as_ref().map_or_else(|| None, |v| v.get("debugger"));
+                let always = match job_config.map(|v| v.as_str()).unwrap_or(Some("default")) {
+                    Some("none") => return vec![],
+                    Some("always") => true,
+                    _ => match global_config.map(|v| v.as_str()).unwrap_or("default") {
+                        "none" => return vec![],
+                        "always" => true,
+                        _ => false
+                    }
+                };
                 // if in container, sudo does not required to install debug instrument
-                match j.runner {
+                (match j.runner {
                     config::job::Runner::Machine{..} => true,
-                    config::job::Runner::Container{..} => false,        
-                }
+                    config::job::Runner::Container{..} => false,
+                }, always)
             },
             None => {
-                // deplo kick/finish
-                if !config.debug.as_ref().map_or_else(|| false, |v| v.get("ghaction_deplo_debugger").is_some()) {
-                    return vec![]
-                }
-                true
+                let global_config = config.debug.as_ref().map_or_else(|| None, |v| v.get("ghaction_deplo_debugger"));
+                // deplo boot/halt
+                (true, match global_config.map(|v| v.as_str()).unwrap_or("default") {
+                    "none" => return vec![],
+                    "always" => true,
+                    _ => false
+                })
             }
         };
         format!(
             include_str!("../../res/ci/ghaction/debugger.yml.tmpl"), 
-            sudo = sudo
+            sudo = sudo,
+            condition = if always {
+                ""
+            } else {
+                "if: always() && (env.DEPLO_RUN_DEBUGGER != '')"
+            }
         ).split("\n").map(|s| s.to_string()).collect()        
     }
     fn generate_restore_keys(&self, cache: &config::job::Cache) -> Vec<String> {
@@ -603,6 +617,14 @@ impl<S: shell::Shell> GhAction<S> {
         self.shell.eval(
             &format!("echo \'{key}={val}\' >> $GITHUB_OUTPUT", key = key, val = val),
             &None, hashmap!{"GITHUB_OUTPUT" => shell::arg!(std::env::var("GITHUB_OUTPUT")?)},
+            shell::no_cwd(), &shell::no_capture()
+        )?;
+        Ok(())
+    }
+    fn set_env(&self, key: &str, val: &str) -> Result<(), Box<dyn Error>> {
+        self.shell.eval(
+            &format!("echo \'{key}={val}\' >> $GITHUB_ENV", key = key, val = val),
+            &None, hashmap!{"GITHUB_ENV" => shell::arg!(std::env::var("GITHUB_ENV")?)},
             shell::no_cwd(), &shell::no_capture()
         )?;
         Ok(())
@@ -1135,6 +1157,18 @@ impl<S: shell::Shell> ci::CI for GhAction<S> {
             self.set_output(kind.to_str(), &text)?;
         } else {
             std::env::set_var(&kind.env_name_for_job(job_name), &text);
+        }
+        Ok(())
+    }
+    fn set_job_env(&self, envs: HashMap<&str, &str>) -> Result<(), Box<dyn Error>> {
+        if config::Config::is_running_on_ci() {
+            for (k, v) in envs {
+                self.set_env(k, v)?;
+            }
+        } else {
+            for (k, v) in envs {
+                std::env::set_var(k, v);
+            }
         }
         Ok(())
     }

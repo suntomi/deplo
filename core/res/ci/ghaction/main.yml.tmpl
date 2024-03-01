@@ -9,6 +9,7 @@ env:
   DEPLO_GHACTION_EVENT_DATA: ${{{{ toJson(github) }}}}
   DEPLO_GHACTION_WORKFLOW_NAME: ${{{{ github.workflow }}}}
   DEPLO_OVERWRITE_EXEC_OPTIONS: ${{{{ github.event.inputs.exec }}}}
+  DEPLO_CI_START_DEBUG_DEFAULT: ${{{{ vars.DEPLO_CI_START_DEBUG_DEFAULT }}}}
 {secrets:>2}
 jobs:
   deplo-main:
