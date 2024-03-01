@@ -125,6 +125,9 @@ impl Workflows {
     pub fn setup(&mut self) {
         self.insert_or_die("deploy", Workflow::Deploy);
         self.insert_or_die("integrate", Workflow::Integrate);
+        self.insert_or_die(config::DEPLO_SYSTEM_WORKFLOW_NAME, Workflow::Dispatch {
+            manual: Some(false), inputs: InputSchemaSet(HashMap::new())
+        });
         let mut cron_found = None;
         let mut repo_found = None;
         for (name, wf) in &self.0 {

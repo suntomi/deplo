@@ -3,7 +3,7 @@ version = 1
 # common settings
 # ---------------
 project_name = "deplo"
-debug = { ghaction_deplo_debugger = "on", ghaction_job_debugger = "on" }
+debug = { ghaction_deplo_debugger = "adhoc", ghaction_job_debugger = "adhoc" }
 checkout = { submodules = true, fetch_depth = 0, token = "${SUNTOMI_VCS_ACCOUNT_KEY}" }
 
 # release target branch settings
