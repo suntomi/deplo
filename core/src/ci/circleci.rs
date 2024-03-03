@@ -160,6 +160,10 @@ impl<'a, S: shell::Shell> ci::CI for CircleCI<S> {
         log::warn!("TODO: implement set_job_output for circleci");
         Ok(())
     }
+    fn set_job_env(&self, _envs: HashMap<&str, &str>) -> Result<(), Box<dyn Error>> {
+        log::warn!("TODO: implement set_job_env for circleci");
+        Ok(())
+    }
     fn process_env(&self) -> Result<HashMap<&str, String>, Box<dyn Error>> {
         let mut envs = hashmap!{
             "DEPLO_CI_TYPE" => "CircleCI".to_string(),
