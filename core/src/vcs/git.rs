@@ -127,6 +127,7 @@ pub trait GitFeatures<S: shell::Shell> {
     fn rebase_with_remote_counterpart(
         &self, remote_url: &str, remote_branch: &str
     ) -> Result<(), Box<dyn Error>>;
+    fn search_remote_ref(&self, commit: &str) -> Result<Option<String>, Box<dyn Error>>;
     fn cherry_pick(&self, branch: &str) -> Result<(), Box<dyn Error>>;
     fn push_branch(
         &self, remote_url: &str, local_ref: &str, 
@@ -406,6 +407,17 @@ impl<S: shell::Shell> GitFeatures<S> for Git<S> {
             "git", "rebase", format!("remotes/latest/{}", remote_branch)
         ), self.commit_env(), shell::no_cwd(), &shell::no_capture())?;
         Ok(())
+    }
+    fn search_remote_ref(&self, commit: &str) -> Result<Option<String>, Box<dyn Error>> {
+        let refs: Vec<Vec<String>> = self.shell.output_of(shell::args!(
+            "git", "ls-remote", "--heads", "--tags", "--refs", "origin"
+        ), shell::no_env(), shell::no_cwd())?.split('\n').map(|s| 
+            s.split_whitespace().collect::<Vec<&str>>().iter().map(|s| s.to_string()).collect::<Vec<String>>()
+        ).collect();
+        match refs.iter().find(|v| v[0] == commit) {
+            Some(v) => Ok(Some(v[1].clone())),
+            None => Ok(None)
+        }
     }
 }
 
