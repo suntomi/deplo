@@ -24,8 +24,11 @@
         "type": "lldb",
         "request": "launch",
         "program": "${workspaceFolder}/target/debug/cli",
+        "env": {
+            "DEPLO_GHACTION_WORKFLOW_NAME": "Deplo System"
+        },
         "args": [
-            "-v=3", "run", "-p=payload.json", "builder"
+            "-v=3", "run", "-p=payload.json", "remote-test"
         ]
     },    
     {

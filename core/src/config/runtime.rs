@@ -60,8 +60,9 @@ impl StartDebugOn {
                     "always" => true,
                     "failure" => job_failure,
                     "never" => false,
+                    "" => false,
                     _ => {
-                        log::warn!("DEPLO_CI_START_DEBUG_DEFAULT should be one of always, failure, never but {}, fallback to behaviour of `failure`", v);
+                        log::warn!("DEPLO_CI_START_DEBUG_DEFAULT should be one of 'always', 'failure', 'never', '' but [{}], fallback to behaviour of `failure`", v);
                         job_failure
                     }
                 }
@@ -114,16 +115,20 @@ impl ExecOptions {
         serde_json::from_str(json).expect(&format!("exec options should be valid json but {}", json))
     }
     pub fn apply<A: Args>(&mut self, args: &A, config: &config::Container, has_job_config: bool) {
+        // merge parameters from command line args, basically value does not change if cli arg not specified.
         self.envs = merge_hashmap(&self.envs, &args.map_of("env"));
-        match args.value_of("revision") {
-            Some(v) => self.revision = Some(v.to_string()),
-            None => {}
+        self.revision = match args.value_of("revision") {
+            Some(v) => Some(v.to_string()),
+            None => self.revision.clone()
         };
         self.release_target = match args.value_of("release_target") {
             Some(v) => Some(v.to_string()),
-            None => {
-                let c = config.borrow();
-                c.modules.vcs().release_target()
+            None => match self.release_target {
+                Some(ref v) => Some(v.clone()),
+                None => {
+                    let c = config.borrow();
+                    c.modules.vcs().release_target()
+                }
             }
         };
         self.debug = match args.value_of("debug") {
@@ -131,15 +136,18 @@ impl ExecOptions {
                 "always"|"a" => StartDebugOn::Always,
                 "failure"|"f" => StartDebugOn::Failure,
                 "never"|"n" => StartDebugOn::Never,
-                _ => StartDebugOn::Default
+                _ => {
+                    log::warn!("value of `debug` should be one of 'always', 'failure', 'never' but {}", v);
+                    self.debug.clone()
+                }
             },
-            None => StartDebugOn::Default
+            None => self.debug.clone()
         };
-        match args.value_of("timeout") {
-            Some(v) => self.timeout = Some(v.parse().expect(
+        self.timeout = match args.value_of("timeout") {
+            Some(v) => Some(v.parse().expect(
                 &format!("value of `timeout` should be a number but {}", v)
             )),
-            None => {}
+            None => self.timeout
         };
         // remote/follow_dependency always apply cmdline parameter,
         // to avoid these parameter from event payload wrongly used.
