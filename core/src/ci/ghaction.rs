@@ -401,7 +401,7 @@ impl<S: shell::Shell> GhAction<S> {
             condition = if always {
                 ""
             } else {
-                "if: always() && (env.DEPLO_RUN_DEBUGGER != '')"
+                "if: always() && (env.DEPLO_CI_RUN_DEBUGGER != '')"
             }
         ).split("\n").map(|s| s.to_string()).collect()        
     }

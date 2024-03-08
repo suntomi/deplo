@@ -464,6 +464,23 @@ pub fn join_vector<T>(src: Vec<Vec<T>>) -> Vec<T> {
     r
 }
 
+// debugger
+#[macro_export]
+macro_rules! macro_try_debug {
+    ($ctx: expr, $ci: expr, $config: expr, $failure: expr) => {
+        if $config.should_start($failure) {
+            log::info!("start debugger for job {} by failure {:?}, config {}",
+                $ctx, $failure, $config);
+        } else {
+            $ci.set_job_env(hashmap!{
+                "DEPLO_CI_RUN_DEBUGGER" => ""
+            })?;
+        }        
+    }
+}
+pub use macro_try_debug as try_debug;
+
+
 // json
 // same as serde_json::from_str, but support the case that s represents single number/boolean/null.
 // serde_json::from_str does not seem to support them.
