@@ -113,7 +113,7 @@ fn workflow_command_options(
         .required(false)
         .takes_value(true))
     .arg(Arg::new("revision")
-        .help("git ref to run the job")
+        .help("git ref or sha to run the job")
         .long("rev")
         .takes_value(true)
         .required(false))
