@@ -21,6 +21,7 @@ env:
   DEPLO_GHACTION_EVENT_DATA: ${{ toJson(github) }}
   DEPLO_GHACTION_WORKFLOW_NAME: ${{ github.workflow }}
   DEPLO_OVERWRITE_EXEC_OPTIONS: ${{ github.event.inputs.exec }}
+  DEPLO_CI_START_DEBUG_DEFAULT: ${{ vars.DEPLO_CI_START_DEBUG_DEFAULT }}
   SUNTOMI_AWS_ROLE: ${{ secrets.SUNTOMI_AWS_ROLE }}
   SUNTOMI_VCS_ACCOUNT: ${{ secrets.SUNTOMI_VCS_ACCOUNT }}
   SUNTOMI_VCS_ACCOUNT_EMAIL: ${{ secrets.SUNTOMI_VCS_ACCOUNT_EMAIL }}
@@ -29,7 +30,7 @@ env:
   SUNTOMI_VCS_APP_PKEY: ${{ secrets.SUNTOMI_VCS_APP_PKEY }}
 jobs:
   deplo-main:
-    name: Start CI ${{ github.event.inputs.job_id }}
+    name: Start CI ${{ github.event.inputs.id }}
     runs-on: ubuntu-latest
     outputs:
       base: ${{ steps.deplo-main.outputs.base }}
@@ -40,6 +41,7 @@ jobs:
       mac: ${{ steps.deplo-main.outputs.mac }}
       module_test: ${{ steps.deplo-main.outputs.module_test }}
       product: ${{ steps.deplo-main.outputs.product }}
+      remote-test: ${{ steps.deplo-main.outputs.remote-test }}
       repository: ${{ steps.deplo-main.outputs.repository }}
       taglab: ${{ steps.deplo-main.outputs.taglab }}
       test: ${{ steps.deplo-main.outputs.test }}
@@ -71,14 +73,14 @@ jobs:
         id: deplo-main
         run: deplo boot
       - name: Setup ssh session to debug
-        if: ${{ failure() }}
+        if: always() && (env.DEPLO_RUN_DEBUGGER != '')
         uses: mxschmitt/action-tmate@v3
         with:
           sudo: true
   deplo-halt:
     name: Cleanup CI
-    if: ${{ !failure() && (needs.base.outputs.need-cleanup || needs.builder.outputs.need-cleanup || needs.config.outputs.need-cleanup || needs.dispatched.outputs.need-cleanup || needs.latest.outputs.need-cleanup || needs.mac.outputs.need-cleanup || needs.module_test.outputs.need-cleanup || needs.product.outputs.need-cleanup || needs.repository.outputs.need-cleanup || needs.taglab.outputs.need-cleanup || needs.test.outputs.need-cleanup || needs.win.outputs.need-cleanup) }}
-    needs: ["deplo-main","base","builder","config","dispatched","latest","mac","module_test","product","repository","taglab","test","win"]
+    if: ${{ !failure() && (needs.base.outputs.need-cleanup || needs.builder.outputs.need-cleanup || needs.config.outputs.need-cleanup || needs.dispatched.outputs.need-cleanup || needs.latest.outputs.need-cleanup || needs.mac.outputs.need-cleanup || needs.module_test.outputs.need-cleanup || needs.product.outputs.need-cleanup || needs.remote-test.outputs.need-cleanup || needs.repository.outputs.need-cleanup || needs.taglab.outputs.need-cleanup || needs.test.outputs.need-cleanup || needs.win.outputs.need-cleanup) }}
+    needs: ["deplo-main","base","builder","config","dispatched","latest","mac","module_test","product","remote-test","repository","taglab","test","win"]
     runs-on: ubuntu-latest
     env:
       DEPLO_JOB_SYSTEM_OUTPUT_BASE: ${{ needs.base.outputs.system }}
@@ -89,6 +91,7 @@ jobs:
       DEPLO_JOB_SYSTEM_OUTPUT_MAC: ${{ needs.mac.outputs.system }}
       DEPLO_JOB_SYSTEM_OUTPUT_MODULE_TEST: ${{ needs.module_test.outputs.system }}
       DEPLO_JOB_SYSTEM_OUTPUT_PRODUCT: ${{ needs.product.outputs.system }}
+      DEPLO_JOB_SYSTEM_OUTPUT_REMOTE_TEST: ${{ needs.remote-test.outputs.system }}
       DEPLO_JOB_SYSTEM_OUTPUT_REPOSITORY: ${{ needs.repository.outputs.system }}
       DEPLO_JOB_SYSTEM_OUTPUT_TAGLAB: ${{ needs.taglab.outputs.system }}
       DEPLO_JOB_SYSTEM_OUTPUT_TEST: ${{ needs.test.outputs.system }}
@@ -121,7 +124,7 @@ jobs:
         id: deplo-halt
         run: deplo halt
       - name: Setup ssh session to debug
-        if: ${{ failure() }}
+        if: always() && (env.DEPLO_RUN_DEBUGGER != '')
         uses: mxschmitt/action-tmate@v3
         with:
           sudo: true
@@ -165,7 +168,7 @@ jobs:
         id: deplo-job-base
         run: deplo run base
       - name: Setup ssh session to debug
-        if: ${{ failure() }}
+        if: always() && (env.DEPLO_RUN_DEBUGGER != '')
         uses: mxschmitt/action-tmate@v3
         with:
           sudo: true
@@ -209,7 +212,7 @@ jobs:
         id: deplo-job-builder
         run: deplo run builder
       - name: Setup ssh session to debug
-        if: ${{ failure() }}
+        if: always() && (env.DEPLO_RUN_DEBUGGER != '')
         uses: mxschmitt/action-tmate@v3
         with:
           sudo: true
@@ -253,7 +256,7 @@ jobs:
         id: deplo-job-config
         run: deplo run config
       - name: Setup ssh session to debug
-        if: ${{ failure() }}
+        if: always() && (env.DEPLO_RUN_DEBUGGER != '')
         uses: mxschmitt/action-tmate@v3
         with:
           sudo: true
@@ -297,7 +300,7 @@ jobs:
         id: deplo-job-dispatched
         run: deplo run dispatched
       - name: Setup ssh session to debug
-        if: ${{ failure() }}
+        if: always() && (env.DEPLO_RUN_DEBUGGER != '')
         uses: mxschmitt/action-tmate@v3
         with:
           sudo: true
@@ -342,7 +345,7 @@ jobs:
         id: deplo-job-latest
         run: deplo run latest
       - name: Setup ssh session to debug
-        if: ${{ failure() }}
+        if: always() && (env.DEPLO_RUN_DEBUGGER != '')
         uses: mxschmitt/action-tmate@v3
         with:
           sudo: true
@@ -403,7 +406,7 @@ jobs:
         id: deplo-job-mac
         run: deplo run mac
       - name: Setup ssh session to debug
-        if: ${{ failure() }}
+        if: always() && (env.DEPLO_RUN_DEBUGGER != '')
         uses: mxschmitt/action-tmate@v3
         with:
           sudo: true
@@ -447,7 +450,7 @@ jobs:
         id: deplo-job-module_test
         run: deplo run module_test
       - name: Setup ssh session to debug
-        if: ${{ failure() }}
+        if: always() && (env.DEPLO_RUN_DEBUGGER != '')
         uses: mxschmitt/action-tmate@v3
         with:
           sudo: true
@@ -492,7 +495,51 @@ jobs:
         id: deplo-job-product
         run: deplo run product
       - name: Setup ssh session to debug
-        if: ${{ failure() }}
+        if: always() && (env.DEPLO_RUN_DEBUGGER != '')
+        uses: mxschmitt/action-tmate@v3
+        with:
+          sudo: true
+  remote-test:
+    needs: [deplo-main]
+    if: ${{ needs.deplo-main.outputs.remote-test && !failure() }}
+    name: Running job remote-test
+    runs-on: ubuntu-latest
+  
+  
+  
+    outputs:
+      need-cleanup: ${{ steps.deplo-job-remote-test.outputs.need-cleanup }}
+      system: ${{ steps.deplo-job-remote-test.outputs.system }}
+      user: ${{ steps.deplo-job-remote-test.outputs.user }}
+    steps:
+      - name: Fetch deplo cli
+        run: |
+          curl -L https://github.com/suntomi/deplo/releases/download/nightly/deplo-Linux-$(uname -m) -o /usr/local/bin/deplo
+          chmod +x /usr/local/bin/deplo
+      - name: Fetch repository cache
+        id: fetch-repository-cache
+        uses: actions/cache@v2
+        with:
+          path: .git
+          key: deplo-git-v1-40BFB0C55D506BC4-${{ github.sha }}
+          restore-keys:
+            deplo-git-v1-40BFB0C55D506BC4-
+      - name: Checkout
+        if: steps.fetch-repository-cache.outputs.cache-hit != 'true'
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+          submodules: true
+          token: ${{ secrets.SUNTOMI_VCS_ACCOUNT_KEY }}
+      - name: Restore repository from cache
+        if: steps.fetch-repository-cache.outputs.cache-hit == 'true'
+        run: git reset --hard HEAD && git submodule update --init --recursive && deplo -v=1 ci restore-cache --submodules
+  
+      - name: remote-test
+        id: deplo-job-remote-test
+        run: deplo run remote-test
+      - name: Setup ssh session to debug
+        if: always() && (env.DEPLO_RUN_DEBUGGER != '')
         uses: mxschmitt/action-tmate@v3
         with:
           sudo: true
@@ -536,7 +583,7 @@ jobs:
         id: deplo-job-repository
         run: deplo run repository
       - name: Setup ssh session to debug
-        if: ${{ failure() }}
+        if: always() && (env.DEPLO_RUN_DEBUGGER != '')
         uses: mxschmitt/action-tmate@v3
         with:
           sudo: true
@@ -580,7 +627,7 @@ jobs:
         id: deplo-job-taglab
         run: deplo run taglab
       - name: Setup ssh session to debug
-        if: ${{ failure() }}
+        if: always() && (env.DEPLO_RUN_DEBUGGER != '')
         uses: mxschmitt/action-tmate@v3
         with:
           sudo: true
@@ -641,7 +688,7 @@ jobs:
         id: deplo-job-test
         run: deplo run test
       - name: Setup ssh session to debug
-        if: ${{ failure() }}
+        if: always() && (env.DEPLO_RUN_DEBUGGER != '')
         uses: mxschmitt/action-tmate@v3
         with:
           sudo: true
@@ -704,7 +751,7 @@ jobs:
         run: deplo run win
         shell: bash
       - name: Setup ssh session to debug
-        if: ${{ failure() }}
+        if: always() && (env.DEPLO_RUN_DEBUGGER != '')
         uses: mxschmitt/action-tmate@v3
         with:
           sudo: true

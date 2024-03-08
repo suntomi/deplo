@@ -72,6 +72,7 @@ pub trait CI {
     ) -> Result<Vec<config::runtime::Workflow>, Box<dyn Error>>;
     fn set_job_output(&self, job_name: &str, kind: OutputKind, outputs: HashMap<&str, &str>) -> Result<(), Box<dyn Error>>;
     fn job_output(&self, job_name: &str, kind: OutputKind, key: &str) -> Result<Option<String>, Box<dyn Error>>;
+    fn set_job_env(&self, envs: HashMap<&str, &str>) -> Result<(), Box<dyn Error>>;
 }
 #[derive(Clone)]
 pub struct ModuleDescription;

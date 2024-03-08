@@ -3,7 +3,6 @@ version = 1
 # common settings
 # ---------------
 project_name = "deplo"
-debug = { ghaction_deplo_debugger = "on", ghaction_job_debugger = "on" }
 checkout = { submodules = true, fetch_depth = 0, token = "${SUNTOMI_VCS_ACCOUNT_KEY}" }
 
 # release target branch settings
@@ -442,5 +441,18 @@ if [ "${DEPLO_CI_WORKFLOW_NAME}" = "deploy" ]; then
     fi
 else
     echo "workflow name ok: ${DEPLO_CI_WORKFLOW_NAME}"
+fi
+"""
+
+[jobs.remote-test]
+on = { changed = ["README.md"] }
+runner = { os = "linux", local_fallback = { image = "ghcr.io/suntomi/images:aws", shell = "sh" } }
+command = """
+set -e
+if [ ! -z "${TEST_ABORT}" ]; then
+    echo "boom"
+    exit 1
+else
+    echo "ok :D"
 fi
 """

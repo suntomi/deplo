@@ -9,10 +9,11 @@ env:
   DEPLO_GHACTION_EVENT_DATA: ${{{{ toJson(github) }}}}
   DEPLO_GHACTION_WORKFLOW_NAME: ${{{{ github.workflow }}}}
   DEPLO_OVERWRITE_EXEC_OPTIONS: ${{{{ github.event.inputs.exec }}}}
+  DEPLO_CI_START_DEBUG_DEFAULT: ${{{{ vars.DEPLO_CI_START_DEBUG_DEFAULT }}}}
 {secrets:>2}
 jobs:
   deplo-main:
-    name: Start CI ${{{{ github.event.inputs.job_id }}}}
+    name: Start CI ${{{{ github.event.inputs.id }}}}
     runs-on: ubuntu-latest
     outputs:
 {outputs:>6}

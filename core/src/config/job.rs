@@ -554,7 +554,16 @@ impl Job {
         runtime_workflow_config: &config::runtime::Workflow
     ) -> Result<Option<String>, Box<dyn Error>> where S: shell::Shell {
         let runner = runner::Runner::new(self, config);
-        runner.run(shell, runtime_workflow_config)
+        let r = runner.run(shell, runtime_workflow_config);
+        if runtime_workflow_config.exec.debug.should_start(r.is_err()) {
+            log::info!("start debugger for job {} by result {:?}, config {}",
+                self.name, r, runtime_workflow_config.exec.debug);
+            let ci = self.ci(config);
+            ci.set_job_env(hashmap!{
+                "DEPLO_RUN_DEBUGGER" => "true"
+            })?;
+        }
+        r
     }
     pub fn env(
         &self,

@@ -265,7 +265,7 @@ impl<S: shell::Shell> GhAction<S> {
                             panic!("deplo does not allow manual dispatch name 'main'")
                         }
                         workflow_dispatch_entries.entry(name).or_insert(self.generate_manual_dispatch(inputs));
-                    } else {
+                    } else if name != config::DEPLO_SYSTEM_WORKFLOW_NAME {
                         repository_dispatches.push(name.replace("_", "-"));
                     }
                 },
@@ -317,10 +317,12 @@ impl<S: shell::Shell> GhAction<S> {
                 postfix: None
             }
         ).split("\n").map(|s| s.to_string()).collect());
+        let mut keys: Vec<_> = config.jobs.as_map().keys().collect();
+        keys.sort();
         results.insert("system".to_string(), format!(
             include_str!("../../res/ci/ghaction/system_entrypoint.yml.tmpl"), 
             jobs = MultilineFormatString{
-                strings: &config.jobs.as_map().keys().map(|v| format!("- {}", v)).collect::<Vec<String>>(),
+                strings: &keys.iter().map(|v| format!("- {}", v)).collect::<Vec<String>>(),
                 postfix: None
             },
         ).split("\n").map(|s| s.to_string()).collect());
@@ -364,29 +366,43 @@ impl<S: shell::Shell> GhAction<S> {
         }
     }
     fn generate_debugger(&self, job: Option<&config::job::Job>, config: &config::Config) -> Vec<String> {
-        let sudo = match job {
+        let (sudo, always) = match job {
             Some(ref j) => {
-                if !config.debug.as_ref().map_or_else(|| false, |v| v.get("ghaction_job_debugger").is_some()) &&
-                    !j.options.as_ref().map_or_else(|| false, |v| v.get("debugger").is_some()) {
-                    return vec![];
-                }
+                let global_config = config.debug.as_ref().map_or_else(|| None, |v| v.get("ghaction_job_debugger"));
+                let job_config = j.options.as_ref().map_or_else(|| None, |v| v.get("debugger"));
+                let always = match job_config.map(|v| v.as_str()).unwrap_or(Some("default")) {
+                    Some("none") => return vec![],
+                    Some("always") => true,
+                    _ => match global_config.map(|v| v.as_str()).unwrap_or("default") {
+                        "none" => return vec![],
+                        "always" => true,
+                        _ => false
+                    }
+                };
                 // if in container, sudo does not required to install debug instrument
-                match j.runner {
+                (match j.runner {
                     config::job::Runner::Machine{..} => true,
-                    config::job::Runner::Container{..} => false,        
-                }
+                    config::job::Runner::Container{..} => false,
+                }, always)
             },
             None => {
-                // deplo kick/finish
-                if !config.debug.as_ref().map_or_else(|| false, |v| v.get("ghaction_deplo_debugger").is_some()) {
-                    return vec![]
-                }
-                true
+                let global_config = config.debug.as_ref().map_or_else(|| None, |v| v.get("ghaction_deplo_debugger"));
+                // deplo boot/halt
+                (true, match global_config.map(|v| v.as_str()).unwrap_or("default") {
+                    "none" => return vec![],
+                    "always" => true,
+                    _ => false
+                })
             }
         };
         format!(
             include_str!("../../res/ci/ghaction/debugger.yml.tmpl"), 
-            sudo = sudo
+            sudo = sudo,
+            condition = if always {
+                ""
+            } else {
+                "if: always() && (env.DEPLO_RUN_DEBUGGER != '')"
+            }
         ).split("\n").map(|s| s.to_string()).collect()        
     }
     fn generate_restore_keys(&self, cache: &config::job::Cache) -> Vec<String> {
@@ -601,6 +617,14 @@ impl<S: shell::Shell> GhAction<S> {
         self.shell.eval(
             &format!("echo \'{key}={val}\' >> $GITHUB_OUTPUT", key = key, val = val),
             &None, hashmap!{"GITHUB_OUTPUT" => shell::arg!(std::env::var("GITHUB_OUTPUT")?)},
+            shell::no_cwd(), &shell::no_capture()
+        )?;
+        Ok(())
+    }
+    fn set_env(&self, key: &str, val: &str) -> Result<(), Box<dyn Error>> {
+        self.shell.eval(
+            &format!("echo \'{key}={val}\' >> $GITHUB_ENV", key = key, val = val),
+            &None, hashmap!{"GITHUB_ENV" => shell::arg!(std::env::var("GITHUB_ENV")?)},
             shell::no_cwd(), &shell::no_capture()
         )?;
         Ok(())
@@ -904,7 +928,7 @@ impl<S: shell::Shell> ci::CI for GhAction<S> {
                             let dispatch_name = std::env::var("DEPLO_GHACTION_WORKFLOW_NAME").expect(
                                 &format!("DEPLO_GHACTION_WORKFLOW_NAME should set")
                             );
-                            if dispatch_name == config::DEPLO_SYSTEM_WORKFLOW_NAME {
+                            if dispatch_name == config::DEPLO_SYSTEM_WORKFLOW_NAME && name == config::DEPLO_SYSTEM_WORKFLOW_NAME {
                                 matched_names.push(config::DEPLO_SYSTEM_WORKFLOW_NAME.to_string());
                             } else if name.replace("_", "-") == dispatch_name {
                                 matched_names.push(name);
@@ -973,6 +997,7 @@ impl<S: shell::Shell> ci::CI for GhAction<S> {
                                 },
                                 EventPayload::WorkflowDispatch{inputs: client_payload} => if name == config::DEPLO_SYSTEM_WORKFLOW_NAME {
                                     matches.push(config::runtime::Workflow::with_system_dispatch(
+                                        // input format collectness is checked by this deserialize
                                         &serde_json::from_str(&serde_json::to_string(&client_payload)?)?
                                     ));
                                 } else if manual.unwrap_or(false) {
@@ -1010,31 +1035,48 @@ impl<S: shell::Shell> ci::CI for GhAction<S> {
         let token = self.get_token()?;
         let user_and_repo = config.modules.vcs().user_and_repo()?;
         let payload = ClientPayload::new(job_config);
-        let inputs = hashmap!{
+        let mut inputs = hashmap!{
             "id" => payload.job_id.clone(),
             "workflow" => job_config.name.clone(),
             "context" => serde_json::to_string(&job_config.context)?,
             "exec" => serde_json::to_string(&job_config.exec)?,
-            "job" => job_config.name.clone()
+            "job" => job_config.job.as_ref().unwrap().name.clone(),
         };
-        self.shell.exec(shell::args![
-            "curl", "-H", shell::fmtargs!("Authorization: token {}", &token), 
+        match job_config.job {
+            Some(ref j) => match j.command { 
+                Some(ref c) => match c.args {
+                    Some(ref a) => { inputs.insert("command", a.join(" ")); },
+                    None => {}
+                },
+                None => {} 
+            },
+            None => {}
+        }
+        let commit = match &job_config.exec.revision {
+            Some(v) => v.clone(),
+            None => config.modules.vcs().commit_hash(None)?
+        };
+        let response = self.shell.exec(shell::args![
+            "curl", "-f", "-H", shell::fmtargs!("Authorization: token {}", &token),
             "-H", "Accept: application/vnd.github.v3+json", 
             format!(
                 "https://api.github.com/repos/{}/{}/actions/workflows/{}/dispatches", 
                 user_and_repo.0, user_and_repo.1, config::DEPLO_SYSTEM_WORKFLOW_ID,
             ),
             "-d", format!(r#"{{
-                "ref": "{revision}",
+                "ref": "{remote_ref}",
                 "inputs": {inputs}
             }}"#, 
-                revision = match &job_config.exec.revision {
-                    Some(v) => v.to_string(),
-                    None => config.modules.vcs().commit_hash(None)?
+                remote_ref = match config.modules.vcs().search_remote_ref(&commit)? {
+                    Some(v) => v,
+                    None => return escalate!(Box::new(ci::CIError {
+                        cause: format!("remote ref for {} not found", commit),
+                    }))
                 },
                 inputs = serde_json::to_string(&inputs)?
             )
         ], shell::no_env(), shell::no_cwd(), &shell::capture())?;
+        log::trace!("response: [{}]", response);
         log::debug!("wait for remote job to start.");
         let mut count = 0;
         // we have 1 minutes buffer to search for created workflow
@@ -1115,6 +1157,18 @@ impl<S: shell::Shell> ci::CI for GhAction<S> {
             self.set_output(kind.to_str(), &text)?;
         } else {
             std::env::set_var(&kind.env_name_for_job(job_name), &text);
+        }
+        Ok(())
+    }
+    fn set_job_env(&self, envs: HashMap<&str, &str>) -> Result<(), Box<dyn Error>> {
+        if config::Config::is_running_on_ci() {
+            for (k, v) in envs {
+                self.set_env(k, v)?;
+            }
+        } else {
+            for (k, v) in envs {
+                std::env::set_var(k, v);
+            }
         }
         Ok(())
     }
