@@ -468,9 +468,9 @@ pub fn join_vector<T>(src: Vec<Vec<T>>) -> Vec<T> {
 #[macro_export]
 macro_rules! macro_try_debug {
     ($ctx: expr, $ci: expr, $config: expr, $failure: expr) => {
-        if $config.should_start($failure) {
-            log::info!("start debugger for job {} by failure {:?}, config {}",
-                $ctx, $failure, $config);
+        if $config.debug_should_start($ctx, $failure) {
+            log::info!("start debugger for job {} by failure {}, config {}:{:?}",
+                $ctx, $failure, $config.debug, $config.debug_job);
         } else {
             $ci.set_job_env(hashmap!{
                 "DEPLO_CI_RUN_DEBUGGER" => ""

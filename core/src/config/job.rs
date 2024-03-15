@@ -555,7 +555,7 @@ impl Job {
     ) -> Result<Option<String>, Box<dyn Error>> where S: shell::Shell {
         let runner = runner::Runner::new(self, config);
         let r = runner.run(shell, runtime_workflow_config);
-        crate::util::try_debug!(self.name, self.ci(config), runtime_workflow_config.exec.debug, r.is_err());
+        crate::util::try_debug!(&self.name, self.ci(config), runtime_workflow_config.exec, r.is_err());
         // if runtime_workflow_config.exec.debug.should_start(r.is_err()) {
         //     log::info!("start debugger for job {} by result {:?}, config {}",
         //         self.name, r, runtime_workflow_config.exec.debug);
@@ -958,7 +958,7 @@ impl Jobs {
                 }
             }
         }
-        crate::util::try_debug!("halt", config.modules.ci_by_default(), runtime_workflow_config.exec.debug, false);
+        crate::util::try_debug!("deplo-halt", config.modules.ci_by_default(), runtime_workflow_config.exec, false);
         Ok(())
     }    
     fn wait_job(
@@ -1056,7 +1056,7 @@ impl Jobs {
             }
             Ok(())
         })?;
-        crate::util::try_debug!("boot", ci, runtime_workflow_config.exec.debug, false);
+        crate::util::try_debug!("deplo-boot", ci, runtime_workflow_config.exec, false);
         if !config::Config::is_running_on_ci() {
             log::debug!("if not running on CI, all jobs should be finished");
             self.halt(config, runtime_workflow_config)?;

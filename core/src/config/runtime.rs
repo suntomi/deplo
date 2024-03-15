@@ -81,6 +81,7 @@ pub struct ExecOptions {
     pub revision: Option<String>,
     pub release_target: Option<String>,
     pub debug: StartDebugOn,
+    pub debug_job: Option<String>,
     pub verbosity: u64,
     pub remote: bool,
     pub follow_dependency: bool,
@@ -94,6 +95,7 @@ impl ExecOptions {
             revision: None,
             release_target: None,
             debug: StartDebugOn::Default,
+            debug_job: None,
             verbosity: 0,
             remote: false,
             follow_dependency: false,
@@ -143,6 +145,10 @@ impl ExecOptions {
             },
             None => self.debug.clone()
         };
+        self.debug_job = match args.value_of("debug_job") {
+            Some(v) => Some(v.to_string()),
+            None => self.debug_job.clone()
+        };
         self.timeout = match args.value_of("timeout") {
             Some(v) => Some(v.parse().expect(
                 &format!("value of `timeout` should be a number but {}", v)
@@ -162,6 +168,15 @@ impl ExecOptions {
         if args.occurence_of("silent") > 0 {
             self.silent = true;
         }
+    }
+    pub fn debug_should_start(&self, job: &str, job_failure: bool) -> bool {
+        if self.debug.should_start(job_failure) {
+            match &self.debug_job {
+                Some(j) => return j == job,
+                None => {}
+            }
+        }
+        return false;
     }
 }
 

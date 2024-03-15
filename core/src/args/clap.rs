@@ -132,6 +132,13 @@ there are 3 options.
         .takes_value(true)
         .possible_values(&["always", "failure", "never", "a", "f", "n"])
         .required(false))
+    .arg(Arg::new("debug-job")
+        .help(r#"if set, run debugger after finishing job only that specified in the argment. 
+normally job name. if you want to stop only on deplo boot or halt, specify like deplo-boot/deplo-halt"#)
+        .short('j')
+        .long("debug-job")
+        .takes_value(true)
+        .required(false))
 }
 fn run_command_options(
     name: &'static str,
