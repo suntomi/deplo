@@ -71,7 +71,7 @@ jobs:
           chmod +x /usr/local/bin/deplo
       - name: Fetch repository cache
         id: fetch-repository-cache
-        uses: actions/cache@v2
+        uses: actions/cache@v4
         with:
           path: .git
           key: deplo-git-v1-40BFB0C55D506BC4-${{ github.sha }}
@@ -79,7 +79,7 @@ jobs:
             deplo-git-v1-40BFB0C55D506BC4-
       - name: Checkout
         if: steps.fetch-repository-cache.outputs.cache-hit != 'true'
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0
           submodules: true
@@ -121,7 +121,7 @@ jobs:
           chmod +x /usr/local/bin/deplo
       - name: Fetch repository cache
         id: fetch-repository-cache
-        uses: actions/cache@v2
+        uses: actions/cache@v4
         with:
           path: .git
           key: deplo-git-v1-40BFB0C55D506BC4-${{ github.sha }}
@@ -129,7 +129,7 @@ jobs:
             deplo-git-v1-40BFB0C55D506BC4-
       - name: Checkout
         if: steps.fetch-repository-cache.outputs.cache-hit != 'true'
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0
           lfs: false
@@ -165,7 +165,7 @@ jobs:
           chmod +x /usr/local/bin/deplo
       - name: Fetch repository cache
         id: fetch-repository-cache
-        uses: actions/cache@v2
+        uses: actions/cache@v4
         with:
           path: .git
           key: deplo-git-v1-40BFB0C55D506BC4-${{ github.sha }}
@@ -173,7 +173,7 @@ jobs:
             deplo-git-v1-40BFB0C55D506BC4-
       - name: Checkout
         if: steps.fetch-repository-cache.outputs.cache-hit != 'true'
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0
           submodules: true
@@ -209,7 +209,7 @@ jobs:
           chmod +x /usr/local/bin/deplo
       - name: Fetch repository cache
         id: fetch-repository-cache
-        uses: actions/cache@v2
+        uses: actions/cache@v4
         with:
           path: .git
           key: deplo-git-v1-40BFB0C55D506BC4-${{ github.sha }}
@@ -217,7 +217,7 @@ jobs:
             deplo-git-v1-40BFB0C55D506BC4-
       - name: Checkout
         if: steps.fetch-repository-cache.outputs.cache-hit != 'true'
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0
           submodules: true
@@ -253,7 +253,7 @@ jobs:
           chmod +x /usr/local/bin/deplo
       - name: Fetch repository cache
         id: fetch-repository-cache
-        uses: actions/cache@v2
+        uses: actions/cache@v4
         with:
           path: .git
           key: deplo-git-v1-40BFB0C55D506BC4-${{ github.sha }}
@@ -261,7 +261,7 @@ jobs:
             deplo-git-v1-40BFB0C55D506BC4-
       - name: Checkout
         if: steps.fetch-repository-cache.outputs.cache-hit != 'true'
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0
           submodules: true
@@ -297,7 +297,7 @@ jobs:
           chmod +x /usr/local/bin/deplo
       - name: Fetch repository cache
         id: fetch-repository-cache
-        uses: actions/cache@v2
+        uses: actions/cache@v4
         with:
           path: .git
           key: deplo-git-v1-40BFB0C55D506BC4-${{ github.sha }}
@@ -305,7 +305,7 @@ jobs:
             deplo-git-v1-40BFB0C55D506BC4-
       - name: Checkout
         if: steps.fetch-repository-cache.outputs.cache-hit != 'true'
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0
           submodules: true
@@ -342,7 +342,7 @@ jobs:
           chmod +x /usr/local/bin/deplo
       - name: Fetch repository cache
         id: fetch-repository-cache
-        uses: actions/cache@v2
+        uses: actions/cache@v4
         with:
           path: .git
           key: deplo-git-v1-40BFB0C55D506BC4-${{ github.sha }}
@@ -350,7 +350,7 @@ jobs:
             deplo-git-v1-40BFB0C55D506BC4-
       - name: Checkout
         if: steps.fetch-repository-cache.outputs.cache-hit != 'true'
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0
           submodules: true
@@ -387,7 +387,7 @@ jobs:
           chmod +x /usr/local/bin/deplo
       - name: Fetch repository cache
         id: fetch-repository-cache
-        uses: actions/cache@v2
+        uses: actions/cache@v4
         with:
           path: .git
           key: deplo-git-v1-40BFB0C55D506BC4-${{ github.sha }}
@@ -395,7 +395,7 @@ jobs:
             deplo-git-v1-40BFB0C55D506BC4-
       - name: Checkout
         if: steps.fetch-repository-cache.outputs.cache-hit != 'true'
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0
           submodules: true
@@ -405,7 +405,7 @@ jobs:
         run: git reset --hard HEAD && git submodule update --init --recursive && deplo -v=1 ci restore-cache --submodules
       - name: Cache cargo
         id: deplo-cache-cargo
-        uses: actions/cache@v2
+        uses: actions/cache@v4
         with:
           path: |
             target
@@ -447,7 +447,7 @@ jobs:
           chmod +x /usr/local/bin/deplo
       - name: Fetch repository cache
         id: fetch-repository-cache
-        uses: actions/cache@v2
+        uses: actions/cache@v4
         with:
           path: .git
           key: deplo-git-v1-40BFB0C55D506BC4-${{ github.sha }}
@@ -455,7 +455,7 @@ jobs:
             deplo-git-v1-40BFB0C55D506BC4-
       - name: Checkout
         if: steps.fetch-repository-cache.outputs.cache-hit != 'true'
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0
           submodules: true
@@ -492,7 +492,7 @@ jobs:
           chmod +x /usr/local/bin/deplo
       - name: Fetch repository cache
         id: fetch-repository-cache
-        uses: actions/cache@v2
+        uses: actions/cache@v4
         with:
           path: .git
           key: deplo-git-v1-40BFB0C55D506BC4-${{ github.sha }}
@@ -500,7 +500,7 @@ jobs:
             deplo-git-v1-40BFB0C55D506BC4-
       - name: Checkout
         if: steps.fetch-repository-cache.outputs.cache-hit != 'true'
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0
           submodules: true
@@ -536,7 +536,7 @@ jobs:
           chmod +x /usr/local/bin/deplo
       - name: Fetch repository cache
         id: fetch-repository-cache
-        uses: actions/cache@v2
+        uses: actions/cache@v4
         with:
           path: .git
           key: deplo-git-v1-40BFB0C55D506BC4-${{ github.sha }}
@@ -544,7 +544,7 @@ jobs:
             deplo-git-v1-40BFB0C55D506BC4-
       - name: Checkout
         if: steps.fetch-repository-cache.outputs.cache-hit != 'true'
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0
           submodules: true
@@ -580,7 +580,7 @@ jobs:
           chmod +x /usr/local/bin/deplo
       - name: Fetch repository cache
         id: fetch-repository-cache
-        uses: actions/cache@v2
+        uses: actions/cache@v4
         with:
           path: .git
           key: deplo-git-v1-40BFB0C55D506BC4-${{ github.sha }}
@@ -588,7 +588,7 @@ jobs:
             deplo-git-v1-40BFB0C55D506BC4-
       - name: Checkout
         if: steps.fetch-repository-cache.outputs.cache-hit != 'true'
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0
           submodules: true
@@ -624,7 +624,7 @@ jobs:
           chmod +x /usr/local/bin/deplo
       - name: Fetch repository cache
         id: fetch-repository-cache
-        uses: actions/cache@v2
+        uses: actions/cache@v4
         with:
           path: .git
           key: deplo-git-v1-40BFB0C55D506BC4-${{ github.sha }}
@@ -632,7 +632,7 @@ jobs:
             deplo-git-v1-40BFB0C55D506BC4-
       - name: Checkout
         if: steps.fetch-repository-cache.outputs.cache-hit != 'true'
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0
           submodules: true
@@ -671,7 +671,7 @@ jobs:
           chmod +x /usr/local/bin/deplo
       - name: Fetch repository cache
         id: fetch-repository-cache
-        uses: actions/cache@v2
+        uses: actions/cache@v4
         with:
           path: .git
           key: deplo-git-v1-40BFB0C55D506BC4-${{ github.sha }}
@@ -679,7 +679,7 @@ jobs:
             deplo-git-v1-40BFB0C55D506BC4-
       - name: Checkout
         if: steps.fetch-repository-cache.outputs.cache-hit != 'true'
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0
           submodules: true
@@ -689,7 +689,7 @@ jobs:
         run: git reset --hard HEAD && git submodule update --init --recursive && deplo -v=1 ci restore-cache --submodules
       - name: Cache cargo
         id: deplo-cache-cargo
-        uses: actions/cache@v2
+        uses: actions/cache@v4
         with:
           path: |
             target
@@ -731,7 +731,7 @@ jobs:
         shell: bash
       - name: Fetch repository cache
         id: fetch-repository-cache
-        uses: actions/cache@v2
+        uses: actions/cache@v4
         with:
           path: .git
           key: deplo-git-v1-40BFB0C55D506BC4-${{ github.sha }}
@@ -739,7 +739,7 @@ jobs:
             deplo-git-v1-40BFB0C55D506BC4-
       - name: Checkout
         if: steps.fetch-repository-cache.outputs.cache-hit != 'true'
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0
           submodules: true
@@ -749,7 +749,7 @@ jobs:
         run: git reset --hard HEAD && git submodule update --init --recursive && deplo -v=1 ci restore-cache --submodules
       - name: Cache cargo
         id: deplo-cache-cargo
-        uses: actions/cache@v2
+        uses: actions/cache@v4
         with:
           path: |
             target
