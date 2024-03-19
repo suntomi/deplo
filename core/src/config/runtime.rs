@@ -145,7 +145,7 @@ impl ExecOptions {
             },
             None => self.debug.clone()
         };
-        self.debug_job = match args.value_of("debug_job") {
+        self.debug_job = match args.value_of("debug-job") {
             Some(v) => Some(v.to_string()),
             None => self.debug_job.clone()
         };
@@ -171,9 +171,13 @@ impl ExecOptions {
     }
     pub fn debug_should_start(&self, job: &str, job_failure: bool) -> bool {
         if self.debug.should_start(job_failure) {
-            match &self.debug_job {
-                Some(j) => return j == job,
-                None => {}
+            return match &self.debug_job {
+                Some(j) => j == job,
+                None => match job {
+                    // if debug_job is not specified, deplo-boot/deplo-halt is ignored.
+                    "deplo-boot"| "deplo-halt" => job_failure,
+                    _ => true
+                }
             }
         }
         return false;
