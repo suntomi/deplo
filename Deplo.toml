@@ -341,6 +341,7 @@ steps = [{
     shell = "bash",
     workdir = ".vscode",
     command = """
+    echo "========== step start ============="
     if [ "$(echo $FUGA)" != "fuga" ]; then
         echo "env does not work"
         exit 1
@@ -354,6 +355,7 @@ steps = [{
         echo "shell does not work"
         exit 1
     fi
+    echo "========== step finish ============="
     """,
 }]
 tasks = {
@@ -377,11 +379,13 @@ set -eo pipefail
 cargo build --release
 deplo vcs release-assets ${DEPLO_RELEASE_TAG} target/release/cli.exe --replace -o name=deplo-Windows.exe
 deplo vcs release-assets ${DEPLO_RELEASE_TAG} target/release/cli.pdb --replace -o name=deplo-Windows.pdb
+echo "check output works"
 # job 'win' depends on job 'product', so can use its output
 if [ $(deplo job output product fuga) != "hoge" ]; then
     echo "failed to get output from job 'product'"
     exit 1
 fi
+echo "end check output works"
 """
 caches = {
     cargo = {
