@@ -401,7 +401,7 @@ impl<S: shell::Shell> GhAction<S> {
             condition = if always {
                 ""
             } else {
-                "if: always() && (env.DEPLO_RUN_DEBUGGER != '')"
+                "if: always() && (env.DEPLO_CI_RUN_DEBUGGER != '')"
             }
         ).split("\n").map(|s| s.to_string()).collect()        
     }
@@ -1067,11 +1067,15 @@ impl<S: shell::Shell> ci::CI for GhAction<S> {
                 "ref": "{remote_ref}",
                 "inputs": {inputs}
             }}"#, 
-                remote_ref = match config.modules.vcs().search_remote_ref(&commit)? {
-                    Some(v) => v,
-                    None => return escalate!(Box::new(ci::CIError {
-                        cause: format!("remote ref for {} not found", commit),
-                    }))
+                remote_ref = if commit.starts_with("refs") {
+                    commit
+                } else {
+                    match config.modules.vcs().search_remote_ref(&commit)? {
+                        Some(v) => v,
+                        None => return escalate!(Box::new(ci::CIError {
+                            cause: format!("remote ref for {} not found", commit),
+                        }))
+                    }
                 },
                 inputs = serde_json::to_string(&inputs)?
             )

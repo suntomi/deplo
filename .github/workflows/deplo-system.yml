@@ -39,6 +39,7 @@ env:
   DEPLO_GHACTION_WORKFLOW_NAME: ${{ github.workflow }}
   DEPLO_OVERWRITE_EXEC_OPTIONS: ${{ github.event.inputs.exec }}
   DEPLO_CI_START_DEBUG_DEFAULT: ${{ vars.DEPLO_CI_START_DEBUG_DEFAULT }}
+  DEPLO_CI_RUN_DEBUGGER: "true"
   SUNTOMI_AWS_ROLE: ${{ secrets.SUNTOMI_AWS_ROLE }}
   SUNTOMI_VCS_ACCOUNT: ${{ secrets.SUNTOMI_VCS_ACCOUNT }}
   SUNTOMI_VCS_ACCOUNT_EMAIL: ${{ secrets.SUNTOMI_VCS_ACCOUNT_EMAIL }}
@@ -70,7 +71,7 @@ jobs:
           chmod +x /usr/local/bin/deplo
       - name: Fetch repository cache
         id: fetch-repository-cache
-        uses: actions/cache@v2
+        uses: actions/cache@v4
         with:
           path: .git
           key: deplo-git-v1-40BFB0C55D506BC4-${{ github.sha }}
@@ -78,7 +79,7 @@ jobs:
             deplo-git-v1-40BFB0C55D506BC4-
       - name: Checkout
         if: steps.fetch-repository-cache.outputs.cache-hit != 'true'
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0
           submodules: true
@@ -90,7 +91,7 @@ jobs:
         id: deplo-main
         run: deplo boot
       - name: Setup ssh session to debug
-        if: always() && (env.DEPLO_RUN_DEBUGGER != '')
+        if: always() && (env.DEPLO_CI_RUN_DEBUGGER != '')
         uses: mxschmitt/action-tmate@v3
         with:
           sudo: true
@@ -120,7 +121,7 @@ jobs:
           chmod +x /usr/local/bin/deplo
       - name: Fetch repository cache
         id: fetch-repository-cache
-        uses: actions/cache@v2
+        uses: actions/cache@v4
         with:
           path: .git
           key: deplo-git-v1-40BFB0C55D506BC4-${{ github.sha }}
@@ -128,7 +129,7 @@ jobs:
             deplo-git-v1-40BFB0C55D506BC4-
       - name: Checkout
         if: steps.fetch-repository-cache.outputs.cache-hit != 'true'
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0
           lfs: false
@@ -141,7 +142,7 @@ jobs:
         id: deplo-halt
         run: deplo halt
       - name: Setup ssh session to debug
-        if: always() && (env.DEPLO_RUN_DEBUGGER != '')
+        if: always() && (env.DEPLO_CI_RUN_DEBUGGER != '')
         uses: mxschmitt/action-tmate@v3
         with:
           sudo: true
@@ -164,7 +165,7 @@ jobs:
           chmod +x /usr/local/bin/deplo
       - name: Fetch repository cache
         id: fetch-repository-cache
-        uses: actions/cache@v2
+        uses: actions/cache@v4
         with:
           path: .git
           key: deplo-git-v1-40BFB0C55D506BC4-${{ github.sha }}
@@ -172,7 +173,7 @@ jobs:
             deplo-git-v1-40BFB0C55D506BC4-
       - name: Checkout
         if: steps.fetch-repository-cache.outputs.cache-hit != 'true'
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0
           submodules: true
@@ -185,7 +186,7 @@ jobs:
         id: deplo-job-base
         run: deplo run base
       - name: Setup ssh session to debug
-        if: always() && (env.DEPLO_RUN_DEBUGGER != '')
+        if: always() && (env.DEPLO_CI_RUN_DEBUGGER != '')
         uses: mxschmitt/action-tmate@v3
         with:
           sudo: true
@@ -208,7 +209,7 @@ jobs:
           chmod +x /usr/local/bin/deplo
       - name: Fetch repository cache
         id: fetch-repository-cache
-        uses: actions/cache@v2
+        uses: actions/cache@v4
         with:
           path: .git
           key: deplo-git-v1-40BFB0C55D506BC4-${{ github.sha }}
@@ -216,7 +217,7 @@ jobs:
             deplo-git-v1-40BFB0C55D506BC4-
       - name: Checkout
         if: steps.fetch-repository-cache.outputs.cache-hit != 'true'
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0
           submodules: true
@@ -229,7 +230,7 @@ jobs:
         id: deplo-job-builder
         run: deplo run builder
       - name: Setup ssh session to debug
-        if: always() && (env.DEPLO_RUN_DEBUGGER != '')
+        if: always() && (env.DEPLO_CI_RUN_DEBUGGER != '')
         uses: mxschmitt/action-tmate@v3
         with:
           sudo: true
@@ -252,7 +253,7 @@ jobs:
           chmod +x /usr/local/bin/deplo
       - name: Fetch repository cache
         id: fetch-repository-cache
-        uses: actions/cache@v2
+        uses: actions/cache@v4
         with:
           path: .git
           key: deplo-git-v1-40BFB0C55D506BC4-${{ github.sha }}
@@ -260,7 +261,7 @@ jobs:
             deplo-git-v1-40BFB0C55D506BC4-
       - name: Checkout
         if: steps.fetch-repository-cache.outputs.cache-hit != 'true'
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0
           submodules: true
@@ -273,7 +274,7 @@ jobs:
         id: deplo-job-config
         run: deplo run config
       - name: Setup ssh session to debug
-        if: always() && (env.DEPLO_RUN_DEBUGGER != '')
+        if: always() && (env.DEPLO_CI_RUN_DEBUGGER != '')
         uses: mxschmitt/action-tmate@v3
         with:
           sudo: true
@@ -296,7 +297,7 @@ jobs:
           chmod +x /usr/local/bin/deplo
       - name: Fetch repository cache
         id: fetch-repository-cache
-        uses: actions/cache@v2
+        uses: actions/cache@v4
         with:
           path: .git
           key: deplo-git-v1-40BFB0C55D506BC4-${{ github.sha }}
@@ -304,7 +305,7 @@ jobs:
             deplo-git-v1-40BFB0C55D506BC4-
       - name: Checkout
         if: steps.fetch-repository-cache.outputs.cache-hit != 'true'
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0
           submodules: true
@@ -317,7 +318,7 @@ jobs:
         id: deplo-job-dispatched
         run: deplo run dispatched
       - name: Setup ssh session to debug
-        if: always() && (env.DEPLO_RUN_DEBUGGER != '')
+        if: always() && (env.DEPLO_CI_RUN_DEBUGGER != '')
         uses: mxschmitt/action-tmate@v3
         with:
           sudo: true
@@ -341,7 +342,7 @@ jobs:
           chmod +x /usr/local/bin/deplo
       - name: Fetch repository cache
         id: fetch-repository-cache
-        uses: actions/cache@v2
+        uses: actions/cache@v4
         with:
           path: .git
           key: deplo-git-v1-40BFB0C55D506BC4-${{ github.sha }}
@@ -349,7 +350,7 @@ jobs:
             deplo-git-v1-40BFB0C55D506BC4-
       - name: Checkout
         if: steps.fetch-repository-cache.outputs.cache-hit != 'true'
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0
           submodules: true
@@ -362,7 +363,7 @@ jobs:
         id: deplo-job-latest
         run: deplo run latest
       - name: Setup ssh session to debug
-        if: always() && (env.DEPLO_RUN_DEBUGGER != '')
+        if: always() && (env.DEPLO_CI_RUN_DEBUGGER != '')
         uses: mxschmitt/action-tmate@v3
         with:
           sudo: true
@@ -386,7 +387,7 @@ jobs:
           chmod +x /usr/local/bin/deplo
       - name: Fetch repository cache
         id: fetch-repository-cache
-        uses: actions/cache@v2
+        uses: actions/cache@v4
         with:
           path: .git
           key: deplo-git-v1-40BFB0C55D506BC4-${{ github.sha }}
@@ -394,7 +395,7 @@ jobs:
             deplo-git-v1-40BFB0C55D506BC4-
       - name: Checkout
         if: steps.fetch-repository-cache.outputs.cache-hit != 'true'
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0
           submodules: true
@@ -404,7 +405,7 @@ jobs:
         run: git reset --hard HEAD && git submodule update --init --recursive && deplo -v=1 ci restore-cache --submodules
       - name: Cache cargo
         id: deplo-cache-cargo
-        uses: actions/cache@v2
+        uses: actions/cache@v4
         with:
           path: |
             target
@@ -423,7 +424,7 @@ jobs:
         id: deplo-job-mac
         run: deplo run mac
       - name: Setup ssh session to debug
-        if: always() && (env.DEPLO_RUN_DEBUGGER != '')
+        if: always() && (env.DEPLO_CI_RUN_DEBUGGER != '')
         uses: mxschmitt/action-tmate@v3
         with:
           sudo: true
@@ -446,7 +447,7 @@ jobs:
           chmod +x /usr/local/bin/deplo
       - name: Fetch repository cache
         id: fetch-repository-cache
-        uses: actions/cache@v2
+        uses: actions/cache@v4
         with:
           path: .git
           key: deplo-git-v1-40BFB0C55D506BC4-${{ github.sha }}
@@ -454,7 +455,7 @@ jobs:
             deplo-git-v1-40BFB0C55D506BC4-
       - name: Checkout
         if: steps.fetch-repository-cache.outputs.cache-hit != 'true'
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0
           submodules: true
@@ -467,7 +468,7 @@ jobs:
         id: deplo-job-module_test
         run: deplo run module_test
       - name: Setup ssh session to debug
-        if: always() && (env.DEPLO_RUN_DEBUGGER != '')
+        if: always() && (env.DEPLO_CI_RUN_DEBUGGER != '')
         uses: mxschmitt/action-tmate@v3
         with:
           sudo: true
@@ -491,7 +492,7 @@ jobs:
           chmod +x /usr/local/bin/deplo
       - name: Fetch repository cache
         id: fetch-repository-cache
-        uses: actions/cache@v2
+        uses: actions/cache@v4
         with:
           path: .git
           key: deplo-git-v1-40BFB0C55D506BC4-${{ github.sha }}
@@ -499,7 +500,7 @@ jobs:
             deplo-git-v1-40BFB0C55D506BC4-
       - name: Checkout
         if: steps.fetch-repository-cache.outputs.cache-hit != 'true'
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0
           submodules: true
@@ -512,7 +513,7 @@ jobs:
         id: deplo-job-product
         run: deplo run product
       - name: Setup ssh session to debug
-        if: always() && (env.DEPLO_RUN_DEBUGGER != '')
+        if: always() && (env.DEPLO_CI_RUN_DEBUGGER != '')
         uses: mxschmitt/action-tmate@v3
         with:
           sudo: true
@@ -535,7 +536,7 @@ jobs:
           chmod +x /usr/local/bin/deplo
       - name: Fetch repository cache
         id: fetch-repository-cache
-        uses: actions/cache@v2
+        uses: actions/cache@v4
         with:
           path: .git
           key: deplo-git-v1-40BFB0C55D506BC4-${{ github.sha }}
@@ -543,7 +544,7 @@ jobs:
             deplo-git-v1-40BFB0C55D506BC4-
       - name: Checkout
         if: steps.fetch-repository-cache.outputs.cache-hit != 'true'
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0
           submodules: true
@@ -556,7 +557,7 @@ jobs:
         id: deplo-job-remote-test
         run: deplo run remote-test
       - name: Setup ssh session to debug
-        if: always() && (env.DEPLO_RUN_DEBUGGER != '')
+        if: always() && (env.DEPLO_CI_RUN_DEBUGGER != '')
         uses: mxschmitt/action-tmate@v3
         with:
           sudo: true
@@ -579,7 +580,7 @@ jobs:
           chmod +x /usr/local/bin/deplo
       - name: Fetch repository cache
         id: fetch-repository-cache
-        uses: actions/cache@v2
+        uses: actions/cache@v4
         with:
           path: .git
           key: deplo-git-v1-40BFB0C55D506BC4-${{ github.sha }}
@@ -587,7 +588,7 @@ jobs:
             deplo-git-v1-40BFB0C55D506BC4-
       - name: Checkout
         if: steps.fetch-repository-cache.outputs.cache-hit != 'true'
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0
           submodules: true
@@ -600,7 +601,7 @@ jobs:
         id: deplo-job-repository
         run: deplo run repository
       - name: Setup ssh session to debug
-        if: always() && (env.DEPLO_RUN_DEBUGGER != '')
+        if: always() && (env.DEPLO_CI_RUN_DEBUGGER != '')
         uses: mxschmitt/action-tmate@v3
         with:
           sudo: true
@@ -623,7 +624,7 @@ jobs:
           chmod +x /usr/local/bin/deplo
       - name: Fetch repository cache
         id: fetch-repository-cache
-        uses: actions/cache@v2
+        uses: actions/cache@v4
         with:
           path: .git
           key: deplo-git-v1-40BFB0C55D506BC4-${{ github.sha }}
@@ -631,7 +632,7 @@ jobs:
             deplo-git-v1-40BFB0C55D506BC4-
       - name: Checkout
         if: steps.fetch-repository-cache.outputs.cache-hit != 'true'
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0
           submodules: true
@@ -644,7 +645,7 @@ jobs:
         id: deplo-job-taglab
         run: deplo run taglab
       - name: Setup ssh session to debug
-        if: always() && (env.DEPLO_RUN_DEBUGGER != '')
+        if: always() && (env.DEPLO_CI_RUN_DEBUGGER != '')
         uses: mxschmitt/action-tmate@v3
         with:
           sudo: true
@@ -670,7 +671,7 @@ jobs:
           chmod +x /usr/local/bin/deplo
       - name: Fetch repository cache
         id: fetch-repository-cache
-        uses: actions/cache@v2
+        uses: actions/cache@v4
         with:
           path: .git
           key: deplo-git-v1-40BFB0C55D506BC4-${{ github.sha }}
@@ -678,7 +679,7 @@ jobs:
             deplo-git-v1-40BFB0C55D506BC4-
       - name: Checkout
         if: steps.fetch-repository-cache.outputs.cache-hit != 'true'
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0
           submodules: true
@@ -688,7 +689,7 @@ jobs:
         run: git reset --hard HEAD && git submodule update --init --recursive && deplo -v=1 ci restore-cache --submodules
       - name: Cache cargo
         id: deplo-cache-cargo
-        uses: actions/cache@v2
+        uses: actions/cache@v4
         with:
           path: |
             target
@@ -705,7 +706,7 @@ jobs:
         id: deplo-job-test
         run: deplo run test
       - name: Setup ssh session to debug
-        if: always() && (env.DEPLO_RUN_DEBUGGER != '')
+        if: always() && (env.DEPLO_CI_RUN_DEBUGGER != '')
         uses: mxschmitt/action-tmate@v3
         with:
           sudo: true
@@ -730,7 +731,7 @@ jobs:
         shell: bash
       - name: Fetch repository cache
         id: fetch-repository-cache
-        uses: actions/cache@v2
+        uses: actions/cache@v4
         with:
           path: .git
           key: deplo-git-v1-40BFB0C55D506BC4-${{ github.sha }}
@@ -738,7 +739,7 @@ jobs:
             deplo-git-v1-40BFB0C55D506BC4-
       - name: Checkout
         if: steps.fetch-repository-cache.outputs.cache-hit != 'true'
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0
           submodules: true
@@ -748,7 +749,7 @@ jobs:
         run: git reset --hard HEAD && git submodule update --init --recursive && deplo -v=1 ci restore-cache --submodules
       - name: Cache cargo
         id: deplo-cache-cargo
-        uses: actions/cache@v2
+        uses: actions/cache@v4
         with:
           path: |
             target
@@ -768,7 +769,7 @@ jobs:
         run: deplo run win
         shell: bash
       - name: Setup ssh session to debug
-        if: always() && (env.DEPLO_RUN_DEBUGGER != '')
+        if: always() && (env.DEPLO_CI_RUN_DEBUGGER != '')
         uses: mxschmitt/action-tmate@v3
         with:
           sudo: true

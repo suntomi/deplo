@@ -1,5 +1,7 @@
 #!/bin/bash
 
+echo "DEPLO_CI_RELEASE_TARGET = [${DEPLO_CI_RELEASE_TARGET}]"
+
 if [ "${DEPLO_CI_RELEASE_TARGET}" = "prod" ]; then
     export DEPLO_RELEASE_TAG=${DEPLO_CI_TAG_NAME}
     export DEPLO_RELEASE_NAME=${DEPLO_CI_TAG_NAME}

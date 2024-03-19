@@ -113,7 +113,7 @@ fn workflow_command_options(
         .required(false)
         .takes_value(true))
     .arg(Arg::new("revision")
-        .help("git ref to run the job")
+        .help("git ref or sha to run the job")
         .long("rev")
         .takes_value(true)
         .required(false))
@@ -131,6 +131,14 @@ there are 3 options.
         .long("debug")
         .takes_value(true)
         .possible_values(&["always", "failure", "never", "a", "f", "n"])
+        .required(false))
+    .arg(Arg::new("debug-job")
+        .help(r#"by default, deplo try to stop on all job which matches condition specified with --debug option, except deplo-main/deplo-halt.
+if the option is set, deplo run debugger after finishing job only that specified as value.
+normally job name. if you want to debug deplo-main/deplo-halt, specify these names for the argument"#)
+        .short('j')
+        .long("debug-job")
+        .takes_value(true)
         .required(false))
 }
 fn run_command_options(
