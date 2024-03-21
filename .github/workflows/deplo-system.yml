@@ -746,7 +746,7 @@ jobs:
           token: ${{ secrets.SUNTOMI_VCS_ACCOUNT_KEY }}
       - name: Restore repository from cache
         if: steps.fetch-repository-cache.outputs.cache-hit == 'true'
-        run: git reset --hard HEAD && git submodule update --init --recursive && echo "deplo restore path=[$PATH]" && which deplo && /usr/bin/deplo -v=1 ci restore-cache --submodules
+        run: git reset --hard HEAD && git submodule update --init --recursive && echo "==== restore cache start" && which deplo && deplo -v=1 ci restore-cache --submodules && echo "==== restore cache end"
       - name: Cache cargo
         id: deplo-cache-cargo
         uses: actions/cache@v4
