@@ -28,7 +28,7 @@
             "DEPLO_GHACTION_WORKFLOW_NAME": "Deplo System"
         },
         "args": [
-            "-v=3", "run", "-p=payload.json", "remote-test"
+            "-v=3", "boot", "-p=payload.json"
         ]
     },    
     {
