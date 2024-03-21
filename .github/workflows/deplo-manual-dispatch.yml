@@ -14,7 +14,6 @@ on:
           - prod
           - qa
           - review
-  
 
 env:
   DEPLO_GHACTION_CI_ID: ${{ github.run_id }}-${{ github.run_attempt }}
@@ -407,7 +406,6 @@ jobs:
           key: deploy-build-${{ runner.os }}-v1-${{ hashFiles('**/Cargo.lock') }}
           restore-keys:
             deploy-build-${{ runner.os }}-v1-
-          
       - name: Mark cache result
         if: steps.deplo-cache-cargo.outputs.cache-hit == 'true'
         run: echo "DEPLO_CACHE_CARGO_HIT=true" >> $GITHUB_ENV
@@ -758,7 +756,6 @@ jobs:
           key: deploy-build-${{ runner.os }}-v1-${{ hashFiles('**/Cargo.lock') }}
           restore-keys:
             deploy-build-${{ runner.os }}-v1-
-          
       - name: Mark cache result
         if: steps.deplo-cache-cargo.outputs.cache-hit == 'true'
         run: echo "DEPLO_CACHE_CARGO_HIT=true" >> $GITHUB_ENV
