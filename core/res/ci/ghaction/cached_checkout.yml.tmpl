@@ -13,3 +13,4 @@
 - name: Restore repository from cache
   if: steps.fetch-repository-cache.outputs.cache-hit == 'true'
   run: {restore_commands}
+  shell: bash
