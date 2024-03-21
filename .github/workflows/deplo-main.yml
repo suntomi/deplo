@@ -72,7 +72,6 @@ jobs:
       - name: Restore repository from cache
         if: steps.fetch-repository-cache.outputs.cache-hit == 'true'
         run: git reset --hard HEAD && git submodule update --init --recursive && deplo -v=1 ci restore-cache --submodules
-        shell: bash
       - name: Boot deplo
         id: deplo-main
         run: deplo boot
@@ -124,7 +123,6 @@ jobs:
       - name: Restore repository from cache
         if: steps.fetch-repository-cache.outputs.cache-hit == 'true'
         run: git reset --hard HEAD && git submodule update --init --recursive && deplo -v=1 ci restore-cache --submodules
-        shell: bash
       - name: Halt deplo
         id: deplo-halt
         run: deplo halt
@@ -168,7 +166,6 @@ jobs:
       - name: Restore repository from cache
         if: steps.fetch-repository-cache.outputs.cache-hit == 'true'
         run: git reset --hard HEAD && git submodule update --init --recursive && deplo -v=1 ci restore-cache --submodules
-        shell: bash
   
       - name: base
         id: deplo-job-base
@@ -213,7 +210,6 @@ jobs:
       - name: Restore repository from cache
         if: steps.fetch-repository-cache.outputs.cache-hit == 'true'
         run: git reset --hard HEAD && git submodule update --init --recursive && deplo -v=1 ci restore-cache --submodules
-        shell: bash
   
       - name: builder
         id: deplo-job-builder
@@ -258,7 +254,6 @@ jobs:
       - name: Restore repository from cache
         if: steps.fetch-repository-cache.outputs.cache-hit == 'true'
         run: git reset --hard HEAD && git submodule update --init --recursive && deplo -v=1 ci restore-cache --submodules
-        shell: bash
   
       - name: config
         id: deplo-job-config
@@ -303,7 +298,6 @@ jobs:
       - name: Restore repository from cache
         if: steps.fetch-repository-cache.outputs.cache-hit == 'true'
         run: git reset --hard HEAD && git submodule update --init --recursive && deplo -v=1 ci restore-cache --submodules
-        shell: bash
   
       - name: dispatched
         id: deplo-job-dispatched
@@ -349,7 +343,6 @@ jobs:
       - name: Restore repository from cache
         if: steps.fetch-repository-cache.outputs.cache-hit == 'true'
         run: git reset --hard HEAD && git submodule update --init --recursive && deplo -v=1 ci restore-cache --submodules
-        shell: bash
   
       - name: latest
         id: deplo-job-latest
@@ -395,7 +388,6 @@ jobs:
       - name: Restore repository from cache
         if: steps.fetch-repository-cache.outputs.cache-hit == 'true'
         run: git reset --hard HEAD && git submodule update --init --recursive && deplo -v=1 ci restore-cache --submodules
-        shell: bash
       - name: Cache cargo
         id: deplo-cache-cargo
         uses: actions/cache@v4
@@ -409,6 +401,7 @@ jobs:
           key: deploy-build-${{ runner.os }}-v1-${{ hashFiles('**/Cargo.lock') }}
           restore-keys:
             deploy-build-${{ runner.os }}-v1-
+          
       - name: Mark cache result
         if: steps.deplo-cache-cargo.outputs.cache-hit == 'true'
         run: echo "DEPLO_CACHE_CARGO_HIT=true" >> $GITHUB_ENV
@@ -455,7 +448,6 @@ jobs:
       - name: Restore repository from cache
         if: steps.fetch-repository-cache.outputs.cache-hit == 'true'
         run: git reset --hard HEAD && git submodule update --init --recursive && deplo -v=1 ci restore-cache --submodules
-        shell: bash
   
       - name: module_test
         id: deplo-job-module_test
@@ -501,7 +493,6 @@ jobs:
       - name: Restore repository from cache
         if: steps.fetch-repository-cache.outputs.cache-hit == 'true'
         run: git reset --hard HEAD && git submodule update --init --recursive && deplo -v=1 ci restore-cache --submodules
-        shell: bash
   
       - name: product
         id: deplo-job-product
@@ -546,7 +537,6 @@ jobs:
       - name: Restore repository from cache
         if: steps.fetch-repository-cache.outputs.cache-hit == 'true'
         run: git reset --hard HEAD && git submodule update --init --recursive && deplo -v=1 ci restore-cache --submodules
-        shell: bash
   
       - name: remote-test
         id: deplo-job-remote-test
@@ -591,7 +581,6 @@ jobs:
       - name: Restore repository from cache
         if: steps.fetch-repository-cache.outputs.cache-hit == 'true'
         run: git reset --hard HEAD && git submodule update --init --recursive && deplo -v=1 ci restore-cache --submodules
-        shell: bash
   
       - name: repository
         id: deplo-job-repository
@@ -636,7 +625,6 @@ jobs:
       - name: Restore repository from cache
         if: steps.fetch-repository-cache.outputs.cache-hit == 'true'
         run: git reset --hard HEAD && git submodule update --init --recursive && deplo -v=1 ci restore-cache --submodules
-        shell: bash
   
       - name: taglab
         id: deplo-job-taglab
@@ -684,7 +672,6 @@ jobs:
       - name: Restore repository from cache
         if: steps.fetch-repository-cache.outputs.cache-hit == 'true'
         run: git reset --hard HEAD && git submodule update --init --recursive && deplo -v=1 ci restore-cache --submodules
-        shell: bash
       - name: Cache cargo
         id: deplo-cache-cargo
         uses: actions/cache@v4
@@ -745,7 +732,6 @@ jobs:
       - name: Restore repository from cache
         if: steps.fetch-repository-cache.outputs.cache-hit == 'true'
         run: git reset --hard HEAD && git submodule update --init --recursive && deplo -v=1 ci restore-cache --submodules
-        shell: bash
       - name: Cache cargo
         id: deplo-cache-cargo
         uses: actions/cache@v4
@@ -759,6 +745,7 @@ jobs:
           key: deploy-build-${{ runner.os }}-v1-${{ hashFiles('**/Cargo.lock') }}
           restore-keys:
             deploy-build-${{ runner.os }}-v1-
+          
       - name: Mark cache result
         if: steps.deplo-cache-cargo.outputs.cache-hit == 'true'
         run: echo "DEPLO_CACHE_CARGO_HIT=true" >> $GITHUB_ENV
