@@ -245,7 +245,7 @@ commit = [
 ]
 
 [jobs.product]
-on = { workflows = ["deploy"], release_targets = ["prod","nightly"], changed = ["*/src/*", "Cargo.*"] }
+on = { workflows = ["deploy"], release_targets = ["prod","nightly"], changed = ["*/src/*", "*/res/*", "Cargo.*"] }
 # job dependencies. deploy.product only starts to run after deploy.builder finished.
 depends = ["builder"]
 runner = { os = "linux", local_fallback = { path = "tools/docker/Dockerfile.vmfb", shell = "sh" } }
@@ -286,7 +286,7 @@ cp tools/docker/bin/cli .deplo/cli/${DEPLO_RELEASE_NAME}/Linux/deplo
 
 [jobs.latest]
 # latest tag of docker image is only updated when production release is created.
-on = { workflows = ["deploy"], release_targets = ["prod"], changed = ["*/src/*", "Cargo.*"] }
+on = { workflows = ["deploy"], release_targets = ["prod"], changed = ["*/src/*", "*/res/*", "Cargo.*"] }
 # prohibit to run from cli
 options = { only_from_ci = true }
 depends = ["product"]
@@ -300,7 +300,7 @@ docker push ghcr.io/suntomi/deplo:latest
 """
 
 [jobs.mac]
-on = { workflows = ["deploy"], release_targets = ["prod","nightly"], changed = ["*/src/*", "Cargo.*"] }
+on = { workflows = ["deploy"], release_targets = ["prod","nightly"], changed = ["*/src/*", "*/res/*", "Cargo.*"] }
 depends = ["product"]
 runner = { os = "macos" }
 steps = [{
@@ -370,7 +370,7 @@ caches.cargo = {
 }
 
 [jobs.win]
-on = { workflows = ["deploy"], release_targets = ["prod","nightly"], changed = [".*/src/.*", 'Cargo\.*'], diff_matcher = "regex" }
+on = { workflows = ["deploy"], release_targets = ["prod","nightly"], changed = [".*/src/.*", "*/res/*", 'Cargo\.*'], diff_matcher = "regex" }
 depends = ["product"]
 runner = { os = "windows" }
 command = """
