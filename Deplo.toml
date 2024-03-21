@@ -370,7 +370,7 @@ caches.cargo = {
 }
 
 [jobs.win]
-on = { workflows = ["deploy"], release_targets = ["prod","nightly"], changed = [".*/src/.*", "*/res/*", 'Cargo\.*'], diff_matcher = "regex" }
+on = { workflows = ["deploy"], release_targets = ["prod","nightly"], changed = [".*/src/.*", ".*/res/.*", 'Cargo\.*'], diff_matcher = "regex" }
 depends = ["product"]
 runner = { os = "windows" }
 command = """
