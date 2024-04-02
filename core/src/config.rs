@@ -20,6 +20,7 @@ pub mod module;
 pub mod release_target;
 pub mod runtime;
 pub mod secret;
+pub mod var;
 pub mod source;
 pub mod value;
 pub mod vcs;
@@ -303,8 +304,8 @@ impl Config {
         // config source
         let src = runtime_config.config_source();
         // 1. load secret config and setup
-        let secret_config = src.load_as::<secret::Config>()?;
-        secret_config.apply_with(&runtime_config)?; // after here, all secrets in Deplo.toml will be resolvable
+        let secret_config = src.load_as::<var::Config>()?;
+        secret_config.apply_with(&runtime_config)?; // after here, all secrets/vars in Deplo.toml will be resolvable
         // 2. create deplo config
         let c = {
             let mut config = src.load_as::<Config>()?;

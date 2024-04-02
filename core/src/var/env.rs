@@ -2,7 +2,7 @@ use std::error::Error;
 use std::result::Result;
 
 use crate::config;
-use crate::secret;
+use crate::var;
 use crate::util::{escalate};
 
 pub struct Env {
@@ -10,17 +10,17 @@ pub struct Env {
     pub val: String,
 }
 
-impl secret::Factory for Env {
+impl var::Factory for Env {
     fn new(
         _name: &str,
         _runtime_config: &config::runtime::Config,
-        secret_config: &config::secret::Secret
+        var: &var::Var
     ) -> Result<Self, Box<dyn Error>> {
-        return Ok(match secret_config {
-            config::secret::Secret::Env { env } => Self{
+        return Ok(match var {
+            var::Var::Env { env } => Self{
                 key: env.clone(), val: match std::env::var(&env) {
                     Ok(val) => val,
-                    Err(_) => return escalate!(Box::new(secret::SecretError{
+                    Err(_) => return escalate!(Box::new(var::VarError{
                         cause: format!("env var {} not found", env)
                     }))
                 }
@@ -29,10 +29,10 @@ impl secret::Factory for Env {
         });
     }
 }
-impl secret::Accessor for Env {
+impl var::Accessor for Env {
     fn var(&self) -> Result<Option<String>, Box<dyn Error>> {
         Ok(Some(self.val.clone()))
     }
 }
-impl secret::Secret for Env {
+impl var::Trait for Env {
 }

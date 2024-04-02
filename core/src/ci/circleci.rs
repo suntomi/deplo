@@ -98,6 +98,10 @@ impl<'a, S: shell::Shell> ci::CI for CircleCI<S> {
                 (self as &dyn ci::CI).set_secret(k, v)?;
                 log::debug!("set secret value of {}", k);
             }
+            for (k, v) in &config::secret::vars()? {
+                (self as &dyn ci::CI).set_var(k, v)?;
+                log::debug!("set secret value of {}", k);
+            }
         }
         fs::write(&circle_yml_path, format!(
             include_str!("../../res/ci/circleci/main.yml.tmpl"),
@@ -197,6 +201,10 @@ impl<'a, S: shell::Shell> ci::CI for CircleCI<S> {
     fn list_secret_name(&self) -> Result<Vec<String>, Box<dyn Error>> {
         log::warn!("TODO: implement list_secret_name for circleci");
         Ok(vec![])   
+    }
+    fn set_var(&self, _key: &str, _value: &str) -> Result<(), Box<dyn Error>> {
+        log::warn!("TODO: implement set_var for circleci");
+        Ok(())
     }
     fn set_secret(&self, key: &str, val: &str) -> Result<(), Box<dyn Error>> {
         let config = self.config.borrow();

@@ -45,6 +45,8 @@ env:
   SUNTOMI_VCS_ACCOUNT_KEY: ${{ secrets.SUNTOMI_VCS_ACCOUNT_KEY }}
   SUNTOMI_VCS_APP_ID: ${{ secrets.SUNTOMI_VCS_APP_ID }}
   SUNTOMI_VCS_APP_PKEY: ${{ secrets.SUNTOMI_VCS_APP_PKEY }}
+  SUNTOMI_VARS1: ${{ vars.SUNTOMI_VARS1 }}
+  SUNTOMI_VARS2: ${{ vars.SUNTOMI_VARS2 }}
 jobs:
   deplo-main:
     name: Start CI ${{ github.event.inputs.id }}

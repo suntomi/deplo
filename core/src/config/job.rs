@@ -574,8 +574,10 @@ impl Job {
     ) -> HashMap<String, config::Value> {
         let ci = self.ci(config);
         let secrets = config::secret::as_config_values();
+        let vars = config::var::as_config_values();
         let mut envs_list = vec![];
         envs_list.push(&config.envs);
+        envs_list.push(&vars);
         envs_list.push(&secrets);
         let common_envs = merge_hashmap(&hashmap!{
             "DEPLO_CI_JOB_NAME".to_string() => config::Value::new(&self.name),

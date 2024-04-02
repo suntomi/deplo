@@ -4,7 +4,7 @@ use std::path::{PathBuf};
 use std::result::Result;
 
 use crate::config;
-use crate::secret;
+use crate::var;
 use crate::util::{escalate};
 
 pub struct File {
@@ -12,29 +12,29 @@ pub struct File {
     pub val: String,
 }
 
-impl secret::Factory for File {
+impl var::Factory for File {
     fn new(
         name: &str,
         runtime_config: &config::runtime::Config,
-        secret_config: &config::secret::Secret
+        var: &var::Var
     ) -> Result<Self, Box<dyn Error>> {
         let cwd = match runtime_config.workdir.as_ref() {
             Some(wd) => PathBuf::from(wd),
             None => std::env::current_dir()?
         };
-        return Ok(match secret_config {
-            config::secret::Secret::File { path } => Self{
+        return Ok(match var {
+            var::Var::File { path } => Self{
                 path: path.clone(), val: if config::Config::is_running_on_ci() {
                     match std::env::var(&name) {
                         Ok(val) => val,
-                        Err(_) => return escalate!(Box::new(secret::SecretError{
+                        Err(_) => return escalate!(Box::new(var::VarError{
                             cause: format!("env var {} not found", name)
                         }))
                     }
                 } else {
                     match fs::read_to_string(cwd.join(&path)) {
                         Ok(val) => val,
-                        Err(e) => return escalate!(Box::new(secret::SecretError{
+                        Err(e) => return escalate!(Box::new(var::VarError{
                             cause: format!("file load error {:?} path={}", e, cwd.join(&path).display())
                         }))
                     }
@@ -44,10 +44,10 @@ impl secret::Factory for File {
         });
     }
 }
-impl secret::Accessor for File {
+impl var::Accessor for File {
     fn var(&self) -> Result<Option<String>, Box<dyn Error>> {
         Ok(Some(self.val.clone()))
     }
 }
-impl secret::Secret for File {
+impl var::Trait for File {
 }
