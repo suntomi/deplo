@@ -705,6 +705,13 @@ impl<S: shell::Shell> ci::CI for GhAction<S> {
             }
             secrets.push(format!("{}: ${{{{ secrets.{} }}}}", k, k));
         }
+        for (k, v) in sorted_key_iter(&config::var::vars()?) {
+            if previously_no_file || reinit {
+                (self as &dyn ci::CI).set_var(k, v)?;
+                log::debug!("set variable value of {}", k);
+            }
+            secrets.push(format!("{}: ${{{{ vars.{} }}}}", k, k));
+        }
         // generate job entries
         let mut job_descs = Vec::new();
         let mut all_job_names = vec!["deplo-main".to_string()];

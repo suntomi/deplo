@@ -98,6 +98,10 @@ impl<'a, S: shell::Shell> ci::CI for CircleCI<S> {
                 (self as &dyn ci::CI).set_secret(k, v)?;
                 log::debug!("set secret value of {}", k);
             }
+            for (k, v) in &config::secret::vars()? {
+                (self as &dyn ci::CI).set_var(k, v)?;
+                log::debug!("set secret value of {}", k);
+            }
         }
         fs::write(&circle_yml_path, format!(
             include_str!("../../res/ci/circleci/main.yml.tmpl"),
