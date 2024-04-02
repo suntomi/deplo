@@ -50,8 +50,8 @@ pub fn vars() -> Result<HashMap<String, String>, Box<dyn Error>> {
 }
 pub fn as_config_values() -> HashMap<String, config::Value> {
     let mut result = hashmap!{};
-    for (k, _v) in vars().unwrap() {
-        result.insert(k.clone(), config::Value::new(&k));
+    for (k, v) in vars().unwrap() {
+        result.insert(k.clone(), config::Value::new(&v));
     }
     return result;
 }
