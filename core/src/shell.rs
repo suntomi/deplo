@@ -184,6 +184,15 @@ mod tests {
             println!("entry = {}", entry.unwrap().to_string_lossy());
         }
     }
+    // test strange freeze of curl execution never returns when response body is something strange
+    // #[test]
+    // fn test_curl_fetch() {
+    //     let shell = crate::shell::new_default(&crate::config::Container::new());
+    //     let url = "https://www.google.com";
+    //     let output_path = "/tmp/google.html";
+    //     let result = shell.download(url, output_path, false);
+    //     assert_eq!(result.is_ok(), true);
+    // }
 }
 
 #[derive(Eq, PartialEq, Hash)]
