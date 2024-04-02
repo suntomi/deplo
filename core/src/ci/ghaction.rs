@@ -1346,4 +1346,31 @@ impl<S: shell::Shell> ci::CI for GhAction<S> {
             }));
         }
     }
+    fn set_var(&self, key: &str, value: &str) -> Result<(), Box<dyn Error>> {
+        let token = self.get_token()?;
+        let config = self.config.borrow();
+        let user_and_repo = config.modules.vcs().user_and_repo()?;
+        let json = format!("{{\"name\":\"{}\",\"variable_value\":\"{}\"}}", 
+            key, value
+        );
+        // TODO_PATH: use Path to generate path of /dev/null
+        let status = self.shell.exec(shell::args!(
+            "curl", "-X", "POST",
+            format!(
+                "https://api.github.com/repos/{}/{}/actions/variables",
+                user_and_repo.0, user_and_repo.1
+            ),
+            "-H", "Content-Type: application/json",
+            "-H", "Accept: application/json",
+            "-H", shell::fmtargs!("Authorization: token {}", &token),
+            "-d", json, "-w", "%{http_code}", "-o", "/dev/null"
+        ), shell::no_env(), shell::no_cwd(), &shell::capture())?.parse::<u32>()?;
+        if status >= 200 && status < 300 {
+            Ok(())
+        } else {
+            return escalate!(Box::new(ci::CIError {
+                cause: format!("fail to set variable to CircleCI CI with status code:{}", status)
+            }));
+        }
+    }    
 }

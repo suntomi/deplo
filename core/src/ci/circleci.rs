@@ -198,6 +198,10 @@ impl<'a, S: shell::Shell> ci::CI for CircleCI<S> {
         log::warn!("TODO: implement list_secret_name for circleci");
         Ok(vec![])   
     }
+    fn set_var(&self, _key: &str, _value: &str) -> Result<(), Box<dyn Error>> {
+        log::warn!("TODO: implement set_var for circleci");
+        Ok(())
+    }
     fn set_secret(&self, key: &str, val: &str) -> Result<(), Box<dyn Error>> {
         let config = self.config.borrow();
         let token = match &config.ci.get(&self.account_name).expect(&format!("no ci config for {}", self.account_name)) {

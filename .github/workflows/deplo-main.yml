@@ -75,7 +75,7 @@ jobs:
         shell: bash
       - name: Boot deplo
         id: deplo-main
-        run: deplo boot
+        run: echo "[$DEPLO_HOGE]" && deplo boot
       - name: Setup ssh session to debug
         if: always() && (env.DEPLO_CI_RUN_DEBUGGER != '')
         uses: mxschmitt/action-tmate@v3

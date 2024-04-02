@@ -30,6 +30,14 @@ SUNTOMI_AWS_ROLE = { env = "SUNTOMI_AWS_ROLE" }
 
 
 # ------------
+# var settings
+# ------------
+[vars]
+SUNTOMI_VARS1 = { env = "SUNTOMI_VARS1" }
+SUNTOMI_VARS2 = { path = "./.vars/hoge.txt" }
+
+
+# ------------
 # vcs settings
 # ------------
 # version control system account settings
@@ -404,6 +412,14 @@ command = """
 echo "======================="
 echo "dispatch context = ${DEPLO_CI_WORKFLOW_CONTEXT}"
 echo "======================="
+if [ "${SUNTOMI_VARS1}" != "hoge" ]; then
+    echo "failed to get vars SUNTOMI_VARS1"
+    exit 1
+fi
+if [ "${SUNTOMI_VARS2}" != "fugafugafuga" ]; then
+    echo "failed to get vars SUNTOMI_VARS2"
+    exit 1
+fi
 """
 
 [jobs.repository]

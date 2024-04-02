@@ -3,7 +3,7 @@ extern crate lazy_static;
 
 pub mod args;
 pub mod config;
-pub mod secret;
+pub mod var;
 pub mod shell;
 pub mod util;
 pub mod step;

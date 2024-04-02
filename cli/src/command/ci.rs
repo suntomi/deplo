@@ -21,6 +21,10 @@ impl<S: shell::Shell> CI<S> {
             println!("set secret {}", k);
             ci.set_secret(&k, &v)?;
         }
+        for (k,v) in config::var::vars()? {
+            println!("set var {}", k);
+            ci.set_var(&k, &v)?;
+        }
         Ok(())
     }
     fn token<A: args::Args>(&self, args: &A) -> Result<(), Box<dyn Error>> {
