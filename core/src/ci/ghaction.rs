@@ -1357,7 +1357,7 @@ impl<S: shell::Shell> ci::CI for GhAction<S> {
         let token = self.get_token()?;
         let config = self.config.borrow();
         let user_and_repo = config.modules.vcs().user_and_repo()?;
-        let json = format!("{{\"name\":\"{}\",\"variable_value\":\"{}\"}}", 
+        let json = format!("{{\"name\":\"{}\",\"value\":\"{}\"}}", 
             key, value
         );
         // TODO_PATH: use Path to generate path of /dev/null
@@ -1369,6 +1369,7 @@ impl<S: shell::Shell> ci::CI for GhAction<S> {
             ),
             "-H", "Content-Type: application/json",
             "-H", "Accept: application/json",
+            "-H", "X-GitHub-Api-Version: 2022-11-28",
             "-H", shell::fmtargs!("Authorization: token {}", &token),
             "-d", json, "-w", "%{http_code}", "-o", "/dev/null"
         ), shell::no_env(), shell::no_cwd(), &shell::capture())?.parse::<u32>()?;

@@ -412,7 +412,7 @@ command = """
 echo "======================="
 echo "dispatch context = ${DEPLO_CI_WORKFLOW_CONTEXT}"
 echo "======================="
-if [ "${SUNTOMI_VARS1}" != "hoge" ]; then
+if [ "${SUNTOMI_VARS1}" != "piyo" ]; then
     echo "failed to get vars SUNTOMI_VARS1"
     exit 1
 fi
