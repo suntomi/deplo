@@ -175,26 +175,6 @@ impl Settings {
     }
 }
 
-#[cfg(test)]
-mod tests {
-    #[test]
-    fn glob_test() {
-        for entry in glob::glob("~/*/").unwrap() {
-            assert_eq!(entry.is_ok(), true);
-            println!("entry = {}", entry.unwrap().to_string_lossy());
-        }
-    }
-    // test strange freeze of curl execution never returns when response body is something strange
-    // #[test]
-    // fn test_curl_fetch() {
-    //     let shell = crate::shell::new_default(&crate::config::Container::new());
-    //     let url = "https://www.google.com";
-    //     let output_path = "/tmp/google.html";
-    //     let result = shell.download(url, output_path, false);
-    //     assert_eq!(result.is_ok(), true);
-    // }
-}
-
 #[derive(Eq, PartialEq, Hash)]
 pub enum MountType {
     Bind,
@@ -548,5 +528,24 @@ pub fn sheban_of<'a>(script: &'a str, fallback: &'a str) -> &'a str {
     match re.captures(script) {
         Some(c) => c.get(1).unwrap().as_str(),
         None => fallback
+    }
+}
+
+mod tests {
+    use crate::shell::*;
+    #[test]
+    fn glob_test() {
+        for entry in glob::glob("~/*/").unwrap() {
+            assert_eq!(entry.is_ok(), true);
+            println!("entry = {}", entry.unwrap().to_string_lossy());
+        }
+    }
+    #[test]
+    fn large_output_test() {
+        let shell = crate::shell::new_default(&crate::config::Config::with(None).unwrap());
+        std::fs::write("/tmp/large-text.json", include_str!("../res/test/large-text.json")).unwrap();
+        shell.exec(args!(
+            "cat", "/tmp/large-text.json"
+        ), no_env(), no_cwd(), &crate::shell::capture()).unwrap();
     }
 }
