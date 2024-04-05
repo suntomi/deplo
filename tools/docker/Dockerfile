@@ -15,9 +15,6 @@ RUN echo "DEPLO_RELEASE_VERSION=[${DEPLO_RELEASE_VERSION}]"
 RUN if [ "${TARGETARCH}" = "arm64" ]; then export ARCH="aarch64"; else export ARCH="x86_64"; fi && \
     cargo zigbuild --release --target=${ARCH}-unknown-linux-musl && \
     cp /tmp/target/${ARCH}-unknown-linux-musl/release/cli /tmp/cli
-# install binutils of target architecture for strip (causion: not x86_64 but x86-64 :<)
-RUN if [ "${TARGETARCH}" = "arm64" ]; then export STRIP_ARCH="aarch64"; else export STRIP_ARCH="x86-64"; fi && \
-    apt-get install -y curl binutils-${STRIP_ARCH}-linux-gnu
 # upload symbol files (cli.debug) to github release here, so that avoiding unnecessary copy to release image
 RUN if [ "${TARGETARCH}" = "arm64" ]; then export ARCH="aarch64"; else export ARCH="x86_64"; fi && \
     cp /tmp/cli /tmp/cli.debug && \

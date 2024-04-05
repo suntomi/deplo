@@ -532,6 +532,7 @@ pub fn sheban_of<'a>(script: &'a str, fallback: &'a str) -> &'a str {
 }
 
 mod tests {
+    #[allow(unused_imports)]
     use crate::shell::*;
     #[test]
     fn glob_test() {
@@ -546,6 +547,6 @@ mod tests {
         std::fs::write("/tmp/large-text.json", include_str!("../res/test/large-text.json")).unwrap();
         shell.exec(args!(
             "cat", "/tmp/large-text.json"
-        ), no_env(), no_cwd(), &crate::shell::capture()).unwrap();
+        ), crate::shell::no_env(), crate::shell::no_cwd(), &crate::shell::capture()).unwrap();
     }
 }
