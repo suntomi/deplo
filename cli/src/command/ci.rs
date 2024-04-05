@@ -4,6 +4,7 @@ use std::fs;
 use core::config;
 use core::shell;
 use core::ci;
+use std::vec;
 
 use crate::args;
 use crate::command;
@@ -25,6 +26,23 @@ impl<S: shell::Shell> CI<S> {
             println!("set var {}", k);
             ci.set_var(&k, &v)?;
         }
+        Ok(())
+    }
+    fn getenv<A: args::Args>(&self, args: &A) -> Result<(), Box<dyn Error>> {
+        let mut lines = vec![];
+        let out_path = match args.value_of("output") {
+            Some(v) => v,
+            None => return escalate!(args.error("ci getenv: must specify output"))
+        };
+        for (k,v) in config::secret::vars()? {
+            println!("get secret {}", k);
+            lines.push(format!("{}={}", k, Self::escape(&v)));
+        }
+        for (k,v) in config::var::vars()? {
+            println!("get var {}", k);
+            lines.push(format!("{}={}", k, Self::escape(&v)));
+        }
+        fs::write(out_path, lines.join("\n"))?;
         Ok(())
     }
     fn token<A: args::Args>(&self, args: &A) -> Result<(), Box<dyn Error>> {
@@ -63,6 +81,26 @@ impl<S: shell::Shell> CI<S> {
         let (_, ci) = config.modules.ci_by_env();
         ci.restore_cache(args.occurence_of("submodules") > 0)
     }
+    fn escape(input: &str) -> String {
+        let mut escaped = String::new();
+        for c in input.chars() {
+            match c {
+                '\x00' => escaped.push_str("\\0"),
+                '\x07' => escaped.push_str("\\a"),
+                '\x08' => escaped.push_str("\\b"),
+                '\t' => escaped.push_str("\\t"),
+                '\n' => escaped.push_str("\\n"),
+                '\x0b' => escaped.push_str("\\v"),
+                '\x0c' => escaped.push_str("\\f"),
+                '\r' => escaped.push_str("\\r"),
+                '\\' => escaped.push_str("\\\\"),
+                '"' => escaped.push_str("\\\""),
+                '\'' => escaped.push_str("\\'"),
+                _ => escaped.push(c),
+            }
+        }    
+        escaped
+    }    
 }
 
 impl<S: shell::Shell, A: args::Args> command::Command<A> for CI<S> {
@@ -75,6 +113,7 @@ impl<S: shell::Shell, A: args::Args> command::Command<A> for CI<S> {
     fn run(&self, args: &A) -> Result<(), Box<dyn Error>> {
         match args.subcommand() {
             Some(("setenv", subargs)) => return self.setenv(&subargs),
+            Some(("getenv", subargs)) => return self.getenv(&subargs),
             Some(("token", subargs)) => return self.token(&subargs),
             Some(("restore-cache", subargs)) => return self.restore_cache(&subargs),
             Some((name, _)) => return escalate!(args.error(
