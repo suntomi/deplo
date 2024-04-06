@@ -2,6 +2,22 @@
     "version": "0.2.0",
     "configurations": [
     {
+        "type": "lldb",
+        "request": "launch",
+        "name": "Test",
+        "cargo": {
+            "args": [
+                "test",
+                "--no-run",
+                "--lib",
+                "--package=core",
+                "shell::tests::curl_fetch_test"
+            ]
+        },
+        "args": [],
+        "cwd": "${workspaceFolder}"
+    },
+    {
         "name": "Steps",
         "type": "lldb",
         "request": "launch",

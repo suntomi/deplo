@@ -175,17 +175,6 @@ impl Settings {
     }
 }
 
-#[cfg(test)]
-mod tests {
-    #[test]
-    fn glob_test() {
-        for entry in glob::glob("~/*/").unwrap() {
-            assert_eq!(entry.is_ok(), true);
-            println!("entry = {}", entry.unwrap().to_string_lossy());
-        }
-    }
-}
-
 #[derive(Eq, PartialEq, Hash)]
 pub enum MountType {
     Bind,
@@ -539,5 +528,25 @@ pub fn sheban_of<'a>(script: &'a str, fallback: &'a str) -> &'a str {
     match re.captures(script) {
         Some(c) => c.get(1).unwrap().as_str(),
         None => fallback
+    }
+}
+
+mod tests {
+    #[allow(unused_imports)]
+    use crate::shell::*;
+    #[test]
+    fn glob_test() {
+        for entry in glob::glob("~/*/").unwrap() {
+            assert_eq!(entry.is_ok(), true);
+            println!("entry = {}", entry.unwrap().to_string_lossy());
+        }
+    }
+    #[test]
+    fn large_output_test() {
+        let shell = crate::shell::new_default(&crate::config::Config::with(None).unwrap());
+        std::fs::write("/tmp/large-text.json", include_str!("../res/test/large-text.json")).unwrap();
+        shell.exec(args!(
+            "cat", "/tmp/large-text.json"
+        ), crate::shell::no_env(), crate::shell::no_cwd(), &crate::shell::capture()).unwrap();
     }
 }

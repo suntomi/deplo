@@ -68,4 +68,6 @@ RUN export ARCH="aarch64"; \
     cargo zigbuild --release --target ${ARCH}-unknown-linux-musl --color never --features single-binary && \
     rm -r /tmp/target/${ARCH}-unknown-linux-musl/release/.fingerprint/cli-*
 # install dependent cli
-RUN apt update && apt install -y git
+# install binutils of target architecture for strip (causion: not x86_64 but x86-64 :<)
+RUN apt-get update  && \
+    apt-get install -y git curl binutils-aarch64-linux-gnu binutils-x86-64-linux-gnu

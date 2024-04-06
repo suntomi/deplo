@@ -1,3 +1,7 @@
 [workspace]
 members = ["cli", "core"]
 resolver = "2"
+
+[profile.release]
+debug = 2
+split-debuginfo = "packed"

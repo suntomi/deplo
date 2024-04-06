@@ -1,4 +1,4 @@
-use std::process::{Command, Stdio, ChildStdout};
+use std::process::{Command, Stdio};
 use std::collections::HashMap;
 use std::borrow::Cow;
 use std::error::Error;
@@ -229,39 +229,12 @@ impl Native {
             })
         }
     }
-    fn read_stdout_or_empty(
-        _cmd: &Command, stdout: Option<ChildStdout>, ct: &mut Option<CaptureTarget>, cmdstr: &str
-    ) -> Result<String, shell::ShellError> {
-        let mut buf = String::new();
-        match ct {
-            Some(v) => {
-                let mut buf = String::new();
-                v.read_stdout(&mut buf).map_err(|e| shell::ShellError::OtherFailure{
-                    cause: format!("cannot read from stderr tempfile error {:?}", e),
-                    cmd: cmdstr.to_string()
-                })?;
-            },
-            None => match stdout {
-                Some(mut stream) => {
-                    match stream.read_to_string(&mut buf) {
-                        Ok(_) => {},
-                        Err(err) => {
-                            log::error!("read_stdout_or_empty error: {:?}", err);
-                        }
-                    }
-                },
-                None => {}
-            }
-        }
-        Ok(buf)
-    }
     fn run_as_child(cmd: &mut Command, ct: &mut Option<CaptureTarget>, cmdstr: String) -> Result<String,shell::ShellError> {
         match cmd.spawn() {
-            Ok(mut process) => {
-                match process.wait() { 
-                    Ok(status) => {
-                        if status.success() {
-                            let mut s = String::new();
+            Ok(process) => {
+                match process.wait_with_output() { 
+                    Ok(output) => {
+                        if output.status.success() {
                             match ct {
                                 Some(v) => {
                                     let mut buf = String::new();
@@ -272,42 +245,32 @@ impl Native {
                                     log::debug!("stdout: [{}]", buf);
                                     return Ok(buf.trim().to_string())
                                 },
-                                None => match process.stdout {
-                                    Some(mut stream) => match stream.read_to_string(&mut s) {
-                                        Ok(_) => return Ok(s.trim().to_string()),
-                                        Err(err) => return Err(shell::ShellError::OtherFailure{
-                                            cause: format!("read stream error {:?}", err),
-                                            cmd: cmdstr
-                                        })
-                                    },
-                                    None => return Ok("".to_string())
+                                None => match String::from_utf8(output.stdout) {
+                                    Ok(s) => return Ok(s.trim().to_string()),
+                                    Err(err) => return Err(shell::ShellError::OtherFailure{
+                                        cause: format!("read stdout error: non printable characters {:?}", err),
+                                        cmd: cmdstr
+                                    })
                                 }
                             }
                         } else {
-                            let mut s = String::new();
-                            let output = match process.stderr {
-                                Some(mut stream) => {
-                                    match stream.read_to_string(&mut s) {
-                                        Ok(_) => if s.is_empty() {
-                                            Self::read_stdout_or_empty(&cmd, process.stdout, ct, &cmdstr)?
-                                        } else {
-                                            s
-                                        },
-                                        Err(_) => Self::read_stdout_or_empty(&cmd, process.stdout, ct, &cmdstr)?
-                                    }
-                                },
-                                None => Self::read_stdout_or_empty(&cmd, process.stdout, ct, &cmdstr)?
-                            };           
-                            return match status.code() {
+                            let stderr = match String::from_utf8(output.stderr) {
+                                Ok(s) => s,
+                                Err(err) => return Err(shell::ShellError::OtherFailure{
+                                    cause: format!("read stdout error: non printable characters {:?}", err),
+                                    cmd: cmdstr
+                                })
+                            };
+                            return match output.status.code() {
                                 Some(_) => Err(shell::ShellError::ExitStatus{ 
-                                    status, stderr: output,
+                                    status: output.status, stderr,
                                     cmd: cmdstr
                                 }),
                                 None => Err(shell::ShellError::OtherFailure{
-                                    cause: if output.is_empty() { 
+                                    cause: if stderr.is_empty() { 
                                         format!("cmd terminated by signal")
                                     } else {
-                                        format!("cmd failed. output: {}", output)
+                                        format!("cmd failed. output: {}", stderr)
                                     },
                                     cmd: cmdstr
                                 }),

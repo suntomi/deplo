@@ -345,6 +345,16 @@ lazy_static! {
                     .about("upload current .env contents as CI service secrets")
                 )
                 .subcommand(
+                    App::new("getenv")
+                    .about("generate .env format file that contains all secrets/vars")
+                    .arg(Arg::new("output")
+                        .help("output file path")
+                        .short('o')
+                        .long("out")
+                        .takes_value(true)
+                        .required(true))
+                )
+                .subcommand(
                     App::new("restore-cache")
                     .about("restore cached repository to correct state")
                     .arg(Arg::new("submodules")

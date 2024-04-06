@@ -337,6 +337,8 @@ steps = [{
     . tools/scripts/setup_release_env.sh
     cargo build --release
     deplo vcs release-assets ${DEPLO_RELEASE_TAG} target/release/cli --replace -o name=deplo-Darwin
+    tar -czvhf deplo-Darwin.dSYM.tgz target/release/cli.dSYM
+    deplo vcs release-assets ${DEPLO_RELEASE_TAG} deplo-Darwin.dSYM.tgz --replace -o name=deplo-Darwin.dSYM.tgz
     # deploy-mac depends on deploy-product, so can use its output
     if [ "$(deplo job output product foo)" != "bar" ]; then
         echo "failed to get output from job 'product'"
