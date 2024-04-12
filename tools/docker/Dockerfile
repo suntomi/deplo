@@ -17,6 +17,7 @@ RUN if [ "${TARGETARCH}" = "arm64" ]; then export ARCH="aarch64"; else export AR
     cargo zigbuild --release --target=${ARCH}-unknown-linux-musl && \
     cp /tmp/target/${ARCH}-unknown-linux-musl/release/cli /tmp/cli
 # upload symbol files (cli.debug) to github release here, so that avoiding unnecessary copy to release image
+# we use host-deplo because if architecure is different from host, /tmp/cli will not be executable
 RUN if [ "${TARGETARCH}" = "arm64" ]; then export ARCH="aarch64"; else export ARCH="x86_64"; fi && \
     cp /tmp/cli /tmp/cli.debug && \
     ${ARCH}-linux-gnu-strip /tmp/cli && \
