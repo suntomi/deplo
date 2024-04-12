@@ -13,6 +13,7 @@ export_bin() {
     docker rm deplo-bin
 }
 
+echo "host deplo path=[$(which deplo)]"
 cp $(which deplo) ${ROOT}/tools/docker/bin/host-deplo
 deplo ci getenv --out=${ROOT}/.deplo/env
 echo ${SUNTOMI_VCS_ACCOUNT_KEY} | docker login ghcr.io -u ${SUNTOMI_VCS_ACCOUNT} --password-stdin
