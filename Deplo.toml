@@ -296,7 +296,7 @@ cp tools/docker/bin/cli .deplo/cli/${DEPLO_RELEASE_NAME}/Linux/deplo
 
 [jobs.latest]
 # latest tag of docker image is only updated when production release is created.
-on = { workflows = ["deploy"], release_targets = ["prod","nightly"], changed = [
+on = { workflows = ["deploy"], release_targets = ["prod"], changed = [
     "*/src/*", "*/res/*", "Cargo.*", "tools/docker/Dockerfile*", "tools/scripts/build_linux.sh"
 ] }
 # prohibit to run from cli
