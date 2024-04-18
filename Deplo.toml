@@ -165,7 +165,7 @@ docker buildx build ${push_opt} --platform linux/amd64,linux/arm64 -t ghcr.io/su
 
 [jobs.builder]
 # if workflows is opmitted, use ["deploy", "integrate"] by default.
-on = { workflows = ["deploy"], changed = ["tools/docker/Dockerfile.builder", "Cargo.*"] }
+on = { workflows = ["deploy"], release_targets = ["nightly"], changed = ["tools/docker/Dockerfile.builder", "Cargo.*"] }
 runner = { os = "linux", local_fallback = { image = "docker:25.0.1", shell = "sh" } }
 command = """
 set -e
