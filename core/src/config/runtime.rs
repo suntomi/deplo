@@ -3,6 +3,7 @@ use std::error::Error;
 use std::fmt::{self};
 use std::fs;
 use std::path::Path;
+use std::io::Error as IoError;
 
 use maplit::hashmap;
 use serde::{Deserialize, Serialize};
@@ -384,7 +385,15 @@ impl Config {
                 dotenv::from_path(path)?;
             },
             None => {
-                dotenv::dotenv()?;
+                match dotenv::dotenv() {
+                    Ok(_) => {},
+                    Err(e) => match e {
+                        dotenv::Error::Io(e) => {
+                            log::debug!("seems dotenv file not found, skip loading: {}", e)
+                        }
+                        _ => return Err(Box::new(e))
+                    }
+                }
             }
         };
         Ok(())
