@@ -384,7 +384,7 @@ impl Config {
                 dotenv::from_path(path)?;
             },
             None => {
-                dotenv::dotenv().ok();
+                dotenv::dotenv()?;
             }
         };
         Ok(())
