@@ -3,7 +3,6 @@ use std::error::Error;
 use std::fmt::{self};
 use std::fs;
 use std::path::Path;
-use std::io::Error as IoError;
 
 use maplit::hashmap;
 use serde::{Deserialize, Serialize};
