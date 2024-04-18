@@ -186,7 +186,7 @@ dependencies = [
 [[package]]
 name = "dotenv"
 version = "0.15.0"
-source = "git+https://github.com/umegaya/dotenv/#52bb7f1937af67fbc2729bf73521755a24e9c065"
+source = "git+https://github.com/suntomi/dotenv/?rev=5d4fa11#5d4fa11ed5cf2cbb8ff9218b1a00b7a4f00394f3"
 
 [[package]]
 name = "equivalent"
