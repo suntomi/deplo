@@ -35,6 +35,7 @@ SUNTOMI_AWS_ROLE = { env = "SUNTOMI_AWS_ROLE" }
 [vars]
 SUNTOMI_VARS1 = { env = "SUNTOMI_VARS1" }
 SUNTOMI_VARS2 = { path = "./.secrets/hoge.txt" }
+SUNTOMI_VARS3 = { env = "SUNTOMI_VARS3" }
 
 
 # ------------
