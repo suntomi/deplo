@@ -22,7 +22,8 @@ use crate::util::{
     MultilineFormatString,rm,
     sorted_key_iter,
     merge_hashmap,
-    randombytes_as_string
+    randombytes_as_string,
+    escape
 };
 
 #[derive(Deserialize)]
@@ -1358,15 +1359,36 @@ impl<S: shell::Shell> ci::CI for GhAction<S> {
         let config = self.config.borrow();
         let user_and_repo = config.modules.vcs().user_and_repo()?;
         let json = format!("{{\"name\":\"{}\",\"value\":\"{}\"}}", 
-            key, value
+            key, escape(value)
         );
-        // TODO_PATH: use Path to generate path of /dev/null
-        let status = self.shell.exec(shell::args!(
-            "curl", "-X", "POST",
+        // Check if the variable already exists
+        let check_status = self.shell.exec(shell::args!(
+            "curl", "-X", "GET",
             format!(
+                "https://api.github.com/repos/{}/{}/actions/variables/{}",
+                user_and_repo.0, user_and_repo.1, key
+            ),
+            "-H", "Content-Type: application/json",
+            "-H", "Accept: application/json",
+            "-H", "X-GitHub-Api-Version: 2022-11-28",
+            "-H", shell::fmtargs!("Authorization: token {}", &token),
+            "-w", "%{http_code}", "-o", "/dev/null"
+        ), shell::no_env(), shell::no_cwd(), &shell::capture())?.parse::<u32>()?;
+        log::debug!("check status: {}", check_status);
+        let (method, url) = if check_status != 200 { 
+            ("POST", format!(
                 "https://api.github.com/repos/{}/{}/actions/variables",
                 user_and_repo.0, user_and_repo.1
-            ),
+            ))
+        } else {
+            ("PATCH", format!(
+                "https://api.github.com/repos/{}/{}/actions/variables/{}",
+                user_and_repo.0, user_and_repo.1, key
+            ))
+        };
+        // TODO_PATH: use Path to generate path of /dev/null
+        let status = self.shell.exec(shell::args!(
+            "curl", "-X", method, url,
             "-H", "Content-Type: application/json",
             "-H", "Accept: application/json",
             "-H", "X-GitHub-Api-Version: 2022-11-28",
