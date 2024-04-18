@@ -453,6 +453,28 @@ pub fn strhash(src: &str) -> String {
     format!("{:X}", digest.finalize())
 }
 
+// escape
+pub fn escape(input: &str) -> String {
+    let mut escaped = String::new();
+    for c in input.chars() {
+        match c {
+            '\x00' => escaped.push_str("\\0"),
+            '\x07' => escaped.push_str("\\a"),
+            '\x08' => escaped.push_str("\\b"),
+            '\t' => escaped.push_str("\\t"),
+            '\n' => escaped.push_str("\\n"),
+            '\x0b' => escaped.push_str("\\v"),
+            '\x0c' => escaped.push_str("\\f"),
+            '\r' => escaped.push_str("\\r"),
+            '\\' => escaped.push_str("\\\\"),
+            '"' => escaped.push_str("\\\""),
+            '\'' => escaped.push_str("\\'"),
+            _ => escaped.push(c),
+        }
+    }    
+    escaped
+}   
+
 // vec
 pub fn join_vector<T>(src: Vec<Vec<T>>) -> Vec<T> {
     let mut r = vec![];

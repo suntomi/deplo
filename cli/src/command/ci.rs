@@ -4,6 +4,7 @@ use std::fs;
 use core::config;
 use core::shell;
 use core::ci;
+use core::util;
 use std::vec;
 
 use crate::args;
@@ -36,11 +37,11 @@ impl<S: shell::Shell> CI<S> {
         };
         for (k,v) in config::secret::vars()? {
             println!("get secret {}", k);
-            lines.push(format!("{}={}", k, Self::escape(&v)));
+            lines.push(format!("{}={}", k, util::escape(&v)));
         }
         for (k,v) in config::var::vars()? {
             println!("get var {}", k);
-            lines.push(format!("{}={}", k, Self::escape(&v)));
+            lines.push(format!("{}={}", k, util::escape(&v)));
         }
         fs::write(out_path, lines.join("\n"))?;
         Ok(())
@@ -80,27 +81,7 @@ impl<S: shell::Shell> CI<S> {
         let config = self.config.borrow();
         let (_, ci) = config.modules.ci_by_env();
         ci.restore_cache(args.occurence_of("submodules") > 0)
-    }
-    fn escape(input: &str) -> String {
-        let mut escaped = String::new();
-        for c in input.chars() {
-            match c {
-                '\x00' => escaped.push_str("\\0"),
-                '\x07' => escaped.push_str("\\a"),
-                '\x08' => escaped.push_str("\\b"),
-                '\t' => escaped.push_str("\\t"),
-                '\n' => escaped.push_str("\\n"),
-                '\x0b' => escaped.push_str("\\v"),
-                '\x0c' => escaped.push_str("\\f"),
-                '\r' => escaped.push_str("\\r"),
-                '\\' => escaped.push_str("\\\\"),
-                '"' => escaped.push_str("\\\""),
-                '\'' => escaped.push_str("\\'"),
-                _ => escaped.push(c),
-            }
-        }    
-        escaped
-    }    
+    } 
 }
 
 impl<S: shell::Shell, A: args::Args> command::Command<A> for CI<S> {

@@ -35,6 +35,7 @@ SUNTOMI_AWS_ROLE = { env = "SUNTOMI_AWS_ROLE" }
 [vars]
 SUNTOMI_VARS1 = { env = "SUNTOMI_VARS1" }
 SUNTOMI_VARS2 = { path = "./.secrets/hoge.txt" }
+SUNTOMI_VARS3 = { env = "SUNTOMI_VARS3" }
 
 
 # ------------
@@ -422,12 +423,12 @@ command = """
 echo "======================="
 echo "dispatch context = ${DEPLO_CI_WORKFLOW_CONTEXT}"
 echo "======================="
-if [ "${SUNTOMI_VARS1}" != "piyo" ]; then
-    echo "failed to get vars SUNTOMI_VARS1"
+if [ "${SUNTOMI_VARS1}" != "piyo\npiyo" ]; then
+    echo "failed to get vars SUNTOMI_VARS1 = [${SUNTOMI_VARS1}]"
     exit 1
 fi
-if [ "${SUNTOMI_VARS2}" != "fugafugafuga" ]; then
-    echo "failed to get vars SUNTOMI_VARS2"
+if [ "${SUNTOMI_VARS2}" != "fugafugafuga\n\nhogehogehoge\t" ]; then
+    echo "failed to get vars SUNTOMI_VARS2 = [${SUNTOMI_VARS2}]"
     exit 1
 fi
 """
