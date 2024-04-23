@@ -446,6 +446,15 @@ echo "======================="
 on = { workflows = ["integrate"] }
 runner = { os = "linux", local_fallback = { path = "tools/docker/Dockerfile.vmfb", shell = "sh" } }
 steps = [{
+    name = "github ref test"
+    command = """
+    if [ -z "${GITHUB_REF}" ]; then
+        echo "failed to get GITHUB_REF"
+    fi
+    echo "DEPLO_CI_BRANCH_NAME = ${DEPLO_CI_BRANCH_NAME}"
+    echo "DEPLO_CI_TAG_NAME = ${DEPLO_CI_TAG_NAME}"
+    """
+}, {
     uses = { path = "./tools/modules/sample" }
 }]
 
