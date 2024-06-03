@@ -121,21 +121,21 @@ manual_dispatch = {
         }
         param1 = {
             type = "number"
-            default = 100
+            # default = 100
         }
         param2 = {
             required = true
             type = "float"
-            default = 3.14
+            # default = 3.14
         }
         param3 = {
             required = true
             type = "string"
-            default = "fuga"
+            # default = "fuga"
         }
         param4 = {
             type = "bool"
-            default = false
+            # default = false
         }
     }    
 }

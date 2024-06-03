@@ -194,3 +194,4 @@ impl Module {
 pub fn empty_env<'a>() -> HashMap<String, shell::Arg<'a>> {
     HashMap::new()
 }
+

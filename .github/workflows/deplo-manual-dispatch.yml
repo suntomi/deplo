@@ -4,6 +4,16 @@ name: manual-dispatch
 on: 
   workflow_dispatch:
     inputs:
+      param1:
+        default: 100
+        type: number
+      param3:
+        required: true
+        default: "fuga"
+      param2:
+        required: true
+        default: 3.14
+        type: number
       target:
         required: true
         default: "dev"
@@ -14,19 +24,9 @@ on:
           - prod
           - qa
           - review
-      param2:
-        required: true
-        default: 3.14
-        type: number
-      param3:
-        required: true
-        default: "fuga"
       param4:
         default: false
         type: boolean
-      param1:
-        default: 100
-        type: number
 
 env:
   DEPLO_GHACTION_CI_ID: ${{ github.run_id }}-${{ github.run_attempt }}
