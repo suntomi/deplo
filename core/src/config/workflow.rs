@@ -47,12 +47,43 @@ pub enum InputSchemaClass {
     Object{schema: HashMap<String, Box<InputSchema>>}
 }
 #[derive(Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum InputDefaultValue {
+    Float(f64),
+    Number(i64),
+    String(String),
+    Bool(bool),
+}
+impl InputDefaultValue {
+    pub fn to_string(&self) -> String {
+        match self {
+            Self::Number(v) => format!("{}", v),
+            Self::Float(v) => format!("{}", v),
+            Self::String(v) => format!("\"{}\"", v),
+            Self::Bool(v) => format!("{}", v),
+        }
+    }
+}
+
+mod tests {
+    #[allow(unused_imports)]
+    use crate::config::workflow::*;
+    #[test]
+    fn test_input_default_value() {
+        let value = InputDefaultValue::Number(1);
+        match toml::to_string(&value) {
+            Ok(v) => assert_eq!(v, "1".to_string()),
+            Err(e) => panic!("{}", e)
+        }
+    }
+}
+#[derive(Serialize, Deserialize)]
 pub struct InputSchema {
     #[serde(flatten)]
     pub class: InputSchemaClass,
     pub required: Option<bool>,
     pub description: Option<String>,
-    pub default: Option<String>
+    pub default: Option<InputDefaultValue>
 }
 impl InputSchema {
     pub fn verify(&self, _inputs: &serde_json::Value) {
