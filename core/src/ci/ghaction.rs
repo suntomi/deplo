@@ -175,7 +175,7 @@ pub struct GhAction<S: shell::Shell = shell::Default> {
 impl<S: shell::Shell> GhAction<S> {
     fn generate_manual_dispatch(&self, schemas: &config::workflow::InputSchemaSet) -> Vec<String> {
         let mut input_configs = vec![];
-        for (name, schema) in schemas.as_map() {
+        for (name, schema) in sorted_key_iter(schemas.as_map()) {
             let mut options = vec![];
             if schema.description.is_some() {
                 options.push(format!("description: '{}'", schema.description.as_ref().unwrap()));
