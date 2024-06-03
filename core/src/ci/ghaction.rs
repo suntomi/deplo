@@ -184,11 +184,13 @@ impl<S: shell::Shell> GhAction<S> {
                 options.push(format!("required: {}", schema.required.unwrap()));
             }
             if schema.default.is_some() {
-                options.push(format!("default: {}", schema.default.as_ref().unwrap()));
+                options.push(format!("default: {}", schema.default.as_ref().unwrap().to_string()));
             }
             match &schema.class {
                 config::workflow::InputSchemaClass::Value{ty,..} => match ty {
                     config::workflow::InputValueType::Bool => options.push(format!("type: boolean")),
+                    config::workflow::InputValueType::Number => options.push(format!("type: number")),
+                    config::workflow::InputValueType::Float => options.push(format!("type: number")),
                     _ => {},
                 },
                 config::workflow::InputSchemaClass::Enum{options: opts} => {

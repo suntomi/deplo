@@ -119,6 +119,24 @@ manual_dispatch = {
                 "review"
             ]
         }
+        param1 = {
+            type = "number"
+            default = 100
+        }
+        param2 = {
+            required = true
+            type = "float"
+            default = 3.14
+        }
+        param3 = {
+            required = true
+            type = "string"
+            default = "fuga"
+        }
+        param4 = {
+            type = "bool"
+            default = false
+        }
     }    
 }
 slack = {
