@@ -8,8 +8,14 @@ use crate::config;
 use crate::var::AccessorsRef;
 
 #[derive(Deserialize)]
+pub struct SecretConfig {
+    #[serde(flatten)]
+    pub var: crate::var::Var,
+    pub targets: Option<Vec<String>>
+}
+#[derive(Deserialize)]
 pub struct Config {
-    pub secrets: HashMap<String, crate::var::Var>,
+    pub secrets: HashMap<String, SecretConfig>,
     pub vars: HashMap<String, crate::var::Var>
 }
 impl Config {
@@ -19,8 +25,9 @@ impl Config {
     ) -> Result<(), Box<dyn Error>> {
         let mut secrets = hashmap!{};
         for (k, secret) in &self.secrets {
-            let s = crate::var::factory(k, runtime_config, secret)?;
+            let s = crate::var::factory(k, runtime_config, &secret.var)?;
             secrets.insert(k.clone(), s);
+            config::secret::set_targets(k.clone(), secret.targets.clone());
         }
         config::secret::set_ref(secrets);
         let mut vars = hashmap!{};

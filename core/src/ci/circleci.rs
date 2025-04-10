@@ -95,7 +95,8 @@ impl<'a, S: shell::Shell> ci::CI for CircleCI<S> {
         if previously_no_file || reinit {
             // sync dotenv secrets with ci system
             for (k, v) in &config::secret::vars()? {
-                (self as &dyn ci::CI).set_secret(k, v)?;
+                let targets = config::secret::targets(k.as_str());
+                (self as &dyn ci::CI).set_secret(k, v, &targets)?;
                 log::debug!("set secret value of {}", k);
             }
             for (k, v) in &config::secret::vars()? {
@@ -206,7 +207,7 @@ impl<'a, S: shell::Shell> ci::CI for CircleCI<S> {
         log::warn!("TODO: implement set_var for circleci");
         Ok(())
     }
-    fn set_secret(&self, key: &str, val: &str) -> Result<(), Box<dyn Error>> {
+    fn set_secret(&self, key: &str, val: &str, _targets: &Option<Vec<String>>) -> Result<(), Box<dyn Error>> {
         let config = self.config.borrow();
         let token = match &config.ci.get(&self.account_name).expect(&format!("no ci config for {}", self.account_name)) {
             config::ci::Account::CircleCI { key, .. } => { key },

@@ -26,7 +26,7 @@ SUNTOMI_VCS_ACCOUNT_EMAIL = { env = "SUNTOMI_VCS_ACCOUNT_EMAIL" }
 SUNTOMI_VCS_ACCOUNT_KEY = { env = "SUNTOMI_VCS_ACCOUNT_KEY" }
 SUNTOMI_VCS_APP_ID = { env = "SUNTOMI_VCS_APP_ID" }
 SUNTOMI_VCS_APP_PKEY = { path = "./.secrets/ghapp.pem" }
-SUNTOMI_AWS_ROLE = { env = "SUNTOMI_AWS_ROLE" }
+SUNTOMI_AWS_ROLE = { env = "SUNTOMI_AWS_ROLE", targets = ["actions"] }
 
 
 # ------------
