@@ -172,6 +172,58 @@ pub struct GhAction<S: shell::Shell = shell::Default> {
     pub shell: S,
 }
 
+lazy_static! {
+    static ref G_ALL_SECRET_TARGETS: Vec<String> = {
+        vec!["actions".to_string(), "dependabot".to_string()]
+    };
+}
+impl<S: shell::Shell> GhAction<S> {
+    fn set_secret_base(&self, key: &str, value: &str, path: &str) -> Result<(), Box<dyn Error>> {
+        let token = self.get_token()?;
+        let config = self.config.borrow();
+        let user_and_repo = config.modules.vcs().user_and_repo()?;
+        let pkey_response = &self.shell.exec(shell::args![
+                "curl", format!(
+                    "https://api.github.com/repos/{}/{}/{}/secrets/public-key",
+                    user_and_repo.0, user_and_repo.1, path
+                ),
+                "-H", shell::fmtargs!("Authorization: token {}", &token)
+            ], shell::no_env(), shell::no_cwd(), &shell::capture()
+        )?;
+        let public_key_info = match serde_json::from_str::<RepositoryPublicKeyResponse>(pkey_response) {
+            Ok(v) => v,
+            Err(e) => {
+                log::error!("fail to get public key to encode secret: {}", pkey_response);
+                return escalate!(Box::new(e))
+            }
+        };
+        let json = format!("{{\"encrypted_value\":\"{}\",\"key_id\":\"{}\"}}", 
+            //get value from env to unescapse
+            seal(value, &public_key_info.key)?,
+            public_key_info.key_id
+        );
+        // TODO_PATH: use Path to generate path of /dev/null
+        let status = self.shell.exec(shell::args!(
+            "curl", "-X", "PUT",
+            format!(
+                "https://api.github.com/repos/{}/{}/{}/secrets/{}",
+                user_and_repo.0, user_and_repo.1, path, key
+            ),
+            "-H", "Content-Type: application/json",
+            "-H", "Accept: application/json",
+            "-H", shell::fmtargs!("Authorization: token {}", &token),
+            "-d", json, "-w", "%{http_code}", "-o", "/dev/null"
+        ), shell::no_env(), shell::no_cwd(), &shell::capture())?.parse::<u32>()?;
+        if status >= 200 && status < 300 {
+            Ok(())
+        } else {
+            return escalate!(Box::new(ci::CIError {
+                cause: format!("fail to set secret to CircleCI CI with status code:{}", status)
+            }));
+        }
+    }
+}
+
 impl<S: shell::Shell> GhAction<S> {
     fn generate_manual_dispatch(&self, schemas: &config::workflow::InputSchemaSet) -> Vec<String> {
         let mut input_configs = vec![];
@@ -703,7 +755,8 @@ impl<S: shell::Shell> ci::CI for GhAction<S> {
         let mut secrets = vec!();
         for (k, v) in sorted_key_iter(&config::secret::vars()?) {
             if previously_no_file || reinit {
-                (self as &dyn ci::CI).set_secret(k, v)?;
+                let targets = config::secret::targets(k.as_str());
+                (self as &dyn ci::CI).set_secret(k, v, &targets)?;
                 log::debug!("set secret value of {}", k);
             }
             secrets.push(format!("{}: ${{{{ secrets.{} }}}}", k, k));
@@ -1312,49 +1365,15 @@ impl<S: shell::Shell> ci::CI for GhAction<S> {
             response.secrets.iter().map(|s| s.name.clone()).collect()
         )
     }
-    fn set_secret(&self, key: &str, value: &str) -> Result<(), Box<dyn Error>> {
-        let token = self.get_token()?;
-        let config = self.config.borrow();
-        let user_and_repo = config.modules.vcs().user_and_repo()?;
-        let pkey_response = &self.shell.exec(shell::args![
-                "curl", format!(
-                    "https://api.github.com/repos/{}/{}/actions/secrets/public-key",
-                    user_and_repo.0, user_and_repo.1
-                ),
-                "-H", shell::fmtargs!("Authorization: token {}", &token)
-            ], shell::no_env(), shell::no_cwd(), &shell::capture()
-        )?;
-        let public_key_info = match serde_json::from_str::<RepositoryPublicKeyResponse>(pkey_response) {
-            Ok(v) => v,
-            Err(e) => {
-                log::error!("fail to get public key to encode secret: {}", pkey_response);
-                return escalate!(Box::new(e))
-            }
+    fn set_secret(&self, key: &str, value: &str, targets: &Option<Vec<String>>) -> Result<(), Box<dyn Error>> {
+        let ts = match targets {
+            Some(v) => v,
+            None => &G_ALL_SECRET_TARGETS
         };
-        let json = format!("{{\"encrypted_value\":\"{}\",\"key_id\":\"{}\"}}", 
-            //get value from env to unescapse
-            seal(value, &public_key_info.key)?,
-            public_key_info.key_id
-        );
-        // TODO_PATH: use Path to generate path of /dev/null
-        let status = self.shell.exec(shell::args!(
-            "curl", "-X", "PUT",
-            format!(
-                "https://api.github.com/repos/{}/{}/actions/secrets/{}",
-                user_and_repo.0, user_and_repo.1, key
-            ),
-            "-H", "Content-Type: application/json",
-            "-H", "Accept: application/json",
-            "-H", shell::fmtargs!("Authorization: token {}", &token),
-            "-d", json, "-w", "%{http_code}", "-o", "/dev/null"
-        ), shell::no_env(), shell::no_cwd(), &shell::capture())?.parse::<u32>()?;
-        if status >= 200 && status < 300 {
-            Ok(())
-        } else {
-            return escalate!(Box::new(ci::CIError {
-                cause: format!("fail to set secret to CircleCI CI with status code:{}", status)
-            }));
+        for t in ts {
+            self.set_secret_base(key, value, &t)?;
         }
+        Ok(())
     }
     fn set_var(&self, key: &str, value: &str) -> Result<(), Box<dyn Error>> {
         let token = self.get_token()?;

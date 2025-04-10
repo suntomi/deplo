@@ -62,7 +62,7 @@ pub trait CI {
     fn mark_need_cleanup(&self, job_name: &str) -> Result<(), Box<dyn Error>>;
     fn run_job(&self, job_config: &config::runtime::Workflow) -> Result<String, Box<dyn Error>>;
     fn check_job_finished(&self, job_id: &str) -> Result<Option<String>, Box<dyn Error>>;
-    fn set_secret(&self, key: &str, val: &str) -> Result<(), Box<dyn Error>>;
+    fn set_secret(&self, key: &str, val: &str, targets: &Option<Vec<String>>) -> Result<(), Box<dyn Error>>;
     fn set_var(&self, key: &str, val: &str) -> Result<(), Box<dyn Error>>;
     fn list_secret_name(&self) -> Result<Vec<String>, Box<dyn Error>>;
     fn job_env(&self) -> HashMap<String, config::Value>;

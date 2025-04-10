@@ -21,7 +21,8 @@ impl<S: shell::Shell> CI<S> {
         let ci = config.modules.ci_by_default();
         for (k,v) in config::secret::vars()? {
             println!("set secret {}", k);
-            ci.set_secret(&k, &v)?;
+            let targets = config::secret::targets(&k);
+            ci.set_secret(&k, &v, &targets)?;
         }
         for (k,v) in config::var::vars()? {
             println!("set var {}", k);
