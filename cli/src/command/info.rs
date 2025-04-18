@@ -10,7 +10,9 @@ use crate::command;
 use crate::util::escalate;
 
 pub struct Info<S: shell::Shell = shell::Default> {
+    #[allow(dead_code)]
     pub config: config::Container,
+    #[allow(dead_code)]
     pub shell: S
 }
 

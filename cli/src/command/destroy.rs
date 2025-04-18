@@ -9,7 +9,9 @@ use core::shell;
 use crate::command;
 
 pub struct Destroy<S: shell::Shell = shell::Default> {
+    #[allow(dead_code)]
     pub config: config::Container,
+    #[allow(dead_code)]
     pub shell: S
 }
 

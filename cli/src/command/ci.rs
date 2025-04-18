@@ -13,6 +13,7 @@ use crate::util::escalate;
 
 pub struct CI<S: shell::Shell = shell::Default> {
     pub config: config::Container,
+    #[allow(dead_code)]
     pub shell: S
 }
 impl<S: shell::Shell> CI<S> {

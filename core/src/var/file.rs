@@ -8,7 +8,6 @@ use crate::var;
 use crate::util::{escalate};
 
 pub struct File {
-    pub path: String,
     pub val: String,
 }
 
@@ -24,7 +23,7 @@ impl var::Factory for File {
         };
         return Ok(match var {
             var::Var::File { path } => Self{
-                path: path.clone(), val: if config::Config::is_running_on_ci() {
+                val: if config::Config::is_running_on_ci() {
                     match std::env::var(&name) {
                         Ok(val) => val,
                         Err(_) => return escalate!(Box::new(var::VarError{

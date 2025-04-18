@@ -66,7 +66,7 @@ pub struct RemoteCredential {
 impl RemoteCredential {
     pub fn authorize<'a>(
         &'a self, command: Vec<&'a str>, target_url: &'a str
-    ) -> Result<Vec<shell::Arg>, Box<dyn Error>> {
+    ) -> Result<Vec<shell::Arg<'a>>, Box<dyn Error>> {
         let mut authorized: Vec<Vec<shell::Arg>> = vec![];
         if command[0] != "git" {
             return escalate!(Box::new(vcs::VCSError {
