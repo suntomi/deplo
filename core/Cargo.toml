@@ -27,7 +27,7 @@ serde_yaml = "0.9.31"
 simple_logger = "1.6.0"
 toml = { git = "https://github.com/umegaya/toml-rs", rev = "93292f8" }
 sodalite = { git = "https://github.com/suntomi/sodalite" }
-tempfile = "3.2.0"
+tempfile = "3.19.1"
 # strfmt = "0.2.2"
 formatx = "0.1.4"
 petgraph = { version = "0.6.2", features = ["graphmap"] }
