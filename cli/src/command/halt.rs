@@ -10,6 +10,7 @@ use crate::command;
 
 pub struct Halt<S: shell::Shell = shell::Default> {
     pub config: config::Container,
+    #[allow(dead_code)]
     pub shell: S
 }
 

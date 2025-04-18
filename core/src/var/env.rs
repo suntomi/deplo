@@ -6,7 +6,6 @@ use crate::var;
 use crate::util::{escalate};
 
 pub struct Env {
-    pub key: String,
     pub val: String,
 }
 
@@ -18,7 +17,7 @@ impl var::Factory for Env {
     ) -> Result<Self, Box<dyn Error>> {
         return Ok(match var {
             var::Var::Env { env } => Self{
-                key: env.clone(), val: match std::env::var(&env) {
+                val: match std::env::var(&env) {
                     Ok(val) => val,
                     Err(_) => return escalate!(Box::new(var::VarError{
                         cause: format!("env var {} not found", env)
