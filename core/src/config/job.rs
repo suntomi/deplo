@@ -41,7 +41,7 @@ pub enum ContainerImageSource {
     /// docker image that is used for local execution.
     ImageUrl{ image: config::Value },
     /// dockerfile that is used for local execution. deplo build docker iamge with the dockerfile.
-    DockerFile{ path: config::Value, repo_name: Option<config::Value> },
+    DockerFile{ path: config::Value, repo_name: Option<config::Value>, args: Option<HashMap<String, config::Value>> },
 }
 #[derive(Serialize, Deserialize)]
 #[serde(untagged)]

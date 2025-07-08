@@ -1,3 +1,6 @@
 FROM docker:25.0.1
 
+ARG TEST_ARG
+ENV TEST_ENV=${TEST_ARG:-"no test arg"}
+
 RUN apk add curl git

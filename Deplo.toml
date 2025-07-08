@@ -453,11 +453,17 @@ fi
 
 [jobs.repository]
 on = { workflows = ["repository"] }
-runner = { os = "linux", local_fallback = { path = "tools/docker/Dockerfile.vmfb", shell = "sh" } }
+runner = { os = "linux", local_fallback = { 
+    path = "tools/docker/Dockerfile.vmfb", shell = "sh", args = { TEST_ARG = "test arg" }
+} }
 command = """
 echo "======================="
 echo "repository context = ${DEPLO_CI_WORKFLOW_CONTEXT}"
 echo "======================="
+if [ "${TEST_ENV}" != "test arg" ]; then
+    echo "failed to get env TEST_ENV = [${TEST_ENV}]"
+    exit 1
+fi
 """
 
 [jobs.module_test]

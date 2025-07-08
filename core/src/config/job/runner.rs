@@ -194,7 +194,7 @@ impl<'a> Runner<'a> {
                         Some(f) => {
                             let (image, sh) = match &f.source {
                                 job::ContainerImageSource::ImageUrl{ image } => (image.clone(), &f.shell),
-                                job::ContainerImageSource::DockerFile{ path, repo_name } => {
+                                job::ContainerImageSource::DockerFile{ path, repo_name, args: build_args } => {
                                     let local_image = match repo_name.as_ref() {
                                         Some(n) => format!("{}:{}", n, job.name),
                                         None => format!("{}-deplo-local-fallback:{}", config.project_name, job.name)
@@ -202,13 +202,18 @@ impl<'a> Runner<'a> {
                                     log::info!("generate fallback docker image {} from {}", local_image, path);
                                     let path_string = path.resolve();
                                     let path = Path::new(&path_string);
+                                    let mut args = shell::args![
+                                        "docker", "build",
+                                        "-t", local_image.as_str(),
+                                        "-f", path.file_name().unwrap().to_str().unwrap()
+                                    ];
+                                    for (k, v) in build_args.iter().flatten() {
+                                        args.push(shell::arg!("--build-arg"));
+                                        args.push(shell::arg!(shell::fmtargs!("{}={}", k, v)));
+                                    }
+                                    args.push(shell::arg!("."));
                                     shell.exec(
-                                        shell::args![
-                                            "docker", "build",
-                                            "-t", local_image.as_str(),
-                                            "-f", path.file_name().unwrap().to_str().unwrap(),
-                                            "."
-                                        ], shell::no_env(),
+                                        args, shell::no_env(),
                                         &Some(path.parent().unwrap().to_string_lossy().to_string()),
                                         &shell::capture_inherit()
                                     )?;
