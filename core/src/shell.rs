@@ -98,15 +98,15 @@ macro_rules! kv_arg {
 
 #[macro_export]
 macro_rules! synthesize_arg_internal {
-    ($proc: expr, $($values: expr),+) => {
-        $crate::config::value::Synthesize::new($proc, vec![$($crate::arg!($values)),+])
+    ($proc:expr, $($x:expr),+) => {
+        $crate::config::value::Synthesize::new($proc, vec![$($crate::arg!($x)),+])
     };
 }
 pub use synthesize_arg_internal as synthesize_arg;
 
 #[macro_export]
 macro_rules! fmtargs_internal {
-    ($format: expr) => {
+    ($format:expr) => {
         $crate::config::value::Synthesize::new(
             |v| v[0].value(), vec![$crate::arg!($format)]
         )
