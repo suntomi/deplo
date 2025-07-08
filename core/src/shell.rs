@@ -111,7 +111,7 @@ macro_rules! fmtargs_internal {
             |v| v[0].value(), vec![$crate::arg!($format)]
         )
     };
-    ($format: expr, $($values: expr),*) => {{
+    ($format:expr, $($values:expr),*) => {{
         $crate::config::value::Synthesize::new(|v| {
             let mut tmpl = formatx::Template::new(&v[0]).expect(&format!("format parse error {}", v[0]));
             for e in &v[1..] {
