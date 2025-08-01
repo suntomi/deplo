@@ -292,7 +292,7 @@ impl<S: shell::Shell> GhAction<S> {
         let mut schedule_entries = vec![];
         for (name, v) in sorted_key_iter(config.workflows.as_map()) {
             match v {
-                config::workflow::Workflow::Repository { events } => {
+                config::workflow::Workflow::Repository { events, .. } => {
                     for (_, event_names) in events {
                         for event_name in event_names {
                             let name = event_name.resolve();
@@ -310,11 +310,11 @@ impl<S: shell::Shell> GhAction<S> {
                         }
                     }
                 },
-                config::workflow::Workflow::Cron { schedules } => {
+                config::workflow::Workflow::Cron { schedules, .. } => {
                     schedule_entries.push(sorted_key_iter(schedules).map(|(_,v)| { format!("- cron: {}", v) }).collect::<Vec<_>>())
                 },
                 config::workflow::Workflow::Deploy|config::workflow::Workflow::Integrate => {},
-                config::workflow::Workflow::Dispatch{inputs,manual} => {
+                config::workflow::Workflow::Dispatch{inputs,manual, ..} => {
                     if manual.unwrap_or(false) {
                         if name == "main" {
                             panic!("deplo does not allow manual dispatch name 'main'")
@@ -1022,7 +1022,7 @@ impl<S: shell::Shell> ci::CI for GhAction<S> {
                                 name, hashmap!{}
                             ))
                         },
-                        config::workflow::Workflow::Cron{schedules} => {
+                        config::workflow::Workflow::Cron{schedules, ..} => {
                             if let EventPayload::Schedule{ref schedule} = workflow_event.event {
                                 match schedules.iter().find_map(|(k, v)| {
                                     if v.resolve().as_str() == schedule.as_str() { Some(k) } else { None }
@@ -1059,7 +1059,7 @@ impl<S: shell::Shell> ci::CI for GhAction<S> {
                                 panic!("event payload type does not match {}", workflow_event.event);
                             }
                         },
-                        config::workflow::Workflow::Dispatch{inputs,manual} => {
+                        config::workflow::Workflow::Dispatch{inputs,manual, ..} => {
                             match &workflow_event.event {
                                 EventPayload::RepositoryDispatch{client_payload,action} => if !manual.unwrap_or(false) {
                                     inputs.verify(&client_payload); // panic!s when schema does not matched

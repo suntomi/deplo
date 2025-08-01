@@ -373,6 +373,17 @@ impl Workflow {
             None => panic!("workflow {} not found in config", self.name),
         }
     }
+    pub fn match_with(&self, config: &config::Config, workflow_name: &str) -> bool {
+        // check if workflow matches with the name
+        if self.name == workflow_name {
+            return true;
+        }
+        // check if workflow config's inherit_from matches with the name
+        match config.workflows.get(&self.name) {
+            Some(w) => w.inherits(workflow_name),
+            None => false,
+        }
+    }
 }
 /// runtime configuration for all invocation of deplo cli.
 #[derive(Default)]

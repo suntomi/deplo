@@ -285,7 +285,7 @@ pub enum TriggerCondition {
     }
 }
 impl TriggerCondition {
-    fn check_workflow_type(&self, w: &config::workflow::Workflow) -> bool {
+    pub fn check_workflow_type(&self, w: &config::workflow::Workflow) -> bool {
         match self {
             Self::Commit{..} => if let config::workflow::Workflow::Deploy{..} = w {
                 true
@@ -359,7 +359,7 @@ impl Trigger {
             // when no workflow specified for condition, always pass
             || true,
             // if more than 1 workflows specified, runtime_workflow_config.name should match any of them
-            |v| v.iter().find(|v| { let s: &str = &v.resolve(); s == runtime_workflow_config.name }).is_some()
+            |v| v.iter().find(|v| { runtime_workflow_config.match_with(config, &v.resolve()) }).is_some()
         ) {
             log::debug!(
                 "workflow '{}' does not match for trigger workflow '{:?}' of '{}'", 
@@ -381,7 +381,7 @@ impl Trigger {
                 workflow, self.release_targets, job.name, runtime_workflow_config.exec.release_target);
             return false;
         }        
-        if !self.condition.check_workflow_type(workflow) {
+        if !workflow.can_react(config, &self.condition) {
             log::debug!(
                 "workflow '{}' does not match for trigger condition type '{:?}' of '{}'",
                 workflow, self.condition, job.name
@@ -682,6 +682,8 @@ pub struct MatchOptions {
 impl MatchOptions {
     fn from(runtime_workflow_config: &config::runtime::Workflow) -> Self {
         Self {
+            // if runtime_workflow_config.job is Some, it means this workflow is running for single job.
+            // so condition check is not required.
             check_condition: runtime_workflow_config.job.is_none()
         }
     }

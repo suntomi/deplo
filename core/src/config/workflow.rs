@@ -10,6 +10,7 @@ use crate::config;
 pub struct WorkflowExtension {
     pub release_target: Option<String>,
     pub priority: Option<i64>,
+    pub inherit_from: Option<Vec<String>>,
 }
 #[derive(Serialize, Deserialize)]
 pub enum InputValueType {
@@ -121,22 +122,61 @@ pub enum Workflow {
     Deploy,
     Integrate,
     Cron {
-        schedules: HashMap<String, config::Value>
+        schedules: HashMap<String, config::Value>,
+        priority: Option<i64>
     },
     Repository {
-        events: HashMap<String, Vec<config::Value>>
+        events: HashMap<String, Vec<config::Value>>,
+        priority: Option<i64>
     },
     Dispatch {
         manual: Option<bool>,
-        inputs: InputSchemaSet
+        inputs: InputSchemaSet,
+        priority: Option<i64>
     },
     Module(config::module::ConfigFor<crate::workflow::ModuleDescription, WorkflowExtension>),
 }
 impl Workflow {
     pub fn priority(&self) -> i64 {
         match self {
-            Self::Module(m) => m.ext().priority.unwrap_or(2),
-            _ => 1,
+            Self::Module(m) => m.ext().priority.unwrap_or(1),
+            Self::Cron{priority, ..} => priority.unwrap_or(1),
+            Self::Repository{priority, ..} => priority.unwrap_or(1),
+            Self::Dispatch{priority, ..} => priority.unwrap_or(1),
+            _ => 0,
+        }
+    }
+    pub fn inherits(&self, workflow_name: &str) -> bool {
+        // check if workflow matches with the name
+        match self {
+            Self::Module(m) => {
+                m.ext().inherit_from.as_ref().map_or(
+                    false,
+                    |v| v.contains(&workflow_name.to_string())
+                )
+            },
+            _ => false,
+        }
+    }
+    pub fn can_react(&self, config: &config::Config, trigger: &config::job::TriggerCondition) -> bool {
+        if trigger.check_workflow_type(self) {
+            return true;
+        }
+        match self {
+            Self::Module(m) => {
+                m.ext().inherit_from.as_ref().map_or(
+                    false,
+                    |v| v.iter().any(|workflow_name| 
+                        match config.workflows.get(workflow_name) {
+                            Some(w) => w.can_react(config, trigger),
+                            None => {
+                                panic!("workflow '{}' not found in config", workflow_name);
+                            }
+                        }
+                    )
+                )
+            },
+            _ => false,
         }
     }
 }
@@ -145,8 +185,8 @@ impl fmt::Display for Workflow {
         match self {
             Self::Deploy => write!(f, "deploy"),
             Self::Integrate => write!(f, "integrate"),
-            Self::Cron{schedules} => write!(f, "cron:{:?}", schedules),
-            Self::Repository{events} => write!(f, "repository:{:?}", events),
+            Self::Cron{schedules,..} => write!(f, "cron:{:?}", schedules),
+            Self::Repository{events,..} => write!(f, "repository:{:?}", events),
             Self::Dispatch{manual,..} => write!(f, "dispatch:{:?}", manual),
             Self::Module(m) => m.value(|v| write!(f, "{}({:?})", v.uses.to_string(), v.with))
         }
@@ -166,7 +206,7 @@ impl Workflows {
         self.insert_or_die("deploy", Workflow::Deploy);
         self.insert_or_die("integrate", Workflow::Integrate);
         self.insert_or_die(config::DEPLO_SYSTEM_WORKFLOW_NAME, Workflow::Dispatch {
-            manual: Some(false), inputs: InputSchemaSet(HashMap::new())
+            manual: Some(false), inputs: InputSchemaSet(HashMap::new()), priority: None
         });
         let mut cron_found = None;
         let mut repo_found = None;
