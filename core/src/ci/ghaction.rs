@@ -1086,15 +1086,15 @@ impl<S: shell::Shell> ci::CI for GhAction<S> {
                                 let event = match &resolved_trigger {
                                     ci::WorkflowTrigger::EventPayload(payload) => payload,
                                 };
-                                config.modules.workflow(&v.uses).matches(
-                                    &shell::no_capture(), event, &v.with
-                                )
+                                log::debug!("check module workflow [{}] matches with setting {:?}", 
+                                    v.uses.to_string(), v.with);
+                                config.modules.workflow(&v.uses).matches(event, &v.with)
                             })? {
                                 matches.push(config::runtime::Workflow::with_context(
                                     name, serde_json::from_str(&event_payload)?
                                 ));
                             } else {
-                                log::debug!("module workflow {} does not match with event payload", name);
+                                log::debug!("module workflow '{}' does not match with event payload", name);
                             }
                         }
                     }

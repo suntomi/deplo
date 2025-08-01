@@ -19,7 +19,6 @@ pub trait Workflow {
     ) -> Result<(), Box<dyn Error>>;
     fn matches(
         &self, 
-        shell_settings: &shell::Settings,
         event: &str,
         with: &Option<HashMap<String, config::AnyValue>>
     ) -> Result<Option<String>, Box<dyn Error>>;
