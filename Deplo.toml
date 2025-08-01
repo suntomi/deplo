@@ -165,7 +165,7 @@ prbot = {
     # this workflow is matched with jobs that matches "integrate" workflow.
     inherit_from = ["integrate"],
     with = {
-        author = "suntomi-bot",
+        author = "umegaya",
     }
 }
 
