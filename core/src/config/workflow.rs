@@ -9,6 +9,7 @@ use crate::config;
 #[derive(Serialize, Deserialize, Clone)]
 pub struct WorkflowExtension {
     pub release_target: Option<String>,
+    pub priority: Option<i64>,
 }
 #[derive(Serialize, Deserialize)]
 pub enum InputValueType {
@@ -130,6 +131,14 @@ pub enum Workflow {
         inputs: InputSchemaSet
     },
     Module(config::module::ConfigFor<crate::workflow::ModuleDescription, WorkflowExtension>),
+}
+impl Workflow {
+    pub fn priority(&self) -> i64 {
+        match self {
+            Self::Module(m) => m.ext().priority.unwrap_or(2),
+            _ => 1,
+        }
+    }
 }
 impl fmt::Display for Workflow {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
