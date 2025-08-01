@@ -521,7 +521,7 @@ fi
 """
 
 [jobs.prbot-test]
-on = { changed = ["README.md"] }
+on = { workflows = ["prbot"] }
 runner = { os = "linux", local_fallback = { image = "ghcr.io/suntomi/images:aws", shell = "sh" } }
 command = """
 set -e

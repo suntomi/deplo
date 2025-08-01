@@ -1,6 +1,5 @@
 use std::collections::HashMap;
 use std::error::Error;
-use std::f64::consts::E;
 
 use crate::config;
 use crate::module;

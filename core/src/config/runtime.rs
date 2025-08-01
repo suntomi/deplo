@@ -289,13 +289,14 @@ impl Workflow {
                 };
                 if matches.len() == 0 {
                     panic!("no workflow matches with trigger")
-                } else if matches.len() > 2 {
+                } else if matches.len() >= 2 {
                     log::warn!(
                         "multiple workflow matches({})",
                         matches.iter().map(|m| {m.name.as_str()}).collect::<Vec<&str>>().join(",")
                     );
                 }
                 let mut v = matches.remove(0);
+                log::debug!("determined workflow name: {}", v.name);
                 v.apply(args, config, has_job_config);
                 Ok(v)
             }
