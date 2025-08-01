@@ -118,6 +118,7 @@ impl<S: shell::Shell> Repository<S> {
         match fs::metadata(&module_path) {
             Ok(mata) => if mata.is_dir() {
                 log::debug!("module already exists at {:?}", module_path);
+                // TODO: check version is same and if not, move to below
             } else {
                 panic!("module should already exists at {:?} but its not directory", module_path);
             },

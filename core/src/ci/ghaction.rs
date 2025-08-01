@@ -26,7 +26,7 @@ use crate::util::{
     escape
 };
 
-#[derive(Deserialize)]
+#[derive(Serialize, Deserialize)]
 #[serde(untagged)]
 enum EventPayload {
     Schedule {
@@ -947,12 +947,21 @@ impl<S: shell::Shell> ci::CI for GhAction<S> {
             }
         };
         let config = self.config.borrow();
-        match resolved_trigger {
+        match &resolved_trigger {
             ci::WorkflowTrigger::EventPayload(payload) => {
                 let mut matched_names = vec![];
-                let workflow_event = serde_json::from_str::<WorkflowEvent>(&payload)?;
+                let workflow_event = serde_json::from_str::<WorkflowEvent>(payload)?;
                 for (k,v) in config.workflows.as_map() {
                     let name = k.to_string();
+                    // module type workflow always matched here,
+                    // then filtered when generating matches from matched_names
+                    match v {
+                        config::workflow::Workflow::Module(_) => {
+                            matched_names.push(name);
+                            continue;
+                        },
+                        _ => {}
+                    }
                     match workflow_event.event_name.as_str() {
                         "push" => match v {
                             config::workflow::Workflow::Deploy => matched_names.push(name),
@@ -966,7 +975,7 @@ impl<S: shell::Shell> ci::CI for GhAction<S> {
                             config::workflow::Workflow::Cron{..} => matched_names.push(name),
                             _ => {}
                         },
-                        // repository_dispatch has a few possibility.
+                        // repository_dispatch has multiple possibility.
                         // config::DEPLO_MODULE_EVENT_TYPE => Module workflow invocation
                         // others => Repository workflow invocation
                         "repository_dispatch" => if let EventPayload::RepositoryDispatch{
@@ -1074,17 +1083,18 @@ impl<S: shell::Shell> ci::CI for GhAction<S> {
                         },
                         config::workflow::Workflow::Module(c) => {
                             if let Some(event_payload) = c.value(|v| {
-                                let event = match &workflow_event.event {
-                                    EventPayload::RepositoryDispatch{client_payload,..} => serde_json::to_string(client_payload)?,
-                                    _ => panic!("event payload type does not match {}", workflow_event.event),
+                                let event = match &resolved_trigger {
+                                    ci::WorkflowTrigger::EventPayload(payload) => payload,
                                 };
                                 config.modules.workflow(&v.uses).matches(
-                                    &shell::no_capture(), &event, &v.with
+                                    &shell::no_capture(), event, &v.with
                                 )
                             })? {
                                 matches.push(config::runtime::Workflow::with_context(
                                     name, serde_json::from_str(&event_payload)?
                                 ));
+                            } else {
+                                log::debug!("module workflow {} does not match with event payload", name);
                             }
                         }
                     }

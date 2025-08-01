@@ -16,3 +16,6 @@
 [submodule "tools/crates/dotenv"]
 	path = tools/crates/dotenv
 	url = https://github.com/suntomi/dotenv.git
+[submodule "tools/modules/prfilter"]
+	path = tools/modules/prfilter
+	url = https://github.com/suntomi/prfilter.git

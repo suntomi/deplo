@@ -46,7 +46,7 @@ impl<S: shell::Shell> workflow::Workflow for ModuleRunner<S> {
         match module.run(
             module::EntryPointType::Workflow,
             &self.shell, shell_settings,
-            shell::args!["matches", event], 
+            shell::args!["match", event],
             module::empty_env(), with
         ) {
             Ok(v) => Ok(Some(v)),
