@@ -134,6 +134,8 @@ pub enum Runner {
         class: Option<config::Value>,
         /// container image setting for run the job on local.
         local_fallback: Option<FallbackContainer>,
+        /// run in host directly if os type matches
+        no_fallback: Option<bool>,
     },
     #[serde(rename = "container")]
     Container {

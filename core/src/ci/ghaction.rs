@@ -876,7 +876,7 @@ impl<S: shell::Shell> ci::CI for GhAction<S> {
                     },
                     fetchcli = MultilineFormatString{
                         strings: &self.generate_fetchcli_steps(&config::job::Runner::Machine{
-                            os: config::job::RunnerOS::Linux, image: None, class: None, local_fallback: None }
+                            os: config::job::RunnerOS::Linux, image: None, class: None, local_fallback: None, no_fallback: None }
                         ),
                         postfix: None
                     },
