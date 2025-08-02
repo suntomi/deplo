@@ -434,9 +434,10 @@ impl Trigger {
                 }
             },
             TriggerCondition::Module{ when } => {
-                // use module method like _wf.matches(when) to determine.
                 match workflow {
                     config::workflow::Workflow::Module(c) => {
+                        // uses same workflow module that trigger this workflow, to check
+                        // the job really need to run.
                         return match c.value(|v| {
                             config.modules.workflow(&v.uses).filter_context(
                                 &v.with, &when, &runtime_workflow_config.context

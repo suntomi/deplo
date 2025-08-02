@@ -523,7 +523,7 @@ fi
 """
 
 [jobs.prbot-test]
-on = { workflows = ["prbot"] }
+on = { workflows = ["prbot"], when = { author = "umegaya" } }
 runner = { os = "linux", local_fallback = { image = "ghcr.io/suntomi/images:aws", shell = "sh" } }
 command = """
 set -e
