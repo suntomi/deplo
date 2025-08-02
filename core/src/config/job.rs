@@ -435,10 +435,31 @@ impl Trigger {
             },
             TriggerCondition::Module{ when } => {
                 // use module method like _wf.matches(when) to determine.
-                panic!(
-                    "TODO: workflow '{}' job '{}' implement match logic for Module condition {:?}",
-                    workflow, job.name, when
-                );
+                match workflow {
+                    config::workflow::Workflow::Module(c) => {
+                        return match c.value(|v| {
+                            config.modules.workflow(&v.uses).filter_context(
+                                &v.with, &when, &runtime_workflow_config.context
+                            )
+                        }) {
+                            Ok(v) => {
+                                log::trace!(
+                                    "workflow '{}' job '{}' module condition matches with '{:?}'",
+                                    workflow, job.name, v
+                                );
+                                v.is_some()
+                            },
+                            Err(e) => panic!(
+                                "workflow '{}' job '{}' module condition check failed: {}",
+                                workflow, job.name, e
+                            )
+                        }
+                    },
+                    _ => {
+                        log::warn!("workflow '{}' is not module workflow", workflow);
+                        return false;
+                    }
+                }
             },
             TriggerCondition::Any{..} => {},
         }

@@ -1088,7 +1088,7 @@ impl<S: shell::Shell> ci::CI for GhAction<S> {
                                 };
                                 log::debug!("check module workflow [{}] matches with setting {:?}", 
                                     v.uses.to_string(), v.with);
-                                config.modules.workflow(&v.uses).matches(event, &v.with)
+                                config.modules.workflow(&v.uses).filter_event(event, &v.with)
                             })? {
                                 matches.push(config::runtime::Workflow::with_context(
                                     name, serde_json::from_str(&event_payload)?
