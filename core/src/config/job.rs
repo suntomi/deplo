@@ -192,7 +192,7 @@ pub enum CommitMethod {
 #[derive(Serialize, Deserialize)]
 pub struct Commit {
     pub files: Vec<config::Value>,
-    pub on: Option<Trigger>,
+    pub on: Option<TriggerTarget>,
     pub log_format: Option<config::Value>,
     #[serde(flatten)]
     pub method: Option<CommitMethod>,
@@ -317,9 +317,66 @@ impl TriggerCondition {
     }
 }
 #[derive(Serialize, Deserialize)]
-pub struct Trigger {
+pub struct TriggerTarget {
+    /// name of the workflow that is triggered.
     workflows: Option<Vec<config::Value>>,
+    /// release target of the job that is triggered.
     release_targets: Option<Vec<config::Value>>,
+}
+impl TriggerTarget {
+    pub fn matches(
+        &self,
+        job: &config::job::Job,
+        config: &config::Config,
+        runtime_workflow_config: &config::runtime::Workflow
+    ) -> bool{
+        match &runtime_workflow_config.job {
+            Some(j) => if j.name != job.name {
+                log::debug!(
+                    "workflow '{}' is running for single job '{}' but current job is '{}'",
+                    runtime_workflow_config.name, j.name, job.name
+                );
+                return false;
+            },
+            None => {}
+        }
+        // workflows match?
+        if !self.workflows.as_ref().map_or_else(
+            // when no workflow specified for condition, always pass
+            || true,
+            // if more than 1 workflows specified, runtime_workflow_config.name should match any of them
+            // or inherit the workflow
+            |v| v.iter().find(|v| {
+                runtime_workflow_config.contain_workflow(config, &v.resolve())
+            }).is_some()
+        ) {
+            log::debug!(
+                "workflow '{}' does not match for trigger workflow '{:?}' of '{}'", 
+                runtime_workflow_config.name, self.workflows, job.name
+            );
+            return false;
+        }
+        if !self.release_targets.as_ref().map_or_else(
+            // no job.release_targets restriction. always ok
+            || true,
+            |v| match &runtime_workflow_config.exec.release_target {
+                // both runtime_workflow_config.exec.release_target and job.release_targets exists, compare matches
+                Some(rt) => v.iter().find(|v| { v.resolve() == *rt }).is_some(),
+                // job.release_target exists, but no runtime_workflow_config.exec.release_target, always ng
+                None => false
+            }
+        ) {
+            log::debug!("workflow '{}' does not match for release target '{:?}' of '{}'. current release target is '{:?}'", 
+                runtime_workflow_config.name, self.release_targets, job.name, runtime_workflow_config.exec.release_target);
+            return false;
+        }
+        return true;
+    }
+}
+#[derive(Serialize, Deserialize)]
+pub struct Trigger {
+    #[serde(flatten)]
+    target: TriggerTarget,
     #[serde(flatten)]
     condition: TriggerCondition,
 }
@@ -342,47 +399,17 @@ impl Trigger {
         runtime_workflow_config: &config::runtime::Workflow,
         options: Option<MatchOptions>
     ) -> bool {
-        match &runtime_workflow_config.job {
-            Some(j) => if j.name != job.name {
-                log::debug!(
-                    "workflow '{}' is running for single job '{}' but current job is '{}'",
-                    runtime_workflow_config.name, j.name, job.name
-                );
-                return false;
-            },
-            None => {}
+        if !self.target.matches(job, config, runtime_workflow_config) {
+            log::debug!(
+                "workflow '{}' does not match for trigger target of '{}'", 
+                runtime_workflow_config.name, job.name
+            );
+            return false;
         }
         let opts = options.unwrap_or(MatchOptions::from(runtime_workflow_config));
         let workflow = config.workflows.as_map().get(&runtime_workflow_config.name).expect(
             &format!("{} does not exist in workflows of Deplo.toml", runtime_workflow_config.name)
         );
-        // workflows match?
-        if !self.workflows.as_ref().map_or_else(
-            // when no workflow specified for condition, always pass
-            || true,
-            // if more than 1 workflows specified, runtime_workflow_config.name should match any of them
-            |v| v.iter().find(|v| { runtime_workflow_config.match_with(config, &v.resolve()) }).is_some()
-        ) {
-            log::debug!(
-                "workflow '{}' does not match for trigger workflow '{:?}' of '{}'", 
-                runtime_workflow_config.name, self.workflows, job.name
-            );
-            return false;
-        }
-        if !self.release_targets.as_ref().map_or_else(
-            // no job.release_targets restriction. always ok
-            || true,
-            |v| match &runtime_workflow_config.exec.release_target {
-                // both runtime_workflow_config.exec.release_target and job.release_targets exists, compare matches
-                Some(rt) => v.iter().find(|v| { v.resolve() == *rt }).is_some(),
-                // job.release_target exists, but no runtime_workflow_config.exec.release_target, always ng
-                None => false
-            }
-        ) {
-            log::debug!("workflow '{}' does not match for release target '{:?}' of '{}'. current release target is '{:?}'", 
-                workflow, self.release_targets, job.name, runtime_workflow_config.exec.release_target);
-            return false;
-        }        
         if !workflow.can_react(config, &self.condition) {
             log::debug!(
                 "workflow '{}' does not match for trigger condition type '{:?}' of '{}'",
@@ -673,21 +700,21 @@ impl Job {
             Some(ref v) => {
                 for commit in v {
                     match commit.on {
-                        // first only matches commit entry that has valid for_targets and target
-                        Some(ref t) => if t.matches(self, config, runtime_workflow_config, None) {
+                        // check first entry in self.commit which matches current runtime_workflow_config
+                        Some(ref t) => if t.matches(self, config, runtime_workflow_config) {
                             return Some(commit)
                         },
                         None => {}
                     }
                 }
-                // if no matches for all for_targets of Some, find first for_targets of None
+                // if no matches, find first entry that has no on condition.
                 for commit in v {
                     match commit.on {
-                        // first only matches some for_targets and target
                         Some(_) => {},
                         None => return Some(commit)
                     }
                 }
+                // if both check failed, no need to commit.
                 return None;
             },
             // if no commits setting, return none

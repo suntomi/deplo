@@ -373,7 +373,7 @@ impl Workflow {
             None => panic!("workflow {} not found in config", self.name),
         }
     }
-    pub fn match_with(&self, config: &config::Config, workflow_name: &str) -> bool {
+    pub fn contain_workflow(&self, config: &config::Config, workflow_name: &str) -> bool {
         // check if workflow matches with the name
         if self.name == workflow_name {
             return true;
