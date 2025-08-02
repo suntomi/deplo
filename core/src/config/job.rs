@@ -472,8 +472,12 @@ impl Trigger {
                         }) {
                             Ok(v) => {
                                 log::trace!(
-                                    "workflow '{}' job '{}' module condition matches with '{:?}'",
-                                    workflow, job.name, v
+                                    "module workflow '{}' job '{}' condition {}",
+                                    workflow, job.name, if v.is_some() {
+                                        "matched"
+                                    } else {
+                                        "not matched"
+                                    }
                                 );
                                 v.is_some()
                             },

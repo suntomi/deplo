@@ -56,7 +56,7 @@
             "DEPLO_GHACTION_WORKFLOW_NAME": "Deplo System"
         },
         "args": [
-            "-v=3", "run", "-w=prbot", "-p=payload.json", "-c='{\"user\":\"umegaya\"}'", "prbot-test"
+            "-v=3", "run", "-w", "prbot", "-c", "{\"author\":\"umegaya\"}", "prbot-test"
         ]
     },
     {
