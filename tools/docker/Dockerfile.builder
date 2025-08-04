@@ -1,13 +1,14 @@
 FROM --platform=${BUILDPLATFORM} debian:trixie-slim AS zig
+ENV DEBIAN_FRONTEND=noninteractive
 RUN apt update && apt install -y curl xz-utils
 # 0.11.0 has lfs64 linker error with cargo-zigbuild https://github.com/ziglang/zig/issues/15610
 ENV ZIG_VERSION="0.14.1"
 RUN if [ "${BUILDPLATFORM}" = "arm64" ]; then export ARCH="aarch64"; else export ARCH="x86_64"; fi && \
-    curl -LO https://ziglang.org/download/${ZIG_VERSION}/zig-linux-${ARCH}-${ZIG_VERSION}.tar.xz && \
-    tar -xf zig-linux-${ARCH}-${ZIG_VERSION}.tar.xz && mkdir -p /opt/zig && \
-    mv zig-linux-${ARCH}-${ZIG_VERSION}/zig /opt/zig/ && \
-    mv zig-linux-${ARCH}-${ZIG_VERSION}/lib /opt/zig/ && ls -al /opt/zig/ && \
-    rm -rf zig-linux-${ARCH}-${ZIG_VERSION}.tar.xz zig-linux-${ARCH}-${ZIG_VERSION}
+    curl -LO https://ziglang.org/download/${ZIG_VERSION}/zig-${ARCH}-linux-${ZIG_VERSION}.tar.xz && \
+    tar -xf zig-${ARCH}-linux-${ZIG_VERSION}.tar.xz && mkdir -p /opt/zig && \
+    mv zig-${ARCH}-linux-${ZIG_VERSION}/zig /opt/zig/ && \
+    mv zig-${ARCH}-linux-${ZIG_VERSION}/lib /opt/zig/ && ls -al /opt/zig/ && \
+    rm -rf zig-${ARCH}-linux-${ZIG_VERSION}.tar.xz zig-${ARCH}-linux-${ZIG_VERSION}
 
 FROM --platform=${BUILDPLATFORM} debian:trixie-slim AS builder-x86_64
 COPY --from=zig /opt/zig/zig /usr/local/bin/zig
