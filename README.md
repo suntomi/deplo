@@ -157,3 +157,4 @@ run command `${adhoc command args}` remotely on CI service environment of `$job_
 
 ### Roadmap
 [see here](https://github.com/suntomi/deplo/issues/12)
+
