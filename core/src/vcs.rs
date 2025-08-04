@@ -59,7 +59,7 @@ pub trait VCS {
         &self, url: &str, options: &JsonValue
     ) -> Result<(), Box<dyn Error>>;
     fn close_pr(
-        &self, url: &str
+        &self, url: &str, opts: &JsonValue
     ) -> Result<(), Box<dyn Error>>;
     fn pr_url_from_env(&self) -> Result<Option<String>, Box<dyn Error>>;
     fn user_and_repo(&self) -> Result<(String, String), Box<dyn Error>>;

@@ -450,7 +450,7 @@ impl<GIT: git::GitFeatures<S>, S: shell::Shell> vcs::VCS for Github<GIT, S> {
     }
     fn close_pr(
         // options has merge_method, commit_message, comit_title, sha
-        &self, url: &str
+        &self, url: &str, opts: &JsonValue
     ) -> Result<(), Box<dyn Error>> {
         if let config::vcs::Account::Github{ key, .. } = &self.config.borrow().vcs {
             let user_and_repo = (self as &dyn vcs::VCS).user_and_repo().unwrap();
@@ -459,6 +459,18 @@ impl<GIT: git::GitFeatures<S>, S: shell::Shell> vcs::VCS for Github<GIT, S> {
                 "https://api.github.com/repos/{}/{}/pulls/{}",
                 user_and_repo.0, user_and_repo.1, pr_num
             );
+            let optmap_src = json_to_strmap(&opts);
+            let options = optmap_src.iter().map(|(k, v)| (*k, v.as_str())).collect::<HashMap<_, _>>();
+            // if options["message"] is set, use it as comment to pull request, then close it
+            if let Some(message) = options.get("message") {
+                let comment_url = format!("{}/comments", api_url).replace("pulls", "issues");
+                self.shell.exec(shell::args![
+                    "curl", "-sS", "-X", "POST", comment_url,
+                    "-H", shell::fmtargs!("Authorization: token {}", key),
+                    "-H", "Accept: application/vnd.github.v3+json",
+                    "-d", format!(r#"{{"body":"{}"}}"#, message)
+                ], shell::no_env(), shell::no_cwd(), &shell::capture())?;
+            }
             self.shell.exec(shell::args![
                 "curl", "-sS", "-X", "PATCH", api_url,
                 "-H", shell::fmtargs!("Authorization: token {}", key),

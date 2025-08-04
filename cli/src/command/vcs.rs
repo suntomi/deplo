@@ -47,7 +47,10 @@ impl<S: shell::Shell> VCS<S> {
                 )?;
             },
             Some(("close", subargs)) => {
-                vcs.close_pr(subargs.value_or_die("url"))?;
+                vcs.close_pr(
+                    subargs.value_or_die("url"),
+                    &subargs.json_value_of("option")?
+                )?;
             },
             _ => return escalate!(args.error("no such subcommand for pr control"))
         }

@@ -429,7 +429,45 @@ lazy_static! {
                         .multiple_values(true)
                         .multiple_occurrences(true))
                 )
-        )        
+                .subcommand(
+                    App::new("pr")
+                    .about("control pull request")
+                    .subcommand(
+                        App::new("merge")
+                        .about("merge pull request")
+                        .arg(Arg::new("url")
+                            .help("URL of the pull request")
+                            .index(1)
+                            .required(true))
+                        .arg(Arg::new("option")
+                            .help("option for pull request merge.\n\
+                                    -o $key=$value\n\
+                                    for github, body options of https://docs.github.com/en/rest/pulls/pulls?apiVersion=2022-11-28#merge-a-pull-request can be specified.\n\
+                                    plus, -o auto_merge=true to enable auto merge.\n\
+                                          -o approve=true to approve the pull request.\n\
+                                    TODO: for gitlab")
+                            .short('o')
+                            .takes_value(true)
+                            .multiple_values(true)
+                            .multiple_occurrences(true))
+                    )
+                    .subcommand(
+                        App::new("close")
+                        .about("close pull request")
+                        .arg(Arg::new("url")
+                            .help("URL of the pull request")
+                            .index(1)
+                            .required(true))
+                        .arg(Arg::new("option")
+                            .help("option for pull request merge.\n\
+                                    -o message=$text to post comment to pull request.")
+                            .short('o')
+                            .takes_value(true)
+                            .multiple_values(true)
+                            .multiple_occurrences(true))         
+                    )
+                )
+        )
         .get_matches();
 }
 impl<'a> Clap<'a> {
