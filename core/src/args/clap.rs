@@ -444,6 +444,7 @@ lazy_static! {
                                     -o $key=$value\n\
                                     for github, body options of https://docs.github.com/en/rest/pulls/pulls?apiVersion=2022-11-28#merge-a-pull-request can be specified.\n\
                                     plus, -o auto_merge=true to enable auto merge.\n\
+                                          -o message=$text to post comment to pull request.\n\
                                           -o approve=true to approve the pull request.\n\
                                     TODO: for gitlab")
                             .short('o')

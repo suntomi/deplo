@@ -395,16 +395,23 @@ impl<GIT: git::GitFeatures<S>, S: shell::Shell> vcs::VCS for Github<GIT, S> {
         &self, url: &str, opts: &JsonValue
     ) -> Result<(), Box<dyn Error>> {
         let optmap_src = json_to_strmap(&opts);
-        let options = optmap_src.iter().map(|(k, v)| (*k, v.as_str())).collect::<HashMap<_, _>>();
-        // Check if auto_merge option is requested
-        if options.get("auto_merge").unwrap_or(&"false") == &"true" {
-            return self.enable_auto_merge_pr(url, &options);
-        }
-        
+        let options = optmap_src.iter().map(|(k, v)| (*k, v.as_str())).collect::<HashMap<_, _>>();        
         // merge pr with github api
         if let config::vcs::Account::Github{ key, .. } = &self.config.borrow().vcs {
             let user_and_repo = (self as &dyn vcs::VCS).user_and_repo().unwrap();
             let pr_num = url.split('/').last().unwrap_or("");
+            if let Some(message) = options.get("message") {
+                let api_url = format!(
+                    "https://api.github.com/repos/{}/{}/issues/{}/comments",
+                    user_and_repo.0, user_and_repo.1, pr_num
+                );
+                self.shell.exec(shell::args![
+                    "curl", "-sS", "-X", "POST", api_url,
+                    "-H", shell::fmtargs!("Authorization: token {}", key),
+                    "-H", "Accept: application/vnd.github.v3+json",
+                    "-d", format!(r#"{{"body":"{}"}}"#, message)
+                ], shell::no_env(), shell::no_cwd(), &shell::capture())?;
+            }            
             // if options are set, approve first
             if options.get("approve").unwrap_or(&"true") == &"true" {
                 let api_url = format!(
@@ -418,14 +425,19 @@ impl<GIT: git::GitFeatures<S>, S: shell::Shell> vcs::VCS for Github<GIT, S> {
                     "-d", r#"{"event":"APPROVE"}"#
                 ], shell::no_env(), shell::no_cwd(), &shell::capture())?;
             }
+            // Check if auto_merge option is requested
+            if options.get("auto_merge").unwrap_or(&"false") == &"true" {
+                return self.enable_auto_merge_pr(url, &options);
+            }
             let api_url = format!(
                 "https://api.github.com/repos/{}/{}/pulls/{}/merge",
                 user_and_repo.0, user_and_repo.1, pr_num
             );
             let default_message = format!("deplo version: {}, commit: {}", 
                 config::DEPLO_VERSION, config::DEPLO_GIT_HASH);
+            let default_commit_title = format!("PR #{} merged by deplo", pr_num);
             let default_body = hashmap!{
-                "merge_method" => "merge", "commit_title" => "merged by deplo",
+                "merge_method" => "merge", "commit_title" => &default_commit_title,
                 "commit_message" => default_message.as_str()
             };
             let body = merge_hashmap(&default_body, &options);
