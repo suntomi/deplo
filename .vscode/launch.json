@@ -48,6 +48,18 @@
         ]
     },    
     {
+        "name": "RunWithCustomWorkflow",
+        "type": "lldb",
+        "request": "launch",
+        "program": "${workspaceFolder}/target/debug/cli",
+        "env": {
+            "DEPLO_GHACTION_WORKFLOW_NAME": "Deplo System"
+        },
+        "args": [
+            "-v=3", "run", "-w", "prbot", "-c", "{\"author\":\"umegaya\"}", "prbot-test"
+        ]
+    },
+    {
         "name": "ReleaseAssets",
         "type": "lldb",
         "request": "launch",
@@ -63,6 +75,16 @@
         "program": "${workspaceFolder}/target/debug/cli",
         "args": [
             "-v=3", "vcs", "release", "nightly", "-o", "name=nightly"
+        ]
+    },
+    {
+        "name": "MergePR",
+        "type": "lldb",
+        "request": "launch",
+        "program": "${workspaceFolder}/target/debug/cli",
+        "args": [
+            "-v=3", "vcs", "pr", "merge", "https://github.com/suntomi/deplo/pull/134", "-o", "auto_merge=true",
+            "-o", "message=\"test comment on merge\"", "-o", "approve=false"
         ]
     },
     {

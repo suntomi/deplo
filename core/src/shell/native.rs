@@ -187,13 +187,26 @@ impl Native {
                             let mut buf = String::new();
                             v.read_stdout(&mut buf).map_err(|e| shell::ShellError::OtherFailure{
                                 cause: format!("cannot read from stdout tempfile error {:?}", e),
-                                cmd: cmdstr
+                                cmd: cmdstr.clone()
                             })?;
-                            log::debug!("stdout: [{}]", buf);
+                            log::trace!("command success: stdout: [{}]", buf);
+                            let mut buferr = String::new();
+                            v.read_stderr(&mut buferr).map_err(|e| shell::ShellError::OtherFailure{
+                                cause: format!("cannot read from stderr tempfile error {:?}", e),
+                                cmd: cmdstr.clone()
+                            })?;
+                            log::trace!("command success: stderr: [{}]", buferr);
                             return Ok(buf.trim().to_string());
                         },
                         None => match String::from_utf8(output.stdout) {
-                            Ok(s) => return Ok(s.trim().to_string()),
+                            Ok(s) => {
+                                let res = s.trim().to_string();
+                                log::trace!("command success: stdout: [{}]", res);
+                                if let Ok(err) = String::from_utf8(output.stderr) {
+                                    log::trace!("command success: stderr: [{}]", err);
+                                }
+                                return Ok(res);
+                            },
                             Err(err) => return Err(shell::ShellError::OtherFailure{
                                 cause: format!("stdout character code error {:?}", err),
                                 cmd: cmdstr
@@ -208,13 +221,17 @@ impl Native {
                                 cause: format!("cannot read from stderr tempfile error {:?}", e),
                                 cmd: cmdstr
                             })?;
+                            log::trace!("command error: stderr: [{}]", buf);
                             return Ok(buf.trim().to_string());
                         },
                         None => match String::from_utf8(output.stderr) {
-                            Ok(s) => return Err(shell::ShellError::OtherFailure{ 
-                                cause: format!("command returns error {}", s),
-                                cmd: cmdstr
-                            }),
+                            Ok(s) => return {
+                                log::trace!("command error: stderr: [{}]", s);
+                                Err(shell::ShellError::OtherFailure{ 
+                                    cause: format!("command returns error {}", s),
+                                    cmd: cmdstr
+                                })
+                            },
                             Err(err) => return Err(shell::ShellError::OtherFailure{
                                 cause: format!("stderr character code error {:?}", err),
                                 cmd: cmdstr
@@ -239,14 +256,27 @@ impl Native {
                                 Some(v) => {
                                     let mut buf = String::new();
                                     v.read_stdout(&mut buf).map_err(|e| shell::ShellError::OtherFailure{
-                                        cause: format!("cannot read from stderr tempfile error {:?}", e),
-                                        cmd: cmdstr
+                                        cause: format!("cannot read from stdout tempfile error {:?}", e),
+                                        cmd: cmdstr.clone()
                                     })?;
-                                    log::debug!("stdout: [{}]", buf);
+                                    log::trace!("command success: stdout: [{}]", buf);
+                                    let mut buferr = String::new();
+                                    v.read_stderr(&mut buferr).map_err(|e| shell::ShellError::OtherFailure{
+                                        cause: format!("cannot read from stderr tempfile error {:?}", e),
+                                        cmd: cmdstr.clone()
+                                    })?;
+                                    log::trace!("command success: stderr: [{}]", buferr);
                                     return Ok(buf.trim().to_string())
                                 },
                                 None => match String::from_utf8(output.stdout) {
-                                    Ok(s) => return Ok(s.trim().to_string()),
+                                    Ok(s) => {
+                                        let res = s.trim().to_string();
+                                        log::trace!("command success: stdout: [{}]", res);
+                                        if let Ok(err) = String::from_utf8(output.stderr) {
+                                            log::trace!("command success: stderr: [{}]", err);
+                                        }
+                                        return Ok(res);
+                                    },
                                     Err(err) => return Err(shell::ShellError::OtherFailure{
                                         cause: format!("read stdout error: non printable characters {:?}", err),
                                         cmd: cmdstr
@@ -262,18 +292,24 @@ impl Native {
                                 })
                             };
                             return match output.status.code() {
-                                Some(_) => Err(shell::ShellError::ExitStatus{ 
-                                    status: output.status, stderr,
-                                    cmd: cmdstr
-                                }),
-                                None => Err(shell::ShellError::OtherFailure{
-                                    cause: if stderr.is_empty() { 
-                                        format!("cmd terminated by signal")
-                                    } else {
-                                        format!("cmd failed. output: {}", stderr)
-                                    },
-                                    cmd: cmdstr
-                                }),
+                                Some(_) => {
+                                    log::trace!("command error: stderr: [{}], ec={}", stderr, output.status);
+                                    Err(shell::ShellError::ExitStatus{ 
+                                        status: output.status, stderr,
+                                        cmd: cmdstr
+                                    })
+                                },
+                                None => {
+                                    log::trace!("command error: stderr: [{}]", stderr);
+                                    Err(shell::ShellError::OtherFailure{
+                                        cause: if stderr.is_empty() { 
+                                            format!("cmd terminated by signal")
+                                        } else {
+                                            format!("cmd failed. output: {}", stderr)
+                                        },
+                                        cmd: cmdstr
+                                    })
+                                },
                             }
                         }
                     },

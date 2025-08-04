@@ -35,9 +35,8 @@ impl<S: shell::Shell> workflow::Workflow for ModuleRunner<S> {
         )?;
         Ok(())
     }
-    fn matches(
+    fn filter_event(
         &self,
-        shell_settings: &shell::Settings,
         event: &str,
         with: &Option<HashMap<String, config::AnyValue>>
     ) -> Result<Option<String>, Box<dyn Error>> {
@@ -45,15 +44,41 @@ impl<S: shell::Shell> workflow::Workflow for ModuleRunner<S> {
         let module = c.modules.repos().get(&self.module_key);
         match module.run(
             module::EntryPointType::Workflow,
-            &self.shell, shell_settings,
-            shell::args!["matches", event], 
+            &self.shell, &shell::capture(),
+            shell::args!["filter_event", event],
             module::empty_env(), with
         ) {
-            Ok(v) => Ok(Some(v)),
+            Ok(v) => Ok(if v.len() > 0 { Some(v) } else { None }),
             Err(e) => {
-                log::debug!("workflow {} does not match by error {:?}", self.module_key, e);
+                log::debug!("workflow {} does not match event by error {:?}", self.module_key, e);
                 Ok(None)
             }
         }
     }
+    fn filter_context(
+        &self,
+        with: &Option<HashMap<String, config::AnyValue>>,
+        when: &HashMap<String, config::AnyValue>,
+        context: &HashMap<String, config::AnyValue>
+    ) -> Result<Option<String>, Box<dyn Error>> {
+        let c = self.config.borrow();
+        let module = c.modules.repos().get(&self.module_key);
+        match module.run(
+            module::EntryPointType::Workflow,
+            &self.shell, &shell::capture(),
+            shell::args![
+                "filter_context", 
+                serde_json::to_string(when)?,
+                serde_json::to_string(context)?
+            ], module::empty_env(), with
+        ) {
+            Ok(v) => Ok(if v.len() > 0 { Some(v) } else { None }),
+            Err(e) => {
+                log::debug!("workflow {} context {:?} does not match context by error {:?}", 
+                    self.module_key, context, e);
+                Ok(None)
+            }
+        }
+    }
+
 }

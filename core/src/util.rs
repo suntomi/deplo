@@ -529,6 +529,20 @@ pub fn str_to_json(s: &str) -> serde_json::Value {
 // }
 // pub use macro_jsonpath as jsonpath;
 
+pub fn json_to_strmap(v: &serde_json::Value) -> HashMap<&str, String> {
+    let mut ret = HashMap::new();
+    if let Some(obj) = v.as_object() {
+        for (k, v) in obj {
+            if let Some(s) = v.as_str() {
+                ret.insert(k.as_str(), s.to_string());
+            } else {
+                ret.insert(k.as_str(), v.to_string());
+            }
+        }
+    }
+    ret
+}
+
 pub fn jsonpath(src: &str, expr: &str) -> Result<Option<String>, Box<dyn Error>> {
     let filtered = jsonpath_lib::select_as_str(src, expr)?;
     let json = str_to_json(&filtered);

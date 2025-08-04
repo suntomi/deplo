@@ -134,6 +134,8 @@ pub enum Runner {
         class: Option<config::Value>,
         /// container image setting for run the job on local.
         local_fallback: Option<FallbackContainer>,
+        /// run in host directly if os type matches
+        no_fallback: Option<bool>,
     },
     #[serde(rename = "container")]
     Container {
@@ -190,7 +192,7 @@ pub enum CommitMethod {
 #[derive(Serialize, Deserialize)]
 pub struct Commit {
     pub files: Vec<config::Value>,
-    pub on: Option<Trigger>,
+    pub on: Option<TriggerTarget>,
     pub log_format: Option<config::Value>,
     #[serde(flatten)]
     pub method: Option<CommitMethod>,
@@ -285,7 +287,7 @@ pub enum TriggerCondition {
     }
 }
 impl TriggerCondition {
-    fn check_workflow_type(&self, w: &config::workflow::Workflow) -> bool {
+    pub fn check_workflow_type(&self, w: &config::workflow::Workflow) -> bool {
         match self {
             Self::Commit{..} => if let config::workflow::Workflow::Deploy{..} = w {
                 true
@@ -315,9 +317,66 @@ impl TriggerCondition {
     }
 }
 #[derive(Serialize, Deserialize)]
-pub struct Trigger {
+pub struct TriggerTarget {
+    /// name of the workflow that is triggered.
     workflows: Option<Vec<config::Value>>,
+    /// release target of the job that is triggered.
     release_targets: Option<Vec<config::Value>>,
+}
+impl TriggerTarget {
+    pub fn matches(
+        &self,
+        job: &config::job::Job,
+        config: &config::Config,
+        runtime_workflow_config: &config::runtime::Workflow
+    ) -> bool{
+        match &runtime_workflow_config.job {
+            Some(j) => if j.name != job.name {
+                log::debug!(
+                    "workflow '{}' is running for single job '{}' but current job is '{}'",
+                    runtime_workflow_config.name, j.name, job.name
+                );
+                return false;
+            },
+            None => {}
+        }
+        // workflows match?
+        if !self.workflows.as_ref().map_or_else(
+            // when no workflow specified for condition, always pass
+            || true,
+            // if more than 1 workflows specified, runtime_workflow_config.name should match any of them
+            // or inherit the workflow
+            |v| v.iter().find(|v| {
+                runtime_workflow_config.contain_workflow(config, &v.resolve())
+            }).is_some()
+        ) {
+            log::debug!(
+                "workflow '{}' does not match for trigger workflow '{:?}' of '{}'", 
+                runtime_workflow_config.name, self.workflows, job.name
+            );
+            return false;
+        }
+        if !self.release_targets.as_ref().map_or_else(
+            // no job.release_targets restriction. always ok
+            || true,
+            |v| match &runtime_workflow_config.exec.release_target {
+                // both runtime_workflow_config.exec.release_target and job.release_targets exists, compare matches
+                Some(rt) => v.iter().find(|v| { v.resolve() == *rt }).is_some(),
+                // job.release_target exists, but no runtime_workflow_config.exec.release_target, always ng
+                None => false
+            }
+        ) {
+            log::debug!("workflow '{}' does not match for release target '{:?}' of '{}'. current release target is '{:?}'", 
+                runtime_workflow_config.name, self.release_targets, job.name, runtime_workflow_config.exec.release_target);
+            return false;
+        }
+        return true;
+    }
+}
+#[derive(Serialize, Deserialize)]
+pub struct Trigger {
+    #[serde(flatten)]
+    target: TriggerTarget,
     #[serde(flatten)]
     condition: TriggerCondition,
 }
@@ -340,48 +399,18 @@ impl Trigger {
         runtime_workflow_config: &config::runtime::Workflow,
         options: Option<MatchOptions>
     ) -> bool {
-        match &runtime_workflow_config.job {
-            Some(j) => if j.name != job.name {
-                log::debug!(
-                    "workflow '{}' is running for single job '{}' but current job is '{}'",
-                    runtime_workflow_config.name, j.name, job.name
-                );
-                return false;
-            },
-            None => {}
+        if !self.target.matches(job, config, runtime_workflow_config) {
+            log::debug!(
+                "workflow '{}' does not match for trigger target of '{}'", 
+                runtime_workflow_config.name, job.name
+            );
+            return false;
         }
         let opts = options.unwrap_or(MatchOptions::from(runtime_workflow_config));
         let workflow = config.workflows.as_map().get(&runtime_workflow_config.name).expect(
             &format!("{} does not exist in workflows of Deplo.toml", runtime_workflow_config.name)
         );
-        // workflows match?
-        if !self.workflows.as_ref().map_or_else(
-            // when no workflow specified for condition, always pass
-            || true,
-            // if more than 1 workflows specified, runtime_workflow_config.name should match any of them
-            |v| v.iter().find(|v| { let s: &str = &v.resolve(); s == runtime_workflow_config.name }).is_some()
-        ) {
-            log::debug!(
-                "workflow '{}' does not match for trigger workflow '{:?}' of '{}'", 
-                runtime_workflow_config.name, self.workflows, job.name
-            );
-            return false;
-        }
-        if !self.release_targets.as_ref().map_or_else(
-            // no job.release_targets restriction. always ok
-            || true,
-            |v| match &runtime_workflow_config.exec.release_target {
-                // both runtime_workflow_config.exec.release_target and job.release_targets exists, compare matches
-                Some(rt) => v.iter().find(|v| { v.resolve() == *rt }).is_some(),
-                // job.release_target exists, but no runtime_workflow_config.exec.release_target, always ng
-                None => false
-            }
-        ) {
-            log::debug!("workflow '{}' does not match for release target '{:?}' of '{}'. current release target is '{:?}'", 
-                workflow, self.release_targets, job.name, runtime_workflow_config.exec.release_target);
-            return false;
-        }        
-        if !self.condition.check_workflow_type(workflow) {
+        if !workflow.can_react(config, &self.condition) {
             log::debug!(
                 "workflow '{}' does not match for trigger condition type '{:?}' of '{}'",
                 workflow, self.condition, job.name
@@ -432,11 +461,37 @@ impl Trigger {
                 }
             },
             TriggerCondition::Module{ when } => {
-                // use module method like _wf.matches(when) to determine.
-                panic!(
-                    "TODO: workflow '{}' job '{}' implement match logic for Module condition {:?}",
-                    workflow, job.name, when
-                );
+                match workflow {
+                    config::workflow::Workflow::Module(c) => {
+                        // uses same workflow module that trigger this workflow, to check
+                        // the job really need to run.
+                        return match c.value(|v| {
+                            config.modules.workflow(&v.uses).filter_context(
+                                &v.with, &when, &runtime_workflow_config.context
+                            )
+                        }) {
+                            Ok(v) => {
+                                log::trace!(
+                                    "module workflow '{}' job '{}' condition {}",
+                                    workflow, job.name, if v.is_some() {
+                                        "matched"
+                                    } else {
+                                        "not matched"
+                                    }
+                                );
+                                v.is_some()
+                            },
+                            Err(e) => panic!(
+                                "workflow '{}' job '{}' module condition check failed: {}",
+                                workflow, job.name, e
+                            )
+                        }
+                    },
+                    _ => {
+                        log::warn!("workflow '{}' is not module workflow", workflow);
+                        return false;
+                    }
+                }
             },
             TriggerCondition::Any{..} => {},
         }
@@ -649,21 +704,21 @@ impl Job {
             Some(ref v) => {
                 for commit in v {
                     match commit.on {
-                        // first only matches commit entry that has valid for_targets and target
-                        Some(ref t) => if t.matches(self, config, runtime_workflow_config, None) {
+                        // check first entry in self.commit which matches current runtime_workflow_config
+                        Some(ref t) => if t.matches(self, config, runtime_workflow_config) {
                             return Some(commit)
                         },
                         None => {}
                     }
                 }
-                // if no matches for all for_targets of Some, find first for_targets of None
+                // if no matches, find first entry that has no on condition.
                 for commit in v {
                     match commit.on {
-                        // first only matches some for_targets and target
                         Some(_) => {},
                         None => return Some(commit)
                     }
                 }
+                // if both check failed, no need to commit.
                 return None;
             },
             // if no commits setting, return none
@@ -682,6 +737,8 @@ pub struct MatchOptions {
 impl MatchOptions {
     fn from(runtime_workflow_config: &config::runtime::Workflow) -> Self {
         Self {
+            // if runtime_workflow_config.job is Some, it means this workflow is running for single job.
+            // so condition check is not required.
             check_condition: runtime_workflow_config.job.is_none()
         }
     }

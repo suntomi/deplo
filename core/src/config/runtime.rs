@@ -289,13 +289,38 @@ impl Workflow {
                 };
                 if matches.len() == 0 {
                     panic!("no workflow matches with trigger")
-                } else if matches.len() > 2 {
-                    log::warn!(
-                        "multiple workflow matches({})",
+                } else if matches.len() >= 2 {
+                    // if multiple workflows matches, we should determine which workflow to run.
+                    // use WorkflowExtension::priority to determine which workflow to run.
+                    log::trace!(
+                        "multiple workflow matches({}), tie break",
                         matches.iter().map(|m| {m.name.as_str()}).collect::<Vec<&str>>().join(",")
                     );
+                    {
+                        let config = config.borrow();
+                        // sort by priority. bigger number means higher priority.
+                        matches.sort_by(|a, b| {
+                            b.priority(&config).cmp(&a.priority(&config))
+                        });
+                        // if there is multiple workflows with same priority, we should warn about it.
+                        // and take the first one.
+                        log::trace!(
+                            "multiple workflow matches after sort ({})",
+                            matches.iter().map(|m| {m.name.as_str()}).collect::<Vec<&str>>().join(",")
+                        );
+                        let same_priority = matches.iter().
+                            filter(|v| v.priority(&config) == matches[0].priority(&config)).
+                            collect::<Vec<&Workflow>>();
+                        if same_priority.len() > 1 {
+                            log::warn!(
+                                "still multiple workflow matches({})",
+                                same_priority.iter().map(|m| {m.name.as_str()}).collect::<Vec<&str>>().join(",")
+                            );
+                        }
+                    }
                 }
                 let mut v = matches.remove(0);
+                log::debug!("determined workflow name: {}", v.name);
                 v.apply(args, config, has_job_config);
                 Ok(v)
             }
@@ -339,6 +364,24 @@ impl Workflow {
                 None => config::job::Command::Job
             },
             None => config::job::Command::Job
+        }
+    }
+    pub fn priority(&self, config: &config::Config) -> i64 {
+        // get workflow type from config.workflows
+        match config.workflows.get(&self.name) {
+            Some(w) => w.priority(),
+            None => panic!("workflow {} not found in config", self.name),
+        }
+    }
+    pub fn contain_workflow(&self, config: &config::Config, workflow_name: &str) -> bool {
+        // check if workflow matches with the name
+        if self.name == workflow_name {
+            return true;
+        }
+        // check if workflow config's inherit_from matches with the name
+        match config.workflows.get(&self.name) {
+            Some(w) => w.inherits(workflow_name),
+            None => false,
         }
     }
 }

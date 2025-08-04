@@ -17,11 +17,16 @@ pub trait Workflow {
         shell_settings: &shell::Settings,
         with: &Option<HashMap<String, config::AnyValue>>
     ) -> Result<(), Box<dyn Error>>;
-    fn matches(
+    fn filter_event(
         &self, 
-        shell_settings: &shell::Settings,
         event: &str,
         with: &Option<HashMap<String, config::AnyValue>>
+    ) -> Result<Option<String>, Box<dyn Error>>;
+    fn filter_context(
+        &self, 
+        with: &Option<HashMap<String, config::AnyValue>>,
+        when: &HashMap<String, config::AnyValue>,
+        context: &HashMap<String, config::AnyValue>
     ) -> Result<Option<String>, Box<dyn Error>>;
 }
 #[derive(Clone)]

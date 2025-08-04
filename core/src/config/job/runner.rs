@@ -166,21 +166,24 @@ impl<'a> Runner<'a> {
             }
         };
         let (steps, cmd_for_container) = self.create_steps(&command);
+        let ci = job.ci(&config);
         if exec.remote {
             log::debug!(
                 "force running job '{}' on remote with steps {} at {}",
                 job.name, job::StepsDumper{steps: &steps}, exec.revision.as_ref().unwrap_or(&"".to_string())
             );
-            let ci = job.ci(&config);
             return Ok(Some(ci.run_job(&runtime_workflow_config)?));
         }
         // adjust revision with command line argument
         self.adjust_commit_hash(&exec.revision.as_ref().map(|v| v.as_str()))?;
         defer!{self.recover_branch().unwrap();};
         match job.runner {
-            job::Runner::Machine{os, ref local_fallback, ..} => {
+            job::Runner::Machine{os, ref local_fallback, no_fallback, ..} => {
                 let current_os = shell.detect_os()?;
-                if os == current_os {
+                // if deplo is not runnning on CI, we respect configuration no_fallback.
+                // if set to false or ommitted, we use fallback even if os type is matched
+                if os == current_os && (ci.runs_on_service() || no_fallback.unwrap_or(false)) {
+                    log::debug!("runner os '{}' is different from current os '{}' and no_fallback is set to true", os, current_os);
                     if let Some(p) = config.setup_deplo_cli(os, shell)? {
                         let parent = p.parent().expect(&format!("path should not be root {}", p.display()));
                         shell_settings.paths(vec![parent.to_string_lossy().to_string()]);
@@ -189,7 +192,11 @@ impl<'a> Runner<'a> {
                     self.run_steps(shell, &shell_settings, runtime_workflow_config, job, &steps)?;
                     self.post_run(runtime_workflow_config)?;
                 } else {
-                    log::debug!("runner os '{}' is different from current os '{}'", os, current_os);
+                    if os != current_os {
+                        log::debug!("runner os '{}' is different from current os '{}'", os, current_os);
+                    } else {
+                        log::debug!("runner os '{}' is the same as current os but fallback is forced", os);
+                    }
                     match local_fallback {
                         Some(f) => {
                             let (image, sh) = match &f.source {

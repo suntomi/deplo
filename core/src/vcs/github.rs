@@ -1,3 +1,4 @@
+use std::panic;
 use std::error::Error;
 use std::collections::HashMap;
 use std::path::Path;
@@ -6,14 +7,24 @@ use std::result::Result;
 use glob::Pattern;
 use maplit::hashmap;
 use regex;
+use serde::Deserialize;
+use serde::Serialize;
 use serde_json::{Value as JsonValue};
 
 use crate::config;
+use crate::util::merge_hashmap;
 use crate::vcs;
 use crate::shell;
-use crate::util::{escalate,make_escalation,jsonpath,str_to_json};
+use crate::util::{escalate,make_escalation,jsonpath,str_to_json,json_to_strmap};
 
 use super::git;
+
+#[derive(Serialize, Deserialize)]
+struct MergeResult {
+    merged: bool,
+    message: String,
+    sha: String,
+}
 
 pub struct Github<GIT: git::GitFeatures<S> = git::Git, S: shell::Shell = shell::Default> {
     pub config: config::Container,
@@ -26,6 +37,82 @@ impl<GIT: git::GitFeatures<S>, S: shell::Shell> Github<GIT, S> {
     fn pushable_remote_url(&self) -> Result<String, Box<dyn Error>> {
         let user_and_repo = (self as &dyn vcs::VCS).user_and_repo()?;
         Ok(format!("https://github.com/{}/{}", user_and_repo.0, user_and_repo.1))
+    }
+    fn enable_auto_merge_pr(
+        &self, url: &str, options: &HashMap<&str, &str>
+    ) -> Result<bool, Box<dyn Error>> {
+        if let config::vcs::Account::Github{ key, .. } = &self.config.borrow().vcs {
+            let user_and_repo = (self as &dyn vcs::VCS).user_and_repo().unwrap();
+            let pr_num = url.split('/').last().unwrap_or("");
+            
+            // First, get PR ID using GraphQL query
+            let query_pr_id = format!(r#"
+{{"query": "query {{ repository(owner: \"{}\", name: \"{}\") {{ pullRequest(number: {}) {{ id }} }} }}"}}"#,
+                user_and_repo.0, user_and_repo.1, pr_num);
+            
+            let pr_response = self.shell.exec(shell::args![
+                "curl", "-sS", "-X", "POST", "https://api.github.com/graphql",
+                "-H", shell::fmtargs!("Authorization: Bearer {}", key),
+                "-H", "Content-Type: application/json",
+                "-d", query_pr_id
+            ], shell::no_env(), shell::no_cwd(), &shell::capture())?;
+            
+            let pr_data: serde_json::Value = serde_json::from_str(&pr_response)?;
+            let pr_id = pr_data["data"]["repository"]["pullRequest"]["id"]
+                .as_str()
+                .ok_or("Failed to get PR ID")?;
+            
+            // Enable auto-merge using GraphQL mutation
+            let merge_method = match options.get("merge_method") {
+                Some(method) => match method.to_lowercase().as_str() {
+                    "squash" => "SQUASH",
+                    "rebase" => "REBASE", 
+                    _ => "MERGE"
+                },
+                None => "MERGE"
+            };
+            let commit_headline = options.get("commit_title").unwrap_or(&"Auto-merge by deplo");
+            let commit_body = options.get("commit_message").unwrap_or(&"");
+            
+            let mutation = format!(r#"
+{{"query": "mutation {{ enablePullRequestAutoMerge(input: {{ pullRequestId: \"{}\", mergeMethod: {}, commitHeadline: \"{}\", commitBody: \"{}\" }}) {{ pullRequest {{ autoMergeRequest {{ enabledAt }} }} }} }}"}}"#, 
+                pr_id, merge_method, commit_headline, commit_body);
+            
+            let response = self.shell.exec(shell::args![
+                "curl", "-sS", "-X", "POST", "https://api.github.com/graphql",
+                "-H", shell::fmtargs!("Authorization: Bearer {}", key),
+                "-H", "Content-Type: application/json",
+                "-d", mutation
+            ], shell::no_env(), shell::no_cwd(), &shell::capture())?;
+            
+            let result: serde_json::Value = serde_json::from_str(&response)?;
+            if let Some(errors) = result.get("errors") {
+                let default_strval = serde_json::Value::String("".to_string());
+                // check if errors has entry its path is enablePullRequestAutoMerge and error type is UNPROCESSABLE
+                for e in errors.as_array().unwrap_or(&vec![]) {
+                    if e.get("type").unwrap_or(&default_strval) == &"UNPROCESSABLE" {
+                        for ee in e.get("path").unwrap_or(
+                            &serde_json::Value::Array(vec![])
+                        ).as_array().unwrap_or(&vec![]) {
+                            log::info!("error path: {:?}", ee);
+                            if ee == &"enablePullRequestAutoMerge" {
+                                // already clean state. continue to normal merge
+                                log::info!("may be already clean state. continue to normal merge: {:?}", e.get("message"));
+                                return Ok(false);
+                            }
+                        }
+                    }
+                }
+                return escalate!(Box::new(vcs::VCSError {
+                    cause: format!("Failed to enable auto-merge: {}", errors)
+                }));
+            }
+            
+            log::info!("Auto-merge enabled for PR {}", url);
+        } else {
+            panic!("vcs is not github: {}", self.config.borrow().vcs);
+        }
+        Ok(true)
     }
     fn with_remote_for_push<F,R>(
         &self, executer: F
@@ -315,6 +402,111 @@ impl<GIT: git::GitFeatures<S>, S: shell::Shell> vcs::VCS for Github<GIT, S> {
                 },
                 None => {}
             };
+        } else {
+            panic!("vcs is not github: {}", self.config.borrow().vcs);
+        }
+        Ok(())
+    }
+    fn merge_pr(
+        &self, url: &str, opts: &JsonValue
+    ) -> Result<(), Box<dyn Error>> {
+        let optmap_src = json_to_strmap(&opts);
+        let options = optmap_src.iter().map(|(k, v)| (*k, v.as_str())).collect::<HashMap<_, _>>();        
+        // merge pr with github api
+        if let config::vcs::Account::Github{ key, .. } = &self.config.borrow().vcs {
+            let user_and_repo = (self as &dyn vcs::VCS).user_and_repo().unwrap();
+            let pr_num = url.split('/').last().unwrap_or("");
+            if let Some(message) = options.get("message") {
+                let api_url = format!(
+                    "https://api.github.com/repos/{}/{}/issues/{}/comments",
+                    user_and_repo.0, user_and_repo.1, pr_num
+                );
+                self.shell.exec(shell::args![
+                    "curl", "-sS", "-X", "POST", api_url,
+                    "-H", shell::fmtargs!("Authorization: token {}", key),
+                    "-H", "Accept: application/vnd.github.v3+json",
+                    "-d", format!(r#"{{"body":"{}"}}"#, message)
+                ], shell::no_env(), shell::no_cwd(), &shell::capture())?;
+            }            
+            // if options are set, approve first
+            if options.get("approve").unwrap_or(&"true") == &"true" {
+                let api_url = format!(
+                    "https://api.github.com/repos/{}/{}/pulls/{}/reviews",
+                    user_and_repo.0, user_and_repo.1, pr_num
+                );
+                self.shell.exec(shell::args![
+                    "curl", "-sS", "-X", "POST", api_url,
+                    "-H", shell::fmtargs!("Authorization: token {}", key),
+                    "-H", "Accept: application/vnd.github.v3+json",
+                    "-d", r#"{"event":"APPROVE"}"#
+                ], shell::no_env(), shell::no_cwd(), &shell::capture())?;
+            }
+            // Check if auto_merge option is requested
+            if options.get("auto_merge").unwrap_or(&"false") == &"true" {
+                if self.enable_auto_merge_pr(url, &options)? {
+                    return Ok(()); // auto-merge enabled and not clean status. PR will wait for condition met
+                }
+            }
+            let api_url = format!(
+                "https://api.github.com/repos/{}/{}/pulls/{}/merge",
+                user_and_repo.0, user_and_repo.1, pr_num
+            );
+            let default_message = format!("deplo version: {}, commit: {}", 
+                config::DEPLO_VERSION, config::DEPLO_GIT_HASH);
+            let default_commit_title = format!("PR #{} merged by deplo", pr_num);
+            let default_body = hashmap!{
+                "merge_method" => "merge", "commit_title" => &default_commit_title,
+                "commit_message" => default_message.as_str()
+            };
+            let body = merge_hashmap(&default_body, &options);
+            let response_text = self.shell.exec(shell::args![
+                "curl", "-sS", "-X", "PUT", api_url,
+                "-H", shell::fmtargs!("Authorization: token {}", key),
+                "-H", "Accept: application/vnd.github.v3+json",
+                "-d", serde_json::to_string(&body)?
+            ], shell::no_env(), shell::no_cwd(), &shell::capture())?;
+            let response = serde_json::from_str::<MergeResult>(&response_text)?;
+            if !response.merged {
+                return escalate!(Box::new(vcs::VCSError {
+                    cause: format!("failed to merge PR {}: {}", url, response.message)
+                }));
+            } else {
+                log::info!("successfully merged PR {}: sha={}", url, response.sha);
+            }
+        } else {
+            panic!("vcs is not github: {}", self.config.borrow().vcs);
+        }
+        Ok(())
+    }
+    fn close_pr(
+        // options has merge_method, commit_message, comit_title, sha
+        &self, url: &str, opts: &JsonValue
+    ) -> Result<(), Box<dyn Error>> {
+        if let config::vcs::Account::Github{ key, .. } = &self.config.borrow().vcs {
+            let user_and_repo = (self as &dyn vcs::VCS).user_and_repo().unwrap();
+            let pr_num = url.split('/').last().unwrap_or("");
+            let api_url = format!(
+                "https://api.github.com/repos/{}/{}/pulls/{}",
+                user_and_repo.0, user_and_repo.1, pr_num
+            );
+            let optmap_src = json_to_strmap(&opts);
+            let options = optmap_src.iter().map(|(k, v)| (*k, v.as_str())).collect::<HashMap<_, _>>();
+            // if options["message"] is set, use it as comment to pull request, then close it
+            if let Some(message) = options.get("message") {
+                let comment_url = format!("{}/comments", api_url).replace("pulls", "issues");
+                self.shell.exec(shell::args![
+                    "curl", "-sS", "-X", "POST", comment_url,
+                    "-H", shell::fmtargs!("Authorization: token {}", key),
+                    "-H", "Accept: application/vnd.github.v3+json",
+                    "-d", format!(r#"{{"body":"{}"}}"#, message)
+                ], shell::no_env(), shell::no_cwd(), &shell::capture())?;
+            }
+            self.shell.exec(shell::args![
+                "curl", "-sS", "-X", "PATCH", api_url,
+                "-H", shell::fmtargs!("Authorization: token {}", key),
+                "-H", "Accept: application/vnd.github.v3+json",
+                "-d", r#"{"state":"closed"}"#
+            ], shell::no_env(), shell::no_cwd(), &shell::capture())?;
         } else {
             panic!("vcs is not github: {}", self.config.borrow().vcs);
         }

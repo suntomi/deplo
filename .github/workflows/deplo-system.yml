@@ -25,6 +25,7 @@ on:
           - latest
           - mac
           - module_test
+          - prbot-test
           - product
           - remote-test
           - repository
@@ -48,6 +49,7 @@ env:
   SUNTOMI_VARS1: ${{ vars.SUNTOMI_VARS1 }}
   SUNTOMI_VARS2: ${{ vars.SUNTOMI_VARS2 }}
   SUNTOMI_VARS3: ${{ vars.SUNTOMI_VARS3 }}
+  SUNTOMI_VARS4: ${{ vars.SUNTOMI_VARS4 }}
 jobs:
   deplo-main:
     name: Start CI ${{ github.event.inputs.id }}
@@ -60,6 +62,7 @@ jobs:
       latest: ${{ steps.deplo-main.outputs.latest }}
       mac: ${{ steps.deplo-main.outputs.mac }}
       module_test: ${{ steps.deplo-main.outputs.module_test }}
+      prbot-test: ${{ steps.deplo-main.outputs.prbot-test }}
       product: ${{ steps.deplo-main.outputs.product }}
       remote-test: ${{ steps.deplo-main.outputs.remote-test }}
       repository: ${{ steps.deplo-main.outputs.repository }}
@@ -100,8 +103,8 @@ jobs:
           sudo: true
   deplo-halt:
     name: Cleanup CI
-    if: ${{ !failure() && (needs.base.outputs.need-cleanup || needs.builder.outputs.need-cleanup || needs.config.outputs.need-cleanup || needs.dispatched.outputs.need-cleanup || needs.latest.outputs.need-cleanup || needs.mac.outputs.need-cleanup || needs.module_test.outputs.need-cleanup || needs.product.outputs.need-cleanup || needs.remote-test.outputs.need-cleanup || needs.repository.outputs.need-cleanup || needs.taglab.outputs.need-cleanup || needs.test.outputs.need-cleanup || needs.win.outputs.need-cleanup) }}
-    needs: ["deplo-main","base","builder","config","dispatched","latest","mac","module_test","product","remote-test","repository","taglab","test","win"]
+    if: ${{ !failure() && (needs.base.outputs.need-cleanup || needs.builder.outputs.need-cleanup || needs.config.outputs.need-cleanup || needs.dispatched.outputs.need-cleanup || needs.latest.outputs.need-cleanup || needs.mac.outputs.need-cleanup || needs.module_test.outputs.need-cleanup || needs.prbot-test.outputs.need-cleanup || needs.product.outputs.need-cleanup || needs.remote-test.outputs.need-cleanup || needs.repository.outputs.need-cleanup || needs.taglab.outputs.need-cleanup || needs.test.outputs.need-cleanup || needs.win.outputs.need-cleanup) }}
+    needs: ["deplo-main","base","builder","config","dispatched","latest","mac","module_test","prbot-test","product","remote-test","repository","taglab","test","win"]
     runs-on: ubuntu-latest
     env:
       DEPLO_JOB_SYSTEM_OUTPUT_BASE: ${{ needs.base.outputs.system }}
@@ -111,6 +114,7 @@ jobs:
       DEPLO_JOB_SYSTEM_OUTPUT_LATEST: ${{ needs.latest.outputs.system }}
       DEPLO_JOB_SYSTEM_OUTPUT_MAC: ${{ needs.mac.outputs.system }}
       DEPLO_JOB_SYSTEM_OUTPUT_MODULE_TEST: ${{ needs.module_test.outputs.system }}
+      DEPLO_JOB_SYSTEM_OUTPUT_PRBOT_TEST: ${{ needs.prbot-test.outputs.system }}
       DEPLO_JOB_SYSTEM_OUTPUT_PRODUCT: ${{ needs.product.outputs.system }}
       DEPLO_JOB_SYSTEM_OUTPUT_REMOTE_TEST: ${{ needs.remote-test.outputs.system }}
       DEPLO_JOB_SYSTEM_OUTPUT_REPOSITORY: ${{ needs.repository.outputs.system }}
@@ -477,6 +481,51 @@ jobs:
       - name: module_test
         id: deplo-job-module_test
         run: deplo run module_test
+      - name: Setup ssh session to debug
+        if: always() && (env.DEPLO_CI_RUN_DEBUGGER != '')
+        uses: mxschmitt/action-tmate@v3
+        with:
+          sudo: true
+  prbot-test:
+    needs: [deplo-main]
+    if: ${{ needs.deplo-main.outputs.prbot-test && !failure() }}
+    name: Running job prbot-test
+    runs-on: ubuntu-latest
+  
+  
+  
+    outputs:
+      need-cleanup: ${{ steps.deplo-job-prbot-test.outputs.need-cleanup }}
+      system: ${{ steps.deplo-job-prbot-test.outputs.system }}
+      user: ${{ steps.deplo-job-prbot-test.outputs.user }}
+    steps:
+      - name: Fetch deplo cli
+        run: |
+          curl -L https://github.com/suntomi/deplo/releases/download/nightly/deplo-Linux-$(uname -m) -o /usr/local/bin/deplo
+          chmod +x /usr/local/bin/deplo
+      - name: Fetch repository cache
+        id: fetch-repository-cache
+        uses: actions/cache@v4
+        with:
+          path: .git
+          key: deplo-git-v1-40BFB0C55D506BC4-${{ github.sha }}
+          restore-keys:
+            deplo-git-v1-40BFB0C55D506BC4-
+      - name: Checkout
+        if: steps.fetch-repository-cache.outputs.cache-hit != 'true'
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          submodules: true
+          token: ${{ secrets.SUNTOMI_VCS_ACCOUNT_KEY }}
+      - name: Restore repository from cache
+        if: steps.fetch-repository-cache.outputs.cache-hit == 'true'
+        run: git reset --hard HEAD && git submodule update --init --recursive && deplo -v=1 ci restore-cache --submodules
+        shell: bash
+  
+      - name: prbot-test
+        id: deplo-job-prbot-test
+        run: deplo run prbot-test
       - name: Setup ssh session to debug
         if: always() && (env.DEPLO_CI_RUN_DEBUGGER != '')
         uses: mxschmitt/action-tmate@v3

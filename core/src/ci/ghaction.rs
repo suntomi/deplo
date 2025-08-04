@@ -26,7 +26,7 @@ use crate::util::{
     escape
 };
 
-#[derive(Deserialize)]
+#[derive(Serialize, Deserialize)]
 #[serde(untagged)]
 enum EventPayload {
     Schedule {
@@ -292,7 +292,7 @@ impl<S: shell::Shell> GhAction<S> {
         let mut schedule_entries = vec![];
         for (name, v) in sorted_key_iter(config.workflows.as_map()) {
             match v {
-                config::workflow::Workflow::Repository { events } => {
+                config::workflow::Workflow::Repository { events, .. } => {
                     for (_, event_names) in events {
                         for event_name in event_names {
                             let name = event_name.resolve();
@@ -310,11 +310,11 @@ impl<S: shell::Shell> GhAction<S> {
                         }
                     }
                 },
-                config::workflow::Workflow::Cron { schedules } => {
+                config::workflow::Workflow::Cron { schedules, .. } => {
                     schedule_entries.push(sorted_key_iter(schedules).map(|(_,v)| { format!("- cron: {}", v) }).collect::<Vec<_>>())
                 },
                 config::workflow::Workflow::Deploy|config::workflow::Workflow::Integrate => {},
-                config::workflow::Workflow::Dispatch{inputs,manual} => {
+                config::workflow::Workflow::Dispatch{inputs,manual, ..} => {
                     if manual.unwrap_or(false) {
                         if name == "main" {
                             panic!("deplo does not allow manual dispatch name 'main'")
@@ -876,7 +876,7 @@ impl<S: shell::Shell> ci::CI for GhAction<S> {
                     },
                     fetchcli = MultilineFormatString{
                         strings: &self.generate_fetchcli_steps(&config::job::Runner::Machine{
-                            os: config::job::RunnerOS::Linux, image: None, class: None, local_fallback: None }
+                            os: config::job::RunnerOS::Linux, image: None, class: None, local_fallback: None, no_fallback: None }
                         ),
                         postfix: None
                     },
@@ -947,12 +947,21 @@ impl<S: shell::Shell> ci::CI for GhAction<S> {
             }
         };
         let config = self.config.borrow();
-        match resolved_trigger {
+        match &resolved_trigger {
             ci::WorkflowTrigger::EventPayload(payload) => {
                 let mut matched_names = vec![];
-                let workflow_event = serde_json::from_str::<WorkflowEvent>(&payload)?;
+                let workflow_event = serde_json::from_str::<WorkflowEvent>(payload)?;
                 for (k,v) in config.workflows.as_map() {
                     let name = k.to_string();
+                    // module type workflow always matched here,
+                    // then filtered when generating matches from matched_names
+                    match v {
+                        config::workflow::Workflow::Module(_) => {
+                            matched_names.push(name);
+                            continue;
+                        },
+                        _ => {}
+                    }
                     match workflow_event.event_name.as_str() {
                         "push" => match v {
                             config::workflow::Workflow::Deploy => matched_names.push(name),
@@ -966,7 +975,7 @@ impl<S: shell::Shell> ci::CI for GhAction<S> {
                             config::workflow::Workflow::Cron{..} => matched_names.push(name),
                             _ => {}
                         },
-                        // repository_dispatch has a few possibility.
+                        // repository_dispatch has multiple possibility.
                         // config::DEPLO_MODULE_EVENT_TYPE => Module workflow invocation
                         // others => Repository workflow invocation
                         "repository_dispatch" => if let EventPayload::RepositoryDispatch{
@@ -1013,7 +1022,7 @@ impl<S: shell::Shell> ci::CI for GhAction<S> {
                                 name, hashmap!{}
                             ))
                         },
-                        config::workflow::Workflow::Cron{schedules} => {
+                        config::workflow::Workflow::Cron{schedules, ..} => {
                             if let EventPayload::Schedule{ref schedule} = workflow_event.event {
                                 match schedules.iter().find_map(|(k, v)| {
                                     if v.resolve().as_str() == schedule.as_str() { Some(k) } else { None }
@@ -1050,7 +1059,7 @@ impl<S: shell::Shell> ci::CI for GhAction<S> {
                                 panic!("event payload type does not match {}", workflow_event.event);
                             }
                         },
-                        config::workflow::Workflow::Dispatch{inputs,manual} => {
+                        config::workflow::Workflow::Dispatch{inputs,manual, ..} => {
                             match &workflow_event.event {
                                 EventPayload::RepositoryDispatch{client_payload,action} => if !manual.unwrap_or(false) {
                                     inputs.verify(&client_payload); // panic!s when schema does not matched
@@ -1074,17 +1083,18 @@ impl<S: shell::Shell> ci::CI for GhAction<S> {
                         },
                         config::workflow::Workflow::Module(c) => {
                             if let Some(event_payload) = c.value(|v| {
-                                let event = match &workflow_event.event {
-                                    EventPayload::RepositoryDispatch{client_payload,..} => serde_json::to_string(client_payload)?,
-                                    _ => panic!("event payload type does not match {}", workflow_event.event),
+                                let event = match &resolved_trigger {
+                                    ci::WorkflowTrigger::EventPayload(payload) => payload,
                                 };
-                                config.modules.workflow(&v.uses).matches(
-                                    &shell::no_capture(), &event, &v.with
-                                )
+                                log::debug!("check module workflow [{}] matches with setting {:?}", 
+                                    v.uses.to_string(), v.with);
+                                config.modules.workflow(&v.uses).filter_event(event, &v.with)
                             })? {
                                 matches.push(config::runtime::Workflow::with_context(
                                     name, serde_json::from_str(&event_payload)?
                                 ));
+                            } else {
+                                log::debug!("module workflow '{}' does not match with event payload", name);
                             }
                         }
                     }

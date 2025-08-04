@@ -36,6 +36,7 @@ SUNTOMI_AWS_ROLE = { env = "SUNTOMI_AWS_ROLE", targets = ["actions"] }
 SUNTOMI_VARS1 = { env = "SUNTOMI_VARS1" }
 SUNTOMI_VARS2 = { path = "./.secrets/hoge.txt" }
 SUNTOMI_VARS3 = { env = "SUNTOMI_VARS3" }
+SUNTOMI_VARS4 = { env = "SUNTOMI_VARS4" }
 
 
 # ------------
@@ -156,6 +157,15 @@ discord = {
     release_taget = "nightly",
     with = {
         key = "${SUNTOMI_DISCORD_KEY}",
+    }
+}
+prbot = {
+    uses = { path = "./tools/modules/prfilter" },
+    release_taget = "nightly",
+    # this workflow is matched with jobs that matches "integrate" workflow.
+    inherit_from = ["integrate"],
+    with = {
+        author = "umegaya",
     }
 }
 
@@ -454,7 +464,7 @@ fi
 [jobs.repository]
 on = { workflows = ["repository"] }
 runner = { os = "linux", local_fallback = { 
-    path = "tools/docker/Dockerfile.vmfb", shell = "sh", args = { TEST_ARG = "test arg" }
+    path = "tools/docker/Dockerfile.vmfb", shell = "sh", args = { TEST_ARG = "${env:SUNTOMI_VARS4}" }
 } }
 command = """
 echo "======================="
@@ -509,5 +519,18 @@ if [ ! -z "${TEST_ABORT}" ]; then
     exit 1
 else
     echo "ok :D"
+fi
+"""
+
+[jobs.prbot-test]
+on = { workflows = ["prbot"], when = { author = "um[a-e]gaya" } }
+runner = { os = "linux", local_fallback = { image = "ghcr.io/suntomi/images:aws", shell = "sh" } }
+command = """
+set -e
+if [ "${DEPLO_CI_WORKFLOW_NAME}" = "prbot" ]; then
+    echo "workflow name ok: ${DEPLO_CI_WORKFLOW_NAME}"
+else
+    echo "workflow name ng: ${DEPLO_CI_WORKFLOW_NAME}"
+    exit 1
 fi
 """
