@@ -154,5 +154,6 @@ or specify commit SHA to run job: `deplo i -r $release_target $job_name --ref ef
 you can run your job __on actual CI service environment__ with `--remote`
 run command `${adhoc command args}` remotely on CI service environment of `$job_name`: `deplo i -r $release_target $job_name --remote sh ${adhoc command args}`
 
+
 ### Roadmap
 [see here](https://github.com/suntomi/deplo/issues/12)
