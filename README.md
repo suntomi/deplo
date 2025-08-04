@@ -129,6 +129,7 @@ there is 3 way to run Deplo jobs.
 2. from command line (Local)
 3. from command line (Remote)
 
+
 #### from CI
 this is probably most familiar for you. if push or pull request is made for your `release target`, github actions or circle ci starts their workflow.
 in the workflow, it runs `deplo ci kick` and `job`s defined in Deplo.toml will be executed according to the `changeset` that push or pull request contains.
