@@ -40,7 +40,7 @@ impl<GIT: git::GitFeatures<S>, S: shell::Shell> Github<GIT, S> {
     }
     fn enable_auto_merge_pr(
         &self, url: &str, options: &HashMap<&str, &str>
-    ) -> Result<(), Box<dyn Error>> {
+    ) -> Result<bool, Box<dyn Error>> {
         if let config::vcs::Account::Github{ key, .. } = &self.config.borrow().vcs {
             let user_and_repo = (self as &dyn vcs::VCS).user_and_repo().unwrap();
             let pr_num = url.split('/').last().unwrap_or("");
@@ -86,9 +86,25 @@ impl<GIT: git::GitFeatures<S>, S: shell::Shell> Github<GIT, S> {
             ], shell::no_env(), shell::no_cwd(), &shell::capture())?;
             
             let result: serde_json::Value = serde_json::from_str(&response)?;
-            if result.get("errors").is_some() {
+            if let Some(errors) = result.get("errors") {
+                let default_strval = serde_json::Value::String("".to_string());
+                // check if errors has entry its path is enablePullRequestAutoMerge and error type is UNPROCESSABLE
+                for e in errors.as_array().unwrap_or(&vec![]) {
+                    if e.get("type").unwrap_or(&default_strval) == &"UNPROCESSABLE" {
+                        for ee in e.get("path").unwrap_or(
+                            &serde_json::Value::Array(vec![])
+                        ).as_array().unwrap_or(&vec![]) {
+                            log::info!("error path: {:?}", ee);
+                            if ee == &"enablePullRequestAutoMerge" {
+                                // already clean state. continue to normal merge
+                                log::info!("may be already clean state. continue to normal merge: {:?}", e.get("message"));
+                                return Ok(false);
+                            }
+                        }
+                    }
+                }
                 return escalate!(Box::new(vcs::VCSError {
-                    cause: format!("Failed to enable auto-merge: {}", response)
+                    cause: format!("Failed to enable auto-merge: {}", errors)
                 }));
             }
             
@@ -96,7 +112,7 @@ impl<GIT: git::GitFeatures<S>, S: shell::Shell> Github<GIT, S> {
         } else {
             panic!("vcs is not github: {}", self.config.borrow().vcs);
         }
-        Ok(())
+        Ok(true)
     }
     fn with_remote_for_push<F,R>(
         &self, executer: F
@@ -427,7 +443,9 @@ impl<GIT: git::GitFeatures<S>, S: shell::Shell> vcs::VCS for Github<GIT, S> {
             }
             // Check if auto_merge option is requested
             if options.get("auto_merge").unwrap_or(&"false") == &"true" {
-                return self.enable_auto_merge_pr(url, &options);
+                if self.enable_auto_merge_pr(url, &options)? {
+                    return Ok(()); // auto-merge enabled and not clean status. PR will wait for condition met
+                }
             }
             let api_url = format!(
                 "https://api.github.com/repos/{}/{}/pulls/{}/merge",
