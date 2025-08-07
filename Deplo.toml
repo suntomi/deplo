@@ -165,7 +165,7 @@ prbot = {
     # this workflow is matched with jobs that matches "integrate" workflow.
     inherit_from = ["integrate"],
     with = {
-        author = "umegaya",
+        author = "suntomi-bot",
     }
 }
 
@@ -523,7 +523,7 @@ fi
 """
 
 [jobs.prbot-test]
-on = { workflows = ["prbot"], when = { author = "umegaya" } }
+on = { workflows = ["prbot"], when = { author = "suntomi.*" } }
 runner = { os = "linux", local_fallback = { image = "ghcr.io/suntomi/images:aws", shell = "sh" } }
 env = { PAYLOAD = "${env:DEPLO_GHACTION_EVENT_DATA}" }
 command = """
@@ -535,7 +535,8 @@ if [ -z "${url}" ]; then
 fi
 if [ "${DEPLO_CI_WORKFLOW_NAME}" = "prbot" ]; then
     echo "workflow name ok: ${DEPLO_CI_WORKFLOW_NAME}"
-    deplo vcs pr merge "${url}" -o auto_merge=true -o message="merged by prbot-test job"
+    # deplo vcs pr merge "${url}" -o auto_merge=true -o message="merged by prbot-test job"
+    deplo vcs pr close "${url}" -o message="closed by prbot-test job"
 else
     echo "workflow name ng: ${DEPLO_CI_WORKFLOW_NAME}"
     exit 1
