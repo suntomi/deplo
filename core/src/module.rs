@@ -136,6 +136,7 @@ impl Module {
         }
         Ok(ret)
     }
+    
     pub fn embed_option_to_env<'a,E,K>(
         &self, envs: E, option: &Option<HashMap<String, config::AnyValue>>
     ) -> Result<HashMap<String, shell::Arg<'a>>, Box<dyn Error>>
