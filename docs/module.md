@@ -17,7 +17,7 @@
     - ci
     - vcs
   - tags
-- Deplo invoke entrypoint.XXX with arguments to run deplo module, where XXX is differ from module type 
+- Deplo invoke entrypoint.XXX with arguments to run deplo module, where XXX is differ from module type. so, single module can act as multiple type of modules
 
 ### security
 - deplo carefully chooses command line arguments and environment variables that is passed to module's entrypoint to minimize the risk of leaking sensitive information to 3rd party module.

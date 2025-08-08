@@ -9,7 +9,7 @@ edition = "2021"
 base64 = "0.13.0"
 blake2 = "0.9.2"
 chrono = "0.4.40"
-clap = "3.0.10"
+clap = "4.5.23"
 crc = "2.1.0"
 dotenv = { git = "https://github.com/suntomi/dotenv/", rev = "5d4fa11" }
 jsonpath_lib = "0.3.0"
@@ -24,7 +24,7 @@ regex = "1"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 serde_yaml = "0.9.31"
-simple_logger = "1.6.0"
+simple_logger = { version = "5.0.0", default-features = false, features = ["timestamps"] }
 toml = { git = "https://github.com/umegaya/toml-rs", rev = "93292f8" }
 sodalite = { git = "https://github.com/suntomi/sodalite" }
 tempfile = "3.19.1"
