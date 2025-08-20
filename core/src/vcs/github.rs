@@ -444,6 +444,7 @@ impl<GIT: git::GitFeatures<S>, S: shell::Shell> vcs::VCS for Github<GIT, S> {
             // Check if auto_merge option is requested
             if options.get("auto_merge").unwrap_or(&"false") == &"true" {
                 if self.enable_auto_merge_pr(url, &options)? {
+                    log::info!("successfully auto merged PR {}", url);
                     return Ok(()); // auto-merge enabled and not clean status. PR will wait for condition met
                 }
             }

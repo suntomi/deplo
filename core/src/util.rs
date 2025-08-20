@@ -413,6 +413,18 @@ pub fn docker_mount_path(path: &str) -> String {
     };
     return path.to_string();
 }
+pub fn find_repository_root() -> Result<PathBuf, Box<dyn Error>> {
+    let mut current_dir = std::env::current_dir().unwrap();
+    loop {
+        if current_dir.join(".git").exists() {
+            log::debug!("Found git repository at {}", current_dir.display());
+            return Ok(current_dir);
+        }
+        if !current_dir.pop() {
+            return Err("No git repository found".into());
+        }
+    }
+}
 
 // hashmap utils
 use crc::{Crc, CRC_64_ECMA_182};

@@ -1,6 +1,5 @@
 use std::error::Error;
 use std::fs;
-use std::path::{PathBuf};
 use std::result::Result;
 
 use crate::config;
@@ -17,10 +16,7 @@ impl var::Factory for File {
         runtime_config: &config::runtime::Config,
         var: &var::Var
     ) -> Result<Self, Box<dyn Error>> {
-        let cwd = match runtime_config.workdir.as_ref() {
-            Some(wd) => PathBuf::from(wd),
-            None => std::env::current_dir()?
-        };
+        let cwd = &runtime_config.repository_root;
         return Ok(match var {
             var::Var::File { path } => Self{
                 val: if config::Config::is_running_on_ci() {

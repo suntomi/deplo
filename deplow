@@ -12,7 +12,7 @@ else
     fi
 fi
 DEPLO_VERSION=nightly
-DEPLO_CLI_DIR="${CWD}/.deplo/cli/${DEPLO_VERSION}/${OS}"
+DEPLO_CLI_DIR="${CWD}//Users/iyatomi/Documents/suntomi/deplo/.deplo/cli/${DEPLO_VERSION}/${OS}"
 DEPLO_CLI_BIN="${DEPLO_CLI_DIR}/deplo"
 
 if [ ! -d "${DEPLO_CLI_DIR}" ]; then

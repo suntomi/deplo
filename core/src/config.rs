@@ -334,7 +334,7 @@ impl Config {
     pub fn data_dir(&self) -> String {
         return match self.data_dir {
             Some(ref v) => v.resolve(),
-            None => ".deplo".to_string()
+            None => self.runtime.repository_root.join(".deplo").to_string_lossy().to_string()
         };
     }
     pub fn project_name(&self) -> String {

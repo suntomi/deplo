@@ -2,7 +2,7 @@ use std::collections::{HashMap};
 use std::error::Error;
 use std::result::Result;
 
-use clap::{App, Arg, ArgMatches};
+use clap::{Command, Arg, ArgMatches};
 use maplit::hashmap;
 
 use crate::args;
@@ -16,13 +16,13 @@ pub struct Clap<'a> {
 }
 
 struct CommandFactory {
-    factory: fn (&'static str) -> App<'static>,
+    factory: fn (&'static str) -> Command,
 }
 impl CommandFactory {
-    fn new(f: fn (&'static str) -> App<'static>) -> Self {
+    fn new(f: fn (&'static str) -> Command) -> Self {
         Self { factory: f }
     }
-    fn create(&self, name: &'static str) -> App<'static> {
+    fn create(&self, name: &'static str) -> Command {
         (self.factory)(name)
     }
 }
@@ -37,7 +37,7 @@ impl AliasCommands {
     ) -> Self {
         Self { map, alias_map }
     }
-    fn create(&self, name: &'static str) -> App<'static> {
+    fn create(&self, name: &'static str) -> Command {
         match self.alias_map.get(name) {
             Some(body) => {
                 self.map.get(body).expect(&format!("alias does not have body for {body}", body = body)).1.create(name)
@@ -60,15 +60,15 @@ fn workflow_command_options(
     name: &'static str,
     about: &'static str,
     default_workflow: Option<&'static str>
-) -> App<'static> {
-    App::new(name)
+) -> Command {
+    Command::new(name)
     .about(about)
     .arg((|d| {
         let a = Arg::new("workflow")
             .help("workflow name eg. deploy/integrate")
             .short('w')
             .long("workflow")
-            .takes_value(true)
+            .num_args(1)
             .conflicts_with("workflow_event_payload")
             .required(false);
         match d {
@@ -80,28 +80,28 @@ fn workflow_command_options(
         .help("JSON format workflow parameter")
         .long("workflow-context")
         .short('c')
-        .takes_value(true)
+        .num_args(1)
         .conflicts_with("workflow_event_payload")
         .required(false))
     .arg(Arg::new("workflow_event_payload")
         .help("specify CI event payload directly. deplo calculate workflow type and context from payload")
         .long("workflow-event-payload")
         .short('p')
-        .takes_value(true)
+        .num_args(1)
         .conflicts_with_all(&["workflow_context", "workflow"])
         .required(false))
     .arg(Arg::new("release_target")
         .help("specify CI event payload directly. deplo calculate workflow type and context from payload")
         .long("release-target")
         .short('r')
-        .takes_value(true)
+        .num_args(1)
         .required(false))
     .arg(Arg::new("env")
         .help("set adhoc environment variables for remote job")
         .long("env")
         .short('e')
-        .takes_value(true)
-        .multiple_occurrences(true)
+        .num_args(1)
+        .action(clap::ArgAction::Append)
         .required(false))
     .arg(Arg::new("silent")
         .help("if it set for non-interactive local execution, do not output the job's stdout/stderr.")
@@ -111,11 +111,11 @@ fn workflow_command_options(
         .help("wait timeout for remote job. if --async is set, this option is ignored")
         .long("timeout")
         .required(false)
-        .takes_value(true))
+        .num_args(1))
     .arg(Arg::new("revision")
         .help("git ref or sha to run the job")
         .long("rev")
-        .takes_value(true)
+        .num_args(1)
         .required(false))
     .arg(Arg::new("remote")
         .help("if set, run the job on the correspond remote CI service")
@@ -129,8 +129,8 @@ there are 3 options.
 'never'( or 'n'): never start debugger"#)
         .short('d')
         .long("debug")
-        .takes_value(true)
-        .possible_values(&["always", "failure", "never", "a", "f", "n"])
+        .num_args(1)
+        .value_parser(["always", "failure", "never", "a", "f", "n"])
         .required(false))
     .arg(Arg::new("debug-job")
         .help(r#"by default, deplo try to stop on all job which matches condition specified with --debug option, except deplo-main/deplo-halt.
@@ -138,14 +138,14 @@ if the option is set, deplo run debugger after finishing job only that specified
 normally job name. if you want to debug deplo-main/deplo-halt, specify these names for the argument"#)
         .short('j')
         .long("debug-job")
-        .takes_value(true)
+        .num_args(1)
         .required(false))
 }
 fn run_command_options(
     name: &'static str,
     about: &'static str,
     default_workflow: Option<&'static str>
-) -> App<'static> {
+) -> Command {
     workflow_command_options(name, about, default_workflow)
         .arg(Arg::new("async")
             .help("only works with --remote, don't wait for finishing remote job")
@@ -161,25 +161,25 @@ fn run_command_options(
             .index(1)
             .required(true))
         .subcommand(
-            App::new("sh")
+            Command::new("sh")
                 .about("running arbiter command for environment of jobs")
                 .arg(Arg::new("task")
                     .help("running command that declared in tasks directive")
-                    .multiple_values(true)))
+                    .num_args(1..)))
         .subcommand(
-            App::new("wait")
+            Command::new("wait")
             .about("wait specified job id. --ref,--remote,--async,--env options of parent command is ignored")
             .arg(Arg::new("job_id")
                 .help("job id to wait")
                 .index(1)
                 .required(true)
-                .takes_value(true)))
+                .num_args(1)))
 }
 
 lazy_static! {
     static ref G_ALIASED_COMMANDS: AliasCommands = AliasCommands::new(hashmap!{
         "run_deploy" => (
-            vec!["run"], CommandFactory::new(|name| -> App<'static> {
+            vec!["run"], CommandFactory::new(|name| -> Command {
                 run_command_options(
                     name, 
                     "run specific deploy job in Deplo.toml manually",
@@ -188,7 +188,7 @@ lazy_static! {
             })
         ),
         "run_integrate" => (
-            vec!["run"], CommandFactory::new(|name| -> App<'static> {
+            vec!["run"], CommandFactory::new(|name| -> Command {
                 run_command_options(
                     name, 
                     "run specific integrate job in Deplo.toml manually",
@@ -204,7 +204,7 @@ lazy_static! {
         "d" => "run_deploy",    // linked to G_ALIASED_COMMANDS.map["ci_deploy"]
         "i" => "run_integrate", // linked to G_ALIASED_COMMANDS.map["ci_integrate"]
     });
-    static ref G_ROOT_MATCH: ArgMatches = App::new("deplo")
+    static ref G_ROOT_MATCH: ArgMatches = Command::new("deplo")
         .version(config::DEPLO_VERSION)
         .author("umegaya <iyatomi@gmail.com>")
         .about("provide integrated develop/operation UX for any automation process")
@@ -213,61 +213,57 @@ lazy_static! {
             .long("config")
             .value_name("FILE")
             .help("Sets a custom config file path")
-            .takes_value(true))
+            .num_args(1))
         .arg(Arg::new("debug")
             .short('d')
             .long("debug")
             .value_name("KEY(=VALUE),...")
             .help("Activate debug feature\n\
                     TODO: add some debug flags")
-            .takes_value(true)
-            .multiple_values(true)
-            .multiple_occurrences(true))
+            .num_args(1)
+            .num_args(1..)
+            .action(clap::ArgAction::Append))
         .arg(Arg::new("dotenv")
             .short('e')
             .long("dotenv")
             .value_name(".ENV FILE OR TEXT")
             .help("specify .env file path or .env file content directly")
-            .takes_value(true))
+            .num_args(1))
         .arg(Arg::new("verbosity")
             .short('v')
             .long("verbose")
             .help("Sets the level of verbosity")
-            .takes_value(true))
+            .num_args(1))
         .arg(Arg::new("workdir")
             .long("workdir")
             .help("base directory that deplo runs")
-            .takes_value(true))
+            .num_args(1))
         .subcommand(
-            App::new("info")
+            Command::new("info")
                 .about("get information about deplo")
                 .subcommand(
-                    App::new("version")
+                    Command::new("version")
                         .about("get deplo version")
                         .arg(Arg::new("output")
                             .help("output format")
                             .short('o')
                             .long("output")
-                            .possible_values(
-                                &["plain", "json"]
-                            )
+                            .value_parser(["plain", "json"])
                             .required(false))
                 )
         )
         .subcommand(
-            App::new("init")
+            Command::new("init")
                 .about("initialize deplo project. need to configure deplo.json beforehand")
                 .arg(Arg::new("reinit")
                     .long("reinit")
                     .help("initialize component")
                     .required(false)
-                    .takes_value(true)
-                    .possible_values(
-                        &["ci", "vcs", "all"]
-                    ))
+                    .num_args(1)
+                    .value_parser(["ci", "vcs", "all"]))
         )
         .subcommand(
-            App::new("destroy")
+            Command::new("destroy")
                 .about("destroy deplo configurations")
         )
         .subcommand(
@@ -278,7 +274,7 @@ lazy_static! {
             )
         )
         .subcommand(
-            App::new("halt")
+            Command::new("halt")
                 .about("halt and cleanup deplo workflow")
         )
         .subcommand(
@@ -295,9 +291,9 @@ lazy_static! {
             G_ALIASED_COMMANDS.create("i")
         )
         .subcommand(
-            App::new("job")
+            Command::new("job")
             .subcommand(
-                App::new("set-output")
+                Command::new("set-output")
                 .about("set output, data passed between jobs, of current running job")
                 .arg(Arg::new("key")
                     .help("key to set/get data")
@@ -308,7 +304,7 @@ lazy_static! {
                     .index(2)
                     .required(true)))
             .subcommand(
-                App::new("output")
+                Command::new("output")
                 .about("set output, data passed between jobs, of current running job")
                 .arg(Arg::new("job")
                     .help("job name to get data. values of jobs only dependency of current job, can be retrieved")
@@ -319,7 +315,7 @@ lazy_static! {
                     .index(2)
                     .required(true)))
             .subcommand(
-                App::new("run-steps")
+                Command::new("run-steps")
                 .about("run all steps of the job. designed to be used by deplo itself, you seldom can utilize this command")
                 .arg(Arg::new("job")
                     .help("job name to get data. values of jobs only dependency of current job, can be retrieved")
@@ -329,67 +325,67 @@ lazy_static! {
                     .help("runtime workflow config of parent deplo process")
                     .short('p')
                     .long("parent_workflow")
-                    .takes_value(true)
+                    .num_args(1)
                     .required(true))
                 .arg(Arg::new("task")
                     .help("task name of job")
                     .long("task")
-                    .takes_value(true)
+                    .num_args(1)
                     .required(false)))
         )
         .subcommand(
-            App::new("ci")
+            Command::new("ci")
                 .about("control CI resources")
                 .subcommand(
-                    App::new("setenv")
+                    Command::new("setenv")
                     .about("upload current .env contents as CI service secrets")
                 )
                 .subcommand(
-                    App::new("getenv")
+                    Command::new("getenv")
                     .about("generate .env format file that contains all secrets/vars")
                     .arg(Arg::new("output")
                         .help("output file path")
                         .short('o')
                         .long("out")
-                        .takes_value(true)
+                        .num_args(1)
                         .required(true))
                 )
                 .subcommand(
-                    App::new("restore-cache")
+                    Command::new("restore-cache")
                     .about("restore cached repository to correct state")
                     .arg(Arg::new("submodules")
                         .help("task name of job")
                         .short('s')
                         .long("submodules")
-                        .takes_value(false)
+                        .action(clap::ArgAction::SetTrue)
                         .required(false))
                 )
                 .subcommand(
-                    App::new("token")
+                    Command::new("token")
                     .about("generate temporary token of CI service like oidc jwt")
                     .subcommand(
-                        App::new("oidc")
+                        Command::new("oidc")
                         .about("generate oidc web identity token for current CI service")
                         .arg(Arg::new("audience")
                             .help("aud parameter of generated jwt")
                             .short('a')
                             .long("aud")
-                            .takes_value(true)
+                            .num_args(1)
                             .required(true))
                         .arg(Arg::new("output")
                             .help("file path to output generated token")
                             .short('o')
                             .long("out")
-                            .takes_value(true)
+                            .num_args(1)
                             .required(true))
                     )
                 )
         )
         .subcommand(
-            App::new("vcs")
+            Command::new("vcs")
                 .about("control VCS resources")
                 .subcommand(
-                    App::new("release")
+                    Command::new("release")
                     .about("create release")
                     .arg(Arg::new("tag_name")
                         .help("tag name to use for release")
@@ -401,12 +397,12 @@ lazy_static! {
                                 for github, body options of https://docs.github.com/en/rest/reference/releases#create-a-release can be specified.\n\
                                 TODO: for gitlab")
                         .short('o')
-                        .takes_value(true)
-                        .multiple_values(true)
-                        .multiple_occurrences(true))
+                        .num_args(1)
+                        .num_args(1..)
+                        .action(clap::ArgAction::Append))
                 )
                 .subcommand(
-                    App::new("release-assets")
+                    Command::new("release-assets")
                     .about("upload release assets")
                     .arg(Arg::new("tag_name")
                         .help("tag name to use for release")
@@ -425,15 +421,15 @@ lazy_static! {
                                 -o content-type=$content_type_of_asset\n\
                                 TODO: implement more options")
                         .short('o')
-                        .takes_value(true)
-                        .multiple_values(true)
-                        .multiple_occurrences(true))
+                        .num_args(1)
+                        .num_args(1..)
+                        .action(clap::ArgAction::Append))
                 )
                 .subcommand(
-                    App::new("pr")
+                    Command::new("pr")
                     .about("control pull request")
                     .subcommand(
-                        App::new("merge")
+                        Command::new("merge")
                         .about("merge pull request")
                         .arg(Arg::new("url")
                             .help("URL of the pull request")
@@ -448,12 +444,12 @@ lazy_static! {
                                           -o approve=true to approve the pull request.\n\
                                     TODO: for gitlab")
                             .short('o')
-                            .takes_value(true)
-                            .multiple_values(true)
-                            .multiple_occurrences(true))
+                            .num_args(1)
+                            .num_args(1..)
+                            .action(clap::ArgAction::Append))
                     )
                     .subcommand(
-                        App::new("close")
+                        Command::new("close")
                         .about("close pull request")
                         .arg(Arg::new("url")
                             .help("URL of the pull request")
@@ -463,9 +459,9 @@ lazy_static! {
                             .help("option for pull request merge.\n\
                                     -o message=$text to post comment to pull request.")
                             .short('o')
-                            .takes_value(true)
-                            .multiple_values(true)
-                            .multiple_occurrences(true))         
+                            .num_args(1)
+                            .num_args(1..)
+                            .action(clap::ArgAction::Append))         
                     )
                 )
         )
@@ -533,11 +529,11 @@ impl<'a> args::Args for Clap<'a> {
         }
     }
     fn occurence_of(&self, name: &str) -> u64 {
-        return self.matches.occurrences_of(name);
+        return self.matches.get_count(name) as u64;
     }
     fn values_of(&self, name: &str) -> Option<Vec<&str>> {
-        match self.matches.values_of(name) {
-            Some(it) => Some(it.collect()),
+        match self.matches.get_many::<String>(name) {
+            Some(it) => Some(it.map(|s| s.as_str()).collect()),
             None => None
         }
     }
