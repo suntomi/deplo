@@ -26,7 +26,7 @@ impl<S: shell::Shell> VCS<S> {
         let config = self.config.borrow();
         let vcs = config.modules.vcs();
         let mut options = args.json_value_of("option")?;
-        if args.occurence_of("replace") > 0 {
+        if args.get_flag("replace") {
             options.as_object_mut().unwrap().insert("replace".to_string(), serde_json::json!(true));
         }
         vcs.release_assets(

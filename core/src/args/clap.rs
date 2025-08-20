@@ -414,7 +414,8 @@ lazy_static! {
                         .required(true))
                     .arg(Arg::new("replace")
                         .help("replace existing asset or not")
-                        .long("replace"))
+                        .long("replace")
+                        .action(clap::ArgAction::SetTrue))
                     .arg(Arg::new("option")
                         .help("option for release creation.\n\
                                 -o name=$release_asset_name\n\
@@ -527,6 +528,9 @@ impl<'a> args::Args for Clap<'a> {
             },
             None => None
         }
+    }
+    fn get_flag(&self, name: &str) -> bool {
+        return self.matches.get_flag(name);
     }
     fn occurence_of(&self, name: &str) -> u64 {
         return self.matches.get_count(name) as u64;
