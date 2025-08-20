@@ -1,7 +1,6 @@
 use std::collections::HashMap;
 use std::error::Error;
 use std::fs;
-use std::path::PathBuf;
 
 use maplit::hashmap;
 use regex::Regex;
@@ -105,7 +104,7 @@ impl<S: shell::Shell> Repository<S> {
                 }))
             },
             module::Source::Local{path} => {
-                let mut p = PathBuf::from(&path.resolve());
+                let mut p = config.runtime.repository_root.join(&path.resolve());
                 p.push(module::repos::DEPLO_MODULE_CONFIG_FILE_NAME);
                 return module::Module::with(&p.to_string_lossy().to_string());
             }
