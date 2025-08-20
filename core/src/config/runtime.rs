@@ -2,14 +2,14 @@ use std::collections::{HashMap};
 use std::error::Error;
 use std::fmt::{self};
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use maplit::hashmap;
 use serde::{Deserialize, Serialize};
 
 use crate::args::{Args};
 use crate::config;
-use crate::util::{merge_hashmap};
+use crate::util::{merge_hashmap, find_repository_root};
 
 /// remote execution payload
 #[derive(Deserialize)]
@@ -391,18 +391,28 @@ pub struct Config {
     pub verbosity: u64,
     pub dotenv_path: Option<String>,
     pub config_path: String,
+    pub repository_root: PathBuf,
     pub workdir: Option<String>,
     pub debug_options: HashMap<String, String>,
 }
 impl Config {
     pub fn with_args<A: Args>(args: &A) -> Self {
+        let root = find_repository_root()
+            .expect("deplo only can run on vcs repository");
         Config {
             verbosity: match args.value_of("verbosity") {
                 Some(o) => o.parse().unwrap_or(0),
                 None => 0
             },
-            dotenv_path: args.value_of("dotenv").map(|o| o.to_string()),
-            config_path: args.value_of("config").unwrap_or("Deplo.toml").to_string(),
+            dotenv_path: match args.value_of("dotenv") {
+                Some(o) => Some(o.to_string()),
+                None => root.join(".env").to_str().map(|s| s.to_string())
+            },
+            config_path: match args.value_of("config") {
+                Some(o) => o.to_string(),
+                None => root.join("Deplo.toml").to_string_lossy().to_string()
+            },
+            repository_root: root,
             workdir: args.value_of("workdir").map_or_else(|| None, |v| Some(v.to_string())),
             debug_options: args.map_of("debug")
         }

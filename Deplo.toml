@@ -160,7 +160,7 @@ discord = {
     }
 }
 prbot = {
-    uses = { path = "./tools/modules/prfilter" },
+    uses = "suntomi/prfilter@0.1.0",
     release_taget = "nightly",
     # this workflow is matched with jobs that matches "integrate" workflow.
     inherit_from = ["integrate"],
