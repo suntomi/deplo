@@ -106,6 +106,15 @@
         ]
     },
     {
+        "name": "GetEnv",
+        "type": "lldb",
+        "request": "launch",
+        "program": "${workspaceFolder}/target/debug/cli",
+        "args": [
+            "-v=3", "ci", "getenv", "--out", "test.txt"
+        ]
+    },
+    {
         "name": "Init",
         "type": "lldb",
         "request": "launch",

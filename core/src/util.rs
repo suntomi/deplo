@@ -473,6 +473,7 @@ pub fn escape(input: &str) -> String {
             '\x00' => escaped.push_str("\\0"),
             '\x07' => escaped.push_str("\\a"),
             '\x08' => escaped.push_str("\\b"),
+            ' ' => escaped.push_str("\\ "),
             '\t' => escaped.push_str("\\t"),
             '\n' => escaped.push_str("\\n"),
             '\x0b' => escaped.push_str("\\v"),

@@ -141,7 +141,7 @@ pub trait GitFeatures<S: shell::Shell> {
 }
 
 impl<S: shell::Shell> Git<S> {
-    fn commit_env(&self) -> HashMap<String, shell::Arg> {
+    fn commit_env<'a>(&'a self) -> HashMap<String, shell::Arg<'a>> {
         hashmap!{
             "GIT_COMMITTER_NAME".to_string() => self.credential.username.to_arg(),
             "GIT_AUTHOR_NAME".to_string() => self.credential.username.to_arg(),

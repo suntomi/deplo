@@ -10,7 +10,14 @@ use log;
 
 fn main() {
     let args = args::create().expect("fail to process cli args");
-    let c = &mut config::Config::create(&args).expect("fail to create config");
+    let r = &mut config::Config::create(&args);
+    let c = match r {
+        Ok(c) => c,
+        Err(err) => {
+            println!("fail to create config: {}", err);
+            std::process::exit(1);
+        }
+    };
 
     match cli::run(&args, c){
         Ok(()) => std::process::exit(0),

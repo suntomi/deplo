@@ -1,4 +1,4 @@
-FROM --platform=${BUILDPLATFORM} ghcr.io/suntomi/deplo:builder as builder
+FROM --platform=${BUILDPLATFORM} ghcr.io/suntomi/deplo:builder AS builder
 
 ARG TARGETARCH
 ENV TARGETARCH=${TARGETARCH}
