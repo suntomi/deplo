@@ -434,7 +434,15 @@ impl Config {
     fn load_dotenv(&self) -> Result<(), Box<dyn Error>> {
         match self.dotenv_path {
             Some(ref path) => {
-                dotenv::from_path(path)?;
+                match dotenv::from_path(path) {
+                    Ok(_) => return Ok(()),
+                    Err(e) => match e {
+                        dotenv::Error::Io(e) => {
+                            log::debug!("seems dotenv file not found, skip loading: {}", e);
+                        },
+                        _ => return Err(Box::new(e)),
+                    }
+                }
             },
             None => {
                 match dotenv::dotenv() {
