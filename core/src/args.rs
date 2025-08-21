@@ -12,7 +12,6 @@ pub mod clap;
 pub trait Args : Sized {
     fn create() -> Result<Self, Box<dyn Error>>;
     fn subcommand(&self) -> Option<(&str, Self)>;
-    fn occurence_of(&self, name: &str) -> u64;
     fn values_of(&self, name: &str) -> Option<Vec<&str>>;
     fn command_path(&self) -> &Vec<&str>;
     fn get_flag(&self, name: &str) -> bool;
