@@ -334,8 +334,11 @@ impl Config {
     pub fn data_dir(&self) -> String {
         return match self.data_dir {
             Some(ref v) => v.resolve(),
-            None => self.runtime.repository_root.join(".deplo").to_string_lossy().to_string()
+            None => self.runtime.repository_root.join(Self::data_dir_name()).to_string_lossy().to_string()
         };
+    }
+    pub fn data_dir_name() -> String {
+        return ".deplo".to_string()
     }
     pub fn project_name(&self) -> String {
         self.project_name.resolve()
@@ -371,7 +374,7 @@ impl Config {
         let content = format!(
             include_str!("../res/cli/deplow.sh.tmpl"),
             version = DEPLO_VERSION,
-            data_dir = self.data_dir()
+            data_dir = Self::data_dir_name(),
         );
         fs::write(data_path, content)?;
         shell.exec(
