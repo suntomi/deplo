@@ -79,7 +79,7 @@ jobs:
             deplo-git-v1-40BFB0C55D506BC4-
       - name: Checkout
         if: steps.fetch-repository-cache.outputs.cache-hit != 'true'
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           fetch-depth: 0
           submodules: true
@@ -131,7 +131,7 @@ jobs:
             deplo-git-v1-40BFB0C55D506BC4-
       - name: Checkout
         if: steps.fetch-repository-cache.outputs.cache-hit != 'true'
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           fetch-depth: 0
           lfs: false
@@ -176,7 +176,7 @@ jobs:
             deplo-git-v1-40BFB0C55D506BC4-
       - name: Checkout
         if: steps.fetch-repository-cache.outputs.cache-hit != 'true'
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           fetch-depth: 0
           submodules: true
@@ -221,7 +221,7 @@ jobs:
             deplo-git-v1-40BFB0C55D506BC4-
       - name: Checkout
         if: steps.fetch-repository-cache.outputs.cache-hit != 'true'
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           fetch-depth: 0
           submodules: true
@@ -266,7 +266,7 @@ jobs:
             deplo-git-v1-40BFB0C55D506BC4-
       - name: Checkout
         if: steps.fetch-repository-cache.outputs.cache-hit != 'true'
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           fetch-depth: 0
           submodules: true
@@ -311,7 +311,7 @@ jobs:
             deplo-git-v1-40BFB0C55D506BC4-
       - name: Checkout
         if: steps.fetch-repository-cache.outputs.cache-hit != 'true'
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           fetch-depth: 0
           submodules: true
@@ -357,7 +357,7 @@ jobs:
             deplo-git-v1-40BFB0C55D506BC4-
       - name: Checkout
         if: steps.fetch-repository-cache.outputs.cache-hit != 'true'
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           fetch-depth: 0
           submodules: true
@@ -403,7 +403,7 @@ jobs:
             deplo-git-v1-40BFB0C55D506BC4-
       - name: Checkout
         if: steps.fetch-repository-cache.outputs.cache-hit != 'true'
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           fetch-depth: 0
           submodules: true
@@ -463,7 +463,7 @@ jobs:
             deplo-git-v1-40BFB0C55D506BC4-
       - name: Checkout
         if: steps.fetch-repository-cache.outputs.cache-hit != 'true'
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           fetch-depth: 0
           submodules: true
@@ -508,7 +508,7 @@ jobs:
             deplo-git-v1-40BFB0C55D506BC4-
       - name: Checkout
         if: steps.fetch-repository-cache.outputs.cache-hit != 'true'
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           fetch-depth: 0
           submodules: true
@@ -554,7 +554,7 @@ jobs:
             deplo-git-v1-40BFB0C55D506BC4-
       - name: Checkout
         if: steps.fetch-repository-cache.outputs.cache-hit != 'true'
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           fetch-depth: 0
           submodules: true
@@ -599,7 +599,7 @@ jobs:
             deplo-git-v1-40BFB0C55D506BC4-
       - name: Checkout
         if: steps.fetch-repository-cache.outputs.cache-hit != 'true'
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           fetch-depth: 0
           submodules: true
@@ -644,7 +644,7 @@ jobs:
             deplo-git-v1-40BFB0C55D506BC4-
       - name: Checkout
         if: steps.fetch-repository-cache.outputs.cache-hit != 'true'
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           fetch-depth: 0
           submodules: true
@@ -689,7 +689,7 @@ jobs:
             deplo-git-v1-40BFB0C55D506BC4-
       - name: Checkout
         if: steps.fetch-repository-cache.outputs.cache-hit != 'true'
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           fetch-depth: 0
           submodules: true
@@ -737,7 +737,7 @@ jobs:
             deplo-git-v1-40BFB0C55D506BC4-
       - name: Checkout
         if: steps.fetch-repository-cache.outputs.cache-hit != 'true'
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           fetch-depth: 0
           submodules: true
@@ -798,7 +798,7 @@ jobs:
             deplo-git-v1-40BFB0C55D506BC4-
       - name: Checkout
         if: steps.fetch-repository-cache.outputs.cache-hit != 'true'
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           fetch-depth: 0
           submodules: true

@@ -8,7 +8,7 @@
       deplo-git-v1{opts_hash}-
 - name: Checkout
   if: steps.fetch-repository-cache.outputs.cache-hit != 'true'
-  uses: actions/checkout@v4
+  uses: actions/checkout@v5
 {checkout_opts:>2}
 - name: Restore repository from cache
   if: steps.fetch-repository-cache.outputs.cache-hit == 'true'
