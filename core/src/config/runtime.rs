@@ -157,17 +157,15 @@ impl ExecOptions {
         };
         // remote/follow_dependency always apply cmdline parameter,
         // to avoid these parameter from event payload wrongly used.
-        self.remote = args.occurence_of("remote") > 0;
+        self.remote = args.get_flag("remote");
         self.follow_dependency = if has_job_config {
-            args.occurence_of("follow_dependency") > 0
+            args.get_flag("follow_dependency")
         } else {
             false // deplo boot does not see the option
             // but if the option is set with remote option, each child job run with the option value true.
             // so we set the option false if it does not has job config.
         };
-        if args.occurence_of("silent") > 0 {
-            self.silent = true;
-        }
+        self.silent = args.get_flag("silent");
     }
     pub fn debug_should_start(&self, job: &str, job_failure: bool) -> bool {
         if self.debug.should_start(job_failure) {

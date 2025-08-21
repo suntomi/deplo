@@ -215,7 +215,7 @@ sh ./tools/scripts/merge_manifests.sh
 tasks = {
     long_running = """
 for i in `seq 1 ${COUNT:-10}`; do
-    echo $i
+    echo "${i}${MARK}"
     sleep 1
 done
 """,
