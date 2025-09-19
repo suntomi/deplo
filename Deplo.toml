@@ -281,6 +281,7 @@ commit = [
     { files = ["docs/*"], on = { release_targets = ["lab"] }, with = "push" }
 ]
 
+
 [jobs.product]
 on = { workflows = ["deploy"], release_targets = ["prod","nightly"], changed = [
     "*/src/*", "*/res/*", "Cargo.*", "tools/docker/Dockerfile*", "tools/scripts/build_linux.sh"
