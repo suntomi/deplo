@@ -669,6 +669,7 @@ impl<S: shell::Shell> GhAction<S> {
         })
     }
     fn set_output(&self, key: &str, val: &str) -> Result<(), Box<dyn Error>> {
+        log::warn!("set output {}", format!("echo \'{key}={val}\' >> $GITHUB_OUTPUT", key = key, val = val));
         self.shell.eval(
             &format!("echo \'{key}={val}\' >> $GITHUB_OUTPUT", key = key, val = val),
             &None, hashmap!{"GITHUB_OUTPUT" => shell::arg!(std::env::var("GITHUB_OUTPUT")?)},
@@ -1217,6 +1218,7 @@ impl<S: shell::Shell> ci::CI for GhAction<S> {
     fn job_output(&self, job_name: &str, kind: ci::OutputKind, key: &str) -> Result<Option<String>, Box<dyn Error>> {
         match std::env::var(&kind.env_name_for_job(job_name)) {
             Ok(value) => {
+                log::warn!("job_output: got env {}={}", &kind.env_name_for_job(job_name), value);
                 if value.is_empty() {
                     return Ok(None);
                 }
