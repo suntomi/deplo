@@ -102,7 +102,7 @@
         "request": "launch",
         "program": "${workspaceFolder}/target/debug/cli",
         "args": [
-            "-v=3", "halt", "-r=nightly", "-w=integrate"
+            "-v=3", "halt", "-p=payload.json"
         ]
     },
     {

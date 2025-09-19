@@ -144,6 +144,7 @@ fn run_command_options(
             .help("only works with --remote, don't wait for finishing remote job")
             .long("async")
             .conflicts_with("follow_dependency")
+            .action(clap::ArgAction::SetTrue)
             .required(false))
         .arg(Arg::new("follow_dependency")
             .help("if set, not only run the specified job but run dependent jobs first")
@@ -261,8 +262,11 @@ lazy_static! {
             )
         )
         .subcommand(
-            Command::new("halt")
-                .about("halt and cleanup deplo workflow")
+            workflow_command_options(
+                "halt",
+                "halt deplo workflow",
+                None
+            )
         )
         .subcommand(
             run_command_options(
@@ -506,10 +510,22 @@ impl<'a> args::Args for Clap<'a> {
     fn get_flag(&self, name: &str) -> bool {
         return self.matches.get_flag(name);
     }
+    fn value_of(&self, name: &str) -> Option<&str> {
+        match self.matches.try_get_one::<String>(name) {
+            Ok(v) => match v {
+                Some(v) => Some(v.as_str()),
+                None => None
+            }
+            Err(_) => None
+        }
+    }
     fn values_of(&self, name: &str) -> Option<Vec<&str>> {
-        match self.matches.get_many::<String>(name) {
-            Some(it) => Some(it.map(|s| s.as_str()).collect()),
-            None => None
+        match self.matches.try_get_many::<String>(name) {
+            Ok(vs) => match vs {
+                Some(vs) => Some(vs.map(|v| v.as_str()).collect()),
+                None => None
+            }
+            Err(_) => None
         }
     }
     fn command_path(&self) -> &Vec<&str> {
