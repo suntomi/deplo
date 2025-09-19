@@ -2,4 +2,4 @@ target
 .env*
 .deplo
 .secrets
-payload.json
+payload*.json

@@ -15,12 +15,7 @@ pub trait Args : Sized {
     fn values_of(&self, name: &str) -> Option<Vec<&str>>;
     fn command_path(&self) -> &Vec<&str>;
     fn get_flag(&self, name: &str) -> bool;
-    fn value_of(&self, name: &str) -> Option<&str> {
-        match self.values_of(name) {
-            Some(v) => if v.len() > 0 { Some(v[0]) } else { None },
-            None => None
-        }
-    }
+    fn value_of(&self, name: &str) -> Option<&str>;
     fn value_or_die(&self, name: &str) -> &str {
         self.value_of(name).expect(&format!("missing cli arg '{}'", name))
     }
