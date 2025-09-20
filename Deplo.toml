@@ -428,7 +428,7 @@ deplo vcs release-assets ${DEPLO_RELEASE_TAG} target/release/cli.exe --replace -
 deplo vcs release-assets ${DEPLO_RELEASE_TAG} target/release/cli.pdb --replace -o name=deplo-Windows.pdb
 echo "check output works"
 # job 'win' depends on job 'product', so can use its output
-if [ $(deplo job output product fuga) != "hoge" ]; then
+if [ "$(deplo job output product fuga)" != "hoge" ]; then
     echo "failed to get output from job 'product'"
     exit 1
 fi

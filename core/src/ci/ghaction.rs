@@ -1239,7 +1239,10 @@ impl<S: shell::Shell> ci::CI for GhAction<S> {
                     None => Ok(None),
                 }
             },
-            Err(_) => Ok(None)
+            Err(e) => {
+                log::warn!("job_output: fail to got env {} {:?}", &kind.env_name_for_job(job_name), e);
+                Ok(None)
+            }
         }
     }
     fn set_job_output(&self, job_name: &str, kind: ci::OutputKind, outputs: HashMap<&str, &str>) -> Result<(), Box<dyn Error>> {
