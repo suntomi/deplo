@@ -670,7 +670,7 @@ impl<S: shell::Shell> GhAction<S> {
     }
     fn set_output(&self, key: &str, val: &str) -> Result<(), Box<dyn Error>> {
         let base64_val = base64::encode(val.as_bytes());
-        log::warn!("set output {}", format!("echo \'{key}={base64_val}\' >> $GITHUB_OUTPUT", key = key));
+        // log::warn!("set output {}", format!("echo \'{key}={base64_val}\' >> $GITHUB_OUTPUT", key = key));
         self.shell.eval(
             &format!("echo \'{key}={base64_val}\' >> $GITHUB_OUTPUT", key = key, base64_val = base64_val),
             &None, hashmap!{"GITHUB_OUTPUT" => shell::arg!(std::env::var("GITHUB_OUTPUT")?)},
