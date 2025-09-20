@@ -669,9 +669,10 @@ impl<S: shell::Shell> GhAction<S> {
         })
     }
     fn set_output(&self, key: &str, val: &str) -> Result<(), Box<dyn Error>> {
-        log::warn!("set output {}", format!("echo \'{key}={val}\' >> $GITHUB_OUTPUT", key = key, val = val));
+        let base64_val = base64::encode(val.as_bytes());
+        log::warn!("set output {}", format!("echo \'{key}={base64_val}\' >> $GITHUB_OUTPUT", key = key));
         self.shell.eval(
-            &format!("echo \'{key}={val}\' >> $GITHUB_OUTPUT", key = key, val = val),
+            &format!("echo \'{key}={base64_val}\' >> $GITHUB_OUTPUT", key = key, base64_val = base64_val),
             &None, hashmap!{"GITHUB_OUTPUT" => shell::arg!(std::env::var("GITHUB_OUTPUT")?)},
             shell::no_cwd(), &shell::no_capture()
         )?;
@@ -1243,10 +1244,10 @@ impl<S: shell::Shell> ci::CI for GhAction<S> {
     }
     fn set_job_output(&self, job_name: &str, kind: ci::OutputKind, outputs: HashMap<&str, &str>) -> Result<(), Box<dyn Error>> {
         let text = serde_json::to_string(&outputs)?;
-        let base64_text = base64::encode(text.as_bytes());
         if config::Config::is_running_on_ci() {
-            self.set_output(kind.to_str(), &base64_text)?;
+            self.set_output(kind.to_str(), &text)?;
         } else {
+            let base64_text = base64::encode(text.as_bytes());
             std::env::set_var(&kind.env_name_for_job(job_name), &base64_text);
         }
         Ok(())
