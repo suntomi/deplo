@@ -1219,28 +1219,28 @@ impl<S: shell::Shell> ci::CI for GhAction<S> {
     fn job_output(&self, job_name: &str, kind: ci::OutputKind, key: &str) -> Result<Option<String>, Box<dyn Error>> {
         match std::env::var(&kind.env_name_for_job(job_name)) {
             Ok(value) => {
-                log::warn!("job_output: got env {}={}", &kind.env_name_for_job(job_name), value);
+                // log::warn!("job_output: got env {}={}", &kind.env_name_for_job(job_name), value);
                 if value.is_empty() {
                     return Ok(None);
                 }
-                match serde_json::from_str::<HashMap<String, String>>(&value)?.get(key) {
-                    // set_job_output encodes content with base64.
-                    Some(value) => Ok(Some(match base64::decode(value.to_string()) {
-                        Ok(decoded) => match String::from_utf8(decoded) {
-                            Ok(v) => v,
-                            Err(e) => return escalate!(Box::new(ci::CIError {
-                                cause: format!("output value[{}] is not utf8 string: {:?}", value, e),
-                            }))
-                        },
+                let decoded = match base64::decode(value.to_string()) {
+                    Ok(decoded) => match String::from_utf8(decoded) {
+                        Ok(v) => v,
                         Err(e) => return escalate!(Box::new(ci::CIError {
-                            cause: format!("output value[{}] is not valid base64 string: {:?}", value, e),
+                            cause: format!("output value[{}] is not utf8 string: {:?}", value, e),
                         }))
-                    })),
+                    },
+                    Err(e) => return escalate!(Box::new(ci::CIError {
+                        cause: format!("output value[{}] is not valid base64 string: {:?}", value, e),
+                    }))
+                };
+                match serde_json::from_str::<HashMap<String, String>>(&decoded)?.get(key) {
+                    Some(v) => Ok(Some(v.to_string())),
                     None => Ok(None),
                 }
             },
-            Err(e) => {
-                log::warn!("job_output: fail to got env {} {:?}", &kind.env_name_for_job(job_name), e);
+            Err(_) => {
+                // log::warn!("job_output: fail to got env {} {:?}", &kind.env_name_for_job(job_name), e);
                 Ok(None)
             }
         }
