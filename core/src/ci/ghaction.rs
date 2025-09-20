@@ -1223,7 +1223,18 @@ impl<S: shell::Shell> ci::CI for GhAction<S> {
                     return Ok(None);
                 }
                 match serde_json::from_str::<HashMap<String, String>>(&value)?.get(key) {
-                    Some(value) => Ok(Some(value.to_string())),
+                    // set_job_output encodes content with base64.
+                    Some(value) => Ok(Some(match base64::decode(value.to_string()) {
+                        Ok(decoded) => match String::from_utf8(decoded) {
+                            Ok(v) => v,
+                            Err(e) => return escalate!(Box::new(ci::CIError {
+                                cause: format!("output value[{}] is not utf8 string: {:?}", value, e),
+                            }))
+                        },
+                        Err(e) => return escalate!(Box::new(ci::CIError {
+                            cause: format!("output value[{}] is not valid base64 string: {:?}", value, e),
+                        }))
+                    })),
                     None => Ok(None),
                 }
             },
@@ -1232,10 +1243,11 @@ impl<S: shell::Shell> ci::CI for GhAction<S> {
     }
     fn set_job_output(&self, job_name: &str, kind: ci::OutputKind, outputs: HashMap<&str, &str>) -> Result<(), Box<dyn Error>> {
         let text = serde_json::to_string(&outputs)?;
+        let base64_text = base64::encode(text.as_bytes());
         if config::Config::is_running_on_ci() {
-            self.set_output(kind.to_str(), &text)?;
+            self.set_output(kind.to_str(), &base64_text)?;
         } else {
-            std::env::set_var(&kind.env_name_for_job(job_name), &text);
+            std::env::set_var(&kind.env_name_for_job(job_name), &base64_text);
         }
         Ok(())
     }
