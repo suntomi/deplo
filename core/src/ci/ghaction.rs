@@ -397,9 +397,14 @@ impl<S: shell::Shell> GhAction<S> {
             format!("{name}: ${{{{ steps.deplo-main.outputs.{name} }}}}", name = v)
         }).collect()
     }
-    fn generate_need_cleanups<'a>(&self, jobs: &HashMap<String, config::job::Job>) -> String {
+    fn generate_halt_exec_conditions<'a>(&self, jobs: &HashMap<String, config::job::Job>) -> String {
         sorted_key_iter(jobs).map(|(v,_)| {
             format!("needs.{name}.outputs.need-cleanup", name = v)
+        }).collect::<Vec<String>>().join(" || ")
+    }
+    fn generate_failure_conditions<'a>(&self, jobs: &HashMap<String, config::job::Job>) -> String {
+        sorted_key_iter(jobs).map(|(v,_)| {
+            format!("needs.{name}.result == 'failure'", name = v)
         }).collect::<Vec<String>>().join(" || ")
     }
     fn generate_cleanup_envs<'a>(&self, jobs: &HashMap<String, config::job::Job>) -> Vec<String> {
@@ -894,6 +899,8 @@ impl<S: shell::Shell> ci::CI for GhAction<S> {
                         })),
                         postfix: None
                     },
+                    halt_exec_condition = self.generate_halt_exec_conditions(jobs),
+                    failure_condition = self.generate_failure_conditions(jobs),
                     jobs = MultilineFormatString{
                         strings: &job_descs,
                         postfix: None
@@ -902,7 +909,6 @@ impl<S: shell::Shell> ci::CI for GhAction<S> {
                         strings: &self.generate_debugger(None, &config),
                         postfix: None
                     },
-                    need_cleanups = &self.generate_need_cleanups(jobs),
                     cleanup_envs = MultilineFormatString{
                         strings: &self.generate_cleanup_envs(jobs),
                         postfix: None

@@ -27,14 +27,23 @@ jobs:
 {debugger:>6}
   deplo-halt:
     name: Cleanup CI
-    if: ${{{{ !failure() && ({need_cleanups}) }}}}
+    if: ${{{{ always() }}}}
     needs: [{needs}]
     runs-on: ubuntu-latest
 {cleanup_envs:>4}
     steps:
+      - name: Mark failure
+        if: {failure_condition}
+        id: deplo-failure
+        run: echo "DEPLO_CI_RUN_DEBUGGER=" >> $GITHUB_ENV && exit 1
+      - name: Mark Success
+        if: ${{{{ !({halt_exec_condition}) }}}}
+        id: deplo-success
+        run: echo "DEPLO_CI_RUN_DEBUGGER=" >> $GITHUB_ENV
 {fetchcli:>6}
 {halt_checkout:>6}
       - name: Halt deplo
+        if: {halt_exec_condition}
         id: deplo-halt
         run: deplo halt
 {debugger:>6}
