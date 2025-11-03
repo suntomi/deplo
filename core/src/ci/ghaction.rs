@@ -26,6 +26,13 @@ use crate::util::{
     escape
 };
 
+lazy_static! {
+    pub static ref DEPLO_GHACTION_MODULE_VERSIONS: HashMap<String, String> = hashmap! {
+        "actions/checkout".to_string() => "v5".to_string(),
+        "actions/cache".to_string() => "v4".to_string(),
+        "mxschmitt/action-tmate".to_string() => "c0afd6f790e3a5564914980036ebf83216678101".to_string(),
+    };
+}
 #[derive(Serialize, Deserialize)]
 #[serde(untagged)]
 enum EventPayload {
@@ -462,8 +469,9 @@ impl<S: shell::Shell> GhAction<S> {
                 ""
             } else {
                 "if: always() && (env.DEPLO_CI_RUN_DEBUGGER != '')"
-            }
-        ).split("\n").map(|s| s.to_string()).collect()        
+            },
+            debugger_version = DEPLO_GHACTION_MODULE_VERSIONS.get("mxschmitt/action-tmate").unwrap()
+        ).split("\n").map(|s| s.to_string()).collect()
     }
     fn generate_restore_keys(&self, cache: &config::job::Cache) -> Vec<String> {
         if cache.keys.len() > 1 {
@@ -635,7 +643,9 @@ impl<S: shell::Shell> GhAction<S> {
                 checkout_opts = MultilineFormatString{
                     strings: &self.generate_checkout_opts(&checkout_opts),
                     postfix: None
-                }, opts_hash = opts_hash, restore_commands = &self.generate_cache_restore_cmds(&merged_opts)
+                }, opts_hash = opts_hash, restore_commands = &self.generate_cache_restore_cmds(&merged_opts),
+                checkout_version = DEPLO_GHACTION_MODULE_VERSIONS.get("actions/checkout").unwrap(),
+                cache_version = DEPLO_GHACTION_MODULE_VERSIONS.get("actions/cache").unwrap()
             ).split("\n").map(|s| s.to_string()).collect()
         } else {
             format!(
@@ -643,7 +653,8 @@ impl<S: shell::Shell> GhAction<S> {
                 checkout_opts = MultilineFormatString{
                     strings: &self.generate_checkout_opts(&checkout_opts),
                     postfix: None
-                }
+                },
+                checkout_version = DEPLO_GHACTION_MODULE_VERSIONS.get("actions/checkout").unwrap()
             ).split("\n").map(|s| s.to_string()).collect()
         }
     }
