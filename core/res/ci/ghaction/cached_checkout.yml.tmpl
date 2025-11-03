@@ -1,6 +1,6 @@
 - name: Fetch repository cache
   id: fetch-repository-cache
-  uses: actions/cache@v4
+  uses: actions/cache@{cache_version}
   with:
     path: .git
     key: deplo-git-v1{opts_hash}-${{{{ github.sha }}}}
@@ -8,7 +8,7 @@
       deplo-git-v1{opts_hash}-
 - name: Checkout
   if: steps.fetch-repository-cache.outputs.cache-hit != 'true'
-  uses: actions/checkout@v5
+  uses: actions/checkout@{checkout_version}
 {checkout_opts:>2}
 - name: Restore repository from cache
   if: steps.fetch-repository-cache.outputs.cache-hit == 'true'
