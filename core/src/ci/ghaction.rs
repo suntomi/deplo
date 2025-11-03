@@ -30,7 +30,7 @@ lazy_static! {
     pub static ref DEPLO_GHACTION_MODULE_VERSIONS: HashMap<String, String> = hashmap! {
         "actions/checkout".to_string() => "v5".to_string(),
         "actions/cache".to_string() => "v4".to_string(),
-        "mxschmitt/action-tmate".to_string() => "v3".to_string(),
+        "mxschmitt/action-tmate".to_string() => "c0afd6f790e3a5564914980036ebf83216678101".to_string(),
     };
 }
 #[derive(Serialize, Deserialize)]
