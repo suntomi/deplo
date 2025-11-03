@@ -98,7 +98,7 @@ jobs:
           sudo: true
   deplo-halt:
     name: Cleanup CI
-    if: ${{ !failure() && (needs.base.outputs.need-cleanup || needs.builder.outputs.need-cleanup || needs.config.outputs.need-cleanup || needs.dispatched.outputs.need-cleanup || needs.latest.outputs.need-cleanup || needs.mac.outputs.need-cleanup || needs.module_test.outputs.need-cleanup || needs.prbot-test.outputs.need-cleanup || needs.product.outputs.need-cleanup || needs.remote-test.outputs.need-cleanup || needs.repository.outputs.need-cleanup || needs.taglab.outputs.need-cleanup || needs.test.outputs.need-cleanup || needs.win.outputs.need-cleanup) }}
+    if: ${{ always() }}
     needs: ["deplo-main","base","builder","config","dispatched","latest","mac","module_test","prbot-test","product","remote-test","repository","taglab","test","win"]
     runs-on: ubuntu-latest
     env:
@@ -117,6 +117,14 @@ jobs:
       DEPLO_JOB_SYSTEM_OUTPUT_TEST: ${{ needs.test.outputs.system }}
       DEPLO_JOB_SYSTEM_OUTPUT_WIN: ${{ needs.win.outputs.system }}
     steps:
+      - name: Mark failure
+        if: needs.base.result == 'failure' || needs.builder.result == 'failure' || needs.config.result == 'failure' || needs.dispatched.result == 'failure' || needs.latest.result == 'failure' || needs.mac.result == 'failure' || needs.module_test.result == 'failure' || needs.prbot-test.result == 'failure' || needs.product.result == 'failure' || needs.remote-test.result == 'failure' || needs.repository.result == 'failure' || needs.taglab.result == 'failure' || needs.test.result == 'failure' || needs.win.result == 'failure'
+        id: deplo-failure
+        run: echo "DEPLO_CI_RUN_DEBUGGER=" >> $GITHUB_ENV && exit 1
+      - name: Mark Success
+        if: ${{ !(needs.base.outputs.need-cleanup || needs.builder.outputs.need-cleanup || needs.config.outputs.need-cleanup || needs.dispatched.outputs.need-cleanup || needs.latest.outputs.need-cleanup || needs.mac.outputs.need-cleanup || needs.module_test.outputs.need-cleanup || needs.prbot-test.outputs.need-cleanup || needs.product.outputs.need-cleanup || needs.remote-test.outputs.need-cleanup || needs.repository.outputs.need-cleanup || needs.taglab.outputs.need-cleanup || needs.test.outputs.need-cleanup || needs.win.outputs.need-cleanup) }}
+        id: deplo-success
+        run: echo "DEPLO_CI_RUN_DEBUGGER=" >> $GITHUB_ENV
       - name: Fetch deplo cli
         run: |
           curl -L https://github.com/suntomi/deplo/releases/download/nightly/deplo-Linux-$(uname -m) -o /usr/local/bin/deplo
@@ -142,6 +150,7 @@ jobs:
         run: git reset --hard HEAD && git submodule update --init --recursive && deplo -v=1 ci restore-cache --submodules
         shell: bash
       - name: Halt deplo
+        if: needs.base.outputs.need-cleanup || needs.builder.outputs.need-cleanup || needs.config.outputs.need-cleanup || needs.dispatched.outputs.need-cleanup || needs.latest.outputs.need-cleanup || needs.mac.outputs.need-cleanup || needs.module_test.outputs.need-cleanup || needs.prbot-test.outputs.need-cleanup || needs.product.outputs.need-cleanup || needs.remote-test.outputs.need-cleanup || needs.repository.outputs.need-cleanup || needs.taglab.outputs.need-cleanup || needs.test.outputs.need-cleanup || needs.win.outputs.need-cleanup
         id: deplo-halt
         run: deplo halt
       - name: Setup ssh session to debug
