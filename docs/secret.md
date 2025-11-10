@@ -15,3 +15,4 @@ remote typeは一方で、localでどのように実行させるかが問題
 おそらく、suntomiドメインのid providerを立ち上げておいて、そこ経由でassume role的なことをできるように設定してもらうことになるだろう
 
 https://github.com/ramosbugs/openidconnect-rs とかを使い、oidc provider機能を実装する.
+.
