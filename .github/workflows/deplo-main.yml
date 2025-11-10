@@ -3,10 +3,10 @@ name: Deplo Workflow Runner
 
 on: 
   push:
-    branches: ["lab","main"]
+    branches: ["lab","edge","main"]
     tags: ["[0-9]*","test-[0-9]*"]
   pull_request:
-    branches: ["lab","main"]
+    branches: ["lab","edge","main"]
   repository_dispatch:
     types: [deplo-send-module-payload,webapi-dispatch]
   schedule:
