@@ -459,7 +459,11 @@ if [ "${SUNTOMI_VARS2}" != "fugafugafuga\n\nhogehogehoge\t" ]; then
     echo "failed to get vars SUNTOMI_VARS2 = [${SUNTOMI_VARS2}]"
     exit 1
 fi
+echo "." >> ./docs/secret.md
 """
+commit = [
+    { files = ["docs/*"], with = "push" },
+]
 
 [jobs.repository]
 on = { workflows = ["repository"] }
