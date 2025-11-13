@@ -10,7 +10,7 @@ checkout = { submodules = true, fetch_depth = 0, token = "${SUNTOMI_VCS_ACCOUNT_
 # main branch will be released as nightly
 nightly = { patterns = ["main"] }
 # branch which name is 'lab' will be released as lab
-lab = { patterns = ["lab"] }
+lab = { patterns = ["lab", "edge"] }
 # tag which name is started with numerals treated as release (eg. 0.1.10)
 prod = { tag = true, patterns = ["[0-9]*"] }
 # tag behaviour test
