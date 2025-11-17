@@ -1236,13 +1236,16 @@ impl<S: shell::Shell> ci::CI for GhAction<S> {
     fn job_output(&self, job_name: &str, kind: ci::OutputKind, key: &str) -> Result<Option<String>, Box<dyn Error>> {
         match std::env::var(&kind.env_name_for_job(job_name)) {
             Ok(value) => {
-                // log::warn!("job_output: got env {}={}", &kind.env_name_for_job(job_name), value);
+                log::debug!("job_output: got env {}={}", &kind.env_name_for_job(job_name), value);
                 if value.is_empty() {
                     return Ok(None);
                 }
                 let decoded = match base64::decode(value.to_string()) {
                     Ok(decoded) => match String::from_utf8(decoded) {
-                        Ok(v) => v,
+                        Ok(v) => {
+                            log::debug!("job_output: decoded {}={}, key={}", &kind.env_name_for_job(job_name), v, key);
+                            v
+                        },
                         Err(e) => return escalate!(Box::new(ci::CIError {
                             cause: format!("output value[{}] is not utf8 string: {:?}", value, e),
                         }))
@@ -1256,8 +1259,8 @@ impl<S: shell::Shell> ci::CI for GhAction<S> {
                     None => Ok(None),
                 }
             },
-            Err(_) => {
-                // log::warn!("job_output: fail to got env {} {:?}", &kind.env_name_for_job(job_name), e);
+            Err(e) => {
+                log::debug!("job_output: fail to got env {} {:?}", &kind.env_name_for_job(job_name), e);
                 Ok(None)
             }
         }
