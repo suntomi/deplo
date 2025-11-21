@@ -32,6 +32,7 @@ tempfile = "3.19.1"
 formatx = "0.1.4"
 petgraph = { version = "0.6.2", features = ["graphmap"] }
 url = "2.5.4"
+jsonwebtoken = { version = "10.2.0", features = ["rsa", "aws_lc_rs"] }
 
 [features]
 default = []

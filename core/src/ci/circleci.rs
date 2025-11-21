@@ -44,9 +44,9 @@ impl<S: shell::Shell> CircleCI<S> {
     fn generate_workdir_setting<'a>(&self, job: &'a config::job::Job) -> String {
         return job.workdir.as_ref().map_or_else(|| "".to_string(), |wd| format!("workdir: {}", wd));
     }
-    fn generate_checkout_steps(&self, _: &str, options: &Option<config::job::CheckoutOption>) -> String {
-        let mut checkout_opts = options.as_ref().map_or_else(|| Vec::new(), |v| v.opt_str());
-        checkout_opts.push(format!("opts_hash: {}", options.as_ref().map_or_else(|| "".to_string(), |v| v.hash())));
+    fn generate_checkout_steps(&self, _: &str, account: &config::ci::Account, options: &Option<config::job::CheckoutOption>) -> String {
+        let mut checkout_opts = options.as_ref().map_or_else(|| Vec::new(), |v| v.opt_str(account));
+        checkout_opts.push(format!("opts_hash: {}", options.as_ref().map_or_else(|| "".to_string(), |v| v.hash(account))));
         format!(
             include_str!("../../res/ci/circleci/checkout.yml.tmpl"), 
             checkout_opts = MultilineFormatString{
@@ -73,6 +73,7 @@ impl<'a, S: shell::Shell> ci::CI for CircleCI<S> {
     }
     fn generate_config(&self, reinit: bool) -> Result<(), Box<dyn Error>> {
         let config = self.config.borrow();
+        let account = config.ci.get(&self.account_name).expect(&format!("no ci config for {}", self.account_name));
         let repository_root = config.modules.vcs().repository_root()?;
         let jobs = config.jobs.as_map();
         let create_main = config.ci.is_main("GhAction");
@@ -88,7 +89,7 @@ impl<'a, S: shell::Shell> ci::CI for CircleCI<S> {
                 name = name,
                 machine_or_container = self.generate_executor_setting(&job.runner),
                 workdir = self.generate_workdir_setting(job),
-                checkout = self.generate_checkout_steps(&name, &job.checkout),
+                checkout = self.generate_checkout_steps(&name, account, &job.checkout),
             ).split("\n").map(|s| s.to_string()).collect::<Vec<String>>();
             job_descs = job_descs.into_iter().chain(lines.into_iter()).collect();
         }

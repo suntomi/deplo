@@ -5,12 +5,15 @@ use std::result::Result;
 use std::collections::HashMap;
 use std::thread::sleep;
 use std::time::Duration as StdDuration;
+use std::time::{SystemTime, UNIX_EPOCH};
+use std::vec;
 
 use chrono::{Utc, Duration};
 use log;
 use maplit::hashmap;
 use serde::{Deserialize, Serialize};
 use serde_json::Value as JsonValue;
+use jsonwebtoken::{encode, Header, EncodingKey, Algorithm};
 
 use crate::config;
 use crate::config::value;
@@ -32,6 +35,27 @@ lazy_static! {
         "actions/cache".to_string() => "v4".to_string(),
         "mxschmitt/action-tmate".to_string() => "c0afd6f790e3a5564914980036ebf83216678101".to_string(),
     };
+}
+#[derive(Serialize, Deserialize)]
+struct Claims {
+    iat: u64,  // issued at
+    exp: u64,  // expiration (max 10 minutes)
+    iss: String, // App ID
+}
+
+fn generate_jwt(app_id: &str, private_key: &str) -> Result<String, Box<dyn Error>> {
+    let now = SystemTime::now().duration_since(UNIX_EPOCH)?.as_secs();
+    
+    let claims = Claims {
+        iat: now - 60,  // 60秒前（時刻のずれ対策）
+        exp: now + 600, // 10分後（最大値）
+        iss: app_id.to_string(),
+    };
+    
+    let key = EncodingKey::from_rsa_pem(private_key.as_bytes())?;
+    let token = encode(&Header::new(Algorithm::RS256), &claims, &key)?;
+    
+    Ok(token)
 }
 #[derive(Serialize, Deserialize)]
 #[serde(untagged)]
@@ -108,7 +132,7 @@ impl ci::CheckoutOption for config::job::CheckoutOption {
             value.resolve()
         }
     }
-    fn opt_str(&self) -> Vec<String> {
+    fn opt_str(&self, account: &config::ci::Account) -> Vec<String> {
         let mut r = vec![];
         match self.fetch_depth {
             Some(ref v) => r.push(format!("fetch-depth: {}", v)),
@@ -131,7 +155,14 @@ impl ci::CheckoutOption for config::job::CheckoutOption {
         }
         match self.token {
             Some(ref v) => r.push(format!("token: {}", Self::to_yaml_config(v))),
-            None => {}
+            None => match account {
+                config::ci::Account::GhAction{..} => {},
+                config::ci::Account::GhActionApp{..} => {
+                    // use github app token generated in previous step
+                    r.push("token: ${{ steps.app-token.outputs.token }}".to_string());
+                },
+                _ => {}
+            }
         }        
         return r
     }
@@ -619,7 +650,7 @@ impl<S: shell::Shell> GhAction<S> {
         cmds.join(" && ")
     }
     fn generate_checkout_steps<'a>(
-        &self, _: &'a str, options: &'a Option<config::job::CheckoutOption>, defaults: &Option<config::job::CheckoutOption>
+        &self, _: &'a str, account: &config::ci::Account, options: &'a Option<config::job::CheckoutOption>, defaults: &Option<config::job::CheckoutOption>
     ) -> Vec<String> {
         let merged_opts = match options.as_ref() {
             Some(v) => match defaults.as_ref() {
@@ -631,14 +662,25 @@ impl<S: shell::Shell> GhAction<S> {
                 None => config::job::CheckoutOption::default()
             }
         };
-        let checkout_opts = merged_opts.opt_str();
+        let checkout_opts = merged_opts.opt_str(account);
         // hash value for separating repository cache according to checkout options
         let opts_hash = options.as_ref().map_or_else(
             || "".to_string(), 
-            |v| { format!("-{}", v.hash()) }
+            |v| { format!("-{}", v.hash(account)) }
         );
+        let mut steps = match account {
+            config::ci::Account::GhAction{..} => { vec![] },
+            config::ci::Account::GhActionApp{app_id_secret_name, pkey_secret_name} => {
+                format!(
+                    include_str!("../../res/ci/ghaction/app_token.yml.tmpl"),
+                    app_id_secret_name = app_id_secret_name.resolve(),
+                    pkey_secret_name = pkey_secret_name.resolve()
+                ).split("\n").map(|s| s.to_string()).collect::<Vec<String>>()
+            },
+            _ => panic!("generate_checkout_steps should be called with GhAction account")
+        };
         if merged_opts.fetch_depth.map_or_else(|| false, |v| v == 0) {
-            format!(
+            let mut lines = format!(
                 include_str!("../../res/ci/ghaction/cached_checkout.yml.tmpl"),
                 checkout_opts = MultilineFormatString{
                     strings: &self.generate_checkout_opts(&checkout_opts),
@@ -646,38 +688,31 @@ impl<S: shell::Shell> GhAction<S> {
                 }, opts_hash = opts_hash, restore_commands = &self.generate_cache_restore_cmds(&merged_opts),
                 checkout_version = DEPLO_GHACTION_MODULE_VERSIONS.get("actions/checkout").unwrap(),
                 cache_version = DEPLO_GHACTION_MODULE_VERSIONS.get("actions/cache").unwrap()
-            ).split("\n").map(|s| s.to_string()).collect()
+            ).split("\n").map(|s| s.to_string()).collect();
+            steps.append(&mut lines);
         } else {
-            format!(
+            let mut lines = format!(
                 include_str!("../../res/ci/ghaction/checkout.yml.tmpl"),
                 checkout_opts = MultilineFormatString{
                     strings: &self.generate_checkout_opts(&checkout_opts),
                     postfix: None
                 },
                 checkout_version = DEPLO_GHACTION_MODULE_VERSIONS.get("actions/checkout").unwrap()
-            ).split("\n").map(|s| s.to_string()).collect()
+            ).split("\n").map(|s| s.to_string()).collect();
+            steps.append(&mut lines);
         }
+        steps
     }
     fn get_token(&self) -> Result<config::Value, Box<dyn Error>> {
         let config = self.config.borrow();
         Ok(match config.ci.get(&self.account_name).unwrap() {
-            config::ci::Account::GhAction { account, key, kind } => {
-                let kind_resolved = match kind.as_ref() {
-                    Some(v) => v.resolve(),
-                    None => "user".to_string()
-                };
-                match kind_resolved.as_str() {
-                    "user" => key.clone(),
-                    "app" => return escalate!(Box::new(ci::CIError {
-                        cause: format!(
-                            "TODO: generate jwt with account {} as sub and encrypt with key",
-                            account
-                        ),
-                    })),
-                    v => return escalate!(Box::new(ci::CIError {
-                        cause: format!("unsupported account kind {}", v),
-                    })),
-                }
+            config::ci::Account::GhAction { key, .. } => key.clone(),
+            config::ci::Account::GhActionApp { app_id_secret_name, pkey_secret_name } => {
+                let app_id = config::secret::var(&app_id_secret_name.resolve())
+                    .expect(&format!("app_id secret name {} should set", app_id_secret_name.resolve()));
+                let pkey = config::secret::var(&pkey_secret_name.resolve())
+                    .expect(&format!("pkey secret name {} should set", pkey_secret_name.resolve()));
+                return generate_jwt(&app_id, &pkey).map(|v| config::Value::new(&v))
             },
             _ => return escalate!(Box::new(ci::CIError {
                 cause: "should have ghaction CI config but other config provided".to_string()
@@ -763,6 +798,9 @@ impl<S: shell::Shell> ci::CI for GhAction<S> {
     }
     fn generate_config(&self, reinit: bool) -> Result<(), Box<dyn Error>> {
         let config = self.config.borrow();
+        let account = config.ci.get(&self.account_name).expect(&format!(
+            "CI account {} should exist", self.account_name
+        ));
         let repository_root = config.modules.vcs().repository_root()?;
         // TODO_PATH: use Path to generate path of /.github/...
         let main_workflow_yml_path = format!("{}/.github/workflows/deplo-main.yml", repository_root);
@@ -833,7 +871,7 @@ impl<S: shell::Shell> ci::CI for GhAction<S> {
                     postfix: None
                 },
                 checkout = MultilineFormatString{
-                    strings: &self.generate_checkout_steps(&name, &match config.checkout.as_ref() {
+                    strings: &self.generate_checkout_steps(&name, account, &match config.checkout.as_ref() {
                         Some(v) => match job.checkout.as_ref() {
                             Some(vv) => Some(v.merge(vv)),
                             None => Some(v.clone())
@@ -899,13 +937,13 @@ impl<S: shell::Shell> ci::CI for GhAction<S> {
                         postfix: None
                     },
                     boot_checkout = MultilineFormatString{
-                        strings: &self.generate_checkout_steps("main", &config.checkout, &Some(config::job::CheckoutOption {
+                        strings: &self.generate_checkout_steps("main", account, &config.checkout, &Some(config::job::CheckoutOption {
                             fetch_depth: Some(2), lfs: None, token: None, submodules: None,
                         })),
                         postfix: None
                     },
                     halt_checkout = MultilineFormatString{
-                        strings: &self.generate_checkout_steps("main", &config.checkout, &Some(config::job::CheckoutOption {
+                        strings: &self.generate_checkout_steps("main", account, &config.checkout, &Some(config::job::CheckoutOption {
                             fetch_depth: Some(2), lfs: Some(lfs), token: None, submodules: None,
                         })),
                         postfix: None
