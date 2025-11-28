@@ -5,7 +5,6 @@ use std::result::Result;
 use std::collections::HashMap;
 use std::thread::sleep;
 use std::time::Duration as StdDuration;
-use std::time::{SystemTime, UNIX_EPOCH};
 use std::vec;
 
 use chrono::{Utc, Duration};
@@ -13,7 +12,6 @@ use log;
 use maplit::hashmap;
 use serde::{Deserialize, Serialize};
 use serde_json::Value as JsonValue;
-use jsonwebtoken::{encode, Header, EncodingKey, Algorithm};
 
 use crate::config;
 use crate::config::value;
@@ -28,6 +26,7 @@ use crate::util::{
     randombytes_as_string,
     escape
 };
+use crate::vcs::github::generate_jwt;
 
 lazy_static! {
     pub static ref DEPLO_GHACTION_MODULE_VERSIONS: HashMap<String, String> = hashmap! {
@@ -36,27 +35,7 @@ lazy_static! {
         "mxschmitt/action-tmate".to_string() => "c0afd6f790e3a5564914980036ebf83216678101".to_string(),
     };
 }
-#[derive(Serialize, Deserialize)]
-struct Claims {
-    iat: u64,  // issued at
-    exp: u64,  // expiration (max 10 minutes)
-    iss: String, // App ID
-}
 
-fn generate_jwt(app_id: &str, private_key: &str) -> Result<String, Box<dyn Error>> {
-    let now = SystemTime::now().duration_since(UNIX_EPOCH)?.as_secs();
-    
-    let claims = Claims {
-        iat: now - 60,  // 60秒前（時刻のずれ対策）
-        exp: now + 600, // 10分後（最大値）
-        iss: app_id.to_string(),
-    };
-    
-    let key = EncodingKey::from_rsa_pem(private_key.as_bytes())?;
-    let token = encode(&Header::new(Algorithm::RS256), &claims, &key)?;
-    
-    Ok(token)
-}
 #[derive(Serialize, Deserialize)]
 #[serde(untagged)]
 enum EventPayload {
@@ -153,17 +132,17 @@ impl ci::CheckoutOption for config::job::CheckoutOption {
             },
             None => {}
         }
-        match self.token {
-            Some(ref v) => r.push(format!("token: {}", Self::to_yaml_config(v))),
-            None => match account {
-                config::ci::Account::GhAction{..} => {},
-                config::ci::Account::GhActionApp{..} => {
-                    // use github app token generated in previous step
-                    r.push("token: ${{ steps.app-token.outputs.token }}".to_string());
-                },
-                _ => {}
-            }
-        }        
+        match account {
+            config::ci::Account::GhAction{..} => match self.token {
+                Some(ref v) => r.push(format!("token: {}", Self::to_yaml_config(v))),
+                None => {}
+            },
+            config::ci::Account::GhActionApp{..} => {
+                // use github app token generated in previous step
+                r.push("token: ${{ steps.app-token.outputs.token }}".to_string());
+            },
+            _ => {}
+        }
         return r
     }
 }
@@ -217,7 +196,7 @@ lazy_static! {
 }
 impl<S: shell::Shell> GhAction<S> {
     fn set_secret_base(&self, key: &str, value: &str, path: &str) -> Result<(), Box<dyn Error>> {
-        let token = self.get_token()?;
+        let (token, auth_type) = self.get_token()?;
         let config = self.config.borrow();
         let user_and_repo = config.modules.vcs().user_and_repo()?;
         let pkey_response = &self.shell.exec(shell::args![
@@ -225,7 +204,7 @@ impl<S: shell::Shell> GhAction<S> {
                     "https://api.github.com/repos/{}/{}/{}/secrets/public-key",
                     user_and_repo.0, user_and_repo.1, path
                 ),
-                "-H", shell::fmtargs!("Authorization: token {}", &token)
+                "-H", shell::fmtargs!("Authorization: {} {}", auth_type, &token)
             ], shell::no_env(), shell::no_cwd(), &shell::capture()
         )?;
         let public_key_info = match serde_json::from_str::<RepositoryPublicKeyResponse>(pkey_response) {
@@ -249,7 +228,7 @@ impl<S: shell::Shell> GhAction<S> {
             ),
             "-H", "Content-Type: application/json",
             "-H", "Accept: application/json",
-            "-H", shell::fmtargs!("Authorization: token {}", &token),
+            "-H", shell::fmtargs!("Authorization: {} {}", auth_type, &token),
             "-d", json, "-w", "%{http_code}", "-o", "/dev/null"
         ), shell::no_env(), shell::no_cwd(), &shell::capture())?.parse::<u32>()?;
         if status >= 200 && status < 300 {
@@ -703,16 +682,16 @@ impl<S: shell::Shell> GhAction<S> {
         }
         steps
     }
-    fn get_token(&self) -> Result<config::Value, Box<dyn Error>> {
+    fn get_token(&self) -> Result<(config::Value, &str), Box<dyn Error>> {
         let config = self.config.borrow();
         Ok(match config.ci.get(&self.account_name).unwrap() {
-            config::ci::Account::GhAction { key, .. } => key.clone(),
+            config::ci::Account::GhAction { key, .. } => (key.clone(), "token"),
             config::ci::Account::GhActionApp { app_id_secret_name, pkey_secret_name } => {
                 let app_id = config::secret::var(&app_id_secret_name.resolve())
                     .expect(&format!("app_id secret name {} should set", app_id_secret_name.resolve()));
                 let pkey = config::secret::var(&pkey_secret_name.resolve())
                     .expect(&format!("pkey secret name {} should set", pkey_secret_name.resolve()));
-                return generate_jwt(&app_id, &pkey).map(|v| config::Value::new(&v))
+                (config::Value::new(&generate_jwt(&app_id, &pkey)?), "Bearer")
             },
             _ => return escalate!(Box::new(ci::CIError {
                 cause: "should have ghaction CI config but other config provided".to_string()
@@ -804,7 +783,7 @@ impl<S: shell::Shell> ci::CI for GhAction<S> {
         let repository_root = config.modules.vcs().repository_root()?;
         // TODO_PATH: use Path to generate path of /.github/...
         let main_workflow_yml_path = format!("{}/.github/workflows/deplo-main.yml", repository_root);
-        let create_main = config.ci.is_main("GhAction");
+        let create_main = config.ci.is_main(vec!["GhAction", "GhActionApp"]);
         fs::create_dir_all(&format!("{}/.github/workflows", repository_root))?;
         let previously_no_file = !rm(&main_workflow_yml_path);
         // inject secrets from dotenv file
@@ -1162,7 +1141,7 @@ impl<S: shell::Shell> ci::CI for GhAction<S> {
     }
     fn run_job(&self, job_config: &config::runtime::Workflow) -> Result<String, Box<dyn Error>> {
         let config = self.config.borrow();
-        let token = self.get_token()?;
+        let (token, auth_type) = self.get_token()?;
         let user_and_repo = config.modules.vcs().user_and_repo()?;
         let payload = ClientPayload::new(job_config);
         let mut inputs = hashmap!{
@@ -1187,7 +1166,7 @@ impl<S: shell::Shell> ci::CI for GhAction<S> {
             None => config.modules.vcs().commit_hash(None)?
         };
         let response = self.shell.exec(shell::args![
-            "curl", "-f", "-H", shell::fmtargs!("Authorization: token {}", &token),
+            "curl", "-f", "-H", shell::fmtargs!("Authorization: {} {}", auth_type, &token),
             "-H", "Accept: application/vnd.github.v3+json", 
             format!(
                 "https://api.github.com/repos/{}/{}/actions/workflows/{}/dispatches", 
@@ -1218,7 +1197,7 @@ impl<S: shell::Shell> ci::CI for GhAction<S> {
         let start = Utc::now().checked_sub_signed(Duration::minutes(1)).unwrap();
         loop {
             let response = self.shell.exec(shell::args![
-                "curl", "-H", shell::fmtargs!("Authorization: token {}", &token), 
+                "curl", "-H", shell::fmtargs!("Authorization: {} {}", auth_type, &token), 
                 "-H", "Accept: application/vnd.github.v3+json", 
                 format!(
                     "https://api.github.com/repos/{}/{}/actions/runs?event=workflow_dispatch&created={}",
@@ -1231,7 +1210,7 @@ impl<S: shell::Shell> ci::CI for GhAction<S> {
             if workflows.workflow_runs.len() > 0 {
                 for wf in workflows.workflow_runs {
                     let response = self.shell.exec(shell::args![
-                        "curl", "-H", shell::fmtargs!("Authorization: token {}", &token), 
+                        "curl", "-H", shell::fmtargs!("Authorization: {} {}", auth_type, &token), 
                         "-H", "Accept: application/vnd.github.v3+json", wf.jobs_url
                     ], shell::no_env(), shell::no_cwd(), &shell::capture())?;
                     let parsed = serde_json::from_str::<PartialJobs>(&response)?;
@@ -1255,10 +1234,10 @@ impl<S: shell::Shell> ci::CI for GhAction<S> {
     }
     fn check_job_finished(&self, job_id: &str) -> Result<Option<String>, Box<dyn Error>> {
         let config = self.config.borrow();
-        let token = self.get_token()?;
+        let (token, auth_type) = self.get_token()?;
         let user_and_repo = config.modules.vcs().user_and_repo()?;
         let response = self.shell.exec(shell::args![
-            "curl", "-H", shell::fmtargs!("Authorization: token {}", &token),
+            "curl", "-H", shell::fmtargs!("Authorization: {} {}", auth_type, &token),
             "-H", "Accept: application/vnd.github.v3+json",
             format!(
                 "https://api.github.com/repos/{}/{}/actions/runs/{}",
@@ -1432,7 +1411,7 @@ impl<S: shell::Shell> ci::CI for GhAction<S> {
         )
     }
     fn list_secret_name(&self) -> Result<Vec<String>, Box<dyn Error>> {
-        let token = self.get_token()?;
+        let (token, auth_type) = self.get_token()?;
         let config = self.config.borrow();
         let user_and_repo = config.modules.vcs().user_and_repo()?;
         let response = match serde_json::from_str::<RepositorySecretsResponse>(
@@ -1441,7 +1420,7 @@ impl<S: shell::Shell> ci::CI for GhAction<S> {
                 "https://api.github.com/repos/{}/{}/actions/secrets",
                 user_and_repo.0, user_and_repo.1
             ),
-            "-H", shell::fmtargs!("Authorization: token {}", &token),
+            "-H", shell::fmtargs!("Authorization: {} {}", auth_type, &token),
             "-H", "Accept: application/json"
         ], shell::no_env(), shell::no_cwd(), &shell::capture())?) {
             Ok(v) => v,
@@ -1462,7 +1441,7 @@ impl<S: shell::Shell> ci::CI for GhAction<S> {
         Ok(())
     }
     fn set_var(&self, key: &str, value: &str) -> Result<(), Box<dyn Error>> {
-        let token = self.get_token()?;
+        let (token, auth_type) = self.get_token()?;
         let config = self.config.borrow();
         let user_and_repo = config.modules.vcs().user_and_repo()?;
         let json = format!("{{\"name\":\"{}\",\"value\":\"{}\"}}", 
@@ -1478,7 +1457,7 @@ impl<S: shell::Shell> ci::CI for GhAction<S> {
             "-H", "Content-Type: application/json",
             "-H", "Accept: application/json",
             "-H", "X-GitHub-Api-Version: 2022-11-28",
-            "-H", shell::fmtargs!("Authorization: token {}", &token),
+            "-H", shell::fmtargs!("Authorization: {} {}", auth_type, &token),
             "-w", "%{http_code}", "-o", "/dev/null"
         ), shell::no_env(), shell::no_cwd(), &shell::capture())?.parse::<u32>()?;
         log::debug!("check status: {}", check_status);
@@ -1499,7 +1478,7 @@ impl<S: shell::Shell> ci::CI for GhAction<S> {
             "-H", "Content-Type: application/json",
             "-H", "Accept: application/json",
             "-H", "X-GitHub-Api-Version: 2022-11-28",
-            "-H", shell::fmtargs!("Authorization: token {}", &token),
+            "-H", shell::fmtargs!("Authorization: {} {}", auth_type, &token),
             "-d", json, "-w", "%{http_code}", "-o", "/dev/null"
         ), shell::no_env(), shell::no_cwd(), &shell::capture())?.parse::<u32>()?;
         if status >= 200 && status < 300 {

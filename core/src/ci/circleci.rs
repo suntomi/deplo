@@ -76,7 +76,7 @@ impl<'a, S: shell::Shell> ci::CI for CircleCI<S> {
         let account = config.ci.get(&self.account_name).expect(&format!("no ci config for {}", self.account_name));
         let repository_root = config.modules.vcs().repository_root()?;
         let jobs = config.jobs.as_map();
-        let create_main = config.ci.is_main("GhAction");
+        let create_main = config.ci.is_main(vec!["CircleCI"]);
         // TODO_PATH: use Path to generate path of /.circleci/...
         let circle_yml_path = format!("{}/.circleci/config.yml", repository_root);
         fs::create_dir_all(&format!("{}/.circleci", repository_root))?;

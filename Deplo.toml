@@ -44,11 +44,9 @@ SUNTOMI_VARS4 = { env = "SUNTOMI_VARS4" }
 # ------------
 # version control system account settings
 [vcs]
-type = "github"
-email = "${SUNTOMI_VCS_ACCOUNT_EMAIL}"
-account = "${SUNTOMI_VCS_ACCOUNT}"
-key = "${SUNTOMI_VCS_ACCOUNT_KEY}"
-
+type = "github_app"
+app_id = "${SUNTOMI_VCS_APP_ID}"
+pkey = "${SUNTOMI_VCS_APP_PKEY}"
 
 # ------------
 # ci settings

@@ -62,9 +62,14 @@ impl Accounts {
     pub fn default(&self) -> &Account {
         self.as_map().get("default").expect("missing default account")
     }
-    pub fn is_main(&self, ty: &str) -> bool {
+    pub fn is_main(&self, types: Vec<&str>) -> bool {
         let d = self.default();
-        d.type_matched(ty)
+        for ty in types {
+            if d.type_matched(ty) {
+                return true;
+            }
+        }
+        false
     }
     pub fn get<'a>(&'a self, name: &str) -> Option<&'a Account> {
         self.0.get(name)

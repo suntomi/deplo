@@ -8,6 +8,7 @@ use serde_json::{Value as JsonValue};
 
 use crate::config;
 use crate::module;
+use crate::config::value::Value;
 
 pub enum DiffMatcher {
     Glob(Vec<String>),
@@ -36,6 +37,7 @@ impl fmt::Display for RefType {
 
 pub trait VCS {
     fn new(config: &config::Container) -> Result<Self, Box<dyn Error>> where Self : Sized;
+    fn get_token(&self) -> Result<Value, Box<dyn Error>>;
     fn release_target(&self) -> Option<String>;
     fn current_ref(&self) -> Result<(RefType, String), Box<dyn Error>>;
     fn delete_branch(&self, ref_type: RefType, ref_path: &str) -> Result<(), Box<dyn Error>>;
@@ -155,7 +157,7 @@ pub fn factory<'a>(
     config: &config::Container
 ) -> Result<Box<dyn VCS + 'a>, Box<dyn Error>> {
     match &config.borrow().vcs {
-        config::vcs::Account::Github {..} => {
+        config::vcs::Account::Github {..} | config::vcs::Account::GithubApp {..} => {
             return factory_by::<github::Github>(config);
         },
         _ => return Err(Box::new(VCSError {

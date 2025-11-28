@@ -3,6 +3,7 @@ use std::error::Error;
 use std::collections::HashMap;
 use std::path::Path;
 use std::result::Result;
+use std::time::{SystemTime, UNIX_EPOCH};
 
 use glob::Pattern;
 use maplit::hashmap;
@@ -10,14 +11,38 @@ use regex;
 use serde::Deserialize;
 use serde::Serialize;
 use serde_json::{Value as JsonValue};
+use jsonwebtoken::{encode, Header, EncodingKey, Algorithm};
 
 use crate::config;
 use crate::util::merge_hashmap;
 use crate::vcs;
 use crate::shell;
 use crate::util::{escalate,make_escalation,jsonpath,str_to_json,json_to_strmap};
+use crate::config::value::Value;
 
 use super::git;
+
+#[derive(Serialize, Deserialize)]
+struct Claims {
+    iat: u64,  // issued at
+    exp: u64,  // expiration (max 10 minutes)
+    iss: String, // App ID
+}
+
+pub fn generate_jwt(app_id: &str, private_key: &str) -> Result<String, Box<dyn Error>> {
+    let now = SystemTime::now().duration_since(UNIX_EPOCH)?.as_secs();
+    
+    let claims = Claims {
+        iat: now - 60,  // 60秒前（時刻のずれ対策）
+        exp: now + 600, // 10分後（最大値）
+        iss: app_id.to_string(),
+    };
+    
+    let key = EncodingKey::from_rsa_pem(private_key.as_bytes())?;
+    let token = encode(&Header::new(Algorithm::RS256), &claims, &key)?;
+    
+    Ok(token)
+}
 
 #[derive(Serialize, Deserialize)]
 struct MergeResult {
@@ -127,16 +152,13 @@ impl<GIT: git::GitFeatures<S>, S: shell::Shell> Github<GIT, S> {
             }));
         }
         let config = self.config.borrow();
-        let token = match &config.vcs {
-            config::vcs::Account::Github{ account:_, key, email:_ } => key,
-            _ => panic!("vcs account is not for github but {}", &config.vcs)
-        };
+        let (token, auth_type) = config.vcs.get_token()?;
         let user_and_repo = (self as &dyn vcs::VCS).user_and_repo()?;
         let response = self.shell.exec(shell::args![
             "curl", "--fail", "-sS", format!(
                 "https://api.github.com/repos/{}/{}/releases/tags/{}",
                 user_and_repo.0, user_and_repo.1, target_ref.0
-            ), "-H", shell::fmtargs!("Authorization: token {}", token)
+            ), "-H", shell::fmtargs!("Authorization: {} {}", auth_type, &token)
         ], shell::no_env(), shell::no_cwd(), &shell::capture())?;
         return Ok(response);
     }
@@ -185,22 +207,20 @@ impl<GIT: git::GitFeatures<S>, S: shell::Shell> Github<GIT, S> {
         format!("https://github.com/{}/{}/{}", user_and_repo.0, user_and_repo.1, ref_name)
     }
     fn pr_data_from_ref_path(&self, ref_path: &str, json_path: &str) ->Result<String, Box<dyn Error>> {
-        if let config::vcs::Account::Github{ key, .. } = &self.config.borrow().vcs {
-            let pr_url = self.url_from_pull_ref(ref_path);
-            let api_url = format!(
-                "https://api.github.com/repos/{pr_part}",
-                pr_part = &pr_url[19..].replace("/pull/", "/pulls/")
-            );
-            let output = self.shell.exec(shell::args![
-                "curl", "-s", "-H", shell::fmtargs!("Authorization: token {}", key), 
-                "-H", "Accept: application/vnd.github.v3+json", api_url
-            ], shell::no_env(), shell::no_cwd(), &shell::capture())?;
-            Ok(jsonpath(&output, json_path)
-                .expect(&format!("malform pulls response: {:?} for json_path {}", &output, json_path))
-                .unwrap_or("".to_string()))    
-        } else {
-            panic!("vcs account is not for github {}", &self.config.borrow().vcs)
-        }
+        let config = self.config.borrow();
+        let (token, auth_type) = config.vcs.get_token()?;
+        let pr_url = self.url_from_pull_ref(ref_path);
+        let api_url = format!(
+            "https://api.github.com/repos/{pr_part}",
+            pr_part = &pr_url[19..].replace("/pull/", "/pulls/")
+        );
+        let output = self.shell.exec(shell::args![
+            "curl", "-s", "-H", shell::fmtargs!("Authorization: {} {}", auth_type, &token), 
+            "-H", "Accept: application/vnd.github.v3+json", api_url
+        ], shell::no_env(), shell::no_cwd(), &shell::capture())?;
+        Ok(jsonpath(&output, json_path)
+            .expect(&format!("malform pulls response: {:?} for json_path {}", &output, json_path))
+            .unwrap_or("".to_string()))    
     }
 }
 
@@ -211,12 +231,31 @@ impl<GIT: git::GitFeatures<S>, S: shell::Shell> vcs::VCS for Github<GIT, S> {
                 config: config.clone(),
                 diff: vec!(),
                 shell: S::new(config),
-                git: GIT::new(&account, &email, &key, S::new(config))
+                git: GIT::from_pat(&account, &email, &key, S::new(config))
             });
-        } 
-        return Err(Box::new(vcs::VCSError {
-            cause: format!("should have github config but {}", config.borrow().vcs)
-        }))
+        } else if let config::vcs::Account::GithubApp{ app_id, pkey } = &config.borrow().vcs {
+            return Ok(Github {
+                config: config.clone(),
+                diff: vec!(),
+                shell: S::new(config),
+                git: GIT::from_app(&app_id, &pkey, S::new(config))
+            });
+        } else {
+            return Err(Box::new(vcs::VCSError {
+                cause: format!("should have github config but {}", config.borrow().vcs)
+            }))
+        }
+    }
+    fn get_token(&self) -> Result<Value, Box<dyn Error>> {
+        if let config::vcs::Account::Github{ key, .. } = &self.config.borrow().vcs {
+            Ok(key.clone())
+        } else if let config::vcs::Account::GithubApp{ app_id, pkey } = &self.config.borrow().vcs {
+            Ok(Value::new(&generate_jwt(&app_id.resolve(), &pkey.resolve())?))
+        } else {
+            return Err(Box::new(vcs::VCSError {
+                cause: format!("vcs is not for github: {}", self.config.borrow().vcs)
+            }));
+        }
     }
     fn release_target(&self) -> Option<String> {        
         match self.git.current_ref().unwrap() {
@@ -241,10 +280,7 @@ impl<GIT: git::GitFeatures<S>, S: shell::Shell> vcs::VCS for Github<GIT, S> {
             Ok(v) => v,
             Err(_) => {
                 let config = self.config.borrow();
-                let token = match &config.vcs {
-                    config::vcs::Account::Github{ account:_, key, email:_ } => key,
-                    _ => panic!("vcs account is not for github {}", &config.vcs)
-                };
+                let (token, auth_type) = config.vcs.get_token()?;
                 let user_and_repo = self.user_and_repo()?;
                 // create release
                 let mut options = match opts.as_object() {
@@ -259,7 +295,7 @@ impl<GIT: git::GitFeatures<S>, S: shell::Shell> vcs::VCS for Github<GIT, S> {
                         "https://api.github.com/repos/{}/{}/releases", 
                         user_and_repo.0, user_and_repo.1
                     ), 
-                    "-H", shell::fmtargs!("Authorization: token {}", token), 
+                    "-H", shell::fmtargs!("Authorization: {} {}", auth_type, &token), 
                     "-d", serde_json::to_string(&options)?
                 ], shell::no_env(), shell::no_cwd(), &shell::no_capture())?             
             }
@@ -283,17 +319,14 @@ impl<GIT: git::GitFeatures<S>, S: shell::Shell> vcs::VCS for Github<GIT, S> {
         };
         let upload_url = format!("{}?name={}", upload_url_base, asset_name);
         let config = self.config.borrow();
-        let token = match &config.vcs {
-            config::vcs::Account::Github{ account:_, key, email:_ } => key,
-            _ => panic!("vcs account is not for github {}", &config.vcs)
-        };
+        let (token, auth_type) = config.vcs.get_token()?;
         let content_type = match opts.get("content-type") {
             Some(v) => v.as_str().unwrap_or("application/octet-stream").to_string(),
             None => "application/octet-stream".to_string()
         };
         let response = self.shell.exec(shell::args![
             "curl", "-sS", upload_url_base.replace("uploads.github.com", "api.github.com"),
-            "-H", shell::fmtargs!("Authorization: token {}", token)
+            "-H", shell::fmtargs!("Authorization: {} {}", auth_type, &token)
         ], shell::no_env(), shell::no_cwd(), &shell::capture())?;
         match jsonpath(&response, &format!("$.[?(@.name=='{}')]", asset_name))? {
             Some(v) => match opts.get("replace") {
@@ -301,7 +334,7 @@ impl<GIT: git::GitFeatures<S>, S: shell::Shell> vcs::VCS for Github<GIT, S> {
                     // delete old asset
                     let delete_url = self.get_value_from_json_object(&v, "url")?;
                     self.shell.exec(shell::args![
-                        "curl", delete_url, "-X", "DELETE", "-H", shell::fmtargs!("Authorization: token {}", token)
+                        "curl", delete_url, "-X", "DELETE", "-H", shell::fmtargs!("Authorization: {} {}", auth_type, &token)
                     ], shell::no_env(), shell::no_cwd(), &shell::no_capture())?;
                 },
                 // nothing to do, return browser_download_url
@@ -310,7 +343,7 @@ impl<GIT: git::GitFeatures<S>, S: shell::Shell> vcs::VCS for Github<GIT, S> {
             None => log::debug!("no asset with name {}, proceed to upload", asset_name),
         };
         let response = self.shell.exec(shell::args![
-            "curl", "-sS", upload_url, "-H", shell::fmtargs!("Authorization: token {}", token),
+            "curl", "-sS", upload_url, "-H", shell::fmtargs!("Authorization: {} {}", auth_type, &token),
             "-H", format!("Content-Type: {}", content_type),
             "--data-binary", format!("@{}", asset_file_path)
         ], shell::no_env(), shell::no_cwd(), &shell::capture())?;
@@ -355,56 +388,54 @@ impl<GIT: git::GitFeatures<S>, S: shell::Shell> vcs::VCS for Github<GIT, S> {
     fn pr(
         &self, title: &str, head_branch: &str, base_branch: &str, options: &HashMap<&str, &str>
     ) -> Result<(), Box<dyn Error>> {
-        if let config::vcs::Account::Github{ key, .. } = &self.config.borrow().vcs {
-            let user_and_repo = (self as &dyn vcs::VCS).user_and_repo().unwrap();
-            let mut body = hashmap!{
-                "title" => title, "owner" => &user_and_repo.0, 
-                "repo" => &user_and_repo.1,
-                "head" => head_branch, "base" => base_branch                
-            };
-            for (k, v) in options {
-                if *k != "labels" && *k != "assignees"{
-                    body.insert(k, v);
-                }
+        let config = self.config.borrow();
+        let (token, auth_type) = config.vcs.get_token()?;
+        let user_and_repo = (self as &dyn vcs::VCS).user_and_repo().unwrap();
+        let mut body = hashmap!{
+            "title" => title, "owner" => &user_and_repo.0, 
+            "repo" => &user_and_repo.1,
+            "head" => head_branch, "base" => base_branch                
+        };
+        for (k, v) in options {
+            if *k != "labels" && *k != "assignees"{
+                body.insert(k, v);
             }
-            let response = self.shell.exec(shell::args![
-                "curl", "-H", shell::fmtargs!("Authorization: token {}", key), 
-                "-H", "Accept: application/vnd.github.v3+json", 
-                format!(
-                    "https://api.github.com/repos/{}/{}/pulls", 
-                    user_and_repo.0, user_and_repo.1
-                ),
-                "-d", serde_json::to_string(&body)?
-                ], shell::no_env(), shell::no_cwd(), &shell::capture()
-            )?;
-            let issues_api_url = jsonpath(&response, "$.issue_url")
-                .expect(&format!("malform pulls response: {:?}", &response))
-                .expect(&format!("no issue_url in response: {:?}", &response));
-            match options.get("labels") {
-                Some(labels) => {
-                    log::debug!("attach labels({}) to PR via {}", labels, issues_api_url);
-                    self.shell.exec(shell::args![
-                        "curl", "-H", shell::fmtargs!("Authorization: token {}", key), 
-                        "-H", "Accept: application/vnd.github.v3+json", format!("{}/labels", issues_api_url),
-                        "-d", format!(r#"{{"labels":{}}}"#, labels)
-                    ], shell::no_env(), shell::no_cwd(), &shell::capture())?;
-                },
-                None => {}
-            };
-            match options.get("assignees") {
-                Some(assignees) => {
-                    log::debug!("assign accounts({}) to PR via {}", assignees, issues_api_url);
-                    self.shell.exec(shell::args![
-                        "curl", "-H", shell::fmtargs!("Authorization: token {}", key), 
-                        "-H", "Accept: application/vnd.github.v3+json", format!("{}/assignees", issues_api_url),
-                        "-d", format!(r#"{{"assignees":{}}}"#, assignees)
-                    ], shell::no_env(), shell::no_cwd(), &shell::capture())?;
-                },
-                None => {}
-            };
-        } else {
-            panic!("vcs is not github: {}", self.config.borrow().vcs);
         }
+        let response = self.shell.exec(shell::args![
+            "curl", "-H", shell::fmtargs!("Authorization: {} {}", auth_type, &token), 
+            "-H", "Accept: application/vnd.github.v3+json", 
+            format!(
+                "https://api.github.com/repos/{}/{}/pulls", 
+                user_and_repo.0, user_and_repo.1
+            ),
+            "-d", serde_json::to_string(&body)?
+            ], shell::no_env(), shell::no_cwd(), &shell::capture()
+        )?;
+        let issues_api_url = jsonpath(&response, "$.issue_url")
+            .expect(&format!("malform pulls response: {:?}", &response))
+            .expect(&format!("no issue_url in response: {:?}", &response));
+        match options.get("labels") {
+            Some(labels) => {
+                log::debug!("attach labels({}) to PR via {}", labels, issues_api_url);
+                self.shell.exec(shell::args![
+                    "curl", "-H", shell::fmtargs!("Authorization: {} {}", auth_type, &token), 
+                    "-H", "Accept: application/vnd.github.v3+json", format!("{}/labels", issues_api_url),
+                    "-d", format!(r#"{{"labels":{}}}"#, labels)
+                ], shell::no_env(), shell::no_cwd(), &shell::capture())?;
+            },
+            None => {}
+        };
+        match options.get("assignees") {
+            Some(assignees) => {
+                log::debug!("assign accounts({}) to PR via {}", assignees, issues_api_url);
+                self.shell.exec(shell::args![
+                    "curl", "-H", shell::fmtargs!("Authorization: {} {}", auth_type, &token), 
+                    "-H", "Accept: application/vnd.github.v3+json", format!("{}/assignees", issues_api_url),
+                    "-d", format!(r#"{{"assignees":{}}}"#, assignees)
+                ], shell::no_env(), shell::no_cwd(), &shell::capture())?;
+            },
+            None => {}
+        };
         Ok(())
     }
     fn merge_pr(
@@ -413,69 +444,67 @@ impl<GIT: git::GitFeatures<S>, S: shell::Shell> vcs::VCS for Github<GIT, S> {
         let optmap_src = json_to_strmap(&opts);
         let options = optmap_src.iter().map(|(k, v)| (*k, v.as_str())).collect::<HashMap<_, _>>();        
         // merge pr with github api
-        if let config::vcs::Account::Github{ key, .. } = &self.config.borrow().vcs {
-            let user_and_repo = (self as &dyn vcs::VCS).user_and_repo().unwrap();
-            let pr_num = url.split('/').last().unwrap_or("");
-            if let Some(message) = options.get("message") {
-                let api_url = format!(
-                    "https://api.github.com/repos/{}/{}/issues/{}/comments",
-                    user_and_repo.0, user_and_repo.1, pr_num
-                );
-                self.shell.exec(shell::args![
-                    "curl", "-sS", "-X", "POST", api_url,
-                    "-H", shell::fmtargs!("Authorization: token {}", key),
-                    "-H", "Accept: application/vnd.github.v3+json",
-                    "-d", format!(r#"{{"body":"{}"}}"#, message)
-                ], shell::no_env(), shell::no_cwd(), &shell::capture())?;
-            }            
-            // if options are set, approve first
-            if options.get("approve").unwrap_or(&"true") == &"true" {
-                let api_url = format!(
-                    "https://api.github.com/repos/{}/{}/pulls/{}/reviews",
-                    user_and_repo.0, user_and_repo.1, pr_num
-                );
-                self.shell.exec(shell::args![
-                    "curl", "-sS", "-X", "POST", api_url,
-                    "-H", shell::fmtargs!("Authorization: token {}", key),
-                    "-H", "Accept: application/vnd.github.v3+json",
-                    "-d", r#"{"event":"APPROVE"}"#
-                ], shell::no_env(), shell::no_cwd(), &shell::capture())?;
-            }
-            // Check if auto_merge option is requested
-            if options.get("auto_merge").unwrap_or(&"false") == &"true" {
-                if self.enable_auto_merge_pr(url, &options)? {
-                    log::info!("successfully auto merged PR {}", url);
-                    return Ok(()); // auto-merge enabled and not clean status. PR will wait for condition met
-                }
-            }
+        let config = self.config.borrow();
+        let (token, auth_type) = config.vcs.get_token()?;
+        let user_and_repo = (self as &dyn vcs::VCS).user_and_repo().unwrap();
+        let pr_num = url.split('/').last().unwrap_or("");
+        if let Some(message) = options.get("message") {
             let api_url = format!(
-                "https://api.github.com/repos/{}/{}/pulls/{}/merge",
+                "https://api.github.com/repos/{}/{}/issues/{}/comments",
                 user_and_repo.0, user_and_repo.1, pr_num
             );
-            let default_message = format!("deplo version: {}, commit: {}", 
-                config::DEPLO_VERSION, config::DEPLO_GIT_HASH);
-            let default_commit_title = format!("PR #{} merged by deplo", pr_num);
-            let default_body = hashmap!{
-                "merge_method" => "merge", "commit_title" => &default_commit_title,
-                "commit_message" => default_message.as_str()
-            };
-            let body = merge_hashmap(&default_body, &options);
-            let response_text = self.shell.exec(shell::args![
-                "curl", "-sS", "-X", "PUT", api_url,
-                "-H", shell::fmtargs!("Authorization: token {}", key),
+            self.shell.exec(shell::args![
+                "curl", "-sS", "-X", "POST", api_url,
+                "-H", shell::fmtargs!("Authorization: {} {}", auth_type, &token),
                 "-H", "Accept: application/vnd.github.v3+json",
-                "-d", serde_json::to_string(&body)?
+                "-d", format!(r#"{{"body":"{}"}}"#, message)
             ], shell::no_env(), shell::no_cwd(), &shell::capture())?;
-            let response = serde_json::from_str::<MergeResult>(&response_text)?;
-            if !response.merged {
-                return escalate!(Box::new(vcs::VCSError {
-                    cause: format!("failed to merge PR {}: {}", url, response.message)
-                }));
-            } else {
-                log::info!("successfully merged PR {}: sha={}", url, response.sha);
+        }            
+        // if options are set, approve first
+        if options.get("approve").unwrap_or(&"true") == &"true" {
+            let api_url = format!(
+                "https://api.github.com/repos/{}/{}/pulls/{}/reviews",
+                user_and_repo.0, user_and_repo.1, pr_num
+            );
+            self.shell.exec(shell::args![
+                "curl", "-sS", "-X", "POST", api_url,
+                "-H", shell::fmtargs!("Authorization: {} {}", auth_type, &token),
+                "-H", "Accept: application/vnd.github.v3+json",
+                "-d", r#"{"event":"APPROVE"}"#
+            ], shell::no_env(), shell::no_cwd(), &shell::capture())?;
+        }
+        // Check if auto_merge option is requested
+        if options.get("auto_merge").unwrap_or(&"false") == &"true" {
+            if self.enable_auto_merge_pr(url, &options)? {
+                log::info!("successfully auto merged PR {}", url);
+                return Ok(()); // auto-merge enabled and not clean status. PR will wait for condition met
             }
+        }
+        let api_url = format!(
+            "https://api.github.com/repos/{}/{}/pulls/{}/merge",
+            user_and_repo.0, user_and_repo.1, pr_num
+        );
+        let default_message = format!("deplo version: {}, commit: {}", 
+            config::DEPLO_VERSION, config::DEPLO_GIT_HASH);
+        let default_commit_title = format!("PR #{} merged by deplo", pr_num);
+        let default_body = hashmap!{
+            "merge_method" => "merge", "commit_title" => &default_commit_title,
+            "commit_message" => default_message.as_str()
+        };
+        let body = merge_hashmap(&default_body, &options);
+        let response_text = self.shell.exec(shell::args![
+            "curl", "-sS", "-X", "PUT", api_url,
+            "-H", shell::fmtargs!("Authorization: {} {}", auth_type, &token),
+            "-H", "Accept: application/vnd.github.v3+json",
+            "-d", serde_json::to_string(&body)?
+        ], shell::no_env(), shell::no_cwd(), &shell::capture())?;
+        let response = serde_json::from_str::<MergeResult>(&response_text)?;
+        if !response.merged {
+            return escalate!(Box::new(vcs::VCSError {
+                cause: format!("failed to merge PR {}: {}", url, response.message)
+            }));
         } else {
-            panic!("vcs is not github: {}", self.config.borrow().vcs);
+            log::info!("successfully merged PR {}: sha={}", url, response.sha);
         }
         Ok(())
     }
@@ -483,34 +512,32 @@ impl<GIT: git::GitFeatures<S>, S: shell::Shell> vcs::VCS for Github<GIT, S> {
         // options has merge_method, commit_message, comit_title, sha
         &self, url: &str, opts: &JsonValue
     ) -> Result<(), Box<dyn Error>> {
-        if let config::vcs::Account::Github{ key, .. } = &self.config.borrow().vcs {
-            let user_and_repo = (self as &dyn vcs::VCS).user_and_repo().unwrap();
-            let pr_num = url.split('/').last().unwrap_or("");
-            let api_url = format!(
-                "https://api.github.com/repos/{}/{}/pulls/{}",
-                user_and_repo.0, user_and_repo.1, pr_num
-            );
-            let optmap_src = json_to_strmap(&opts);
-            let options = optmap_src.iter().map(|(k, v)| (*k, v.as_str())).collect::<HashMap<_, _>>();
-            // if options["message"] is set, use it as comment to pull request, then close it
-            if let Some(message) = options.get("message") {
-                let comment_url = format!("{}/comments", api_url).replace("pulls", "issues");
-                self.shell.exec(shell::args![
-                    "curl", "-sS", "-X", "POST", comment_url,
-                    "-H", shell::fmtargs!("Authorization: token {}", key),
-                    "-H", "Accept: application/vnd.github.v3+json",
-                    "-d", format!(r#"{{"body":"{}"}}"#, message)
-                ], shell::no_env(), shell::no_cwd(), &shell::capture())?;
-            }
+        let config = self.config.borrow();
+        let (token, auth_type) = config.vcs.get_token()?;
+        let user_and_repo = (self as &dyn vcs::VCS).user_and_repo().unwrap();
+        let pr_num = url.split('/').last().unwrap_or("");
+        let api_url = format!(
+            "https://api.github.com/repos/{}/{}/pulls/{}",
+            user_and_repo.0, user_and_repo.1, pr_num
+        );
+        let optmap_src = json_to_strmap(&opts);
+        let options = optmap_src.iter().map(|(k, v)| (*k, v.as_str())).collect::<HashMap<_, _>>();
+        // if options["message"] is set, use it as comment to pull request, then close it
+        if let Some(message) = options.get("message") {
+            let comment_url = format!("{}/comments", api_url).replace("pulls", "issues");
             self.shell.exec(shell::args![
-                "curl", "-sS", "-X", "PATCH", api_url,
-                "-H", shell::fmtargs!("Authorization: token {}", key),
+                "curl", "-sS", "-X", "POST", comment_url,
+                "-H", shell::fmtargs!("Authorization: {} {}", auth_type, &token),
                 "-H", "Accept: application/vnd.github.v3+json",
-                "-d", r#"{"state":"closed"}"#
+                "-d", format!(r#"{{"body":"{}"}}"#, message)
             ], shell::no_env(), shell::no_cwd(), &shell::capture())?;
-        } else {
-            panic!("vcs is not github: {}", self.config.borrow().vcs);
         }
+        self.shell.exec(shell::args![
+            "curl", "-sS", "-X", "PATCH", api_url,
+            "-H", shell::fmtargs!("Authorization: {} {}", auth_type, &token),
+            "-H", "Accept: application/vnd.github.v3+json",
+            "-d", r#"{"state":"closed"}"#
+        ], shell::no_env(), shell::no_cwd(), &shell::capture())?;
         Ok(())
     }
     fn pr_url_from_env(&self) -> Result<Option<String>, Box<dyn Error>> {

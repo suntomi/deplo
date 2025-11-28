@@ -1,6 +1,8 @@
 use std::error::Error;
 use std::collections::HashMap;
 
+use crate::vcs::github::generate_jwt;
+
 #[cfg(feature="git2")]
 use git2::{Repository,RepositoryOpenFlags};
 // I love rust in many way, but I want #if~#else~#endif feature to avoid such useless code.
@@ -58,10 +60,16 @@ pub struct Git<S: shell::Shell = shell::Default> {
     repo: StubRepository,
 }
 
-pub struct RemoteCredential {
-    pub username: config::Value,
-    pub email: config::Value,
-    pub key: config::Value,
+pub enum RemoteCredential {
+    Pat {
+        username: config::Value,
+        email: config::Value,
+        key: config::Value,
+    },
+    App {
+        app_id: config::Value,
+        pkey: config::Value,
+    }
 }
 impl RemoteCredential {
     pub fn authorize<'a>(
@@ -97,11 +105,23 @@ impl RemoteCredential {
         // by regex, base_url contains last /
         authorized.push(shell::args!["-c", format!("http.{}.extraheader=", base_url)]);
         authorized.push(shell::args!["-c"]);
-        authorized.push(shell::args![shell::fmtargs!(
-            "http.{}/.extraheader=AUTHORIZATION: Basic {}", 
-            if target_url.ends_with("/") { &target_url[0..target_url.len()-1] } else { target_url },
-            shell::synthesize_arg!(|v| base64::encode(format!("{}:{}", v[0], v[1])), &self.username, &self.key)
-        )]);
+        match self {
+            Self::Pat { username, key, .. } => {
+                authorized.push(shell::args![shell::fmtargs!(
+                    "http.{}/.extraheader=AUTHORIZATION: Basic {}", 
+                    if target_url.ends_with("/") { &target_url[0..target_url.len()-1] } else { target_url },
+                    shell::synthesize_arg!(|v| base64::encode(format!("{}:{}", v[0], v[1])), username, key)
+                )]);
+            },
+            Self::App { app_id, pkey } => {
+                let token = generate_jwt(&app_id.resolve(), &pkey.resolve())?;
+                authorized.push(shell::args![shell::fmtargs!(
+                    "http.{}/.extraheader=AUTHORIZATION: Bearer {}", 
+                    if target_url.ends_with("/") { &target_url[0..target_url.len()-1] } else { target_url },
+                    token
+                )]);
+            }
+        };
         authorized.push(
             command.iter().enumerate()
                 .filter(|(idx, _)| *idx > 0)
@@ -113,7 +133,8 @@ impl RemoteCredential {
 }
 
 pub trait GitFeatures<S: shell::Shell> {
-    fn new(username: &config::Value, email: &config::Value, key: &config::Value, shell: S) -> Self;
+    fn from_pat(username: &config::Value, email: &config::Value, key: &config::Value, shell: S) -> Self;
+    fn from_app(app_id: &config::Value, pkey: &config::Value, shell: S) -> Self;
     fn current_ref(&self) -> Result<(vcs::RefType, String), Box<dyn Error>>;
     fn delete_branch(&self, remote_url: &str, ref_type: vcs::RefType, ref_path: &str) -> Result<(), Box<dyn Error>>;
     fn fetch_branch(&self, remote_url: &str, branch_name: &str) -> Result<(), Box<dyn Error>>;
@@ -142,11 +163,19 @@ pub trait GitFeatures<S: shell::Shell> {
 
 impl<S: shell::Shell> Git<S> {
     fn commit_env<'a>(&'a self) -> HashMap<String, shell::Arg<'a>> {
-        hashmap!{
-            "GIT_COMMITTER_NAME".to_string() => self.credential.username.to_arg(),
-            "GIT_AUTHOR_NAME".to_string() => self.credential.username.to_arg(),
-            "GIT_COMMITTER_EMAIL".to_string() => self.credential.email.to_arg(),
-            "GIT_AUTHOR_EMAIL".to_string() => self.credential.email.to_arg(),
+        match self.credential {
+            RemoteCredential::Pat { ref username, ref email, .. } => hashmap!{
+                "GIT_COMMITTER_NAME".to_string() => username.to_arg(),
+                "GIT_AUTHOR_NAME".to_string() => username.to_arg(),
+                "GIT_COMMITTER_EMAIL".to_string() => email.to_arg(),
+                "GIT_AUTHOR_EMAIL".to_string() => email.to_arg(),
+            },
+            RemoteCredential::App { ref app_id, .. } => hashmap!{
+                "GIT_COMMITTER_NAME".to_string() => shell::arg!(format!("github-app-{}[bot]", app_id.resolve())),
+                "GIT_AUTHOR_NAME".to_string() => shell::arg!(format!("github-app-{}[bot]", app_id.resolve())),
+                "GIT_COMMITTER_EMAIL".to_string() => shell::arg!(format!("github-app-{}@github.com", app_id.resolve())),
+                "GIT_AUTHOR_EMAIL".to_string() => shell::arg!(format!("github-app-{}@github.com", app_id.resolve())),
+            }
         }
     }
     fn parse_ref_path(&self, ref_path: &str) -> Result<(vcs::RefType, String), Box<dyn Error>> {
@@ -171,11 +200,11 @@ impl<S: shell::Shell> Git<S> {
 }
 
 impl<S: shell::Shell> GitFeatures<S> for Git<S> {
-    fn new(username: &config::Value, email: &config::Value, key: &config::Value, shell: S) -> Git<S> {
+    fn from_pat(username: &config::Value, email: &config::Value, key: &config::Value, shell: S) -> Git<S> {
         #[cfg(feature="git2")]
         let cwd = std::env::current_dir().unwrap();
         return Git::<S> {
-            credential: RemoteCredential {
+            credential: RemoteCredential::Pat {
                 username: username.clone(), email: email.clone(), key: key.clone()
             },
             shell,
@@ -192,6 +221,27 @@ impl<S: shell::Shell> GitFeatures<S> for Git<S> {
             repo: StubRepository {},
         }
     }
+    fn from_app(app_id: &config::Value, pkey: &config::Value, shell: S) -> Git<S> {
+        #[cfg(feature="git2")]
+        let cwd = std::env::current_dir().unwrap();
+        return Git::<S> {
+            credential: RemoteCredential::App {
+                app_id: app_id.clone(), pkey: pkey.clone()
+            },
+            shell,
+            #[cfg(feature="git2")]
+            repo: Repository::open_ext(
+                match config.borrow().runtime.workdir {
+                    Some(ref v) => std::path::Path::new(v),
+                    None => cwd.as_path()
+                },
+                RepositoryOpenFlags::empty(), 
+                &[std::env::var("HOME").unwrap()]
+            ).unwrap(),
+            #[cfg(not(feature="git2"))]
+            repo: StubRepository {},
+        }
+    }    
     fn current_ref(&self) -> Result<(vcs::RefType, String), Box<dyn Error>> {
         match self.shell.output_of(shell::args!(
             "git", "describe" , "--all"
@@ -429,7 +479,7 @@ mod tests {
     #[test]
     fn parse_ref_path_test() {
         let config = config::Config::with(None).unwrap();
-        let git = Git::<shell::Default>::new(
+        let git = Git::<shell::Default>::from_pat(
             &config::value::Value::new("umegaya"),
             &config::value::Value::new("mail@address.com"),
             &config::value::Value::new("key"),
