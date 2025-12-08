@@ -564,6 +564,12 @@ pub struct Job {
     pub tasks: Option<HashMap<String, config::Value>>,
 }
 impl Job {
+    pub fn is_enabled_for_account(&self, account_name: &str) -> bool {
+        match &self.account {
+            Some(a) => a.resolve() == account_name,
+            None => account_name == "default"
+        }
+    }
     pub fn runner_os(&self) -> RunnerOS {
         match &self.runner {
             Runner::Machine{ os, .. } => *os,

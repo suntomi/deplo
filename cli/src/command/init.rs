@@ -29,7 +29,8 @@ impl<S: shell::Shell, A: args::Args> command::Command<A> for Init<S> {
         let data_path = path_join(vec![config.deplo_data_path()?.to_str().unwrap(), "..", "deplow"]);
         rm(&data_path);
         config.generate_wrapper_script(&self.shell, &data_path)?;
-        for (_, v) in config.modules.ci() {
+        for (k, v) in config.modules.ci() {
+            log::debug!("generating ci config for account [{}]", k);
             v.generate_config(reinit == "all" || reinit == "ci")?;
         }
         return Ok(())

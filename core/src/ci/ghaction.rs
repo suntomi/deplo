@@ -410,22 +410,22 @@ impl<S: shell::Shell> GhAction<S> {
         }
         results
     }
-    fn generate_outputs(&self, jobs: &HashMap<String, config::job::Job>) -> Vec<String> {
+    fn generate_outputs(&self, jobs: &HashMap<&String, &config::job::Job>) -> Vec<String> {
         sorted_key_iter(jobs).map(|(v,_)| {
             format!("{name}: ${{{{ steps.deplo-main.outputs.{name} }}}}", name = v)
         }).collect()
     }
-    fn generate_halt_exec_conditions<'a>(&self, jobs: &HashMap<String, config::job::Job>) -> String {
+    fn generate_halt_exec_conditions<'a>(&self, jobs: &HashMap<&String, &config::job::Job>) -> String {
         sorted_key_iter(jobs).map(|(v,_)| {
             format!("needs.{name}.outputs.need-cleanup", name = v)
         }).collect::<Vec<String>>().join(" || ")
     }
-    fn generate_failure_conditions<'a>(&self, jobs: &HashMap<String, config::job::Job>) -> String {
+    fn generate_failure_conditions<'a>(&self, jobs: &HashMap<&String, &config::job::Job>) -> String {
         sorted_key_iter(jobs).map(|(v,_)| {
             format!("needs.{name}.result == 'failure'", name = v)
         }).collect::<Vec<String>>().join(" || ")
     }
-    fn generate_cleanup_envs<'a>(&self, jobs: &HashMap<String, config::job::Job>) -> Vec<String> {
+    fn generate_cleanup_envs<'a>(&self, jobs: &HashMap<&String, &config::job::Job>) -> Vec<String> {
         let envs = sorted_key_iter(jobs).map(|(v,_)| {
             format!("{env_name}: ${{{{ needs.{job_name}.outputs.system }}}}",
                 env_name = ci::OutputKind::System.env_name_for_job(&v),
@@ -788,9 +788,23 @@ impl<S: shell::Shell> ci::CI for GhAction<S> {
         let account = config.ci.get(&self.account_name).expect(&format!(
             "CI account {} should exist", self.account_name
         ));
+        let jobs = config.jobs.as_map().iter().filter(
+            |(_,v)| v.is_enabled_for_account(&self.account_name)
+        ).collect::<HashMap<_,_>>();
+        if jobs.len() == 0 {
+            log::info!(
+                "no jobs defined for the account {}. skip ghaction config generation", 
+                self.account_name);
+            return Ok(());
+        }
+        let config_post_fix = match self.account_name.as_str() {
+            "default" => "".to_string(),
+            _ => format!("-{}", self.account_name)
+        };
         let repository_root = config.modules.vcs().repository_root()?;
         // TODO_PATH: use Path to generate path of /.github/...
-        let main_workflow_yml_path = format!("{}/.github/workflows/deplo-main.yml", repository_root);
+        let main_workflow_yml_path = format!(
+            "{}/.github/workflows/deplo-main{}.yml", repository_root, config_post_fix);
         let create_main = config.ci.is_main(vec!["GhAction", "GhActionApp"]);
         fs::create_dir_all(&format!("{}/.github/workflows", repository_root))?;
         let previously_no_file = !rm(&main_workflow_yml_path);
@@ -815,9 +829,8 @@ impl<S: shell::Shell> ci::CI for GhAction<S> {
         let mut job_descs = Vec::new();
         let mut all_job_names = vec!["deplo-main".to_string()];
         let mut lfs = false;
-        let jobs = config.jobs.as_map();
         for (name, job) in sorted_key_iter(&jobs) {
-            all_job_names.push(name.clone());
+            all_job_names.push(name.to_string());
             let lines = format!(
                 include_str!("../../res/ci/ghaction/job.yml.tmpl"), 
                 name = name,
@@ -899,7 +912,7 @@ impl<S: shell::Shell> ci::CI for GhAction<S> {
         }
         let entrypoints = self.generate_entrypoints(&config);
         for (name, entrypoint) in entrypoints {
-            let workflow_yml_path = format!("{}/.github/workflows/deplo-{}.yml", repository_root, name);
+            let workflow_yml_path = format!("{}/.github/workflows/deplo-{}{}.yml", repository_root, name, config_post_fix);
             fs::write(&workflow_yml_path,
                 format!(
                     include_str!("../../res/ci/ghaction/main.yml.tmpl"), 
@@ -914,7 +927,7 @@ impl<S: shell::Shell> ci::CI for GhAction<S> {
                     },
                     secrets = MultilineFormatString{ strings: &secrets, postfix: None },
                     outputs = MultilineFormatString{ 
-                        strings: &self.generate_outputs(jobs),
+                        strings: &self.generate_outputs(&jobs),
                         postfix: None
                     },
                     fetchcli = MultilineFormatString{
@@ -935,8 +948,8 @@ impl<S: shell::Shell> ci::CI for GhAction<S> {
                         })),
                         postfix: None
                     },
-                    halt_exec_condition = self.generate_halt_exec_conditions(jobs),
-                    failure_condition = self.generate_failure_conditions(jobs),
+                    halt_exec_condition = self.generate_halt_exec_conditions(&jobs),
+                    failure_condition = self.generate_failure_conditions(&jobs),
                     jobs = MultilineFormatString{
                         strings: &job_descs,
                         postfix: None
@@ -946,7 +959,7 @@ impl<S: shell::Shell> ci::CI for GhAction<S> {
                         postfix: None
                     },
                     cleanup_envs = MultilineFormatString{
-                        strings: &self.generate_cleanup_envs(jobs),
+                        strings: &self.generate_cleanup_envs(&jobs),
                         postfix: None
                     },
                     needs = format!("\"{}\"", all_job_names.join("\",\""))
