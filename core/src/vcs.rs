@@ -37,7 +37,7 @@ impl fmt::Display for RefType {
 
 pub trait VCS {
     fn new(config: &config::Container) -> Result<Self, Box<dyn Error>> where Self : Sized;
-    fn get_token(&self) -> Result<Value, Box<dyn Error>>;
+    fn get_token(&self) -> Result<(Value, &str), Box<dyn Error>>;
     fn release_target(&self) -> Option<String>;
     fn current_ref(&self) -> Result<(RefType, String), Box<dyn Error>>;
     fn delete_branch(&self, ref_type: RefType, ref_path: &str) -> Result<(), Box<dyn Error>>;

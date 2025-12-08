@@ -1,7 +1,7 @@
 use std::error::Error;
 use std::collections::HashMap;
 
-use crate::vcs::github::generate_jwt;
+use crate::vcs::github::AppTokenGenerator;
 
 #[cfg(feature="git2")]
 use git2::{Repository,RepositoryOpenFlags};
@@ -52,7 +52,7 @@ macro_rules! setup_remote {
 }
 
 pub struct Git<S: shell::Shell = shell::Default> {
-    credential: RemoteCredential,
+    credential: RemoteCredential<S>,
     shell: S,
     #[cfg(feature="git2")]
     repo: Repository,
@@ -60,18 +60,17 @@ pub struct Git<S: shell::Shell = shell::Default> {
     repo: StubRepository,
 }
 
-pub enum RemoteCredential {
+pub enum RemoteCredential<S: shell::Shell = shell::Default> {
     Pat {
         username: config::Value,
         email: config::Value,
         key: config::Value,
     },
     App {
-        app_id: config::Value,
-        pkey: config::Value,
+        app_token_generator: AppTokenGenerator<S>,
     }
 }
-impl RemoteCredential {
+impl<S: shell::Shell> RemoteCredential<S> {
     pub fn authorize<'a>(
         &'a self, command: Vec<&'a str>, target_url: &'a str
     ) -> Result<Vec<shell::Arg<'a>>, Box<dyn Error>> {
@@ -113,8 +112,8 @@ impl RemoteCredential {
                     shell::synthesize_arg!(|v| base64::encode(format!("{}:{}", v[0], v[1])), username, key)
                 )]);
             },
-            Self::App { app_id, pkey } => {
-                let token = generate_jwt(&app_id.resolve(), &pkey.resolve())?;
+            Self::App { app_token_generator } => {
+                let token = app_token_generator.generate()?;
                 authorized.push(shell::args![shell::fmtargs!(
                     "http.{}/.extraheader=AUTHORIZATION: Bearer {}", 
                     if target_url.ends_with("/") { &target_url[0..target_url.len()-1] } else { target_url },
@@ -134,7 +133,8 @@ impl RemoteCredential {
 
 pub trait GitFeatures<S: shell::Shell> {
     fn from_pat(username: &config::Value, email: &config::Value, key: &config::Value, shell: S) -> Self;
-    fn from_app(app_id: &config::Value, pkey: &config::Value, shell: S) -> Self;
+    fn from_app(app_token_generator: AppTokenGenerator<S>, shell: S) -> Self;
+    fn user_and_repo(&self) -> Result<(String, String), Box<dyn Error>>;
     fn current_ref(&self) -> Result<(vcs::RefType, String), Box<dyn Error>>;
     fn delete_branch(&self, remote_url: &str, ref_type: vcs::RefType, ref_path: &str) -> Result<(), Box<dyn Error>>;
     fn fetch_branch(&self, remote_url: &str, branch_name: &str) -> Result<(), Box<dyn Error>>;
@@ -170,11 +170,11 @@ impl<S: shell::Shell> Git<S> {
                 "GIT_COMMITTER_EMAIL".to_string() => email.to_arg(),
                 "GIT_AUTHOR_EMAIL".to_string() => email.to_arg(),
             },
-            RemoteCredential::App { ref app_id, .. } => hashmap!{
-                "GIT_COMMITTER_NAME".to_string() => shell::arg!(format!("github-app-{}[bot]", app_id.resolve())),
-                "GIT_AUTHOR_NAME".to_string() => shell::arg!(format!("github-app-{}[bot]", app_id.resolve())),
-                "GIT_COMMITTER_EMAIL".to_string() => shell::arg!(format!("github-app-{}@github.com", app_id.resolve())),
-                "GIT_AUTHOR_EMAIL".to_string() => shell::arg!(format!("github-app-{}@github.com", app_id.resolve())),
+            RemoteCredential::App { ref app_token_generator, .. } => hashmap!{
+                "GIT_COMMITTER_NAME".to_string() => shell::arg!(format!("github-app-{}[bot]", app_token_generator.app_id())),
+                "GIT_AUTHOR_NAME".to_string() => shell::arg!(format!("github-app-{}[bot]", app_token_generator.app_id())),
+                "GIT_COMMITTER_EMAIL".to_string() => shell::arg!(format!("github-app-{}@github.com", app_token_generator.app_id())),
+                "GIT_AUTHOR_EMAIL".to_string() => shell::arg!(format!("github-app-{}@github.com", app_token_generator.app_id())),
             }
         }
     }
@@ -199,8 +199,11 @@ impl<S: shell::Shell> Git<S> {
     }
 }
 
-impl<S: shell::Shell> GitFeatures<S> for Git<S> {
-    fn from_pat(username: &config::Value, email: &config::Value, key: &config::Value, shell: S) -> Git<S> {
+impl<'a, S: shell::Shell> GitFeatures<S> for Git<S> {
+    fn from_pat(
+        username: &config::Value, email: &config::Value, key: &config::Value,
+        shell: S
+    ) -> Git<S> {
         #[cfg(feature="git2")]
         let cwd = std::env::current_dir().unwrap();
         return Git::<S> {
@@ -221,12 +224,15 @@ impl<S: shell::Shell> GitFeatures<S> for Git<S> {
             repo: StubRepository {},
         }
     }
-    fn from_app(app_id: &config::Value, pkey: &config::Value, shell: S) -> Git<S> {
+    fn from_app(
+        app_token_generator: AppTokenGenerator<S>,
+        shell: S
+    ) -> Git<S> {
         #[cfg(feature="git2")]
         let cwd = std::env::current_dir().unwrap();
         return Git::<S> {
             credential: RemoteCredential::App {
-                app_id: app_id.clone(), pkey: pkey.clone()
+                app_token_generator: app_token_generator,
             },
             shell,
             #[cfg(feature="git2")]
@@ -241,7 +247,21 @@ impl<S: shell::Shell> GitFeatures<S> for Git<S> {
             #[cfg(not(feature="git2"))]
             repo: StubRepository {},
         }
-    }    
+    }
+    fn user_and_repo(&self) -> Result<(String, String), Box<dyn Error>> {
+        let remote_url = self.remote_url(None)?;
+        let re = regex::Regex::new(r"[^:]+[:/]([^/\.]+)/([^/\.]+)").unwrap();
+        let user_and_repo = match re.captures(&remote_url) {
+            Some(c) => (
+                c.get(1).map_or("".to_string(), |m| m.as_str().to_string()), 
+                c.get(2).map_or("".to_string(), |m| m.as_str().to_string())
+            ),
+            None => return escalate!(Box::new(vcs::VCSError {
+                cause: format!("invalid remote origin url: {}", remote_url)
+            }))
+        };
+        Ok(user_and_repo)
+    }
     fn current_ref(&self) -> Result<(vcs::RefType, String), Box<dyn Error>> {
         match self.shell.output_of(shell::args!(
             "git", "describe" , "--all"
@@ -375,8 +395,9 @@ impl<S: shell::Shell> GitFeatures<S> for Git<S> {
                 shell::args!["git", "lfs", "fetch"], shell::no_env(), shell::no_cwd(), &shell::no_capture()
             )?;
             self.shell.exec(
-                self.credential.authorize(vec!["git", "lfs", "push", remote_url], remote_url)?,
-                self.commit_env(), shell::no_cwd(), &shell::no_capture()
+                self.credential.authorize(
+                    vec!["git", "lfs", "push", remote_url], remote_url
+                )?, self.commit_env(), shell::no_cwd(), &shell::no_capture()
             )?;
         }
         self.shell.exec(self.credential.authorize(vec![
@@ -429,8 +450,9 @@ impl<S: shell::Shell> GitFeatures<S> for Git<S> {
 			log::debug!("commit done: [{}]", msg);
 			if explicit_lfs {
                 self.shell.exec(
-                    self.credential.authorize(vec!["git", "lfs", "push", &remote_url], &remote_url)?,
-                    self.commit_env(), shell::no_cwd(), &shell::no_capture()
+                    self.credential.authorize(
+                        vec!["git", "lfs", "push", &remote_url], &remote_url
+                    )?, self.commit_env(), shell::no_cwd(), &shell::no_capture()
                 )?;
             }
             self.shell.exec(self.credential.authorize(vec![

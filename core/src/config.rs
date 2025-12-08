@@ -57,11 +57,11 @@ pub struct Modules {
     /// ci/vcs modules.
     /// all implementation of ci/vcs contained in deplo itself.
     /// TODO: after module system get stable, move these implementation out of deplo
-    ci: HashMap<String, Box<dyn crate::ci::CI>>,
-    vcs: Option<Box<dyn crate::vcs::VCS>>,
+    pub ci: HashMap<String, Box<dyn crate::ci::CI>>,
+    pub vcs: Option<Box<dyn crate::vcs::VCS>>,
     /// step/workflow modules. these implementation already move to module system
-    steps: HashMap<String, Box<dyn crate::step::Step>>,
-    workflows: HashMap<String, Box<dyn crate::workflow::Workflow>>,
+    pub steps: HashMap<String, Box<dyn crate::step::Step>>,
+    pub workflows: HashMap<String, Box<dyn crate::workflow::Workflow>>,
     /// module repository
     repos: Option<ModuleRepository>,
 }

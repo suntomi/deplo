@@ -26,7 +26,7 @@ use crate::util::{
     randombytes_as_string,
     escape
 };
-use crate::vcs::github::generate_jwt;
+use crate::vcs::github::AppTokenGenerator;
 
 lazy_static! {
     pub static ref DEPLO_GHACTION_MODULE_VERSIONS: HashMap<String, String> = hashmap! {
@@ -187,6 +187,7 @@ pub struct GhAction<S: shell::Shell = shell::Default> {
     pub config: config::Container,
     pub account_name: String,
     pub shell: S,
+    pub app_token_generator: Option<AppTokenGenerator<S>>
 }
 
 lazy_static! {
@@ -196,9 +197,9 @@ lazy_static! {
 }
 impl<S: shell::Shell> GhAction<S> {
     fn set_secret_base(&self, key: &str, value: &str, path: &str) -> Result<(), Box<dyn Error>> {
-        let (token, auth_type) = self.get_token()?;
         let config = self.config.borrow();
         let user_and_repo = config.modules.vcs().user_and_repo()?;
+        let (token, auth_type) = self.get_token()?;
         let pkey_response = &self.shell.exec(shell::args![
                 "curl", format!(
                     "https://api.github.com/repos/{}/{}/{}/secrets/public-key",
@@ -686,12 +687,8 @@ impl<S: shell::Shell> GhAction<S> {
         let config = self.config.borrow();
         Ok(match config.ci.get(&self.account_name).unwrap() {
             config::ci::Account::GhAction { key, .. } => (key.clone(), "token"),
-            config::ci::Account::GhActionApp { app_id_secret_name, pkey_secret_name } => {
-                let app_id = config::secret::var(&app_id_secret_name.resolve())
-                    .expect(&format!("app_id secret name {} should set", app_id_secret_name.resolve()));
-                let pkey = config::secret::var(&pkey_secret_name.resolve())
-                    .expect(&format!("pkey secret name {} should set", pkey_secret_name.resolve()));
-                (config::Value::new(&generate_jwt(&app_id, &pkey)?), "Bearer")
+            config::ci::Account::GhActionApp { .. } => {
+                (config::Value::new(&self.app_token_generator.as_ref().unwrap().generate()?), "Bearer")
             },
             _ => return escalate!(Box::new(ci::CIError {
                 cause: "should have ghaction CI config but other config provided".to_string()
@@ -723,7 +720,18 @@ impl<S: shell::Shell> ci::CI for GhAction<S> {
         return Ok(GhAction::<S> {
             config: config.clone(),
             account_name: account_name.to_string(),
-            shell: S::new(config)
+            shell: S::new(config),
+            app_token_generator: match config.borrow().vcs {
+                config::vcs::Account::Github{..} => None,
+                config::vcs::Account::GithubApp{ref app_id, ref pkey} => {
+                    Some(AppTokenGenerator::<S>::new(
+                        S::new(config),
+                        app_id.clone(), pkey.clone(),
+                        config.borrow().modules.vcs.as_ref().unwrap().user_and_repo()?
+                    ))
+                },
+                _ => panic!("DEPLO_GHACTION_EVENT_DATA should set") 
+            }
         });
     }
     fn runs_on_service(&self) -> bool {
@@ -1141,8 +1149,8 @@ impl<S: shell::Shell> ci::CI for GhAction<S> {
     }
     fn run_job(&self, job_config: &config::runtime::Workflow) -> Result<String, Box<dyn Error>> {
         let config = self.config.borrow();
-        let (token, auth_type) = self.get_token()?;
         let user_and_repo = config.modules.vcs().user_and_repo()?;
+        let (token, auth_type) = self.get_token()?;
         let payload = ClientPayload::new(job_config);
         let mut inputs = hashmap!{
             "id" => payload.job_id.clone(),
@@ -1234,8 +1242,8 @@ impl<S: shell::Shell> ci::CI for GhAction<S> {
     }
     fn check_job_finished(&self, job_id: &str) -> Result<Option<String>, Box<dyn Error>> {
         let config = self.config.borrow();
-        let (token, auth_type) = self.get_token()?;
         let user_and_repo = config.modules.vcs().user_and_repo()?;
+        let (token, auth_type) = self.get_token()?;
         let response = self.shell.exec(shell::args![
             "curl", "-H", shell::fmtargs!("Authorization: {} {}", auth_type, &token),
             "-H", "Accept: application/vnd.github.v3+json",
@@ -1411,9 +1419,9 @@ impl<S: shell::Shell> ci::CI for GhAction<S> {
         )
     }
     fn list_secret_name(&self) -> Result<Vec<String>, Box<dyn Error>> {
-        let (token, auth_type) = self.get_token()?;
         let config = self.config.borrow();
         let user_and_repo = config.modules.vcs().user_and_repo()?;
+        let (token, auth_type) = self.get_token()?;
         let response = match serde_json::from_str::<RepositorySecretsResponse>(
             &self.shell.exec(shell::args![
             "curl", format!(
@@ -1441,9 +1449,9 @@ impl<S: shell::Shell> ci::CI for GhAction<S> {
         Ok(())
     }
     fn set_var(&self, key: &str, value: &str) -> Result<(), Box<dyn Error>> {
-        let (token, auth_type) = self.get_token()?;
         let config = self.config.borrow();
         let user_and_repo = config.modules.vcs().user_and_repo()?;
+        let (token, auth_type) = self.get_token()?;
         let json = format!("{{\"name\":\"{}\",\"value\":\"{}\"}}", 
             key, escape(value)
         );

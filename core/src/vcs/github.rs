@@ -4,7 +4,10 @@ use std::collections::HashMap;
 use std::path::Path;
 use std::result::Result;
 use std::time::{SystemTime, UNIX_EPOCH};
+use std::rc::Rc;
+use std::cell::{RefCell};
 
+use chrono::{DateTime, Utc};
 use glob::Pattern;
 use maplit::hashmap;
 use regex;
@@ -15,7 +18,7 @@ use jsonwebtoken::{encode, Header, EncodingKey, Algorithm};
 
 use crate::config;
 use crate::util::merge_hashmap;
-use crate::vcs;
+use crate::vcs::{self, VCS};
 use crate::shell;
 use crate::util::{escalate,make_escalation,jsonpath,str_to_json,json_to_strmap};
 use crate::config::value::Value;
@@ -29,20 +32,109 @@ struct Claims {
     iss: String, // App ID
 }
 
-pub fn generate_jwt(app_id: &str, private_key: &str) -> Result<String, Box<dyn Error>> {
-    let now = SystemTime::now().duration_since(UNIX_EPOCH)?.as_secs();
-    
-    let claims = Claims {
-        iat: now - 60,  // 60秒前（時刻のずれ対策）
-        exp: now + 600, // 10分後（最大値）
-        iss: app_id.to_string(),
-    };
-    
-    let key = EncodingKey::from_rsa_pem(private_key.as_bytes())?;
-    let token = encode(&Header::new(Algorithm::RS256), &claims, &key)?;
-    
-    Ok(token)
+struct AppTokenGeneratorInner<S: shell::Shell> {
+    app_id: config::Value,
+    private_key: config::Value,
+    shell: S,
+    user_and_repo: (String, String),
+    token: config::Value,
+    token_expires_at: SystemTime,
 }
+#[derive(Clone)]
+pub struct AppTokenGenerator<S: shell::Shell> {
+    inner: Rc<RefCell<AppTokenGeneratorInner<S>>>,
+}
+impl<S: shell::Shell> AppTokenGenerator<S> {
+    pub fn new(
+        shell: S, app_id: config::Value, private_key: config::Value,
+        user_and_repo: (String, String)
+    ) -> Self {
+        AppTokenGenerator {
+            inner: Rc::new(RefCell::new(AppTokenGeneratorInner {
+                app_id,
+                private_key,
+                shell,
+                user_and_repo,
+                token: config::Value::new(""),
+                token_expires_at: UNIX_EPOCH,
+            }))
+        }
+    }
+    pub fn generate(&self) -> Result<String, Box<dyn Error>> {
+        self.inner.borrow_mut().generate()
+    }
+    pub fn app_id(&self) -> String {
+        self.inner.borrow().app_id.resolve()
+    }
+}
+impl<S: shell::Shell> AppTokenGeneratorInner<S> {
+    fn generate(&mut self) -> Result<String, Box<dyn Error>> {
+        if self.token_expires_at > SystemTime::now() {
+            return Ok(self.token.resolve());
+        }
+        let (token, token_expires_at) = Self::generate_installation_token(
+            &self.shell,
+            &self.app_id.resolve(),
+            &self.private_key.resolve(),
+            &self.user_and_repo
+        )?;
+        self.token = config::Value::new(&token);
+        self.token_expires_at = DateTime::parse_from_rfc3339(&token_expires_at)?
+            .with_timezone(&Utc).into();
+        Ok(self.token.resolve())
+    }
+    fn generate_jwt(app_id: &str, private_key: &str) -> Result<String, Box<dyn Error>> {
+        let now = SystemTime::now().duration_since(UNIX_EPOCH)?.as_secs();
+        
+        let claims = Claims {
+            iat: now - 60,  // 60秒前（時刻のずれ対策）
+            exp: now + 600, // 10分後（最大値）
+            iss: app_id.to_string(),
+        };
+        
+        let key = EncodingKey::from_rsa_pem(private_key.as_bytes())?;
+        let token = encode(&Header::new(Algorithm::RS256), &claims, &key)?;
+        
+        Ok(token)
+    }
+
+    fn get_installation_id(
+        shell: &impl shell::Shell, jwt: &str, user_and_repo: &(String, String)
+    ) -> Result<String, Box<dyn Error>> {
+        let response = shell.exec(shell::args![
+            "curl", "-sS", "-H", shell::fmtargs!("Authorization: Bearer {}", jwt),
+            "-H", "Accept: application/vnd.github.v3+json",
+            format!("https://api.github.com/repos/{}/{}/installation", user_and_repo.0, user_and_repo.1)
+        ], shell::no_env(), shell::no_cwd(), &shell::capture())?;
+        let installation_id = jsonpath(&response, "$.id")
+            .expect(&format!("malform installation id response: {:?}", &response))
+            .expect(&format!("no installation id in response: {:?}", &response));
+        Ok(installation_id)
+    }
+
+    fn generate_installation_token(
+        shell: &impl shell::Shell, app_id: &str, private_key: &str, user_and_repo: &(String, String)
+    ) -> Result<(String, String), Box<dyn Error>> {
+        let jwt = Self::generate_jwt(app_id, private_key)?;
+        let installation_id = Self::get_installation_id(shell, &jwt, user_and_repo)?;
+        let response = shell.exec(shell::args![
+            "curl", "-sS", "-X", "POST", format!(
+                "https://api.github.com/app/installations/{}/access_tokens",
+                installation_id
+            ),
+            "-H", shell::fmtargs!("Authorization: Bearer {}", jwt),
+            "-H", "Accept: application/vnd.github.v3+json"
+        ], shell::no_env(), shell::no_cwd(), &shell::capture())?;
+        let token = jsonpath(&response, "$.token")
+            .expect(&format!("malform installation token response: {:?}", &response))
+            .expect(&format!("no token in response: {:?}", &response));
+        let token_expires_at = jsonpath(&response, "$.expires_at")
+            .expect(&format!("malform installation token response: {:?}", &response))
+            .expect(&format!("no expires_at in response: {:?}", &response));
+        Ok((token, token_expires_at))
+    }
+}
+
 
 #[derive(Serialize, Deserialize)]
 struct MergeResult {
@@ -55,6 +147,7 @@ pub struct Github<GIT: git::GitFeatures<S> = git::Git, S: shell::Shell = shell::
     pub config: config::Container,
     pub git: GIT,
     pub shell: S,
+    pub app_token_generator: Option<AppTokenGenerator<S>>,
     pub diff: Vec<String>
 }
 
@@ -151,9 +244,8 @@ impl<GIT: git::GitFeatures<S>, S: shell::Shell> Github<GIT, S> {
                 cause: format!("release only can create with tag but branch given: {}", target_ref.0)
             }));
         }
-        let config = self.config.borrow();
-        let (token, auth_type) = config.vcs.get_token()?;
-        let user_and_repo = (self as &dyn vcs::VCS).user_and_repo()?;
+        let user_and_repo = self.user_and_repo()?;
+        let (token, auth_type) = (self as &dyn vcs::VCS).get_token()?;
         let response = self.shell.exec(shell::args![
             "curl", "--fail", "-sS", format!(
                 "https://api.github.com/repos/{}/{}/releases/tags/{}",
@@ -207,8 +299,7 @@ impl<GIT: git::GitFeatures<S>, S: shell::Shell> Github<GIT, S> {
         format!("https://github.com/{}/{}/{}", user_and_repo.0, user_and_repo.1, ref_name)
     }
     fn pr_data_from_ref_path(&self, ref_path: &str, json_path: &str) ->Result<String, Box<dyn Error>> {
-        let config = self.config.borrow();
-        let (token, auth_type) = config.vcs.get_token()?;
+        let (token, auth_type) = (self as &dyn vcs::VCS).get_token()?;
         let pr_url = self.url_from_pull_ref(ref_path);
         let api_url = format!(
             "https://api.github.com/repos/{pr_part}",
@@ -231,14 +322,25 @@ impl<GIT: git::GitFeatures<S>, S: shell::Shell> vcs::VCS for Github<GIT, S> {
                 config: config.clone(),
                 diff: vec!(),
                 shell: S::new(config),
-                git: GIT::from_pat(&account, &email, &key, S::new(config))
+                app_token_generator: None,
+                git: GIT::from_pat(&account, &email, &key,S::new(config))
             });
         } else if let config::vcs::Account::GithubApp{ app_id, pkey } = &config.borrow().vcs {
+            let app_token_generator = AppTokenGenerator::<S>::new(
+                S::new(config), app_id.clone(), pkey.clone(),
+                ("".to_string(), "".to_string())
+            );
+            let git = GIT::from_app(
+                AppTokenGenerator { inner: app_token_generator.inner.clone() },
+                S::new(config)
+            );
+            app_token_generator.inner.borrow_mut().user_and_repo = git.user_and_repo()?;
             return Ok(Github {
                 config: config.clone(),
                 diff: vec!(),
                 shell: S::new(config),
-                git: GIT::from_app(&app_id, &pkey, S::new(config))
+                app_token_generator: Some(app_token_generator),
+                git: git
             });
         } else {
             return Err(Box::new(vcs::VCSError {
@@ -246,15 +348,16 @@ impl<GIT: git::GitFeatures<S>, S: shell::Shell> vcs::VCS for Github<GIT, S> {
             }))
         }
     }
-    fn get_token(&self) -> Result<Value, Box<dyn Error>> {
+    fn get_token(&self) -> Result<(Value, &str), Box<dyn Error>> {
+        let config = self.config.borrow();
         if let config::vcs::Account::Github{ key, .. } = &self.config.borrow().vcs {
-            Ok(key.clone())
-        } else if let config::vcs::Account::GithubApp{ app_id, pkey } = &self.config.borrow().vcs {
-            Ok(Value::new(&generate_jwt(&app_id.resolve(), &pkey.resolve())?))
+            Ok((key.clone(), "token"))
+        } else if let config::vcs::Account::GithubApp{ .. } = &self.config.borrow().vcs {
+            Ok((Value::new(&self.app_token_generator.as_ref().unwrap().generate()?), "Bearer"))
         } else {
             return Err(Box::new(vcs::VCSError {
-                cause: format!("vcs is not for github: {}", self.config.borrow().vcs)
-            }));
+                cause: format!("should have github config but {}", config.vcs)
+            }))
         }
     }
     fn release_target(&self) -> Option<String> {        
@@ -279,9 +382,8 @@ impl<GIT: git::GitFeatures<S>, S: shell::Shell> vcs::VCS for Github<GIT, S> {
         let response = match self.get_release(target_ref) {
             Ok(v) => v,
             Err(_) => {
-                let config = self.config.borrow();
-                let (token, auth_type) = config.vcs.get_token()?;
                 let user_and_repo = self.user_and_repo()?;
+                let (token, auth_type) = self.get_token()?;
                 // create release
                 let mut options = match opts.as_object() {
                     Some(v) => v.clone(),
@@ -318,8 +420,7 @@ impl<GIT: git::GitFeatures<S>, S: shell::Shell> vcs::VCS for Github<GIT, S> {
             None => Path::new(asset_file_path).file_name().unwrap().to_str().unwrap().to_string()
         };
         let upload_url = format!("{}?name={}", upload_url_base, asset_name);
-        let config = self.config.borrow();
-        let (token, auth_type) = config.vcs.get_token()?;
+        let (token, auth_type) = self.get_token()?;
         let content_type = match opts.get("content-type") {
             Some(v) => v.as_str().unwrap_or("application/octet-stream").to_string(),
             None => "application/octet-stream".to_string()
@@ -388,9 +489,8 @@ impl<GIT: git::GitFeatures<S>, S: shell::Shell> vcs::VCS for Github<GIT, S> {
     fn pr(
         &self, title: &str, head_branch: &str, base_branch: &str, options: &HashMap<&str, &str>
     ) -> Result<(), Box<dyn Error>> {
-        let config = self.config.borrow();
-        let (token, auth_type) = config.vcs.get_token()?;
-        let user_and_repo = (self as &dyn vcs::VCS).user_and_repo().unwrap();
+        let user_and_repo = self.user_and_repo()?;
+        let (token, auth_type) = self.get_token()?;
         let mut body = hashmap!{
             "title" => title, "owner" => &user_and_repo.0, 
             "repo" => &user_and_repo.1,
@@ -444,9 +544,8 @@ impl<GIT: git::GitFeatures<S>, S: shell::Shell> vcs::VCS for Github<GIT, S> {
         let optmap_src = json_to_strmap(&opts);
         let options = optmap_src.iter().map(|(k, v)| (*k, v.as_str())).collect::<HashMap<_, _>>();        
         // merge pr with github api
-        let config = self.config.borrow();
-        let (token, auth_type) = config.vcs.get_token()?;
-        let user_and_repo = (self as &dyn vcs::VCS).user_and_repo().unwrap();
+        let user_and_repo = self.user_and_repo()?;
+        let (token, auth_type) = self.get_token()?;
         let pr_num = url.split('/').last().unwrap_or("");
         if let Some(message) = options.get("message") {
             let api_url = format!(
@@ -512,9 +611,8 @@ impl<GIT: git::GitFeatures<S>, S: shell::Shell> vcs::VCS for Github<GIT, S> {
         // options has merge_method, commit_message, comit_title, sha
         &self, url: &str, opts: &JsonValue
     ) -> Result<(), Box<dyn Error>> {
-        let config = self.config.borrow();
-        let (token, auth_type) = config.vcs.get_token()?;
-        let user_and_repo = (self as &dyn vcs::VCS).user_and_repo().unwrap();
+        let user_and_repo = self.user_and_repo()?;
+        let (token, auth_type) = self.get_token()?;
         let pr_num = url.split('/').last().unwrap_or("");
         let api_url = format!(
             "https://api.github.com/repos/{}/{}/pulls/{}",
@@ -549,18 +647,7 @@ impl<GIT: git::GitFeatures<S>, S: shell::Shell> vcs::VCS for Github<GIT, S> {
         }
     }
     fn user_and_repo(&self) -> Result<(String, String), Box<dyn Error>> {
-        let remote_url = self.git.remote_url(None)?;
-        let re = regex::Regex::new(r"[^:]+[:/]([^/\.]+)/([^/\.]+)").unwrap();
-        let user_and_repo = match re.captures(&remote_url) {
-            Some(c) => (
-                c.get(1).map_or("".to_string(), |m| m.as_str().to_string()), 
-                c.get(2).map_or("".to_string(), |m| m.as_str().to_string())
-            ),
-            None => return escalate!(Box::new(vcs::VCSError {
-                cause: format!("invalid remote origin url: {}", remote_url)
-            }))
-        };
-        Ok(user_and_repo)
+       self.git.user_and_repo()
     }
     fn pick_ref(&self, ref_spec: &str) -> Result<(), Box<dyn Error>> {
         self.git.cherry_pick(ref_spec)
