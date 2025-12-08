@@ -13,6 +13,11 @@ pub enum Account {
         account: config::Value,
         key: config::Value
     },
+    #[serde(rename = "github_app")]
+    GithubApp {
+        app_id: config::Value,
+        pkey: config::Value
+    },
     #[serde(rename = "gitlab")]
     Gitlab {
         email: config::Value,
@@ -26,6 +31,7 @@ impl fmt::Display for Account {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::Github{..} => write!(f, "github"),
+            Self::GithubApp{..} => write!(f, "github_app"),
             Self::Gitlab{..} => write!(f, "gitlab"),
             Self::Module(c) => c.value(|v| write!(f, "module {}", v.uses.to_string())),
         }

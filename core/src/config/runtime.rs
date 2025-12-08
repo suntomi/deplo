@@ -53,6 +53,15 @@ impl fmt::Display for StartDebugOn {
     }
 }
 impl StartDebugOn {
+    pub fn always() -> bool {
+        match std::env::var("DEPLO_CI_START_DEBUG_DEFAULT") {
+            Ok(v) => match v.as_str() {
+                "always" => true,
+                _ => false
+            },
+            Err(_) => false
+        }
+    }
     pub fn should_start(&self, job_failure: bool) -> bool {
         match self {
             Self::Default => std::env::var("DEPLO_CI_START_DEBUG_DEFAULT").map_or(false, |v| {
@@ -173,7 +182,11 @@ impl ExecOptions {
                 Some(j) => j == job,
                 None => match job {
                     // if debug_job is not specified, deplo-boot/deplo-halt is ignored.
-                    "deplo-boot"| "deplo-halt" => job_failure,
+                    "deplo-boot"| "deplo-halt" => if StartDebugOn::always() {
+                        true
+                    } else {
+                        job_failure
+                    }
                     _ => true
                 }
             }
@@ -400,7 +413,10 @@ impl Config {
         Config {
             verbosity: match args.value_of("verbosity") {
                 Some(o) => o.parse().unwrap_or(0),
-                None => 0
+                None => match std::env::var("DEPLO_CI_LOG_VERBOSITY") {
+                    Ok(v) => v.parse().unwrap_or(0),
+                    Err(_) => 0
+                }
             },
             dotenv_path: match args.value_of("dotenv") {
                 Some(o) => Some(o.to_string()),

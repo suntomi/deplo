@@ -42,10 +42,10 @@ pub enum TokenConfig {
 }
 
 pub trait CheckoutOption {
-    fn opt_str(&self) -> Vec<String>;
+    fn opt_str(&self, account: &config::ci::Account) -> Vec<String>;
     fn to_yaml_config(value: &config::Value) -> String;
-    fn hash(&self) -> String {
-        let src = self.opt_str().join(",");
+    fn hash(&self, account: &config::ci::Account) -> String {
+        let src = self.opt_str(account).join(",");
         strhash(&src)
     }
 }
@@ -113,7 +113,7 @@ pub fn factory<'a>(
     account_name: &str
 ) -> Result<Box<dyn CI + 'a>, Box<dyn Error>> {
     match &config.borrow().ci.get(account_name).expect(&format!("ci account {} should defined in Deplo.toml", account_name)) {
-        config::ci::Account::GhAction {..} => {
+        config::ci::Account::GhAction {..} | config::ci::Account::GhActionApp {..} => {
             return factory_by::<ghaction::GhAction>(config, account_name);
         },
         config::ci::Account::CircleCI {..} => {

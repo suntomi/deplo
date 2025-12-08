@@ -564,6 +564,12 @@ pub struct Job {
     pub tasks: Option<HashMap<String, config::Value>>,
 }
 impl Job {
+    pub fn is_enabled_for_account(&self, account_name: &str) -> bool {
+        match &self.account {
+            Some(a) => a.resolve() == account_name,
+            None => account_name == "default"
+        }
+    }
     pub fn runner_os(&self) -> RunnerOS {
         match &self.runner {
             Runner::Machine{ os, .. } => *os,
@@ -950,11 +956,12 @@ impl Jobs {
             labels: vec![], assignees: vec![],
         };
         for (job_name, job) in self.as_map() {
+            log::debug!("ci fin: check commit from job {} exists", job_name);
             match self.system_output(config, &job, DEPLO_SYSTEM_OUTPUT_COMMIT_BRANCH_NAME)? {
                 Some(v) => {
                     log::info!("ci fin: find commit from job {} at {}", job_name, v);
                     match job.commit_setting_from_config(config, runtime_workflow_config)
-                             .expect("commit_setting_from_release_target should success").method {
+                             .expect("commit_setting_from_config should success").method {
                         Some(ref options) => match options {
                             CommitMethod::Push{squash} => {
                                 if squash.unwrap_or(true) {
@@ -990,7 +997,9 @@ impl Jobs {
                         }
                     }
                 },
-                None => {}
+                None => {
+                    log::debug!("ci fin: commit from job {} not found", job_name);
+                }
             };
         }
         commits.push(("aggregate-push".to_string(), aggregated_push_branches, CommitMethod::Push{squash: Some(true)}));
