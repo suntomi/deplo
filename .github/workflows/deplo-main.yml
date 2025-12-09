@@ -66,6 +66,7 @@ jobs:
         with:
           app-id: ${{ secrets.SUNTOMI_VCS_APP_ID }}
           private-key: ${{ secrets.SUNTOMI_VCS_APP_PKEY }}
+          owner: ${{ github.repository_owner }}
       - name: Fetch repository cache
         id: fetch-repository-cache
         uses: actions/cache@v4
@@ -132,6 +133,7 @@ jobs:
         with:
           app-id: ${{ secrets.SUNTOMI_VCS_APP_ID }}
           private-key: ${{ secrets.SUNTOMI_VCS_APP_PKEY }}
+          owner: ${{ github.repository_owner }}
       - name: Fetch repository cache
         id: fetch-repository-cache
         uses: actions/cache@v4
@@ -184,6 +186,7 @@ jobs:
         with:
           app-id: ${{ secrets.SUNTOMI_VCS_APP_ID }}
           private-key: ${{ secrets.SUNTOMI_VCS_APP_PKEY }}
+          owner: ${{ github.repository_owner }}
       - name: Fetch repository cache
         id: fetch-repository-cache
         uses: actions/cache@v4
@@ -235,6 +238,7 @@ jobs:
         with:
           app-id: ${{ secrets.SUNTOMI_VCS_APP_ID }}
           private-key: ${{ secrets.SUNTOMI_VCS_APP_PKEY }}
+          owner: ${{ github.repository_owner }}
       - name: Fetch repository cache
         id: fetch-repository-cache
         uses: actions/cache@v4
@@ -286,6 +290,7 @@ jobs:
         with:
           app-id: ${{ secrets.SUNTOMI_VCS_APP_ID }}
           private-key: ${{ secrets.SUNTOMI_VCS_APP_PKEY }}
+          owner: ${{ github.repository_owner }}
       - name: Fetch repository cache
         id: fetch-repository-cache
         uses: actions/cache@v4
@@ -337,6 +342,7 @@ jobs:
         with:
           app-id: ${{ secrets.SUNTOMI_VCS_APP_ID }}
           private-key: ${{ secrets.SUNTOMI_VCS_APP_PKEY }}
+          owner: ${{ github.repository_owner }}
       - name: Fetch repository cache
         id: fetch-repository-cache
         uses: actions/cache@v4
@@ -389,6 +395,7 @@ jobs:
         with:
           app-id: ${{ secrets.SUNTOMI_VCS_APP_ID }}
           private-key: ${{ secrets.SUNTOMI_VCS_APP_PKEY }}
+          owner: ${{ github.repository_owner }}
       - name: Fetch repository cache
         id: fetch-repository-cache
         uses: actions/cache@v4
@@ -441,6 +448,7 @@ jobs:
         with:
           app-id: ${{ secrets.SUNTOMI_VCS_APP_ID }}
           private-key: ${{ secrets.SUNTOMI_VCS_APP_PKEY }}
+          owner: ${{ github.repository_owner }}
       - name: Fetch repository cache
         id: fetch-repository-cache
         uses: actions/cache@v4
@@ -507,6 +515,7 @@ jobs:
         with:
           app-id: ${{ secrets.SUNTOMI_VCS_APP_ID }}
           private-key: ${{ secrets.SUNTOMI_VCS_APP_PKEY }}
+          owner: ${{ github.repository_owner }}
       - name: Fetch repository cache
         id: fetch-repository-cache
         uses: actions/cache@v4
@@ -558,6 +567,7 @@ jobs:
         with:
           app-id: ${{ secrets.SUNTOMI_VCS_APP_ID }}
           private-key: ${{ secrets.SUNTOMI_VCS_APP_PKEY }}
+          owner: ${{ github.repository_owner }}
       - name: Fetch repository cache
         id: fetch-repository-cache
         uses: actions/cache@v4
@@ -610,6 +620,7 @@ jobs:
         with:
           app-id: ${{ secrets.SUNTOMI_VCS_APP_ID }}
           private-key: ${{ secrets.SUNTOMI_VCS_APP_PKEY }}
+          owner: ${{ github.repository_owner }}
       - name: Fetch repository cache
         id: fetch-repository-cache
         uses: actions/cache@v4
@@ -661,6 +672,7 @@ jobs:
         with:
           app-id: ${{ secrets.SUNTOMI_VCS_APP_ID }}
           private-key: ${{ secrets.SUNTOMI_VCS_APP_PKEY }}
+          owner: ${{ github.repository_owner }}
       - name: Fetch repository cache
         id: fetch-repository-cache
         uses: actions/cache@v4
@@ -712,6 +724,7 @@ jobs:
         with:
           app-id: ${{ secrets.SUNTOMI_VCS_APP_ID }}
           private-key: ${{ secrets.SUNTOMI_VCS_APP_PKEY }}
+          owner: ${{ github.repository_owner }}
       - name: Fetch repository cache
         id: fetch-repository-cache
         uses: actions/cache@v4
@@ -763,6 +776,7 @@ jobs:
         with:
           app-id: ${{ secrets.SUNTOMI_VCS_APP_ID }}
           private-key: ${{ secrets.SUNTOMI_VCS_APP_PKEY }}
+          owner: ${{ github.repository_owner }}
       - name: Fetch repository cache
         id: fetch-repository-cache
         uses: actions/cache@v4
@@ -817,6 +831,7 @@ jobs:
         with:
           app-id: ${{ secrets.SUNTOMI_VCS_APP_ID }}
           private-key: ${{ secrets.SUNTOMI_VCS_APP_PKEY }}
+          owner: ${{ github.repository_owner }}
       - name: Fetch repository cache
         id: fetch-repository-cache
         uses: actions/cache@v4
@@ -884,6 +899,7 @@ jobs:
         with:
           app-id: ${{ secrets.SUNTOMI_VCS_APP_ID }}
           private-key: ${{ secrets.SUNTOMI_VCS_APP_PKEY }}
+          owner: ${{ github.repository_owner }}
       - name: Fetch repository cache
         id: fetch-repository-cache
         uses: actions/cache@v4
