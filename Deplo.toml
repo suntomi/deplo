@@ -294,7 +294,7 @@ sh tools/scripts/build_linux.sh
 
 # deplo provides unified command for controlling vcs. 
 # `deplo vcs release` and `deplo vcs release-assets` are used for creating release of vcs like github/gitlab
-# with unified interface.
+# with unified interface :D
 arch=$(uname -m)
 deplo_bin=tools/docker/bin/${arch}/cli
 ${deplo_bin} vcs release ${DEPLO_RELEASE_TAG} -o name=${DEPLO_RELEASE_NAME}
