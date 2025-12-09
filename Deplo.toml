@@ -42,23 +42,13 @@ SUNTOMI_VARS4 = { env = "SUNTOMI_VARS4" }
 # ------------
 # vcs settings
 # ------------
-# version control system account settings
 [vcs]
-type = "github_app"
-app_id = "${SUNTOMI_VCS_APP_ID}"
-pkey = "${SUNTOMI_VCS_APP_PKEY}"
+type = "github"
+email = "${SUNTOMI_VCS_ACCOUNT_EMAIL}"
+account = "${SUNTOMI_VCS_ACCOUNT}"
+key = "${SUNTOMI_VCS_ACCOUNT_KEY}"
 
-# ------------
-# ci settings
-# ------------
 [ci.default]
-type = "ghaction_app"
-app_id_secret_name = "SUNTOMI_VCS_APP_ID"
-pkey_secret_name = "SUNTOMI_VCS_APP_PKEY"
-
-[ci.pat]
-# ci account setting, mutiple ci service can be used by creating mutiple [ci.accounts.$name] sections.
-# [ci.default] should always be set.
 type = "ghaction"
 account = "${SUNTOMI_VCS_ACCOUNT}"
 key = "${SUNTOMI_VCS_ACCOUNT_KEY}"
