@@ -107,7 +107,7 @@ impl<S: shell::Shell> RemoteCredential<S> {
         match self {
             Self::Pat { username, key, .. } => {
                 authorized.push(shell::args![shell::fmtargs!(
-                    "http.{}/.extraheader=AUTHORIZATION: Basic {}", 
+                    "http.{}/.extraheader=AUTHORIZATION: Basic {}",
                     if target_url.ends_with("/") { &target_url[0..target_url.len()-1] } else { target_url },
                     shell::synthesize_arg!(|v| base64::encode(format!("{}:{}", v[0], v[1])), username, key)
                 )]);
@@ -115,9 +115,9 @@ impl<S: shell::Shell> RemoteCredential<S> {
             Self::App { app_token_generator } => {
                 let token = app_token_generator.generate()?;
                 authorized.push(shell::args![shell::fmtargs!(
-                    "http.{}/.extraheader=AUTHORIZATION: Bearer {}", 
+                    "http.{}/.extraheader=AUTHORIZATION: Basic {}",
                     if target_url.ends_with("/") { &target_url[0..target_url.len()-1] } else { target_url },
-                    token
+                    shell::synthesize_arg!(|v| base64::encode(format!("x-access-token:{}", v[0])), token)
                 )]);
             }
         };
