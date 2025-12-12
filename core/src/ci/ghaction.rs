@@ -694,7 +694,7 @@ impl<S: shell::Shell> GhAction<S> {
                         return Ok((fallback.key.clone(), "token"));
                     }
                 }
-                (config::Value::new(&self.app_token_generator.as_ref().unwrap().generate()?), "Bearer")
+                (config::Value::new_sensitive(&self.app_token_generator.as_ref().unwrap().generate()?), "Bearer")
             },
             _ => return escalate!(Box::new(ci::CIError {
                 cause: "should have ghaction CI config but other config provided".to_string()

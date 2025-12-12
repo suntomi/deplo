@@ -78,7 +78,7 @@ impl<S: shell::Shell> AppTokenGeneratorInner<S> {
             &self.private_key.resolve(),
             &self.user_and_repo
         )?;
-        self.token = config::Value::new(&token);
+        self.token = config::Value::new_sensitive(&token);
         self.token_expires_at = DateTime::parse_from_rfc3339(&token_expires_at)?
             .with_timezone(&Utc).into();
         Ok(self.token.resolve())
@@ -371,7 +371,7 @@ impl<GIT: git::GitFeatures<S>, S: shell::Shell> vcs::VCS for Github<GIT, S> {
                     return Ok((fallback.key.clone(), "token"));
                 }
             }
-            Ok((Value::new(&self.app_token_generator.as_ref().unwrap().generate()?), "Bearer"))
+            Ok((Value::new_sensitive(&self.app_token_generator.as_ref().unwrap().generate()?), "Bearer"))
         } else {
             return Err(Box::new(vcs::VCSError {
                 cause: format!("should have github config but {}", config.vcs)
