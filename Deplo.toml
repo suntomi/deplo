@@ -47,6 +47,11 @@ SUNTOMI_VARS4 = { env = "SUNTOMI_VARS4" }
 type = "github_app"
 app_id = "${SUNTOMI_VCS_APP_ID}"
 pkey = "${SUNTOMI_VCS_APP_PKEY}"
+local_fallback = {
+    account = "${SUNTOMI_VCS_ACCOUNT}",
+    key = "${SUNTOMI_VCS_ACCOUNT_KEY}",
+    email = "${SUNTOMI_VCS_ACCOUNT_EMAIL}"
+}
 
 # ------------
 # ci settings
@@ -55,6 +60,7 @@ pkey = "${SUNTOMI_VCS_APP_PKEY}"
 type = "ghaction_app"
 app_id_secret_name = "SUNTOMI_VCS_APP_ID"
 pkey_secret_name = "SUNTOMI_VCS_APP_PKEY"
+local_fallback = { account = "${SUNTOMI_VCS_ACCOUNT}", key = "${SUNTOMI_VCS_ACCOUNT_KEY}" }
 
 [ci.pat]
 # ci account setting, mutiple ci service can be used by creating mutiple [ci.accounts.$name] sections.

@@ -650,7 +650,7 @@ impl<S: shell::Shell> GhAction<S> {
         );
         let mut steps = match account {
             config::ci::Account::GhAction{..} => { vec![] },
-            config::ci::Account::GhActionApp{app_id_secret_name, pkey_secret_name} => {
+            config::ci::Account::GhActionApp{app_id_secret_name, pkey_secret_name, ..} => {
                 format!(
                     include_str!("../../res/ci/ghaction/app_token.yml.tmpl"),
                     app_id_secret_name = app_id_secret_name.resolve(),
@@ -687,7 +687,13 @@ impl<S: shell::Shell> GhAction<S> {
         let config = self.config.borrow();
         Ok(match config.ci.get(&self.account_name).unwrap() {
             config::ci::Account::GhAction { key, .. } => (key.clone(), "token"),
-            config::ci::Account::GhActionApp { .. } => {
+            config::ci::Account::GhActionApp { local_fallback, .. } => {
+                // Use local_fallback when running locally and fallback is configured
+                if !config::Config::is_running_on_ci() {
+                    if let Some(fallback) = local_fallback {
+                        return Ok((fallback.key.clone(), "token"));
+                    }
+                }
                 (config::Value::new(&self.app_token_generator.as_ref().unwrap().generate()?), "Bearer")
             },
             _ => return escalate!(Box::new(ci::CIError {
@@ -723,14 +729,19 @@ impl<S: shell::Shell> ci::CI for GhAction<S> {
             shell: S::new(config),
             app_token_generator: match config.borrow().vcs {
                 config::vcs::Account::Github{..} => None,
-                config::vcs::Account::GithubApp{ref app_id, ref pkey} => {
-                    Some(AppTokenGenerator::<S>::new(
-                        S::new(config),
-                        app_id.clone(), pkey.clone(),
-                        config.borrow().modules.vcs.as_ref().unwrap().user_and_repo()?
-                    ))
+                config::vcs::Account::GithubApp{ref app_id, ref pkey, ref local_fallback} => {
+                    // Use local_fallback when running locally and fallback is configured
+                    if !config::Config::is_running_on_ci() && local_fallback.is_some() {
+                        None
+                    } else {
+                        Some(AppTokenGenerator::<S>::new(
+                            S::new(config),
+                            app_id.clone(), pkey.clone(),
+                            config.borrow().modules.vcs.as_ref().unwrap().user_and_repo()?
+                        ))
+                    }
                 },
-                _ => panic!("DEPLO_GHACTION_EVENT_DATA should set") 
+                _ => panic!("DEPLO_GHACTION_EVENT_DATA should set")
             }
         });
     }

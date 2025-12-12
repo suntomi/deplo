@@ -5,18 +5,25 @@ use serde::{Deserialize, Serialize};
 
 use crate::config;
 
+#[derive(Serialize, Deserialize, Clone)]
+pub struct LocalFallback {
+    pub account: config::Value,
+    pub key: config::Value,
+}
+
 #[derive(Serialize, Deserialize)]
 #[serde(tag = "type")]
 pub enum Account {
     #[serde(rename = "ghaction")]
     GhAction {
-        account: config::Value, // github account name 
+        account: config::Value, // github account name
         key: config::Value, // if github personal access token of account
     },
     #[serde(rename = "ghaction_app")]
     GhActionApp {
         app_id_secret_name: config::Value, // secret name that contains github app id value
         pkey_secret_name: config::Value, // secret name that contains github app private key value
+        local_fallback: Option<LocalFallback>, // fallback to PAT when running locally
     },
     #[serde(rename = "circleci")]
     CircleCI {
