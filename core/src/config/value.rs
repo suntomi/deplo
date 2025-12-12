@@ -11,6 +11,19 @@ use crate::shell;
 
 type AnyValue = toml::value::Value;
 type ValueResolver = fn(&str) -> String;
+type ValueViewer = fn(Option<ValueResolver>, &str) -> String;
+
+fn default_viewer(resolver: Option<ValueResolver>, value: &str) -> String {
+    if resolver.is_some() {
+        format!("<{}:{}>", resolver_to_name(resolver.unwrap()), value)
+    } else {
+        value.to_string()
+    }
+}
+
+fn sensitive_viewer(_resolver: Option<ValueResolver>, _value: &str) -> String {
+    "<sensitive>".to_string()
+}
 
 const SECRET_NAME_REGEX: &str = r"^[[:alpha:]_][[:alpha:]_0-9]*$";
 pub fn is_secret_name(s: &str) -> bool {
@@ -64,24 +77,35 @@ fn resolver_to_name(resolver: ValueResolver) -> &'static str {
 pub struct Value {
     pub value: String,
     pub resolver: Option<ValueResolver>,
+    pub viewer: Option<ValueViewer>,
 }
 impl Value {
     pub fn new(value: &str) -> Self {
         Self {
             value: value.to_string(),
             resolver: None,
+            viewer: None,
         }
     }
     pub fn new_secret(key: &str) -> Self {
         Self {
             value: key.to_string(),
-            resolver: Some(secret_resolver)
+            resolver: Some(secret_resolver),
+            viewer: None,
         }
     }
     pub fn new_env(key: &str) -> Self {
         Self {
             value: key.to_string(),
-            resolver: Some(envref_resolver)
+            resolver: Some(envref_resolver),
+            viewer: None,
+        }
+    }
+    pub fn new_sensitive(value: &str) -> Self {
+        Self {
+            value: value.to_string(),
+            resolver: None,
+            viewer: Some(sensitive_viewer),
         }
     }
     pub fn as_str(&self) -> &str {
@@ -111,10 +135,16 @@ impl Value {
         value.resolve()
     }
 }
+impl Value {
+    fn view_string(&self) -> String {
+        let viewer = self.viewer.unwrap_or(default_viewer);
+        viewer(self.resolver, &self.value)
+    }
+}
 impl PartialEq for Value {
     fn eq(&self, other: &Self) -> bool {
-        return self.value == other.value && 
-            self.resolver.map_or_else(|| 0, |r| r as usize) == 
+        return self.value == other.value &&
+            self.resolver.map_or_else(|| 0, |r| r as usize) ==
             other.resolver.map_or_else(|| 0, |r| r as usize)
     }
 }
@@ -129,7 +159,7 @@ impl<'de> de::Visitor<'de> for Visitor {
         E: de::Error,
     {
         let (value, resolver) = detect_value_ref(s);
-        Ok(Value {value: value.to_string(), resolver})
+        Ok(Value {value: value.to_string(), resolver, viewer: None})
     }
 }
 impl Serialize for Value {
@@ -147,24 +177,14 @@ impl<'de> Deserialize<'de> for Value {
 }
 impl fmt::Display for Value {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        if self.resolver.is_some() {
-            write!(f, "<{}:{}>", resolver_to_name(self.resolver.unwrap()), self.value)
-        } else {
-            write!(f, "{}", self.value)
-        }
+        write!(f, "{}", self.view_string())
     }
 }
 impl fmt::Debug for Value {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        if self.resolver.is_some() {
-            f.debug_struct("Value")
-                .field("value", &format!("<{}:{}>", resolver_to_name(self.resolver.unwrap()), self.value))
-                .finish()
-        } else {
-            f.debug_struct("Value")
-                .field("value", &format!("{}", self.value))
-                .finish()
-        }
+        f.debug_struct("Value")
+            .field("value", &self.view_string())
+            .finish()
     }
 }
 impl PartialEq<String> for Value {
@@ -184,7 +204,7 @@ impl crate::shell::ArgTrait for Value {
         self.resolve()
     }
     fn view(&self) -> Cow<'_, str> {
-        Cow::Owned(format!("{}", self))
+        Cow::Owned(self.view_string())
     }
 }
 impl crate::shell::ArgTrait for &Value {
@@ -192,7 +212,7 @@ impl crate::shell::ArgTrait for &Value {
         self.resolve()
     }
     fn view(&self) -> Cow<'_, str> {
-        Cow::Owned(format!("{}", self))
+        Cow::Owned(self.view_string())
     }
 }
 
@@ -201,6 +221,7 @@ impl crate::shell::ArgTrait for &Value {
 pub struct Any {
     pub value: AnyValue,
     pub resolver: Option<ValueResolver>,
+    pub viewer: Option<ValueViewer>,
 }
 impl Serialize for Any {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
@@ -216,9 +237,9 @@ impl<'de> Deserialize<'de> for Any {
         return match any {
             AnyValue::String(ref v) => {
                 let (value, resolver) = detect_value_ref(v);
-                Ok(Any {value: AnyValue::String(value.to_string()), resolver})
+                Ok(Any {value: AnyValue::String(value.to_string()), resolver, viewer: None})
             },
-            _ => Ok(Any{value: any, resolver: None})
+            _ => Ok(Any{value: any, resolver: None, viewer: None})
         }
     }
 }
@@ -227,6 +248,7 @@ impl Any {
         Self {
             value: AnyValue::String(value.to_string()),
             resolver: None,
+            viewer: None,
         }
     }
     pub fn new_from_vec<V: AsRef<str>>(vec: &Vec<V>) -> Self {
@@ -235,6 +257,7 @@ impl Any {
                 vec.iter().map(|v| AnyValue::String(v.as_ref().to_string())).collect()
             ),
             resolver: None,
+            viewer: None,
         }
     }
     pub fn resolve(&self) -> String {
@@ -273,12 +296,12 @@ impl Any {
     pub fn is_table(&self) -> bool {
         self.value.is_table()
     }
-    pub fn iter<F,R>(&self, proc: F) -> Option<R> 
+    pub fn iter<F,R>(&self, proc: F) -> Option<R>
         where F: Fn(&Self) -> Option<R> {
         match &self.value {
             AnyValue::Array(a) => {
                 for e in a {
-                    match proc(&Self { value: e.clone(), resolver: None }) {
+                    match proc(&Self { value: e.clone(), resolver: None, viewer: self.viewer }) {
                         Some(r) => return Some(r),
                         None => {},
                     }
@@ -291,7 +314,7 @@ impl Any {
     pub fn at(&self, i: usize) -> Option<Any> {
         match &self.value {
             AnyValue::Array(a) => if a.len() > i {
-                Some(Any{value: a[i].clone(), resolver: self.resolver})
+                Some(Any{value: a[i].clone(), resolver: self.resolver, viewer: self.viewer})
             } else {
                 None
             },
@@ -301,10 +324,17 @@ impl Any {
     pub fn index(&self, k: &str) -> Option<Any> {
         match &self.value {
             AnyValue::Table(t) => match t.get(k) {
-                Some(v) => Some(Any{value: v.clone(), resolver: self.resolver}),
+                Some(v) => Some(Any{value: v.clone(), resolver: self.resolver, viewer: self.viewer}),
                 None => None,
             }
             _ => None
+        }
+    }
+    fn view_string(&self) -> String {
+        let viewer = self.viewer.unwrap_or(default_viewer);
+        match self.value.as_str() {
+            Some(s) => viewer(self.resolver, s),
+            None => viewer(self.resolver, &self.raw_value())
         }
     }
     pub fn as_yaml(&self) -> String {
@@ -313,31 +343,15 @@ impl Any {
 }
 impl fmt::Display for Any {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        if self.resolver.is_some() {
-            write!(f, "<{}:{}>", 
-                resolver_to_name(self.resolver.unwrap()), 
-                self.value.as_str().unwrap()
-            )
-        } else {
-            write!(f, "{}", self.value)
-        }
+        write!(f, "{}", self.view_string())
     }
 }
 impl fmt::Debug for Any {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        if self.resolver.is_some() {
-            f.debug_struct("Any")
-                .field("type", &self.value.type_str().to_string())
-                .field("value", &format!("<{}:{}>", 
-                    resolver_to_name(self.resolver.unwrap()), 
-                    self.value))
-                .finish()
-        } else {
-            f.debug_struct("Any")
-                .field("type", &self.value.type_str().to_string())
-                .field("value", &format!("{}", self.value))
-                .finish()
-        }
+        f.debug_struct("Any")
+            .field("type", &self.value.type_str().to_string())
+            .field("value", &self.view_string())
+            .finish()
     }
 }
 

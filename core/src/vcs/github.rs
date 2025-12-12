@@ -78,7 +78,7 @@ impl<S: shell::Shell> AppTokenGeneratorInner<S> {
             &self.private_key.resolve(),
             &self.user_and_repo
         )?;
-        self.token = config::Value::new(&token);
+        self.token = config::Value::new_sensitive(&token);
         self.token_expires_at = DateTime::parse_from_rfc3339(&token_expires_at)?
             .with_timezone(&Utc).into();
         Ok(self.token.resolve())
@@ -325,7 +325,19 @@ impl<GIT: git::GitFeatures<S>, S: shell::Shell> vcs::VCS for Github<GIT, S> {
                 app_token_generator: None,
                 git: GIT::from_pat(&account, &email, &key,S::new(config))
             });
-        } else if let config::vcs::Account::GithubApp{ app_id, pkey } = &config.borrow().vcs {
+        } else if let config::vcs::Account::GithubApp{ app_id, pkey, local_fallback } = &config.borrow().vcs {
+            // Use local_fallback when running locally and fallback is configured
+            if !config::Config::is_running_on_ci() {
+                if let Some(fallback) = local_fallback {
+                    return Ok(Github {
+                        config: config.clone(),
+                        diff: vec!(),
+                        shell: S::new(config),
+                        app_token_generator: None,
+                        git: GIT::from_pat(&fallback.account, &fallback.email, &fallback.key, S::new(config))
+                    });
+                }
+            }
             let app_token_generator = AppTokenGenerator::<S>::new(
                 S::new(config), app_id.clone(), pkey.clone(),
                 ("".to_string(), "".to_string())
@@ -352,8 +364,14 @@ impl<GIT: git::GitFeatures<S>, S: shell::Shell> vcs::VCS for Github<GIT, S> {
         let config = self.config.borrow();
         if let config::vcs::Account::Github{ key, .. } = &self.config.borrow().vcs {
             Ok((key.clone(), "token"))
-        } else if let config::vcs::Account::GithubApp{ .. } = &self.config.borrow().vcs {
-            Ok((Value::new(&self.app_token_generator.as_ref().unwrap().generate()?), "Bearer"))
+        } else if let config::vcs::Account::GithubApp{ local_fallback, .. } = &self.config.borrow().vcs {
+            // Use local_fallback when running locally and fallback is configured
+            if !config::Config::is_running_on_ci() {
+                if let Some(fallback) = local_fallback {
+                    return Ok((fallback.key.clone(), "token"));
+                }
+            }
+            Ok((Value::new_sensitive(&self.app_token_generator.as_ref().unwrap().generate()?), "Bearer"))
         } else {
             return Err(Box::new(vcs::VCSError {
                 cause: format!("should have github config but {}", config.vcs)

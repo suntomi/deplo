@@ -4,6 +4,13 @@ use serde::{Deserialize, Serialize};
 
 use crate::config;
 
+#[derive(Serialize, Deserialize, Clone)]
+pub struct LocalFallback {
+    pub account: config::Value,
+    pub key: config::Value,
+    pub email: config::Value,
+}
+
 #[derive(Serialize, Deserialize)]
 #[serde(tag = "type")]
 pub enum Account {
@@ -16,7 +23,8 @@ pub enum Account {
     #[serde(rename = "github_app")]
     GithubApp {
         app_id: config::Value,
-        pkey: config::Value
+        pkey: config::Value,
+        local_fallback: Option<LocalFallback>
     },
     #[serde(rename = "gitlab")]
     Gitlab {
