@@ -727,16 +727,19 @@ impl<S: shell::Shell> ci::CI for GhAction<S> {
             config: config.clone(),
             account_name: account_name.to_string(),
             shell: S::new(config),
-            app_token_generator: match config.borrow().vcs {
-                config::vcs::Account::Github{..} => None,
-                config::vcs::Account::GithubApp{ref app_id, ref pkey, ref local_fallback} => {
+            app_token_generator: match config.borrow().ci.get(account_name).expect(&format!("account {} not configured", account_name)) {
+                config::ci::Account::GhAction{..} => None,
+                config::ci::Account::GhActionApp{
+                    ref app_id_secret_name, ref pkey_secret_name, ref local_fallback
+                } => {
                     // Use local_fallback when running locally and fallback is configured
                     if !config::Config::is_running_on_ci() && local_fallback.is_some() {
                         None
                     } else {
+                        let app_id = config::Value::new_secret(app_id_secret_name.resolve().as_str());
+                        let pkey = config::Value::new_secret(pkey_secret_name.resolve().as_str());
                         Some(AppTokenGenerator::<S>::new(
-                            S::new(config),
-                            app_id.clone(), pkey.clone(),
+                            S::new(config), app_id, pkey,
                             config.borrow().modules.vcs.as_ref().unwrap().user_and_repo()?
                         ))
                     }
