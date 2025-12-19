@@ -529,6 +529,7 @@ impl<S: shell::Shell> GhAction<S> {
                             config::Value::resolve_to_string
                         ).collect::<Vec<_>>(), postfix: None
                     },
+                    cache_version = get_module_version("actions/cache"),
                     env_key = format!("DEPLO_CACHE_{}_HIT", name.to_uppercase())
                 ).split("\n").map(|s| s.to_string()).collect::<Vec<String>>()
             }).collect(),
