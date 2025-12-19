@@ -485,7 +485,7 @@ jobs:
         shell: bash
       - name: Cache cargo
         id: deplo-cache-cargo
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: |
             target
@@ -868,7 +868,7 @@ jobs:
         shell: bash
       - name: Cache cargo
         id: deplo-cache-cargo
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: |
             target
@@ -936,7 +936,7 @@ jobs:
         shell: bash
       - name: Cache cargo
         id: deplo-cache-cargo
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: |
             target
