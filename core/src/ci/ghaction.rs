@@ -1,3 +1,4 @@
+use std::env;
 use std::fs;
 use std::fmt;
 use std::error::Error;
@@ -31,9 +32,24 @@ use crate::vcs::github::AppTokenGenerator;
 lazy_static! {
     pub static ref DEPLO_GHACTION_MODULE_VERSIONS: HashMap<String, String> = hashmap! {
         "actions/checkout".to_string() => "v5".to_string(),
-        "actions/cache".to_string() => "v4".to_string(),
+        "actions/cache".to_string() => "v5".to_string(),
         "mxschmitt/action-tmate".to_string() => "c0afd6f790e3a5564914980036ebf83216678101".to_string(),
     };
+}
+
+fn get_module_version(module: &str) -> String {
+    // generate environment variable name from module name
+    // eg. actions/checkout => DEPLO_GHACTION_MODULE_VERSION_ACTIONS_CHECKOUT
+    let env_name = format!("DEPLO_GHACTION_MODULE_VERSION_{}",
+        module.to_uppercase().replace("/", "_").replace("-", "_")
+    );
+    if env::var(&env_name).is_ok() {
+        match env::var(&env_name) {
+            Ok(v) => return v,
+            Err(_) => {}
+        }
+    }
+    DEPLO_GHACTION_MODULE_VERSIONS.get(module).unwrap().clone()
 }
 
 #[derive(Serialize, Deserialize)]
@@ -481,7 +497,7 @@ impl<S: shell::Shell> GhAction<S> {
             } else {
                 "if: always() && (env.DEPLO_CI_RUN_DEBUGGER != '')"
             },
-            debugger_version = DEPLO_GHACTION_MODULE_VERSIONS.get("mxschmitt/action-tmate").unwrap()
+            debugger_version = get_module_version("mxschmitt/action-tmate")
         ).split("\n").map(|s| s.to_string()).collect()
     }
     fn generate_restore_keys(&self, cache: &config::job::Cache) -> Vec<String> {
@@ -666,8 +682,8 @@ impl<S: shell::Shell> GhAction<S> {
                     strings: &self.generate_checkout_opts(&checkout_opts),
                     postfix: None
                 }, opts_hash = opts_hash, restore_commands = &self.generate_cache_restore_cmds(&merged_opts),
-                checkout_version = DEPLO_GHACTION_MODULE_VERSIONS.get("actions/checkout").unwrap(),
-                cache_version = DEPLO_GHACTION_MODULE_VERSIONS.get("actions/cache").unwrap()
+                checkout_version = get_module_version("actions/checkout"),
+                cache_version = get_module_version("actions/cache")
             ).split("\n").map(|s| s.to_string()).collect();
             steps.append(&mut lines);
         } else {
@@ -677,7 +693,7 @@ impl<S: shell::Shell> GhAction<S> {
                     strings: &self.generate_checkout_opts(&checkout_opts),
                     postfix: None
                 },
-                checkout_version = DEPLO_GHACTION_MODULE_VERSIONS.get("actions/checkout").unwrap()
+                checkout_version = get_module_version("actions/checkout")
             ).split("\n").map(|s| s.to_string()).collect();
             steps.append(&mut lines);
         }

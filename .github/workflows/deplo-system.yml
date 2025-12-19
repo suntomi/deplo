@@ -84,7 +84,7 @@ jobs:
           owner: ${{ github.repository_owner }}
       - name: Fetch repository cache
         id: fetch-repository-cache
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: .git
           key: deplo-git-v1-FF20A2BE8FC59416-${{ github.sha }}
@@ -151,7 +151,7 @@ jobs:
           owner: ${{ github.repository_owner }}
       - name: Fetch repository cache
         id: fetch-repository-cache
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: .git
           key: deplo-git-v1-FF20A2BE8FC59416-${{ github.sha }}
@@ -204,7 +204,7 @@ jobs:
           owner: ${{ github.repository_owner }}
       - name: Fetch repository cache
         id: fetch-repository-cache
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: .git
           key: deplo-git-v1-FF20A2BE8FC59416-${{ github.sha }}
@@ -256,7 +256,7 @@ jobs:
           owner: ${{ github.repository_owner }}
       - name: Fetch repository cache
         id: fetch-repository-cache
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: .git
           key: deplo-git-v1-FF20A2BE8FC59416-${{ github.sha }}
@@ -308,7 +308,7 @@ jobs:
           owner: ${{ github.repository_owner }}
       - name: Fetch repository cache
         id: fetch-repository-cache
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: .git
           key: deplo-git-v1-FF20A2BE8FC59416-${{ github.sha }}
@@ -360,7 +360,7 @@ jobs:
           owner: ${{ github.repository_owner }}
       - name: Fetch repository cache
         id: fetch-repository-cache
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: .git
           key: deplo-git-v1-FF20A2BE8FC59416-${{ github.sha }}
@@ -413,7 +413,7 @@ jobs:
           owner: ${{ github.repository_owner }}
       - name: Fetch repository cache
         id: fetch-repository-cache
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: .git
           key: deplo-git-v1-FF20A2BE8FC59416-${{ github.sha }}
@@ -466,7 +466,7 @@ jobs:
           owner: ${{ github.repository_owner }}
       - name: Fetch repository cache
         id: fetch-repository-cache
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: .git
           key: deplo-git-v1-FF20A2BE8FC59416-${{ github.sha }}
@@ -533,7 +533,7 @@ jobs:
           owner: ${{ github.repository_owner }}
       - name: Fetch repository cache
         id: fetch-repository-cache
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: .git
           key: deplo-git-v1-FF20A2BE8FC59416-${{ github.sha }}
@@ -585,7 +585,7 @@ jobs:
           owner: ${{ github.repository_owner }}
       - name: Fetch repository cache
         id: fetch-repository-cache
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: .git
           key: deplo-git-v1-FF20A2BE8FC59416-${{ github.sha }}
@@ -638,7 +638,7 @@ jobs:
           owner: ${{ github.repository_owner }}
       - name: Fetch repository cache
         id: fetch-repository-cache
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: .git
           key: deplo-git-v1-FF20A2BE8FC59416-${{ github.sha }}
@@ -690,7 +690,7 @@ jobs:
           owner: ${{ github.repository_owner }}
       - name: Fetch repository cache
         id: fetch-repository-cache
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: .git
           key: deplo-git-v1-FF20A2BE8FC59416-${{ github.sha }}
@@ -742,7 +742,7 @@ jobs:
           owner: ${{ github.repository_owner }}
       - name: Fetch repository cache
         id: fetch-repository-cache
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: .git
           key: deplo-git-v1-FF20A2BE8FC59416-${{ github.sha }}
@@ -794,7 +794,7 @@ jobs:
           owner: ${{ github.repository_owner }}
       - name: Fetch repository cache
         id: fetch-repository-cache
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: .git
           key: deplo-git-v1-FF20A2BE8FC59416-${{ github.sha }}
@@ -849,7 +849,7 @@ jobs:
           owner: ${{ github.repository_owner }}
       - name: Fetch repository cache
         id: fetch-repository-cache
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: .git
           key: deplo-git-v1-FF20A2BE8FC59416-${{ github.sha }}
@@ -917,7 +917,7 @@ jobs:
           owner: ${{ github.repository_owner }}
       - name: Fetch repository cache
         id: fetch-repository-cache
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: .git
           key: deplo-git-v1-FF20A2BE8FC59416-${{ github.sha }}
