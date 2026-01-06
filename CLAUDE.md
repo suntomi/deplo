@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Deplo is a Rust-based CLI tool that provides a unified CI/CD development experience across different CI/CD services (GitHub Actions, CircleCI). It solves CI/CD development pain points by enabling local job execution, remote debugging, and using TOML for configuration instead of YAML.
+Deplo is a Rust-based CLI tool that provides a unified CI/CD development experience across different CI/CD services (GitHub Actions, CircleCI). It solves CI/CD development pain points by enabling local job execution, remote debugging, and using TOML for configuration instead of YAML
 
 ## Key Commands
 
