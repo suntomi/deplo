@@ -47,11 +47,6 @@ SUNTOMI_VARS4 = { env = "SUNTOMI_VARS4" }
 type = "github_app"
 app_id = "${SUNTOMI_VCS_APP_ID}"
 pkey = "${SUNTOMI_VCS_APP_PKEY}"
-local_fallback = {
-    account = "${SUNTOMI_VCS_ACCOUNT}",
-    key = "${SUNTOMI_VCS_ACCOUNT_KEY}",
-    email = "${SUNTOMI_VCS_ACCOUNT_EMAIL}"
-}
 
 # ------------
 # ci settings
