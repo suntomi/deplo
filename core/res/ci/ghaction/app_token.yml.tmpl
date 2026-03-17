@@ -1,5 +1,5 @@
 - name: Get GitHub App Token
-  uses: actions/create-github-app-token@v2
+  uses: actions/create-github-app-token@{app_token_version}
   id: app-token
   with:
     app-id: ${{{{ secrets.{app_id_secret_name} }}}}

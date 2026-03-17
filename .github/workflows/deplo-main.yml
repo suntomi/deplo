@@ -61,7 +61,7 @@ jobs:
           curl -L https://github.com/suntomi/deplo/releases/download/nightly/deplo-Linux-$(uname -m) -o /usr/local/bin/deplo
           chmod +x /usr/local/bin/deplo
       - name: Get GitHub App Token
-        uses: actions/create-github-app-token@v2
+        uses: actions/create-github-app-token@v3
         id: app-token
         with:
           app-id: ${{ secrets.SUNTOMI_VCS_APP_ID }}
@@ -77,7 +77,7 @@ jobs:
             deplo-git-v1-FF20A2BE8FC59416-
       - name: Checkout
         if: steps.fetch-repository-cache.outputs.cache-hit != 'true'
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
         with:
           fetch-depth: 0
           submodules: true
@@ -128,7 +128,7 @@ jobs:
           curl -L https://github.com/suntomi/deplo/releases/download/nightly/deplo-Linux-$(uname -m) -o /usr/local/bin/deplo
           chmod +x /usr/local/bin/deplo
       - name: Get GitHub App Token
-        uses: actions/create-github-app-token@v2
+        uses: actions/create-github-app-token@v3
         id: app-token
         with:
           app-id: ${{ secrets.SUNTOMI_VCS_APP_ID }}
@@ -144,7 +144,7 @@ jobs:
             deplo-git-v1-FF20A2BE8FC59416-
       - name: Checkout
         if: steps.fetch-repository-cache.outputs.cache-hit != 'true'
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
         with:
           fetch-depth: 0
           lfs: false
@@ -181,7 +181,7 @@ jobs:
           curl -L https://github.com/suntomi/deplo/releases/download/nightly/deplo-Linux-$(uname -m) -o /usr/local/bin/deplo
           chmod +x /usr/local/bin/deplo
       - name: Get GitHub App Token
-        uses: actions/create-github-app-token@v2
+        uses: actions/create-github-app-token@v3
         id: app-token
         with:
           app-id: ${{ secrets.SUNTOMI_VCS_APP_ID }}
@@ -197,7 +197,7 @@ jobs:
             deplo-git-v1-FF20A2BE8FC59416-
       - name: Checkout
         if: steps.fetch-repository-cache.outputs.cache-hit != 'true'
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
         with:
           fetch-depth: 0
           submodules: true
@@ -233,7 +233,7 @@ jobs:
           curl -L https://github.com/suntomi/deplo/releases/download/nightly/deplo-Linux-$(uname -m) -o /usr/local/bin/deplo
           chmod +x /usr/local/bin/deplo
       - name: Get GitHub App Token
-        uses: actions/create-github-app-token@v2
+        uses: actions/create-github-app-token@v3
         id: app-token
         with:
           app-id: ${{ secrets.SUNTOMI_VCS_APP_ID }}
@@ -249,7 +249,7 @@ jobs:
             deplo-git-v1-FF20A2BE8FC59416-
       - name: Checkout
         if: steps.fetch-repository-cache.outputs.cache-hit != 'true'
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
         with:
           fetch-depth: 0
           submodules: true
@@ -285,7 +285,7 @@ jobs:
           curl -L https://github.com/suntomi/deplo/releases/download/nightly/deplo-Linux-$(uname -m) -o /usr/local/bin/deplo
           chmod +x /usr/local/bin/deplo
       - name: Get GitHub App Token
-        uses: actions/create-github-app-token@v2
+        uses: actions/create-github-app-token@v3
         id: app-token
         with:
           app-id: ${{ secrets.SUNTOMI_VCS_APP_ID }}
@@ -301,7 +301,7 @@ jobs:
             deplo-git-v1-FF20A2BE8FC59416-
       - name: Checkout
         if: steps.fetch-repository-cache.outputs.cache-hit != 'true'
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
         with:
           fetch-depth: 0
           submodules: true
@@ -337,7 +337,7 @@ jobs:
           curl -L https://github.com/suntomi/deplo/releases/download/nightly/deplo-Linux-$(uname -m) -o /usr/local/bin/deplo
           chmod +x /usr/local/bin/deplo
       - name: Get GitHub App Token
-        uses: actions/create-github-app-token@v2
+        uses: actions/create-github-app-token@v3
         id: app-token
         with:
           app-id: ${{ secrets.SUNTOMI_VCS_APP_ID }}
@@ -353,7 +353,7 @@ jobs:
             deplo-git-v1-FF20A2BE8FC59416-
       - name: Checkout
         if: steps.fetch-repository-cache.outputs.cache-hit != 'true'
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
         with:
           fetch-depth: 0
           submodules: true
@@ -390,7 +390,7 @@ jobs:
           curl -L https://github.com/suntomi/deplo/releases/download/nightly/deplo-Linux-$(uname -m) -o /usr/local/bin/deplo
           chmod +x /usr/local/bin/deplo
       - name: Get GitHub App Token
-        uses: actions/create-github-app-token@v2
+        uses: actions/create-github-app-token@v3
         id: app-token
         with:
           app-id: ${{ secrets.SUNTOMI_VCS_APP_ID }}
@@ -406,7 +406,7 @@ jobs:
             deplo-git-v1-FF20A2BE8FC59416-
       - name: Checkout
         if: steps.fetch-repository-cache.outputs.cache-hit != 'true'
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
         with:
           fetch-depth: 0
           submodules: true
@@ -443,7 +443,7 @@ jobs:
           curl -L https://github.com/suntomi/deplo/releases/download/nightly/deplo-Darwin -o /usr/local/bin/deplo
           chmod +x /usr/local/bin/deplo
       - name: Get GitHub App Token
-        uses: actions/create-github-app-token@v2
+        uses: actions/create-github-app-token@v3
         id: app-token
         with:
           app-id: ${{ secrets.SUNTOMI_VCS_APP_ID }}
@@ -459,7 +459,7 @@ jobs:
             deplo-git-v1-FF20A2BE8FC59416-
       - name: Checkout
         if: steps.fetch-repository-cache.outputs.cache-hit != 'true'
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
         with:
           fetch-depth: 0
           submodules: true
@@ -510,7 +510,7 @@ jobs:
           curl -L https://github.com/suntomi/deplo/releases/download/nightly/deplo-Linux-$(uname -m) -o /usr/local/bin/deplo
           chmod +x /usr/local/bin/deplo
       - name: Get GitHub App Token
-        uses: actions/create-github-app-token@v2
+        uses: actions/create-github-app-token@v3
         id: app-token
         with:
           app-id: ${{ secrets.SUNTOMI_VCS_APP_ID }}
@@ -526,7 +526,7 @@ jobs:
             deplo-git-v1-FF20A2BE8FC59416-
       - name: Checkout
         if: steps.fetch-repository-cache.outputs.cache-hit != 'true'
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
         with:
           fetch-depth: 0
           submodules: true
@@ -562,7 +562,7 @@ jobs:
           curl -L https://github.com/suntomi/deplo/releases/download/nightly/deplo-Linux-$(uname -m) -o /usr/local/bin/deplo
           chmod +x /usr/local/bin/deplo
       - name: Get GitHub App Token
-        uses: actions/create-github-app-token@v2
+        uses: actions/create-github-app-token@v3
         id: app-token
         with:
           app-id: ${{ secrets.SUNTOMI_VCS_APP_ID }}
@@ -578,7 +578,7 @@ jobs:
             deplo-git-v1-FF20A2BE8FC59416-
       - name: Checkout
         if: steps.fetch-repository-cache.outputs.cache-hit != 'true'
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
         with:
           fetch-depth: 0
           submodules: true
@@ -615,7 +615,7 @@ jobs:
           curl -L https://github.com/suntomi/deplo/releases/download/nightly/deplo-Linux-$(uname -m) -o /usr/local/bin/deplo
           chmod +x /usr/local/bin/deplo
       - name: Get GitHub App Token
-        uses: actions/create-github-app-token@v2
+        uses: actions/create-github-app-token@v3
         id: app-token
         with:
           app-id: ${{ secrets.SUNTOMI_VCS_APP_ID }}
@@ -631,7 +631,7 @@ jobs:
             deplo-git-v1-FF20A2BE8FC59416-
       - name: Checkout
         if: steps.fetch-repository-cache.outputs.cache-hit != 'true'
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
         with:
           fetch-depth: 0
           submodules: true
@@ -667,7 +667,7 @@ jobs:
           curl -L https://github.com/suntomi/deplo/releases/download/nightly/deplo-Linux-$(uname -m) -o /usr/local/bin/deplo
           chmod +x /usr/local/bin/deplo
       - name: Get GitHub App Token
-        uses: actions/create-github-app-token@v2
+        uses: actions/create-github-app-token@v3
         id: app-token
         with:
           app-id: ${{ secrets.SUNTOMI_VCS_APP_ID }}
@@ -683,7 +683,7 @@ jobs:
             deplo-git-v1-FF20A2BE8FC59416-
       - name: Checkout
         if: steps.fetch-repository-cache.outputs.cache-hit != 'true'
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
         with:
           fetch-depth: 0
           submodules: true
@@ -719,7 +719,7 @@ jobs:
           curl -L https://github.com/suntomi/deplo/releases/download/nightly/deplo-Linux-$(uname -m) -o /usr/local/bin/deplo
           chmod +x /usr/local/bin/deplo
       - name: Get GitHub App Token
-        uses: actions/create-github-app-token@v2
+        uses: actions/create-github-app-token@v3
         id: app-token
         with:
           app-id: ${{ secrets.SUNTOMI_VCS_APP_ID }}
@@ -735,7 +735,7 @@ jobs:
             deplo-git-v1-FF20A2BE8FC59416-
       - name: Checkout
         if: steps.fetch-repository-cache.outputs.cache-hit != 'true'
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
         with:
           fetch-depth: 0
           submodules: true
@@ -771,7 +771,7 @@ jobs:
           curl -L https://github.com/suntomi/deplo/releases/download/nightly/deplo-Linux-$(uname -m) -o /usr/local/bin/deplo
           chmod +x /usr/local/bin/deplo
       - name: Get GitHub App Token
-        uses: actions/create-github-app-token@v2
+        uses: actions/create-github-app-token@v3
         id: app-token
         with:
           app-id: ${{ secrets.SUNTOMI_VCS_APP_ID }}
@@ -787,7 +787,7 @@ jobs:
             deplo-git-v1-FF20A2BE8FC59416-
       - name: Checkout
         if: steps.fetch-repository-cache.outputs.cache-hit != 'true'
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
         with:
           fetch-depth: 0
           submodules: true
@@ -826,7 +826,7 @@ jobs:
           curl -L https://github.com/suntomi/deplo/releases/download/nightly/deplo-Linux-$(uname -m) -o /usr/local/bin/deplo
           chmod +x /usr/local/bin/deplo
       - name: Get GitHub App Token
-        uses: actions/create-github-app-token@v2
+        uses: actions/create-github-app-token@v3
         id: app-token
         with:
           app-id: ${{ secrets.SUNTOMI_VCS_APP_ID }}
@@ -842,7 +842,7 @@ jobs:
             deplo-git-v1-FF20A2BE8FC59416-
       - name: Checkout
         if: steps.fetch-repository-cache.outputs.cache-hit != 'true'
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
         with:
           fetch-depth: 0
           submodules: true
@@ -894,7 +894,7 @@ jobs:
           chmod +x /usr/bin/deplo
         shell: bash
       - name: Get GitHub App Token
-        uses: actions/create-github-app-token@v2
+        uses: actions/create-github-app-token@v3
         id: app-token
         with:
           app-id: ${{ secrets.SUNTOMI_VCS_APP_ID }}
@@ -910,7 +910,7 @@ jobs:
             deplo-git-v1-FF20A2BE8FC59416-
       - name: Checkout
         if: steps.fetch-repository-cache.outputs.cache-hit != 'true'
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
         with:
           fetch-depth: 0
           submodules: true
