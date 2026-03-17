@@ -67,9 +67,9 @@ fn detect_value_ref(s: &str) -> (&str, Option<ValueResolver>) {
 }
 
 fn resolver_to_name(resolver: ValueResolver) -> &'static str {
-    let sz = resolver as usize;
-    if sz == (secret_resolver as usize) { "secret" }
-    else if sz == (envref_resolver as usize) { "envref" }
+    let sz = resolver as *const () as usize;
+    if sz == (secret_resolver as *const () as usize) { "secret" }
+    else if sz == (envref_resolver as *const () as usize) { "envref" }
     else { panic!("unknown resolver {}", sz) }
 }
 
@@ -144,8 +144,8 @@ impl Value {
 impl PartialEq for Value {
     fn eq(&self, other: &Self) -> bool {
         return self.value == other.value &&
-            self.resolver.map_or_else(|| 0, |r| r as usize) ==
-            other.resolver.map_or_else(|| 0, |r| r as usize)
+            self.resolver.map_or_else(|| 0, |r| r as *const () as usize) ==
+            other.resolver.map_or_else(|| 0, |r| r as *const () as usize)
     }
 }
 struct Visitor;
