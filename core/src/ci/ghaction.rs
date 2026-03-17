@@ -31,9 +31,10 @@ use crate::vcs::github::AppTokenGenerator;
 
 lazy_static! {
     pub static ref DEPLO_GHACTION_MODULE_VERSIONS: HashMap<String, String> = hashmap! {
-        "actions/checkout".to_string() => "v5".to_string(),
+        "actions/checkout".to_string() => "v6".to_string(),
         "actions/cache".to_string() => "v5".to_string(),
         "mxschmitt/action-tmate".to_string() => "c0afd6f790e3a5564914980036ebf83216678101".to_string(),
+        "actions/create-github-app-token".to_string() => "v3".to_string()
     };
 }
 
@@ -671,7 +672,8 @@ impl<S: shell::Shell> GhAction<S> {
                 format!(
                     include_str!("../../res/ci/ghaction/app_token.yml.tmpl"),
                     app_id_secret_name = app_id_secret_name.resolve(),
-                    pkey_secret_name = pkey_secret_name.resolve()
+                    pkey_secret_name = pkey_secret_name.resolve(),
+                    app_token_version = get_module_version("actions/create-github-app-token"),
                 ).split("\n").map(|s| s.to_string()).collect::<Vec<String>>()
             },
             _ => panic!("generate_checkout_steps should be called with GhAction account")
