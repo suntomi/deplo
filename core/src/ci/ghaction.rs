@@ -110,13 +110,13 @@ pub struct ClientPayload {
     pub job_config: config::runtime::Workflow
 }
 impl ClientPayload {
-    fn new(
+    fn try_new(
         job_config: &config::runtime::Workflow
-    ) -> Self {
-        Self {
+    ) -> Result<Self, Box<dyn Error>> {
+        Ok(Self {
             job_id: randombytes_as_string!(16),
             job_config: job_config.clone()
-        }
+        })
     }
 }
 
@@ -1197,7 +1197,7 @@ impl<S: shell::Shell> ci::CI for GhAction<S> {
         let config = self.config.borrow();
         let user_and_repo = config.modules.vcs().user_and_repo()?;
         let (token, auth_type) = self.get_token()?;
-        let payload = ClientPayload::new(job_config);
+        let payload = ClientPayload::try_new(job_config)?;
         let mut inputs = hashmap!{
             "id" => payload.job_id.clone(),
             "workflow" => job_config.name.clone(),

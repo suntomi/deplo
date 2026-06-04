@@ -205,7 +205,13 @@ impl<'a, S: shell::Shell> GitFeatures<S> for Git<S> {
         shell: S
     ) -> Git<S> {
         #[cfg(feature="git2")]
-        let cwd = std::env::current_dir().unwrap();
+        let repo_path = {
+            let config = shell.config().borrow();
+            match config.runtime.workdir.as_ref() {
+                Some(v) => std::path::PathBuf::from(v),
+                None => std::env::current_dir().unwrap()
+            }
+        };
         return Git::<S> {
             credential: RemoteCredential::Pat {
                 username: username.clone(), email: email.clone(), key: key.clone()
@@ -213,10 +219,7 @@ impl<'a, S: shell::Shell> GitFeatures<S> for Git<S> {
             shell,
             #[cfg(feature="git2")]
             repo: Repository::open_ext(
-                match config.borrow().runtime.workdir {
-                    Some(ref v) => std::path::Path::new(v),
-                    None => cwd.as_path()
-                },
+                repo_path.as_path(),
                 RepositoryOpenFlags::empty(), 
                 &[std::env::var("HOME").unwrap()]
             ).unwrap(),
@@ -229,7 +232,13 @@ impl<'a, S: shell::Shell> GitFeatures<S> for Git<S> {
         shell: S
     ) -> Git<S> {
         #[cfg(feature="git2")]
-        let cwd = std::env::current_dir().unwrap();
+        let repo_path = {
+            let config = shell.config().borrow();
+            match config.runtime.workdir.as_ref() {
+                Some(v) => std::path::PathBuf::from(v),
+                None => std::env::current_dir().unwrap()
+            }
+        };
         return Git::<S> {
             credential: RemoteCredential::App {
                 app_token_generator: app_token_generator,
@@ -237,10 +246,7 @@ impl<'a, S: shell::Shell> GitFeatures<S> for Git<S> {
             shell,
             #[cfg(feature="git2")]
             repo: Repository::open_ext(
-                match config.borrow().runtime.workdir {
-                    Some(ref v) => std::path::Path::new(v),
-                    None => cwd.as_path()
-                },
+                repo_path.as_path(),
                 RepositoryOpenFlags::empty(), 
                 &[std::env::var("HOME").unwrap()]
             ).unwrap(),

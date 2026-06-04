@@ -140,6 +140,8 @@ pub mod env {
 
 // seal
 use rand;
+use rand::TryRng;
+use getrandom;
 use base64;
 use blake2::{VarBlake2b};
 use blake2::digest::{Update, VariableOutput};
@@ -171,16 +173,15 @@ fn seal_nonce(epk: &impl AsRef<[u8]>, pk: &impl AsRef<[u8]>, nonce: &mut BoxNonc
         for i in 0..BOX_NONCE_LEN { nonce[i] = bs[i]; }
     });
 }
-pub fn randombytes(x: &mut [u8]) {
-    let mut rng = rand::rngs::OsRng;
-    use rand::RngCore;
-    rng.fill_bytes(x);
+pub fn randombytes(x: &mut [u8]) -> Result<(), getrandom::Error> {
+    let mut rng = rand::rngs::SysRng;
+    rng.try_fill_bytes(x)
 }
 #[macro_export]
 macro_rules! macro_randombytes_as_string {
     ( $len:expr ) => {{
         let mut bytes = [0u8; $len];
-        crate::util::randombytes(&mut bytes);
+        crate::util::randombytes(&mut bytes)?;
         base64::encode_config(&bytes, base64::URL_SAFE_NO_PAD)
     }}
 }
@@ -199,7 +200,7 @@ pub fn seal(plaintext: &str, pkey_encoded: &str) -> Result<String, Box<dyn Error
     let mut epk: BoxPublicKey = [0u8; BOX_PUBLIC_KEY_LEN];
     let mut esk: BoxSecretKey = [0u8; BOX_SECRET_KEY_LEN];
     let mut seed = [0u8; 32];
-    randombytes(&mut seed);
+    randombytes(&mut seed)?;
     box_keypair_seed(&mut epk, &mut esk, &seed);
 
     let mut nonce: BoxNonce = [0u8; BOX_NONCE_LEN];
