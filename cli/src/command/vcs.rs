@@ -63,6 +63,12 @@ impl<S: shell::Shell> VCS<S> {
                     .collect::<HashMap<_, _>>();
                 vcs.pr(title, head, base, &options)?;
             },
+            Some(("search", subargs)) => {
+                let filters = subargs.values_of("filter")
+                    .map(|v| v.into_iter().map(|s| s.to_string()).collect::<Vec<_>>())
+                    .unwrap_or(vec![]);
+                println!("{}", vcs.search_pr(&filters)?);
+            },
             Some(("merge", subargs)) => {
                 vcs.merge_pr(
                     subargs.value_or_die("url"),

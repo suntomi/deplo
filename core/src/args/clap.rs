@@ -426,6 +426,16 @@ lazy_static! {
                             .action(clap::ArgAction::Append))
                     )
                     .subcommand(
+                        Command::new("search")
+                        .about("search pull requests")
+                        .arg(Arg::new("filter")
+                            .help("filter for pull request search.\n\
+                                    -f $key=$value\n\
+                                    for github, query parameters of https://docs.github.com/en/rest/issues/issues?apiVersion=2022-11-28#list-repository-issues can be specified.")
+                            .short('f')
+                            .action(clap::ArgAction::Append))
+                    )
+                    .subcommand(
                         Command::new("merge")
                         .about("merge pull request")
                         .arg(Arg::new("url")

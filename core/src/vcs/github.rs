@@ -652,6 +652,28 @@ impl<GIT: git::GitFeatures<S>, S: shell::Shell> vcs::VCS for Github<GIT, S> {
         ], shell::no_env(), shell::no_cwd(), &shell::capture())?;
         Ok(())
     }
+    fn search_pr(
+        &self, filters: &Vec<String>
+    ) -> Result<String, Box<dyn Error>> {
+        let user_and_repo = self.user_and_repo()?;
+        let (token, auth_type) = self.get_token()?;
+        let mut args = shell::args![
+            "curl", "-fsSL", "-G",
+            "-H", shell::fmtargs!("Authorization: {} {}", auth_type, &token),
+            "-H", "Accept: application/vnd.github.v3+json",
+            format!("https://api.github.com/repos/{}/{}/issues", user_and_repo.0, user_and_repo.1)
+        ];
+        for filter in filters {
+            args.push(shell::arg!("--data-urlencode"));
+            args.push(shell::arg!(filter.clone()));
+        }
+        let response_text = self.shell.exec(args, shell::no_env(), shell::no_cwd(), &shell::capture())?;
+        let issues = serde_json::from_str::<Vec<JsonValue>>(&response_text)?;
+        let prs = issues.into_iter()
+            .filter(|issue| issue.get("pull_request").is_some())
+            .collect::<Vec<_>>();
+        Ok(serde_json::to_string(&prs)?)
+    }
     fn pr_url_from_env(&self) -> Result<Option<String>, Box<dyn Error>> {
         match self.git.current_ref()? {
             (vcs::RefType::Branch|vcs::RefType::Remote, _) => Ok(None),
