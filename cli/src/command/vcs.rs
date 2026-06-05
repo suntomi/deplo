@@ -85,6 +85,20 @@ impl<S: shell::Shell> VCS<S> {
         }
         Ok(())
     }
+    fn control_label<A: args::Args>(&self, args: &A) -> Result<(), Box<dyn Error>> {
+        let config = self.config.borrow();
+        let vcs = config.modules.vcs();
+        match args.subcommand() {
+            Some(("create", subargs)) => {
+                vcs.label(
+                    subargs.value_or_die("label_name"),
+                    subargs.value_of("color")
+                )?;
+            },
+            _ => return escalate!(args.error("no such subcommand for label control"))
+        }
+        Ok(())
+    }
 }
 
 impl<S: shell::Shell, A: args::Args> command::Command<A> for VCS<S> {
@@ -99,6 +113,7 @@ impl<S: shell::Shell, A: args::Args> command::Command<A> for VCS<S> {
             Some(("release", subargs)) => return self.release(&subargs),
             Some(("release-assets", subargs)) => return self.release_assets(&subargs),
             Some(("pr", subargs)) => return self.control_pr(&subargs),
+            Some(("label", subargs)) => return self.control_label(&subargs),
             Some((name, _)) => return escalate!(args.error(
                 &format!("no such subcommand: [{}]", name) 
             )),

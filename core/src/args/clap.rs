@@ -467,6 +467,22 @@ lazy_static! {
                             .action(clap::ArgAction::Append))         
                     )
                 )
+                .subcommand(
+                    Command::new("label")
+                    .about("control labels")
+                    .subcommand(
+                        Command::new("create")
+                        .about("create label")
+                        .arg(Arg::new("label_name")
+                            .help("label name to create")
+                            .index(1)
+                            .required(true))
+                        .arg(Arg::new("color")
+                            .help("label color as 6-character hex code")
+                            .long("color")
+                            .short('c'))
+                    )
+                )
         )
         .get_matches();
 }

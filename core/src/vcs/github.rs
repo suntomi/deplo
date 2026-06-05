@@ -674,6 +674,25 @@ impl<GIT: git::GitFeatures<S>, S: shell::Shell> vcs::VCS for Github<GIT, S> {
             .collect::<Vec<_>>();
         Ok(serde_json::to_string(&prs)?)
     }
+    fn label(
+        &self, name: &str, color: Option<&str>
+    ) -> Result<(), Box<dyn Error>> {
+        let user_and_repo = self.user_and_repo()?;
+        let (token, auth_type) = self.get_token()?;
+        let mut body = serde_json::Map::new();
+        body.insert("name".to_string(), JsonValue::String(name.to_string()));
+        if let Some(color) = color {
+            body.insert("color".to_string(), JsonValue::String(color.trim_start_matches('#').to_string()));
+        }
+        self.shell.exec(shell::args![
+            "curl", "-fsSL", "-X", "POST",
+            "-H", shell::fmtargs!("Authorization: {} {}", auth_type, &token),
+            "-H", "Accept: application/vnd.github.v3+json",
+            format!("https://api.github.com/repos/{}/{}/labels", user_and_repo.0, user_and_repo.1),
+            "-d", serde_json::to_string(&JsonValue::Object(body))?
+        ], shell::no_env(), shell::no_cwd(), &shell::capture())?;
+        Ok(())
+    }
     fn pr_url_from_env(&self) -> Result<Option<String>, Box<dyn Error>> {
         match self.git.current_ref()? {
             (vcs::RefType::Branch|vcs::RefType::Remote, _) => Ok(None),

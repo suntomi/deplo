@@ -66,6 +66,9 @@ pub trait VCS {
     fn search_pr(
         &self, filters: &Vec<String>
     ) -> Result<String, Box<dyn Error>>;
+    fn label(
+        &self, name: &str, color: Option<&str>
+    ) -> Result<(), Box<dyn Error>>;
     fn pr_url_from_env(&self) -> Result<Option<String>, Box<dyn Error>>;
     fn user_and_repo(&self) -> Result<(String, String), Box<dyn Error>>;
     fn release(
