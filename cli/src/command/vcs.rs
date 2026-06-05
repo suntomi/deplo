@@ -1,7 +1,9 @@
+use std::collections::HashMap;
 use std::error::Error;
 
 use core::config;
 use core::shell;
+use core::util::json_to_strmap;
 
 use crate::args;
 use crate::command;
@@ -40,6 +42,27 @@ impl<S: shell::Shell> VCS<S> {
         let config = self.config.borrow();
         let vcs = config.modules.vcs();
         match args.subcommand() {
+            Some(("create", subargs)) => {
+                let option_values = subargs.json_value_of("option")?;
+                let option_map = json_to_strmap(&option_values);
+                let title = match option_map.get("title") {
+                    Some(v) => v,
+                    None => return escalate!(subargs.error("pr create: must specify -o title=$title"))
+                };
+                let head = match option_map.get("head") {
+                    Some(v) => v,
+                    None => return escalate!(subargs.error("pr create: must specify -o head=$head_branch"))
+                };
+                let base = match option_map.get("base") {
+                    Some(v) => v,
+                    None => return escalate!(subargs.error("pr create: must specify -o base=$base_branch"))
+                };
+                let options = option_map.iter()
+                    .filter(|(k, _)| **k != "title" && **k != "head" && **k != "base")
+                    .map(|(k, v)| (*k, v.as_str()))
+                    .collect::<HashMap<_, _>>();
+                vcs.pr(title, head, base, &options)?;
+            },
             Some(("merge", subargs)) => {
                 vcs.merge_pr(
                     subargs.value_or_die("url"),
