@@ -412,6 +412,30 @@ lazy_static! {
                     Command::new("pr")
                     .about("control pull request")
                     .subcommand(
+                        Command::new("create")
+                        .about("create pull request")
+                        .arg(Arg::new("option")
+                            .help("option for pull request creation.\n\
+                                    -o $key=$value\n\
+                                    required: -o title=$title -o head=$head_branch -o base=$base_branch\n\
+                                    for github, body options of https://docs.github.com/en/rest/pulls/pulls?apiVersion=2022-11-28#create-a-pull-request can be specified.\n\
+                                    plus, -o labels=$json_array to attach labels.\n\
+                                          -o assignees=$json_array to assign accounts.\n\
+                                    TODO: for gitlab")
+                            .short('o')
+                            .action(clap::ArgAction::Append))
+                    )
+                    .subcommand(
+                        Command::new("search")
+                        .about("search pull requests")
+                        .arg(Arg::new("filter")
+                            .help("filter for pull request search.\n\
+                                    -f $key=$value\n\
+                                    for github, query parameters of https://docs.github.com/en/rest/issues/issues?apiVersion=2022-11-28#list-repository-issues can be specified.")
+                            .short('f')
+                            .action(clap::ArgAction::Append))
+                    )
+                    .subcommand(
                         Command::new("merge")
                         .about("merge pull request")
                         .arg(Arg::new("url")
@@ -441,6 +465,22 @@ lazy_static! {
                                     -o message=$text to post comment to pull request.")
                             .short('o')
                             .action(clap::ArgAction::Append))         
+                    )
+                )
+                .subcommand(
+                    Command::new("label")
+                    .about("control labels")
+                    .subcommand(
+                        Command::new("create")
+                        .about("create label")
+                        .arg(Arg::new("label_name")
+                            .help("label name to create")
+                            .index(1)
+                            .required(true))
+                        .arg(Arg::new("color")
+                            .help("label color as 6-character hex code")
+                            .long("color")
+                            .short('c'))
                     )
                 )
         )

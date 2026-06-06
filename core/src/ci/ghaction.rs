@@ -110,13 +110,13 @@ pub struct ClientPayload {
     pub job_config: config::runtime::Workflow
 }
 impl ClientPayload {
-    fn new(
+    fn try_new(
         job_config: &config::runtime::Workflow
-    ) -> Self {
-        Self {
+    ) -> Result<Self, Box<dyn Error>> {
+        Ok(Self {
             job_id: randombytes_as_string!(16),
             job_config: job_config.clone()
-        }
+        })
     }
 }
 
@@ -702,6 +702,27 @@ impl<S: shell::Shell> GhAction<S> {
         }
         steps
     }
+    fn generate_update_workflow(
+        &self, repository_root: &str, config_post_fix: &str, account: &config::ci::Account, secrets: &Vec<String>
+    ) -> Result<(), Box<dyn Error>> {
+        let update_workflow_yml_path = format!(
+            "{}/.github/workflows/deplo-update{}.yml", repository_root, config_post_fix);
+        fs::write(&update_workflow_yml_path,
+            format!(
+                include_str!("../../res/ci/ghaction/update.yml.tmpl"),
+                current_version = config::DEPLO_VERSION,
+                release_url_base = config::DEPLO_RELEASE_URL_BASE,
+                secrets = MultilineFormatString{ strings: secrets, postfix: None },
+                checkout = MultilineFormatString{
+                    strings: &self.generate_checkout_steps("update", account, &None, &Some(config::job::CheckoutOption {
+                        fetch_depth: Some(2), lfs: None, token: None, submodules: None,
+                    })),
+                    postfix: None
+                },
+            )
+        )?;
+        Ok(())
+    }
     fn get_token(&self) -> Result<(config::Value, &str), Box<dyn Error>> {
         let config = self.config.borrow();
         Ok(match config.ci.get(&self.account_name).unwrap() {
@@ -824,12 +845,6 @@ impl<S: shell::Shell> ci::CI for GhAction<S> {
         let jobs = config.jobs.as_map().iter().filter(
             |(_,v)| v.is_enabled_for_account(&self.account_name)
         ).collect::<HashMap<_,_>>();
-        if jobs.len() == 0 {
-            log::info!(
-                "no jobs defined for the account {}. skip ghaction config generation", 
-                self.account_name);
-            return Ok(());
-        }
         let config_post_fix = match self.account_name.as_str() {
             "default" => "".to_string(),
             _ => format!("-{}", self.account_name)
@@ -857,6 +872,15 @@ impl<S: shell::Shell> ci::CI for GhAction<S> {
                 log::debug!("set variable value of {}", k);
             }
             secrets.push(format!("{}: ${{{{ vars.{} }}}}", k, k));
+        }
+        if create_main {
+            self.generate_update_workflow(&repository_root, &config_post_fix, account, &secrets)?;
+        }
+        if jobs.len() == 0 {
+            log::info!(
+                "no jobs defined for the account {}. skip ghaction job config generation",
+                self.account_name);
+            return Ok(());
         }
         // generate job entries
         let mut job_descs = Vec::new();
@@ -1197,7 +1221,7 @@ impl<S: shell::Shell> ci::CI for GhAction<S> {
         let config = self.config.borrow();
         let user_and_repo = config.modules.vcs().user_and_repo()?;
         let (token, auth_type) = self.get_token()?;
-        let payload = ClientPayload::new(job_config);
+        let payload = ClientPayload::try_new(job_config)?;
         let mut inputs = hashmap!{
             "id" => payload.job_id.clone(),
             "workflow" => job_config.name.clone(),
