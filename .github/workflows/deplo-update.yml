@@ -33,6 +33,10 @@ jobs:
   deplo-update:
     runs-on: ubuntu-latest
     steps:
+      - name: Fetch deplo cli
+        run: |
+          curl -L https://github.com/suntomi/deplo/releases/download/nightly/deplo-Linux-$(uname -m) -o /usr/local/bin/deplo
+          chmod +x /usr/local/bin/deplo
       - name: Get GitHub App Token
         uses: actions/create-github-app-token@v3
         id: app-token
@@ -40,11 +44,25 @@ jobs:
           client-id: ${{ secrets.SUNTOMI_VCS_APP_ID }}
           private-key: ${{ secrets.SUNTOMI_VCS_APP_PKEY }}
           owner: ${{ github.repository_owner }}
+      - name: Fetch repository cache
+        id: fetch-repository-cache
+        uses: actions/cache@v5
+        with:
+          path: .git
+          key: deplo-git-v1-FF20A2BE8FC59416-${{ github.sha }}
+          restore-keys:
+            deplo-git-v1-FF20A2BE8FC59416-
       - name: Checkout
+        if: steps.fetch-repository-cache.outputs.cache-hit != 'true'
         uses: actions/checkout@v6
         with:
-          fetch-depth: 2
+          fetch-depth: 0
+          submodules: true
           token: ${{ steps.app-token.outputs.token }}
+      - name: Restore repository from cache
+        if: steps.fetch-repository-cache.outputs.cache-hit == 'true'
+        run: git reset --hard HEAD && git submodule update --init --recursive && deplo -v=1 ci restore-cache --submodules
+        shell: bash
       - name: Resolve deplo version
         id: version
         shell: bash

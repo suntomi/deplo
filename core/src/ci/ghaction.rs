@@ -703,7 +703,8 @@ impl<S: shell::Shell> GhAction<S> {
         steps
     }
     fn generate_update_workflow(
-        &self, repository_root: &str, config_post_fix: &str, account: &config::ci::Account, secrets: &Vec<String>
+        &self, repository_root: &str, config_post_fix: &str, account: &config::ci::Account,
+        checkout: &Option<config::job::CheckoutOption>, secrets: &Vec<String>
     ) -> Result<(), Box<dyn Error>> {
         let update_workflow_yml_path = format!(
             "{}/.github/workflows/deplo-update{}.yml", repository_root, config_post_fix);
@@ -713,8 +714,14 @@ impl<S: shell::Shell> GhAction<S> {
                 current_version = config::DEPLO_VERSION,
                 release_url_base = config::DEPLO_RELEASE_URL_BASE,
                 secrets = MultilineFormatString{ strings: secrets, postfix: None },
+                fetchcli = MultilineFormatString{
+                    strings: &self.generate_fetchcli_steps(&config::job::Runner::Machine{
+                        os: config::job::RunnerOS::Linux, image: None, class: None, local_fallback: None, no_fallback: None }
+                    ),
+                    postfix: None
+                },
                 checkout = MultilineFormatString{
-                    strings: &self.generate_checkout_steps("update", account, &None, &Some(config::job::CheckoutOption {
+                    strings: &self.generate_checkout_steps("update", account, checkout, &Some(config::job::CheckoutOption {
                         fetch_depth: Some(2), lfs: None, token: None, submodules: None,
                     })),
                     postfix: None
@@ -874,7 +881,7 @@ impl<S: shell::Shell> ci::CI for GhAction<S> {
             secrets.push(format!("{}: ${{{{ vars.{} }}}}", k, k));
         }
         if create_main {
-            self.generate_update_workflow(&repository_root, &config_post_fix, account, &secrets)?;
+            self.generate_update_workflow(&repository_root, &config_post_fix, account, &config.checkout, &secrets)?;
         }
         if jobs.len() == 0 {
             log::info!(
