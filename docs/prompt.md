@@ -55,4 +55,11 @@ deplo vcs label create $label_name --color (or -c) #FFFF00
 以下の2点を追加で実装してください。
 
 - デフォルトでは最新版のバージョン名が "[0-9]+\.[0-9]+\.[0-9]+" というパターンのみを更新対象にする。 eg. 0.5.0-betaや0.6.0-rc1 といった正式でないリリースに対してPRを作成することで不安定なバージョンを導入しないように。更新対象にするパターンは、action vars経由で指定する正規表現で変更できる
-- PRを作成しようとした時に、すでに更新用のPRが作成されている場合、それをcloseするようにします。更新用のPRには
+- PRを作成しようとした時に、すでに更新用のPRが作成されている場合、それをcloseするようにします。更新用のPRにはdeplo-updateという名称のラベルをつけて、そのラベルのついたopenなPRがないかチェックするのが良いと考えています。
+
+======
+今の実装ですが、気になる点があります。deploのバージョン更新のpull requestがマージされないまま次のworkflowが実行されると、pull requestがcloseされて、新たに同じ内容のPRが作成され続けませんか？それはあまり良くないため、同じバージョン向けの更新用pull requestが作られていたら、closeしないようにしたいです。どのように実装するかアイデアがあれば教えてください。
+
+======
+今、deploが処理するレポジトリのdeplo-main.yamlは、Deplo.tomlの`checkout` という設定を見てcheckoutのやり方を切り替えています。
+現在deplo-update.yamlのcheckoutはそれを見れていないようです。deplo-update.yamlについてもcheckout周りのステップを生成するのに generate_checkout_stepsを使った方が良いのではないでしょうか？
