@@ -36,7 +36,6 @@ env:
   DEPLO_CI_START_DEBUG_DEFAULT: ${{ vars.DEPLO_CI_START_DEBUG_DEFAULT }}
   DEPLO_CI_LOG_VERBOSITY: ${{ vars.DEPLO_CI_LOG_VERBOSITY }}
   DEPLO_CI_RUN_DEBUGGER: "true"
-  
   SUNTOMI_AWS_ROLE: ${{ secrets.SUNTOMI_AWS_ROLE }}
   SUNTOMI_VCS_ACCOUNT: ${{ secrets.SUNTOMI_VCS_ACCOUNT }}
   SUNTOMI_VCS_ACCOUNT_EMAIL: ${{ secrets.SUNTOMI_VCS_ACCOUNT_EMAIL }}
@@ -69,7 +68,7 @@ jobs:
     steps:
       - name: Fetch deplo cli
         run: |
-          curl -L https://github.com/suntomi/deplo/releases/download/nightly/deplo-Linux-$(uname -m) -o /usr/local/bin/deplo
+          curl -L https://github.com/suntomi/deplo/releases/download/0.5.0/deplo-Linux-$(uname -m) -o /usr/local/bin/deplo
           chmod +x /usr/local/bin/deplo
       - name: Get GitHub App Token
         uses: actions/create-github-app-token@v3
@@ -136,7 +135,7 @@ jobs:
         run: echo "DEPLO_CI_RUN_DEBUGGER=" >> $GITHUB_ENV
       - name: Fetch deplo cli
         run: |
-          curl -L https://github.com/suntomi/deplo/releases/download/nightly/deplo-Linux-$(uname -m) -o /usr/local/bin/deplo
+          curl -L https://github.com/suntomi/deplo/releases/download/0.5.0/deplo-Linux-$(uname -m) -o /usr/local/bin/deplo
           chmod +x /usr/local/bin/deplo
       - name: Get GitHub App Token
         uses: actions/create-github-app-token@v3
@@ -189,7 +188,7 @@ jobs:
     steps:
       - name: Fetch deplo cli
         run: |
-          curl -L https://github.com/suntomi/deplo/releases/download/nightly/deplo-Linux-$(uname -m) -o /usr/local/bin/deplo
+          curl -L https://github.com/suntomi/deplo/releases/download/0.5.0/deplo-Linux-$(uname -m) -o /usr/local/bin/deplo
           chmod +x /usr/local/bin/deplo
       - name: Get GitHub App Token
         uses: actions/create-github-app-token@v3
@@ -241,7 +240,7 @@ jobs:
     steps:
       - name: Fetch deplo cli
         run: |
-          curl -L https://github.com/suntomi/deplo/releases/download/nightly/deplo-Linux-$(uname -m) -o /usr/local/bin/deplo
+          curl -L https://github.com/suntomi/deplo/releases/download/0.5.0/deplo-Linux-$(uname -m) -o /usr/local/bin/deplo
           chmod +x /usr/local/bin/deplo
       - name: Get GitHub App Token
         uses: actions/create-github-app-token@v3
@@ -293,7 +292,7 @@ jobs:
     steps:
       - name: Fetch deplo cli
         run: |
-          curl -L https://github.com/suntomi/deplo/releases/download/nightly/deplo-Linux-$(uname -m) -o /usr/local/bin/deplo
+          curl -L https://github.com/suntomi/deplo/releases/download/0.5.0/deplo-Linux-$(uname -m) -o /usr/local/bin/deplo
           chmod +x /usr/local/bin/deplo
       - name: Get GitHub App Token
         uses: actions/create-github-app-token@v3
@@ -345,7 +344,7 @@ jobs:
     steps:
       - name: Fetch deplo cli
         run: |
-          curl -L https://github.com/suntomi/deplo/releases/download/nightly/deplo-Linux-$(uname -m) -o /usr/local/bin/deplo
+          curl -L https://github.com/suntomi/deplo/releases/download/0.5.0/deplo-Linux-$(uname -m) -o /usr/local/bin/deplo
           chmod +x /usr/local/bin/deplo
       - name: Get GitHub App Token
         uses: actions/create-github-app-token@v3
@@ -398,7 +397,7 @@ jobs:
     steps:
       - name: Fetch deplo cli
         run: |
-          curl -L https://github.com/suntomi/deplo/releases/download/nightly/deplo-Linux-$(uname -m) -o /usr/local/bin/deplo
+          curl -L https://github.com/suntomi/deplo/releases/download/0.5.0/deplo-Linux-$(uname -m) -o /usr/local/bin/deplo
           chmod +x /usr/local/bin/deplo
       - name: Get GitHub App Token
         uses: actions/create-github-app-token@v3
@@ -451,7 +450,7 @@ jobs:
     steps:
       - name: Fetch deplo cli
         run: |
-          curl -L https://github.com/suntomi/deplo/releases/download/nightly/deplo-Darwin -o /usr/local/bin/deplo
+          curl -L https://github.com/suntomi/deplo/releases/download/0.5.0/deplo-Darwin -o /usr/local/bin/deplo
           chmod +x /usr/local/bin/deplo
       - name: Get GitHub App Token
         uses: actions/create-github-app-token@v3
@@ -518,7 +517,7 @@ jobs:
     steps:
       - name: Fetch deplo cli
         run: |
-          curl -L https://github.com/suntomi/deplo/releases/download/nightly/deplo-Linux-$(uname -m) -o /usr/local/bin/deplo
+          curl -L https://github.com/suntomi/deplo/releases/download/0.5.0/deplo-Linux-$(uname -m) -o /usr/local/bin/deplo
           chmod +x /usr/local/bin/deplo
       - name: Get GitHub App Token
         uses: actions/create-github-app-token@v3
@@ -570,7 +569,7 @@ jobs:
     steps:
       - name: Fetch deplo cli
         run: |
-          curl -L https://github.com/suntomi/deplo/releases/download/nightly/deplo-Linux-$(uname -m) -o /usr/local/bin/deplo
+          curl -L https://github.com/suntomi/deplo/releases/download/0.5.0/deplo-Linux-$(uname -m) -o /usr/local/bin/deplo
           chmod +x /usr/local/bin/deplo
       - name: Get GitHub App Token
         uses: actions/create-github-app-token@v3
@@ -623,7 +622,7 @@ jobs:
     steps:
       - name: Fetch deplo cli
         run: |
-          curl -L https://github.com/suntomi/deplo/releases/download/nightly/deplo-Linux-$(uname -m) -o /usr/local/bin/deplo
+          curl -L https://github.com/suntomi/deplo/releases/download/0.5.0/deplo-Linux-$(uname -m) -o /usr/local/bin/deplo
           chmod +x /usr/local/bin/deplo
       - name: Get GitHub App Token
         uses: actions/create-github-app-token@v3
@@ -675,7 +674,7 @@ jobs:
     steps:
       - name: Fetch deplo cli
         run: |
-          curl -L https://github.com/suntomi/deplo/releases/download/nightly/deplo-Linux-$(uname -m) -o /usr/local/bin/deplo
+          curl -L https://github.com/suntomi/deplo/releases/download/0.5.0/deplo-Linux-$(uname -m) -o /usr/local/bin/deplo
           chmod +x /usr/local/bin/deplo
       - name: Get GitHub App Token
         uses: actions/create-github-app-token@v3
@@ -727,7 +726,7 @@ jobs:
     steps:
       - name: Fetch deplo cli
         run: |
-          curl -L https://github.com/suntomi/deplo/releases/download/nightly/deplo-Linux-$(uname -m) -o /usr/local/bin/deplo
+          curl -L https://github.com/suntomi/deplo/releases/download/0.5.0/deplo-Linux-$(uname -m) -o /usr/local/bin/deplo
           chmod +x /usr/local/bin/deplo
       - name: Get GitHub App Token
         uses: actions/create-github-app-token@v3
@@ -779,7 +778,7 @@ jobs:
     steps:
       - name: Fetch deplo cli
         run: |
-          curl -L https://github.com/suntomi/deplo/releases/download/nightly/deplo-Linux-$(uname -m) -o /usr/local/bin/deplo
+          curl -L https://github.com/suntomi/deplo/releases/download/0.5.0/deplo-Linux-$(uname -m) -o /usr/local/bin/deplo
           chmod +x /usr/local/bin/deplo
       - name: Get GitHub App Token
         uses: actions/create-github-app-token@v3
@@ -834,7 +833,7 @@ jobs:
     steps:
       - name: Fetch deplo cli
         run: |
-          curl -L https://github.com/suntomi/deplo/releases/download/nightly/deplo-Linux-$(uname -m) -o /usr/local/bin/deplo
+          curl -L https://github.com/suntomi/deplo/releases/download/0.5.0/deplo-Linux-$(uname -m) -o /usr/local/bin/deplo
           chmod +x /usr/local/bin/deplo
       - name: Get GitHub App Token
         uses: actions/create-github-app-token@v3
@@ -901,7 +900,7 @@ jobs:
     steps:
       - name: Fetch deplo cli
         run: |
-          curl -L https://github.com/suntomi/deplo/releases/download/nightly/deplo-Windows.exe -o /usr/bin/deplo
+          curl -L https://github.com/suntomi/deplo/releases/download/0.5.0/deplo-Windows.exe -o /usr/bin/deplo
           chmod +x /usr/bin/deplo
         shell: bash
       - name: Get GitHub App Token
