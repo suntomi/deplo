@@ -295,7 +295,7 @@ impl Workflow {
                 };
                 let mut matches = {
                     let config = config.borrow();
-                    let (_, ci) = config.modules.ci_by_env();
+                    let (_, ci) = config.ci_by_env();
                     ci.filter_workflows(trigger)?
                 };
                 if matches.len() == 0 {
@@ -402,6 +402,7 @@ pub struct Config {
     pub verbosity: u64,
     pub dotenv_path: Option<String>,
     pub config_path: String,
+    pub ci: Option<String>,
     pub repository_root: PathBuf,
     pub workdir: Option<String>,
     pub debug_options: HashMap<String, String>,
@@ -426,6 +427,7 @@ impl Config {
                 Some(o) => o.to_string(),
                 None => root.join("Deplo.toml").to_string_lossy().to_string()
             },
+            ci: args.value_of("ci").map_or_else(|| None, |v| Some(v.to_string())),
             repository_root: root,
             workdir: args.value_of("workdir").map_or_else(|| None, |v| Some(v.to_string())),
             debug_options: args.map_of("debug")

@@ -53,8 +53,11 @@ fn get_module_version(module: &str) -> String {
     DEPLO_GHACTION_MODULE_VERSIONS.get(module).unwrap().clone()
 }
 
-fn common_envs() -> Vec<&'static str> {
-    include_str!("../../res/ci/ghaction/common_envs.yml.tmpl").split("\n").collect()
+fn common_envs() -> Vec<String> {
+    format!(include_str!("../../res/ci/ghaction/common_envs.yml.tmpl"))
+        .split("\n")
+        .map(|s| s.to_string())
+        .collect()
 }
 
 #[derive(Serialize, Deserialize)]
