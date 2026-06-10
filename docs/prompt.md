@@ -63,3 +63,21 @@ deplo vcs label create $label_name --color (or -c) #FFFF00
 ======
 今、deploが処理するレポジトリのdeplo-main.yamlは、Deplo.tomlの`checkout` という設定を見てcheckoutのやり方を切り替えています。
 現在deplo-update.yamlのcheckoutはそれを見れていないようです。deplo-update.yamlについてもcheckout周りのステップを生成するのに generate_checkout_stepsを使った方が良いのではないでしょうか？
+
+======
+core::config::Module::ci_by_envですが、これはCIの環境上でdeploが動いている場合に、対応するciの設定を自動で取得するためのものです。しかし、CIの環境上で動いていない場合にはdefaultのci設定を返しています。
+
+このことは手元でdeploのコマンドラインを動かす場合に以下のような問題を起こしています。
+- ローカルではdefaultのci設定でしか起動できない
+- そしてそのことに気づきづらい
+
+このため以下のようにします。
+- deploの最上位のコマンドライン引数に`--ci=$ci_name` を用意する
+- $ci_nameはDeplo.tomlのci tableのキー
+- core::config::Module::ci_by_env で、対応するCI環境が見つからなかった場合、`--ci=$ci_name`で与えられた指定に対応するciを使う。
+  - このケースで`--ci`が与えられていない場合、warningのログを出して、defaultのci設定を返す
+
+======
+
+- core/src/ci/ghaction.rs の GhAction::generate_configの実装ですが、設定ファイルはDeplo.tomlでそのCI上で動作するjobがない場合作成されません。従って core/src/ci/ghaction.rs:876あたりからのsecret/variableを設定する部分がそのciにおいて常に実行されてしまいます。これらのコードを if jobs.len() == 0 の後に移動させてください。
+- generate_update_workflow ですが、update workflowは１レポジトリで１つあれば良いのですが、現状では複数のアカウントがあるとその数だけ作成されてしまいます。generate_update_workflow を生成するのはdefaultのci accountの時だけにしてください。
