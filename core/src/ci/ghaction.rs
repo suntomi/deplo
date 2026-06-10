@@ -53,6 +53,10 @@ fn get_module_version(module: &str) -> String {
     DEPLO_GHACTION_MODULE_VERSIONS.get(module).unwrap().clone()
 }
 
+fn common_envs() -> Vec<&'static str> {
+    include_str!("../../res/ci/ghaction/common_envs.yml.tmpl").split("\n").collect()
+}
+
 #[derive(Serialize, Deserialize)]
 #[serde(untagged)]
 enum EventPayload {
@@ -713,6 +717,7 @@ impl<S: shell::Shell> GhAction<S> {
                 include_str!("../../res/ci/ghaction/update.yml.tmpl"),
                 current_version = config::DEPLO_VERSION,
                 release_url_base = config::DEPLO_RELEASE_URL_BASE,
+                common_envs = MultilineFormatString{ strings: &common_envs(), postfix: None },
                 secrets = MultilineFormatString{ strings: secrets, postfix: None },
                 fetchcli = MultilineFormatString{
                     strings: &self.generate_fetchcli_steps(&config::job::Runner::Machine{
@@ -989,6 +994,7 @@ impl<S: shell::Shell> ci::CI for GhAction<S> {
                         strings: &(if create_main { entrypoint } else { vec![] }),
                         postfix: None
                     },
+                    common_envs = MultilineFormatString{ strings: &common_envs(), postfix: None },
                     secrets = MultilineFormatString{ strings: &secrets, postfix: None },
                     outputs = MultilineFormatString{ 
                         strings: &self.generate_outputs(&jobs),
