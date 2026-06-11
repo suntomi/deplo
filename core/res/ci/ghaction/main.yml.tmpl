@@ -5,13 +5,7 @@ on:
 {entrypoint:>2}
 
 env:
-  DEPLO_GHACTION_CI_ID: ${{{{ github.run_id }}}}-${{{{ github.run_attempt }}}}
-  DEPLO_GHACTION_EVENT_DATA: ${{{{ toJson(github) }}}}
-  DEPLO_GHACTION_WORKFLOW_NAME: ${{{{ github.workflow }}}}
-  DEPLO_OVERWRITE_EXEC_OPTIONS: ${{{{ github.event.inputs.exec }}}}
-  DEPLO_CI_START_DEBUG_DEFAULT: ${{{{ vars.DEPLO_CI_START_DEBUG_DEFAULT }}}}
-  DEPLO_CI_LOG_VERBOSITY: ${{{{ vars.DEPLO_CI_LOG_VERBOSITY }}}}
-  DEPLO_CI_RUN_DEBUGGER: "true"
+{common_envs:>2}
 {secrets:>2}
 jobs:
   deplo-main:

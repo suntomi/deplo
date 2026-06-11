@@ -53,6 +53,13 @@ fn get_module_version(module: &str) -> String {
     DEPLO_GHACTION_MODULE_VERSIONS.get(module).unwrap().clone()
 }
 
+fn common_envs() -> Vec<String> {
+    format!(include_str!("../../res/ci/ghaction/common_envs.yml.tmpl"))
+        .split("\n")
+        .map(|s| s.to_string())
+        .collect()
+}
+
 #[derive(Serialize, Deserialize)]
 #[serde(untagged)]
 enum EventPayload {
@@ -713,6 +720,7 @@ impl<S: shell::Shell> GhAction<S> {
                 include_str!("../../res/ci/ghaction/update.yml.tmpl"),
                 current_version = config::DEPLO_VERSION,
                 release_url_base = config::DEPLO_RELEASE_URL_BASE,
+                common_envs = MultilineFormatString{ strings: &common_envs(), postfix: None },
                 secrets = MultilineFormatString{ strings: secrets, postfix: None },
                 fetchcli = MultilineFormatString{
                     strings: &self.generate_fetchcli_steps(&config::job::Runner::Machine{
@@ -861,6 +869,12 @@ impl<S: shell::Shell> ci::CI for GhAction<S> {
         let main_workflow_yml_path = format!(
             "{}/.github/workflows/deplo-main{}.yml", repository_root, config_post_fix);
         let create_main = config.ci.is_main(vec!["GhAction", "GhActionApp"]);
+        if jobs.len() == 0 {
+            log::info!(
+                "no jobs defined for the account {}. skip ghaction job config generation",
+                self.account_name);
+            return Ok(());
+        }
         fs::create_dir_all(&format!("{}/.github/workflows", repository_root))?;
         let previously_no_file = !rm(&main_workflow_yml_path);
         // inject secrets from dotenv file
@@ -880,14 +894,8 @@ impl<S: shell::Shell> ci::CI for GhAction<S> {
             }
             secrets.push(format!("{}: ${{{{ vars.{} }}}}", k, k));
         }
-        if create_main {
+        if create_main && self.account_name == "default" {
             self.generate_update_workflow(&repository_root, &config_post_fix, account, &config.checkout, &secrets)?;
-        }
-        if jobs.len() == 0 {
-            log::info!(
-                "no jobs defined for the account {}. skip ghaction job config generation",
-                self.account_name);
-            return Ok(());
         }
         // generate job entries
         let mut job_descs = Vec::new();
@@ -989,6 +997,7 @@ impl<S: shell::Shell> ci::CI for GhAction<S> {
                         strings: &(if create_main { entrypoint } else { vec![] }),
                         postfix: None
                     },
+                    common_envs = MultilineFormatString{ strings: &common_envs(), postfix: None },
                     secrets = MultilineFormatString{ strings: &secrets, postfix: None },
                     outputs = MultilineFormatString{ 
                         strings: &self.generate_outputs(&jobs),

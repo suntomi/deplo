@@ -50,7 +50,7 @@ impl<S: shell::Shell> CI<S> {
     }
     fn token<A: args::Args>(&self, args: &A) -> Result<(), Box<dyn Error>> {
         let config = self.config.borrow();
-        let (_, ci) = config.modules.ci_by_env();
+        let (_, ci) = config.ci_by_env();
         match args.subcommand() {
             Some(("oidc", subargs)) => {
                 let output = match subargs.value_of("output") {
@@ -81,7 +81,7 @@ impl<S: shell::Shell> CI<S> {
     }
     fn restore_cache<A: args::Args>(&self, args: &A) -> Result<(), Box<dyn Error>> {
         let config = self.config.borrow();
-        let (_, ci) = config.modules.ci_by_env();
+        let (_, ci) = config.ci_by_env();
         ci.restore_cache(args.get_flag("submodules"))
     } 
 }

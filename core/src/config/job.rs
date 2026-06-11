@@ -1100,8 +1100,7 @@ impl Jobs {
     pub fn boot(
         &self, config: &config::Config, runtime_workflow_config: &config::runtime::Workflow, shell: &impl shell::Shell
     ) -> Result<(), Box<dyn Error>> {
-        let modules = &config.modules;
-        let (_, ci) = modules.ci_by_env();
+        let (_, ci) = config.ci_by_env();
         // TODO: support follow_dependency of remote job running.
         // if runtime_workflow_config.job has some value and follow_dependency, 
         // we use Some(runtime_workflow_config.job.name) as first argument of traverse,

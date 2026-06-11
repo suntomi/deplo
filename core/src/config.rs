@@ -81,13 +81,13 @@ impl Modules {
     pub fn ci_by_default(&self) -> &Box<dyn crate::ci::CI> {
         self.ci_for("default")
     }
-    pub fn ci_by_env(&self) -> (&str, &Box<dyn crate::ci::CI>) {
+    pub fn ci_by_env(&self) -> Option<(&str, &Box<dyn crate::ci::CI>)> {
         for (k, v) in &self.ci {
             if v.runs_on_service() {
-                return (k, v);
+                return Some((k, v));
             }
         }
-        return ("default", self.ci_by_default());
+        return None;
     }
     pub fn step(&self, src: &crate::module::Source) -> &Box<dyn crate::step::Step> {
         let key = src.to_string();
@@ -245,6 +245,18 @@ impl Config {
         self.workflows.setup();
         self.jobs.setup();
     }
+    pub fn ci_by_env(&self) -> (&str, &Box<dyn crate::ci::CI>) {
+        match self.modules.ci_by_env() {
+            Some(v) => v,
+            None => match &self.runtime.ci {
+                Some(account_name) => (account_name.as_str(), self.modules.ci_for(account_name)),
+                None => {
+                    log::warn!("no CI service environment detected and --ci is not specified. fallback to default CI account");
+                    ("default", self.modules.ci_by_default())
+                }
+            }
+        }
+    }
     pub fn set_process_envs<K: AsRef<str>,V: AsRef<str>>(&mut self, envs: HashMap<K, Option<V>>) {
         let process_envs = &mut self.envs;
         for (k, v) in &envs {
@@ -267,7 +279,7 @@ impl Config {
         })
     }
     pub fn ci_process_envs(&self) -> Result<HashMap<String, Option<String>>, Box<dyn Error>> {
-        let (account_name, ci) = self.modules.ci_by_env();
+        let (account_name, ci) = self.ci_by_env();
         let vcs = self.modules.vcs();
         let (ref_type, ref_path) = vcs.current_ref()?;
         let (may_tag, may_branch) = if ref_type == crate::vcs::RefType::Tag {

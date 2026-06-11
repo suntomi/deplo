@@ -16,6 +16,7 @@ permissions:
   issues: write
 
 env:
+{common_envs:>2}
   DEPLO_UPDATE_CURRENT_VERSION: {current_version}
   DEPLO_UPDATE_VERSION_PATTERN: ${{{{ vars.DEPLO_UPDATE_VERSION_PATTERN || '^[0-9]+\.[0-9]+\.[0-9]+$' }}}}
 {secrets:>2}
