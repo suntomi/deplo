@@ -183,7 +183,7 @@ impl<'a> Runner<'a> {
                 // if deplo is not runnning on CI, we respect configuration no_fallback.
                 // if set to false or ommitted, we use fallback even if os type is matched
                 if os == current_os && (ci.runs_on_service() || no_fallback.unwrap_or(false)) {
-                    log::debug!("runner os '{}' is different from current os '{}' and no_fallback is set to true", os, current_os);
+                    log::debug!("runner os '{}' is same as current os '{}' and runs on CI or no_fallback is set to true", os, current_os);
                     if let Some(p) = config.setup_deplo_cli(os, shell)? {
                         let parent = p.parent().expect(&format!("path should not be root {}", p.display()));
                         shell_settings.paths(vec![parent.to_string_lossy().to_string()]);
@@ -195,7 +195,7 @@ impl<'a> Runner<'a> {
                     if os != current_os {
                         log::debug!("runner os '{}' is different from current os '{}'", os, current_os);
                     } else {
-                        log::debug!("runner os '{}' is the same as current os but fallback is forced", os);
+                        log::debug!("runner os '{}' is the same as current os '{}' but fallback is forced", os, current_os);
                     }
                     match local_fallback {
                         Some(f) => {

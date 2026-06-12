@@ -141,5 +141,17 @@
             "-v=3", "job", "run-steps", "module_test", "-p",
             "{\"name\":\"integrate\",\"context\":{},\"job\":{\"name\":\"module_test\",\"command\":null},\"exec\":{\"envs\":{},\"revision\":null,\"release_target\":null,\"verbosity\":3,\"remote\":false,\"follow_dependency\":false,\"silent\":false,\"timeout\":null}}"
         ]
+    },
+    {
+        "name": "Output",
+        "type": "lldb",
+        "request": "launch",
+        "program": "${workspaceFolder}/target/debug/cli",
+        "args": [
+            "-v=3", "job", "output", "product", "foo"
+        ],
+        "env": {
+            "GITHUB_ACTION": "__repo-owner_name-of-action-repo"
+        }
     }]
 }

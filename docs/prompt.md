@@ -81,3 +81,6 @@ core::config::Module::ci_by_envですが、これはCIの環境上でdeploが動
 
 - core/src/ci/ghaction.rs の GhAction::generate_configの実装ですが、設定ファイルはDeplo.tomlでそのCI上で動作するjobがない場合作成されません。従って core/src/ci/ghaction.rs:876あたりからのsecret/variableを設定する部分がそのciにおいて常に実行されてしまいます。これらのコードを if jobs.len() == 0 の後に移動させてください。
 - generate_update_workflow ですが、update workflowは１レポジトリで１つあれば良いのですが、現状では複数のアカウントがあるとその数だけ作成されてしまいます。generate_update_workflow を生成するのはdefaultのci accountの時だけにしてください。
+
+======
+--ciがないコマンドでwarningを出す件ですが、ログレベルをdebugにします。コマンドの中には出力をshellで利用するものがあり(eg. deplo job output)、warningだと必ずその出力に混じってしまうからです。どのコマンドが出力を利用するものか、は機械的に判定が難しいので、デフォルトでは--ciが指定

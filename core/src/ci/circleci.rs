@@ -66,6 +66,10 @@ impl<'a, S: shell::Shell> ci::CI for CircleCI<S> {
         });
     }
     fn runs_on_service(&self) -> bool {
+        match std::env::var("DEPLO_CI_TYPE") {
+            Ok(v) if !v.is_empty() => return v == "CircleCI",
+            _ => {}
+        }
         std::env::var("CIRCLE_SHA1").is_ok()
     }
     fn restore_cache(&self, _submodule: bool) -> Result<(), Box<dyn Error>> {
