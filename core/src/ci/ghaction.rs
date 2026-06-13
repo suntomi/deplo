@@ -804,6 +804,15 @@ impl<S: shell::Shell> ci::CI for GhAction<S> {
         });
     }
     fn runs_on_service(&self) -> bool {
+        match std::env::var("DEPLO_CI_TYPE") {
+            Ok(v) if !v.is_empty() => {
+                let config = self.config.borrow();
+                return config.ci.get(&self.account_name).map_or(false, |account| {
+                    account.type_as_str() == v
+                });
+            },
+            _ => {}
+        }
         std::env::var("GITHUB_ACTION").is_ok()
     }
     fn restore_cache(&self, submodule: bool) -> Result<(), Box<dyn Error>> {
@@ -1401,8 +1410,11 @@ impl<S: shell::Shell> ci::CI for GhAction<S> {
     fn process_env(&self) -> Result<HashMap<&str, String>, Box<dyn Error>> {
         let config = self.config.borrow();
         let vcs = config.modules.vcs();
+        let ci_type = config.ci.get(&self.account_name).expect(&format!(
+            "CI account {} should exist", self.account_name
+        )).type_as_str().to_string();
         let mut envs = hashmap!{
-            "DEPLO_CI_TYPE" => "GhAction".to_string(),
+            "DEPLO_CI_TYPE" => ci_type,
         };
         if config::Config::is_running_on_ci() {
             envs.insert(config::DEPLO_RUNNING_ON_CI_ENV_KEY, "true".to_string());

@@ -8,7 +8,7 @@ checkout = { submodules = true, fetch_depth = 0, token = "${SUNTOMI_VCS_ACCOUNT_
 # release target branch settings
 [release_targets]
 # main branch will be released as nightly
-nightly = { patterns = ["main"] }
+nightly = { patterns = ["main", "deploy-test-nightly"] }
 # branch which name is 'lab' will be released as lab
 lab = { patterns = ["lab"] }
 # tag which name is started with numerals treated as release (eg. 0.1.10)
