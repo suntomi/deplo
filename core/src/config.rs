@@ -81,10 +81,10 @@ impl Modules {
     pub fn ci_by_default(&self) -> &Box<dyn crate::ci::CI> {
         self.ci_for("default")
     }
-    pub fn ci_by_env(&self) -> Option<(&str, &Box<dyn crate::ci::CI>)> {
-        for (k, v) in &self.ci {
+    pub fn ci_by_env(&self) -> Option<&Box<dyn crate::ci::CI>> {
+        for (_k, v) in &self.ci {
             if v.runs_on_service() {
-                return Some((k, v));
+                return Some(v);
             }
         }
         return None;
@@ -245,14 +245,25 @@ impl Config {
         self.workflows.setup();
         self.jobs.setup();
     }
-    pub fn ci_by_env(&self) -> (&str, &Box<dyn crate::ci::CI>) {
+    pub fn ci_by_env<'a>(&'a self) -> &'a Box<dyn crate::ci::CI + 'a> {
+        // the cli is invoked from deplo job script: use the job name to find the ci module
+        match std::env::var("DEPLO_CI_JOB_NAME") {
+            Ok(job_name) => {
+                let job = self.jobs.as_map().get(&job_name).expect(&format!("job {} does not exist", job_name));
+                return job.ci(self);
+            },
+            Err(_) => {}
+        }
+        // otherwise, deplo invoked directly from user shell or CI service.
+        // if from CI service, detect ci type by search for specific environment variagble
         match self.modules.ci_by_env() {
             Some(v) => v,
+            // otherwise, fallback to default ci account (or use --ci option to specify)
             None => match &self.runtime.ci {
-                Some(account_name) => (account_name.as_str(), self.modules.ci_for(account_name)),
+                Some(account_name) => self.modules.ci_for(account_name),
                 None => {
-                    log::warn!("no CI service environment detected and --ci is not specified. fallback to default CI account");
-                    ("default", self.modules.ci_by_default())
+                    log::debug!("no CI service environment detected and --ci is not specified. fallback to default CI account");
+                    self.modules.ci_by_default()
                 }
             }
         }
@@ -279,7 +290,7 @@ impl Config {
         })
     }
     pub fn ci_process_envs(&self) -> Result<HashMap<String, Option<String>>, Box<dyn Error>> {
-        let (account_name, ci) = self.ci_by_env();
+        let ci = self.ci_by_env();
         let vcs = self.modules.vcs();
         let (ref_type, ref_path) = vcs.current_ref()?;
         let (may_tag, may_branch) = if ref_type == crate::vcs::RefType::Tag {
@@ -289,7 +300,7 @@ impl Config {
         };
         let commit_id = vcs.commit_hash(None)?;
         let random_id = randombytes_as_string!(16);
-        let ci_type = self.ci.get(account_name).unwrap().type_as_str().to_string();
+        let ci_type = self.ci.get(ci.account_name()).unwrap().type_as_str().to_string();
         let mut penvs = hashmap!{
             // on local, CI ID should be inherited from parent, if exists.
             // on CI DEPLO_CI_ID replaced with CI specific environment variable that represents canonical ID

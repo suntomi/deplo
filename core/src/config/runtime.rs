@@ -295,7 +295,7 @@ impl Workflow {
                 };
                 let mut matches = {
                     let config = config.borrow();
-                    let (_, ci) = config.ci_by_env();
+                    let ci = config.ci_by_env();
                     ci.filter_workflows(trigger)?
                 };
                 if matches.len() == 0 {

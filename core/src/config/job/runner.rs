@@ -181,7 +181,7 @@ impl<'a> Runner<'a> {
             job::Runner::Machine{os, ref local_fallback, no_fallback, ..} => {
                 let current_os = shell.detect_os()?;
                 // if deplo is not runnning on CI, we respect configuration no_fallback.
-                // if set to false or ommitted, we use fallback even if os type is matched
+                // if set to false or ommitted (and not running on CI), we use fallback even if os type is matched
                 if os == current_os && (ci.runs_on_service() || no_fallback.unwrap_or(false)) {
                     log::debug!("runner os '{}' is same as current os '{}' and runs on CI or no_fallback is set to true", os, current_os);
                     if let Some(p) = config.setup_deplo_cli(os, shell)? {

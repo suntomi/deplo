@@ -65,6 +65,9 @@ impl<'a, S: shell::Shell> ci::CI for CircleCI<S> {
             shell: S::new(config),
         });
     }
+    fn account_name(&self) -> &str {
+        return &self.account_name
+    }
     fn runs_on_service(&self) -> bool {
         match std::env::var("DEPLO_CI_TYPE") {
             Ok(v) if !v.is_empty() => return v == "CircleCI",

@@ -803,6 +803,9 @@ impl<S: shell::Shell> ci::CI for GhAction<S> {
             }
         });
     }
+    fn account_name(&self) -> &str {
+        return &self.account_name
+    }
     fn runs_on_service(&self) -> bool {
         match std::env::var("DEPLO_CI_TYPE") {
             Ok(v) if !v.is_empty() => {

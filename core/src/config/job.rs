@@ -565,10 +565,10 @@ pub struct Job {
 }
 impl Job {
     pub fn is_enabled_for_account(&self, account_name: &str) -> bool {
-        match &self.account {
-            Some(a) => a.resolve() == account_name,
-            None => account_name == "default"
-        }
+        self.account_name() == account_name
+    }
+    pub fn account_name(&self) -> String {
+        self.account.as_ref().map_or_else(|| "default".to_string(), |v| v.resolve())
     }
     pub fn runner_os(&self) -> RunnerOS {
         match &self.runner {
@@ -603,9 +603,7 @@ impl Job {
         }
     }
     pub fn ci<'a>(&self, config: &'a config::Config) -> &Box<dyn ci::CI + 'a> {
-        let account = self.account.as_ref().map_or_else(
-            || "default".to_string(), config::Value::resolve_to_string
-        );
+        let account = self.account_name();
         return config.modules.ci_for(&account);
     }
     pub fn run<S>(
@@ -1026,7 +1024,7 @@ impl Jobs {
                 }
             }
         }
-        crate::util::try_debug!("deplo-halt", config.modules.ci_by_default(), runtime_workflow_config.exec, false);
+        crate::util::try_debug!("deplo-halt", config.ci_by_env(), runtime_workflow_config.exec, false);
         Ok(())
     }    
     fn wait_job(
@@ -1100,7 +1098,7 @@ impl Jobs {
     pub fn boot(
         &self, config: &config::Config, runtime_workflow_config: &config::runtime::Workflow, shell: &impl shell::Shell
     ) -> Result<(), Box<dyn Error>> {
-        let (_, ci) = config.ci_by_env();
+        let ci = config.ci_by_env();
         // TODO: support follow_dependency of remote job running.
         // if runtime_workflow_config.job has some value and follow_dependency, 
         // we use Some(runtime_workflow_config.job.name) as first argument of traverse,

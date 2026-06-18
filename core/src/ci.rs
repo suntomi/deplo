@@ -54,6 +54,7 @@ pub trait CI {
     fn new(
         config: &config::Container, account_name: &str
     ) -> Result<Self, Box<dyn Error>> where Self : Sized;
+    fn account_name(&self) -> &str;
     fn runs_on_service(&self) -> bool;
     fn restore_cache(&self, submodule: bool) -> Result<(), Box<dyn Error>>;
     fn generate_config(&self, reinit: bool) -> Result<(), Box<dyn Error>>;
