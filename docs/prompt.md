@@ -84,3 +84,11 @@ core::config::Module::ci_by_envですが、これはCIの環境上でdeploが動
 
 ======
 --ciがないコマンドでwarningを出す件ですが、ログレベルをdebugにします。コマンドの中には出力をshellで利用するものがあり(eg. deplo job output)、warningだと必ずその出力に混じってしまうからです。どのコマンドが出力を利用するものか、は機械的に判定が難しいので、デフォルトでは--ciが指定
+
+=======
+CIからdeploが起動されるときに、利用すべきciの設定がどれになるかわかるように、core/src/ci/ghaction.rs の generate_config で生成されるワークフローファイル(eg. .github/workflows/deplo-main.yml)に新しい環境変数を追加します。
+
+core/res/ci/ghaction/common_envs.yml.tmpl に DEPLO_CI_ACCOUNT_NAME を追加して generate_config を行うciのaccout_nameで初期化します。
+
+GhAction::runs_on_service, CircleCI::runs_on_serviceは 既存のコードを置き換え、ciのaccount_nameが DEPLO_CI_ACCOUNT_NAME と一致するか、という判定に変更してください。
+

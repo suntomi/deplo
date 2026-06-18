@@ -53,8 +53,8 @@ fn get_module_version(module: &str) -> String {
     DEPLO_GHACTION_MODULE_VERSIONS.get(module).unwrap().clone()
 }
 
-fn common_envs() -> Vec<String> {
-    format!(include_str!("../../res/ci/ghaction/common_envs.yml.tmpl"))
+fn common_envs(account_name: &str) -> Vec<String> {
+    format!(include_str!("../../res/ci/ghaction/common_envs.yml.tmpl"), account_name = account_name)
         .split("\n")
         .map(|s| s.to_string())
         .collect()
@@ -720,7 +720,7 @@ impl<S: shell::Shell> GhAction<S> {
                 include_str!("../../res/ci/ghaction/update.yml.tmpl"),
                 current_version = config::DEPLO_VERSION,
                 release_url_base = config::DEPLO_RELEASE_URL_BASE,
-                common_envs = MultilineFormatString{ strings: &common_envs(), postfix: None },
+                common_envs = MultilineFormatString{ strings: &common_envs(&self.account_name), postfix: None },
                 secrets = MultilineFormatString{ strings: secrets, postfix: None },
                 fetchcli = MultilineFormatString{
                     strings: &self.generate_fetchcli_steps(&config::job::Runner::Machine{
@@ -807,16 +807,10 @@ impl<S: shell::Shell> ci::CI for GhAction<S> {
         return &self.account_name
     }
     fn runs_on_service(&self) -> bool {
-        match std::env::var("DEPLO_CI_TYPE") {
-            Ok(v) if !v.is_empty() => {
-                let config = self.config.borrow();
-                return config.ci.get(&self.account_name).map_or(false, |account| {
-                    account.type_as_str() == v
-                });
-            },
-            _ => {}
+        match std::env::var("DEPLO_CI_ACCOUNT_NAME") {
+            Ok(v) if !v.is_empty() => self.account_name == v,
+            _ => false,
         }
-        std::env::var("GITHUB_ACTION").is_ok()
     }
     fn restore_cache(&self, submodule: bool) -> Result<(), Box<dyn Error>> {
         log::info!("restore cache: start submodule = {}", submodule);
@@ -1009,7 +1003,7 @@ impl<S: shell::Shell> ci::CI for GhAction<S> {
                         strings: &(if create_main { entrypoint } else { vec![] }),
                         postfix: None
                     },
-                    common_envs = MultilineFormatString{ strings: &common_envs(), postfix: None },
+                    common_envs = MultilineFormatString{ strings: &common_envs(&self.account_name), postfix: None },
                     secrets = MultilineFormatString{ strings: &secrets, postfix: None },
                     outputs = MultilineFormatString{ 
                         strings: &self.generate_outputs(&jobs),
