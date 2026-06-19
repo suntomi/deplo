@@ -300,7 +300,7 @@ impl Config {
         };
         let commit_id = vcs.commit_hash(None)?;
         let random_id = randombytes_as_string!(16);
-        let ci_type = self.ci.get(ci.account_name()).unwrap().type_as_str().to_string();
+        let ci_type = self.ci.get(ci.account_name()).unwrap().ci_type().to_string();
         let mut penvs = hashmap!{
             // on local, CI ID should be inherited from parent, if exists.
             // on CI DEPLO_CI_ID replaced with CI specific environment variable that represents canonical ID

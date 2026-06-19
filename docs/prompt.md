@@ -92,3 +92,21 @@ core/res/ci/ghaction/common_envs.yml.tmpl に DEPLO_CI_ACCOUNT_NAME を追加し
 
 GhAction::runs_on_service, CircleCI::runs_on_serviceは 既存のコードを置き換え、ciのaccount_nameが DEPLO_CI_ACCOUNT_NAME と一致するか、という判定に変更してください。
 
+=======
+core/src/config/ci.rs の Accountsにci_typeという&strを返す関数を追加します。
+GhAction/GhActionAppは"GhAction", CircleCIは"CircleCI"を返します。
+
+Accounts::type_as_str()は以下の３カ所で呼ばれています
+core/src/config.rs
+core/src/ci/ghaction.rs
+core/src/config/ci.rs
+
+それぞれ以下のように修正します。
+core/src/config.rs => ci_type() に変更
+core/src/ci/ghaction.rs => 呼び出すのをやめ、ci_typeを "GhAction" 固定にする
+core/src/config/ci.rs => ci_type() に変更し、呼び出している関数名を type_matched => ci_type_matched に変更
+
+付随してci::Accounts::is_mainを以下のように修正します
+- typesではなく単一のtype(&str)を受け取るようにする
+- circleci側はis_main("CircleCI), ghaction側はis_main("GhAction")と変更
+

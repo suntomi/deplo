@@ -874,7 +874,7 @@ impl<S: shell::Shell> ci::CI for GhAction<S> {
         // TODO_PATH: use Path to generate path of /.github/...
         let main_workflow_yml_path = format!(
             "{}/.github/workflows/deplo-main{}.yml", repository_root, config_post_fix);
-        let create_main = config.ci.is_main(vec!["GhAction", "GhActionApp"]);
+        let create_main = config.ci.is_main("GhAction");
         if jobs.len() == 0 {
             log::info!(
                 "no jobs defined for the account {}. skip ghaction job config generation",
@@ -1407,11 +1407,8 @@ impl<S: shell::Shell> ci::CI for GhAction<S> {
     fn process_env(&self) -> Result<HashMap<&str, String>, Box<dyn Error>> {
         let config = self.config.borrow();
         let vcs = config.modules.vcs();
-        let ci_type = config.ci.get(&self.account_name).expect(&format!(
-            "CI account {} should exist", self.account_name
-        )).type_as_str().to_string();
         let mut envs = hashmap!{
-            "DEPLO_CI_TYPE" => ci_type,
+            "DEPLO_CI_TYPE" => "GhAction".to_string(),
         };
         if config::Config::is_running_on_ci() {
             envs.insert(config::DEPLO_RUNNING_ON_CI_ENV_KEY, "true".to_string());

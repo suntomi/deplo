@@ -29,6 +29,7 @@ on:
           - review
 
 env:
+  DEPLO_CI_ACCOUNT_NAME: "default"
   DEPLO_GHACTION_CI_ID: ${{ github.run_id }}-${{ github.run_attempt }}
   DEPLO_GHACTION_EVENT_DATA: ${{ toJson(github) }}
   DEPLO_GHACTION_WORKFLOW_NAME: ${{ github.workflow }}
