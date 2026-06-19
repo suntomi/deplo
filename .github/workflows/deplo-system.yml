@@ -34,7 +34,6 @@ on:
           - win
 
 env:
-  DEPLO_CI_ACCOUNT_NAME: "default"
   DEPLO_GHACTION_CI_ID: ${{ github.run_id }}-${{ github.run_attempt }}
   DEPLO_GHACTION_EVENT_DATA: ${{ toJson(github) }}
   DEPLO_GHACTION_WORKFLOW_NAME: ${{ github.workflow }}
@@ -75,7 +74,7 @@ jobs:
     steps:
       - name: Fetch deplo cli
         run: |
-          curl -L https://github.com/suntomi/deplo/releases/download/nightly/deplo-Linux-$(uname -m) -o /usr/local/bin/deplo
+          curl -L https://github.com/suntomi/deplo/releases/download/0.5.2/deplo-Linux-$(uname -m) -o /usr/local/bin/deplo
           chmod +x /usr/local/bin/deplo
       - name: Get GitHub App Token
         uses: actions/create-github-app-token@v3
@@ -108,7 +107,7 @@ jobs:
         run: deplo boot
       - name: Setup ssh session to debug
         if: always() && (env.DEPLO_CI_RUN_DEBUGGER != '')
-        uses: mxschmitt/action-tmate@35b54afac29c97fb54faba5b513f8fbd1882f113
+        uses: mxschmitt/action-tmate@c0afd6f790e3a5564914980036ebf83216678101
         with:
           sudo: true
   deplo-halt:
@@ -142,7 +141,7 @@ jobs:
         run: echo "DEPLO_CI_RUN_DEBUGGER=" >> $GITHUB_ENV
       - name: Fetch deplo cli
         run: |
-          curl -L https://github.com/suntomi/deplo/releases/download/nightly/deplo-Linux-$(uname -m) -o /usr/local/bin/deplo
+          curl -L https://github.com/suntomi/deplo/releases/download/0.5.2/deplo-Linux-$(uname -m) -o /usr/local/bin/deplo
           chmod +x /usr/local/bin/deplo
       - name: Get GitHub App Token
         uses: actions/create-github-app-token@v3
@@ -177,7 +176,7 @@ jobs:
         run: deplo halt
       - name: Setup ssh session to debug
         if: always() && (env.DEPLO_CI_RUN_DEBUGGER != '')
-        uses: mxschmitt/action-tmate@35b54afac29c97fb54faba5b513f8fbd1882f113
+        uses: mxschmitt/action-tmate@c0afd6f790e3a5564914980036ebf83216678101
         with:
           sudo: true
   base:
@@ -195,7 +194,7 @@ jobs:
     steps:
       - name: Fetch deplo cli
         run: |
-          curl -L https://github.com/suntomi/deplo/releases/download/nightly/deplo-Linux-$(uname -m) -o /usr/local/bin/deplo
+          curl -L https://github.com/suntomi/deplo/releases/download/0.5.2/deplo-Linux-$(uname -m) -o /usr/local/bin/deplo
           chmod +x /usr/local/bin/deplo
       - name: Get GitHub App Token
         uses: actions/create-github-app-token@v3
@@ -229,7 +228,7 @@ jobs:
         run: deplo run base
       - name: Setup ssh session to debug
         if: always() && (env.DEPLO_CI_RUN_DEBUGGER != '')
-        uses: mxschmitt/action-tmate@35b54afac29c97fb54faba5b513f8fbd1882f113
+        uses: mxschmitt/action-tmate@c0afd6f790e3a5564914980036ebf83216678101
         with:
           sudo: true
   builder:
@@ -247,7 +246,7 @@ jobs:
     steps:
       - name: Fetch deplo cli
         run: |
-          curl -L https://github.com/suntomi/deplo/releases/download/nightly/deplo-Linux-$(uname -m) -o /usr/local/bin/deplo
+          curl -L https://github.com/suntomi/deplo/releases/download/0.5.2/deplo-Linux-$(uname -m) -o /usr/local/bin/deplo
           chmod +x /usr/local/bin/deplo
       - name: Get GitHub App Token
         uses: actions/create-github-app-token@v3
@@ -281,7 +280,7 @@ jobs:
         run: deplo run builder
       - name: Setup ssh session to debug
         if: always() && (env.DEPLO_CI_RUN_DEBUGGER != '')
-        uses: mxschmitt/action-tmate@35b54afac29c97fb54faba5b513f8fbd1882f113
+        uses: mxschmitt/action-tmate@c0afd6f790e3a5564914980036ebf83216678101
         with:
           sudo: true
   config:
@@ -299,7 +298,7 @@ jobs:
     steps:
       - name: Fetch deplo cli
         run: |
-          curl -L https://github.com/suntomi/deplo/releases/download/nightly/deplo-Linux-$(uname -m) -o /usr/local/bin/deplo
+          curl -L https://github.com/suntomi/deplo/releases/download/0.5.2/deplo-Linux-$(uname -m) -o /usr/local/bin/deplo
           chmod +x /usr/local/bin/deplo
       - name: Get GitHub App Token
         uses: actions/create-github-app-token@v3
@@ -333,7 +332,7 @@ jobs:
         run: deplo run config
       - name: Setup ssh session to debug
         if: always() && (env.DEPLO_CI_RUN_DEBUGGER != '')
-        uses: mxschmitt/action-tmate@35b54afac29c97fb54faba5b513f8fbd1882f113
+        uses: mxschmitt/action-tmate@c0afd6f790e3a5564914980036ebf83216678101
         with:
           sudo: true
   dispatched:
@@ -351,7 +350,7 @@ jobs:
     steps:
       - name: Fetch deplo cli
         run: |
-          curl -L https://github.com/suntomi/deplo/releases/download/nightly/deplo-Linux-$(uname -m) -o /usr/local/bin/deplo
+          curl -L https://github.com/suntomi/deplo/releases/download/0.5.2/deplo-Linux-$(uname -m) -o /usr/local/bin/deplo
           chmod +x /usr/local/bin/deplo
       - name: Get GitHub App Token
         uses: actions/create-github-app-token@v3
@@ -385,7 +384,7 @@ jobs:
         run: deplo run dispatched
       - name: Setup ssh session to debug
         if: always() && (env.DEPLO_CI_RUN_DEBUGGER != '')
-        uses: mxschmitt/action-tmate@35b54afac29c97fb54faba5b513f8fbd1882f113
+        uses: mxschmitt/action-tmate@c0afd6f790e3a5564914980036ebf83216678101
         with:
           sudo: true
   latest:
@@ -404,7 +403,7 @@ jobs:
     steps:
       - name: Fetch deplo cli
         run: |
-          curl -L https://github.com/suntomi/deplo/releases/download/nightly/deplo-Linux-$(uname -m) -o /usr/local/bin/deplo
+          curl -L https://github.com/suntomi/deplo/releases/download/0.5.2/deplo-Linux-$(uname -m) -o /usr/local/bin/deplo
           chmod +x /usr/local/bin/deplo
       - name: Get GitHub App Token
         uses: actions/create-github-app-token@v3
@@ -438,7 +437,7 @@ jobs:
         run: deplo run latest
       - name: Setup ssh session to debug
         if: always() && (env.DEPLO_CI_RUN_DEBUGGER != '')
-        uses: mxschmitt/action-tmate@35b54afac29c97fb54faba5b513f8fbd1882f113
+        uses: mxschmitt/action-tmate@c0afd6f790e3a5564914980036ebf83216678101
         with:
           sudo: true
   mac:
@@ -457,7 +456,7 @@ jobs:
     steps:
       - name: Fetch deplo cli
         run: |
-          curl -L https://github.com/suntomi/deplo/releases/download/nightly/deplo-Darwin -o /usr/local/bin/deplo
+          curl -L https://github.com/suntomi/deplo/releases/download/0.5.2/deplo-Darwin -o /usr/local/bin/deplo
           chmod +x /usr/local/bin/deplo
       - name: Get GitHub App Token
         uses: actions/create-github-app-token@v3
@@ -506,7 +505,7 @@ jobs:
         run: deplo run mac
       - name: Setup ssh session to debug
         if: always() && (env.DEPLO_CI_RUN_DEBUGGER != '')
-        uses: mxschmitt/action-tmate@35b54afac29c97fb54faba5b513f8fbd1882f113
+        uses: mxschmitt/action-tmate@c0afd6f790e3a5564914980036ebf83216678101
         with:
           sudo: true
   module_test:
@@ -524,7 +523,7 @@ jobs:
     steps:
       - name: Fetch deplo cli
         run: |
-          curl -L https://github.com/suntomi/deplo/releases/download/nightly/deplo-Linux-$(uname -m) -o /usr/local/bin/deplo
+          curl -L https://github.com/suntomi/deplo/releases/download/0.5.2/deplo-Linux-$(uname -m) -o /usr/local/bin/deplo
           chmod +x /usr/local/bin/deplo
       - name: Get GitHub App Token
         uses: actions/create-github-app-token@v3
@@ -558,7 +557,7 @@ jobs:
         run: deplo run module_test
       - name: Setup ssh session to debug
         if: always() && (env.DEPLO_CI_RUN_DEBUGGER != '')
-        uses: mxschmitt/action-tmate@35b54afac29c97fb54faba5b513f8fbd1882f113
+        uses: mxschmitt/action-tmate@c0afd6f790e3a5564914980036ebf83216678101
         with:
           sudo: true
   prbot-test:
@@ -576,7 +575,7 @@ jobs:
     steps:
       - name: Fetch deplo cli
         run: |
-          curl -L https://github.com/suntomi/deplo/releases/download/nightly/deplo-Linux-$(uname -m) -o /usr/local/bin/deplo
+          curl -L https://github.com/suntomi/deplo/releases/download/0.5.2/deplo-Linux-$(uname -m) -o /usr/local/bin/deplo
           chmod +x /usr/local/bin/deplo
       - name: Get GitHub App Token
         uses: actions/create-github-app-token@v3
@@ -610,7 +609,7 @@ jobs:
         run: deplo run prbot-test
       - name: Setup ssh session to debug
         if: always() && (env.DEPLO_CI_RUN_DEBUGGER != '')
-        uses: mxschmitt/action-tmate@35b54afac29c97fb54faba5b513f8fbd1882f113
+        uses: mxschmitt/action-tmate@c0afd6f790e3a5564914980036ebf83216678101
         with:
           sudo: true
   product:
@@ -629,7 +628,7 @@ jobs:
     steps:
       - name: Fetch deplo cli
         run: |
-          curl -L https://github.com/suntomi/deplo/releases/download/nightly/deplo-Linux-$(uname -m) -o /usr/local/bin/deplo
+          curl -L https://github.com/suntomi/deplo/releases/download/0.5.2/deplo-Linux-$(uname -m) -o /usr/local/bin/deplo
           chmod +x /usr/local/bin/deplo
       - name: Get GitHub App Token
         uses: actions/create-github-app-token@v3
@@ -663,7 +662,7 @@ jobs:
         run: deplo run product
       - name: Setup ssh session to debug
         if: always() && (env.DEPLO_CI_RUN_DEBUGGER != '')
-        uses: mxschmitt/action-tmate@35b54afac29c97fb54faba5b513f8fbd1882f113
+        uses: mxschmitt/action-tmate@c0afd6f790e3a5564914980036ebf83216678101
         with:
           sudo: true
   remote-test:
@@ -681,7 +680,7 @@ jobs:
     steps:
       - name: Fetch deplo cli
         run: |
-          curl -L https://github.com/suntomi/deplo/releases/download/nightly/deplo-Linux-$(uname -m) -o /usr/local/bin/deplo
+          curl -L https://github.com/suntomi/deplo/releases/download/0.5.2/deplo-Linux-$(uname -m) -o /usr/local/bin/deplo
           chmod +x /usr/local/bin/deplo
       - name: Get GitHub App Token
         uses: actions/create-github-app-token@v3
@@ -715,7 +714,7 @@ jobs:
         run: deplo run remote-test
       - name: Setup ssh session to debug
         if: always() && (env.DEPLO_CI_RUN_DEBUGGER != '')
-        uses: mxschmitt/action-tmate@35b54afac29c97fb54faba5b513f8fbd1882f113
+        uses: mxschmitt/action-tmate@c0afd6f790e3a5564914980036ebf83216678101
         with:
           sudo: true
   repository:
@@ -733,7 +732,7 @@ jobs:
     steps:
       - name: Fetch deplo cli
         run: |
-          curl -L https://github.com/suntomi/deplo/releases/download/nightly/deplo-Linux-$(uname -m) -o /usr/local/bin/deplo
+          curl -L https://github.com/suntomi/deplo/releases/download/0.5.2/deplo-Linux-$(uname -m) -o /usr/local/bin/deplo
           chmod +x /usr/local/bin/deplo
       - name: Get GitHub App Token
         uses: actions/create-github-app-token@v3
@@ -767,7 +766,7 @@ jobs:
         run: deplo run repository
       - name: Setup ssh session to debug
         if: always() && (env.DEPLO_CI_RUN_DEBUGGER != '')
-        uses: mxschmitt/action-tmate@35b54afac29c97fb54faba5b513f8fbd1882f113
+        uses: mxschmitt/action-tmate@c0afd6f790e3a5564914980036ebf83216678101
         with:
           sudo: true
   taglab:
@@ -785,7 +784,7 @@ jobs:
     steps:
       - name: Fetch deplo cli
         run: |
-          curl -L https://github.com/suntomi/deplo/releases/download/nightly/deplo-Linux-$(uname -m) -o /usr/local/bin/deplo
+          curl -L https://github.com/suntomi/deplo/releases/download/0.5.2/deplo-Linux-$(uname -m) -o /usr/local/bin/deplo
           chmod +x /usr/local/bin/deplo
       - name: Get GitHub App Token
         uses: actions/create-github-app-token@v3
@@ -819,7 +818,7 @@ jobs:
         run: deplo run taglab
       - name: Setup ssh session to debug
         if: always() && (env.DEPLO_CI_RUN_DEBUGGER != '')
-        uses: mxschmitt/action-tmate@35b54afac29c97fb54faba5b513f8fbd1882f113
+        uses: mxschmitt/action-tmate@c0afd6f790e3a5564914980036ebf83216678101
         with:
           sudo: true
   test:
@@ -840,7 +839,7 @@ jobs:
     steps:
       - name: Fetch deplo cli
         run: |
-          curl -L https://github.com/suntomi/deplo/releases/download/nightly/deplo-Linux-$(uname -m) -o /usr/local/bin/deplo
+          curl -L https://github.com/suntomi/deplo/releases/download/0.5.2/deplo-Linux-$(uname -m) -o /usr/local/bin/deplo
           chmod +x /usr/local/bin/deplo
       - name: Get GitHub App Token
         uses: actions/create-github-app-token@v3
@@ -888,7 +887,7 @@ jobs:
         run: deplo run test
       - name: Setup ssh session to debug
         if: always() && (env.DEPLO_CI_RUN_DEBUGGER != '')
-        uses: mxschmitt/action-tmate@35b54afac29c97fb54faba5b513f8fbd1882f113
+        uses: mxschmitt/action-tmate@c0afd6f790e3a5564914980036ebf83216678101
         with:
           sudo: true
   win:
@@ -907,7 +906,7 @@ jobs:
     steps:
       - name: Fetch deplo cli
         run: |
-          curl -L https://github.com/suntomi/deplo/releases/download/nightly/deplo-Windows.exe -o /usr/bin/deplo
+          curl -L https://github.com/suntomi/deplo/releases/download/0.5.2/deplo-Windows.exe -o /usr/bin/deplo
           chmod +x /usr/bin/deplo
         shell: bash
       - name: Get GitHub App Token
@@ -958,6 +957,6 @@ jobs:
         shell: bash
       - name: Setup ssh session to debug
         if: always() && (env.DEPLO_CI_RUN_DEBUGGER != '')
-        uses: mxschmitt/action-tmate@35b54afac29c97fb54faba5b513f8fbd1882f113
+        uses: mxschmitt/action-tmate@c0afd6f790e3a5564914980036ebf83216678101
         with:
           sudo: true

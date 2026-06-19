@@ -16,7 +16,6 @@ permissions:
   issues: write
 
 env:
-  DEPLO_CI_ACCOUNT_NAME: "default"
   DEPLO_GHACTION_CI_ID: ${{ github.run_id }}-${{ github.run_attempt }}
   DEPLO_GHACTION_EVENT_DATA: ${{ toJson(github) }}
   DEPLO_GHACTION_WORKFLOW_NAME: ${{ github.workflow }}
@@ -25,7 +24,7 @@ env:
   DEPLO_CI_LOG_VERBOSITY: ${{ vars.DEPLO_CI_LOG_VERBOSITY }}
   DEPLO_CI_RUN_DEBUGGER: "true"
   
-  DEPLO_UPDATE_CURRENT_VERSION: nightly
+  DEPLO_UPDATE_CURRENT_VERSION: 0.5.2
   DEPLO_UPDATE_VERSION_PATTERN: ${{ vars.DEPLO_UPDATE_VERSION_PATTERN || '^[0-9]+\.[0-9]+\.[0-9]+$' }}
   SUNTOMI_AWS_ROLE: ${{ secrets.SUNTOMI_AWS_ROLE }}
   SUNTOMI_VCS_ACCOUNT: ${{ secrets.SUNTOMI_VCS_ACCOUNT }}
@@ -44,7 +43,7 @@ jobs:
     steps:
       - name: Fetch deplo cli
         run: |
-          curl -L https://github.com/suntomi/deplo/releases/download/nightly/deplo-Linux-$(uname -m) -o /usr/local/bin/deplo
+          curl -L https://github.com/suntomi/deplo/releases/download/0.5.2/deplo-Linux-$(uname -m) -o /usr/local/bin/deplo
           chmod +x /usr/local/bin/deplo
       - name: Get GitHub App Token
         uses: actions/create-github-app-token@v3
@@ -117,8 +116,6 @@ jobs:
         if: steps.version.outputs.should_update == 'true'
         id: commit
         shell: bash
-        env:
-          GH_APP_TOKEN: ${{ steps.app-token.outputs.token }}
         run: |
           set -euo pipefail
           latest="${{ steps.version.outputs.latest }}"
@@ -134,7 +131,7 @@ jobs:
             exit 0
           fi
           git commit -m "Update deplo to $latest"
-          git push --force-with-lease "https://x-access-token:$GH_APP_TOKEN@github.com/${{ github.repository }}.git" "$branch"
+          git push --force-with-lease origin "$branch"
           echo "has_changes=true" >> "$GITHUB_OUTPUT"
           echo "branch=$branch" >> "$GITHUB_OUTPUT"
           echo "base=$base" >> "$GITHUB_OUTPUT"
