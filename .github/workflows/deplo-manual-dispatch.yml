@@ -103,7 +103,7 @@ jobs:
         run: deplo boot
       - name: Setup ssh session to debug
         if: always() && (env.DEPLO_CI_RUN_DEBUGGER != '')
-        uses: mxschmitt/action-tmate@c0afd6f790e3a5564914980036ebf83216678101
+        uses: mxschmitt/action-tmate@35b54afac29c97fb54faba5b513f8fbd1882f113
         with:
           sudo: true
   deplo-halt:
@@ -172,7 +172,7 @@ jobs:
         run: deplo halt
       - name: Setup ssh session to debug
         if: always() && (env.DEPLO_CI_RUN_DEBUGGER != '')
-        uses: mxschmitt/action-tmate@c0afd6f790e3a5564914980036ebf83216678101
+        uses: mxschmitt/action-tmate@35b54afac29c97fb54faba5b513f8fbd1882f113
         with:
           sudo: true
   base:
@@ -224,7 +224,7 @@ jobs:
         run: deplo run base
       - name: Setup ssh session to debug
         if: always() && (env.DEPLO_CI_RUN_DEBUGGER != '')
-        uses: mxschmitt/action-tmate@c0afd6f790e3a5564914980036ebf83216678101
+        uses: mxschmitt/action-tmate@35b54afac29c97fb54faba5b513f8fbd1882f113
         with:
           sudo: true
   builder:
@@ -276,7 +276,7 @@ jobs:
         run: deplo run builder
       - name: Setup ssh session to debug
         if: always() && (env.DEPLO_CI_RUN_DEBUGGER != '')
-        uses: mxschmitt/action-tmate@c0afd6f790e3a5564914980036ebf83216678101
+        uses: mxschmitt/action-tmate@35b54afac29c97fb54faba5b513f8fbd1882f113
         with:
           sudo: true
   config:
@@ -328,7 +328,7 @@ jobs:
         run: deplo run config
       - name: Setup ssh session to debug
         if: always() && (env.DEPLO_CI_RUN_DEBUGGER != '')
-        uses: mxschmitt/action-tmate@c0afd6f790e3a5564914980036ebf83216678101
+        uses: mxschmitt/action-tmate@35b54afac29c97fb54faba5b513f8fbd1882f113
         with:
           sudo: true
   dispatched:
@@ -380,7 +380,7 @@ jobs:
         run: deplo run dispatched
       - name: Setup ssh session to debug
         if: always() && (env.DEPLO_CI_RUN_DEBUGGER != '')
-        uses: mxschmitt/action-tmate@c0afd6f790e3a5564914980036ebf83216678101
+        uses: mxschmitt/action-tmate@35b54afac29c97fb54faba5b513f8fbd1882f113
         with:
           sudo: true
   latest:
@@ -433,7 +433,7 @@ jobs:
         run: deplo run latest
       - name: Setup ssh session to debug
         if: always() && (env.DEPLO_CI_RUN_DEBUGGER != '')
-        uses: mxschmitt/action-tmate@c0afd6f790e3a5564914980036ebf83216678101
+        uses: mxschmitt/action-tmate@35b54afac29c97fb54faba5b513f8fbd1882f113
         with:
           sudo: true
   mac:
@@ -501,7 +501,7 @@ jobs:
         run: deplo run mac
       - name: Setup ssh session to debug
         if: always() && (env.DEPLO_CI_RUN_DEBUGGER != '')
-        uses: mxschmitt/action-tmate@c0afd6f790e3a5564914980036ebf83216678101
+        uses: mxschmitt/action-tmate@35b54afac29c97fb54faba5b513f8fbd1882f113
         with:
           sudo: true
   module_test:
@@ -553,7 +553,7 @@ jobs:
         run: deplo run module_test
       - name: Setup ssh session to debug
         if: always() && (env.DEPLO_CI_RUN_DEBUGGER != '')
-        uses: mxschmitt/action-tmate@c0afd6f790e3a5564914980036ebf83216678101
+        uses: mxschmitt/action-tmate@35b54afac29c97fb54faba5b513f8fbd1882f113
         with:
           sudo: true
   prbot-test:
@@ -605,7 +605,7 @@ jobs:
         run: deplo run prbot-test
       - name: Setup ssh session to debug
         if: always() && (env.DEPLO_CI_RUN_DEBUGGER != '')
-        uses: mxschmitt/action-tmate@c0afd6f790e3a5564914980036ebf83216678101
+        uses: mxschmitt/action-tmate@35b54afac29c97fb54faba5b513f8fbd1882f113
         with:
           sudo: true
   product:
@@ -658,7 +658,7 @@ jobs:
         run: deplo run product
       - name: Setup ssh session to debug
         if: always() && (env.DEPLO_CI_RUN_DEBUGGER != '')
-        uses: mxschmitt/action-tmate@c0afd6f790e3a5564914980036ebf83216678101
+        uses: mxschmitt/action-tmate@35b54afac29c97fb54faba5b513f8fbd1882f113
         with:
           sudo: true
   remote-test:
@@ -710,7 +710,7 @@ jobs:
         run: deplo run remote-test
       - name: Setup ssh session to debug
         if: always() && (env.DEPLO_CI_RUN_DEBUGGER != '')
-        uses: mxschmitt/action-tmate@c0afd6f790e3a5564914980036ebf83216678101
+        uses: mxschmitt/action-tmate@35b54afac29c97fb54faba5b513f8fbd1882f113
         with:
           sudo: true
   repository:
@@ -762,7 +762,7 @@ jobs:
         run: deplo run repository
       - name: Setup ssh session to debug
         if: always() && (env.DEPLO_CI_RUN_DEBUGGER != '')
-        uses: mxschmitt/action-tmate@c0afd6f790e3a5564914980036ebf83216678101
+        uses: mxschmitt/action-tmate@35b54afac29c97fb54faba5b513f8fbd1882f113
         with:
           sudo: true
   taglab:
@@ -814,7 +814,7 @@ jobs:
         run: deplo run taglab
       - name: Setup ssh session to debug
         if: always() && (env.DEPLO_CI_RUN_DEBUGGER != '')
-        uses: mxschmitt/action-tmate@c0afd6f790e3a5564914980036ebf83216678101
+        uses: mxschmitt/action-tmate@35b54afac29c97fb54faba5b513f8fbd1882f113
         with:
           sudo: true
   test:
@@ -883,7 +883,7 @@ jobs:
         run: deplo run test
       - name: Setup ssh session to debug
         if: always() && (env.DEPLO_CI_RUN_DEBUGGER != '')
-        uses: mxschmitt/action-tmate@c0afd6f790e3a5564914980036ebf83216678101
+        uses: mxschmitt/action-tmate@35b54afac29c97fb54faba5b513f8fbd1882f113
         with:
           sudo: true
   win:
@@ -953,6 +953,6 @@ jobs:
         shell: bash
       - name: Setup ssh session to debug
         if: always() && (env.DEPLO_CI_RUN_DEBUGGER != '')
-        uses: mxschmitt/action-tmate@c0afd6f790e3a5564914980036ebf83216678101
+        uses: mxschmitt/action-tmate@35b54afac29c97fb54faba5b513f8fbd1882f113
         with:
           sudo: true
