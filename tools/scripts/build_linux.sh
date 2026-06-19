@@ -17,7 +17,12 @@ echo "host deplo path=[$(which deplo)]"
 cp $(which deplo) ${ROOT}/tools/docker/bin/host-deplo
 deplo ci getenv --out=${ROOT}/.deplo/env
 echo ${SUNTOMI_VCS_ACCOUNT_KEY} | docker login ghcr.io -u ${SUNTOMI_VCS_ACCOUNT} --password-stdin
-docker buildx create --name mp --bootstrap --use
+if docker buildx inspect mp >/dev/null 2>&1; then
+    docker buildx use mp
+    docker buildx inspect --bootstrap mp >/dev/null
+else
+    docker buildx create --name mp --bootstrap --use
+fi
 docker buildx build --push --platform linux/amd64,linux/arm64 \
     --build-arg DEPLO_RELEASE_VERSION=${DEPLO_RELEASE_VERSION} \
     -t ghcr.io/suntomi/deplo:${DEPLO_RELEASE_VERSION} -f ${ROOT}/tools/docker/Dockerfile ${ROOT}

@@ -65,12 +65,14 @@ impl<'a, S: shell::Shell> ci::CI for CircleCI<S> {
             shell: S::new(config),
         });
     }
+    fn account_name(&self) -> &str {
+        return &self.account_name
+    }
     fn runs_on_service(&self) -> bool {
-        match std::env::var("DEPLO_CI_TYPE") {
-            Ok(v) if !v.is_empty() => return v == "CircleCI",
-            _ => {}
+        match std::env::var("DEPLO_CI_ACCOUNT_NAME") {
+            Ok(v) if !v.is_empty() => self.account_name == v,
+            _ => false,
         }
-        std::env::var("CIRCLE_SHA1").is_ok()
     }
     fn restore_cache(&self, _submodule: bool) -> Result<(), Box<dyn Error>> {
         Ok(())
@@ -80,7 +82,7 @@ impl<'a, S: shell::Shell> ci::CI for CircleCI<S> {
         let account = config.ci.get(&self.account_name).expect(&format!("no ci config for {}", self.account_name));
         let repository_root = config.modules.vcs().repository_root()?;
         let jobs = config.jobs.as_map();
-        let create_main = config.ci.is_main(vec!["CircleCI"]);
+        let create_main = config.ci.is_main("CircleCI");
         // TODO_PATH: use Path to generate path of /.circleci/...
         let circle_yml_path = format!("{}/.circleci/config.yml", repository_root);
         fs::create_dir_all(&format!("{}/.circleci", repository_root))?;

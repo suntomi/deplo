@@ -33,12 +33,20 @@ pub enum Account {
     Module(config::module::ConfigFor<crate::ci::ModuleDescription>)
 }
 impl Account {
-    pub fn type_matched(&self, t: &str) -> bool {
+    pub fn ci_type_matched(&self, t: &str) -> bool {
         match self {
             Self::Module(c) => return c.value(|v| v.uses.to_string().starts_with(t)),
             _ => {}
         }
-        return t == self.type_as_str()
+        return t == self.ci_type()
+    }
+    pub fn ci_type(&self) -> &'static str {
+        match self {
+            Self::GhAction{..} => "GhAction",
+            Self::GhActionApp{..} => "GhAction",
+            Self::CircleCI{..} => "CircleCI",
+            Self::Module{..} => "Module",
+        }
     }
     pub fn type_as_str(&self) -> &'static str {
         match self {
@@ -69,14 +77,8 @@ impl Accounts {
     pub fn default(&self) -> &Account {
         self.as_map().get("default").expect("missing default account")
     }
-    pub fn is_main(&self, types: Vec<&str>) -> bool {
-        let d = self.default();
-        for ty in types {
-            if d.type_matched(ty) {
-                return true;
-            }
-        }
-        false
+    pub fn is_main(&self, ci_type: &str) -> bool {
+        self.default().ci_type_matched(ci_type)
     }
     pub fn get<'a>(&'a self, name: &str) -> Option<&'a Account> {
         self.0.get(name)
