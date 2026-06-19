@@ -117,6 +117,8 @@ jobs:
         if: steps.version.outputs.should_update == 'true'
         id: commit
         shell: bash
+        env:
+          GH_APP_TOKEN: ${{ steps.app-token.outputs.token }}
         run: |
           set -euo pipefail
           latest="${{ steps.version.outputs.latest }}"
@@ -132,7 +134,7 @@ jobs:
             exit 0
           fi
           git commit -m "Update deplo to $latest"
-          git push --force-with-lease origin "$branch"
+          git push --force-with-lease "https://x-access-token:$GH_APP_TOKEN@github.com/${{ github.repository }}.git" "$branch"
           echo "has_changes=true" >> "$GITHUB_OUTPUT"
           echo "branch=$branch" >> "$GITHUB_OUTPUT"
           echo "base=$base" >> "$GITHUB_OUTPUT"
