@@ -74,10 +74,13 @@ jobs:
           printf '%s' "$open_update_prs" | jq -c '.[]' | while read -r pr; do
             title=$(printf '%s' "$pr" | jq -r '.title')
             url=$(printf '%s' "$pr" | jq -r '.html_url')
+            echo "check with existing open deplo update pull request: $title ($url)"
             if [ -z "$url" ]; then
+              echo "skip closing deplo update pull request with empty URL"
               continue
             fi
             if [ "$title" = "$expected_title" ]; then
+              echo "skip closing deplo update pull request with same version: $title $expected_title ($url)"
               continue
             fi
             /tmp/deplo-latest vcs pr close "$url" -o message="Closing superseded deplo update pull request (for $latest)."
@@ -88,11 +91,14 @@ jobs:
               else
                 branch="deplo/update-$version"
                 if git ls-remote --exit-code --heads origin "$branch" >/dev/null 2>&1; then
+                  echo "deleting deplo update branch: $branch"
                   git push origin --delete "$branch"
                 else
                   echo "deplo update branch already absent: $branch"
                 fi
               fi
+            else
+              echo "skip deleting deplo update branch for unexpected title: $title vs $expected_title"
             fi
           done
           if printf '%s' "$open_update_prs" | jq -e --arg expected_title "$expected_title" 'any(.[]; .title == $expected_title)' >/dev/null; then
