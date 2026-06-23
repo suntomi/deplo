@@ -103,6 +103,7 @@ impl Modules {
 }
 pub type ConfigVersion = u64;
 fn default_config_version() -> ConfigVersion { 1 }
+fn default_update_check_schedule() -> Value { Value::new("17 3 * * *") }
 #[derive(Serialize, Deserialize)]
 pub struct Config {
     // config that loads from config file
@@ -112,6 +113,8 @@ pub struct Config {
     pub data_dir: Option<Value>,
     pub debug: Option<HashMap<String, Value>>,
     pub checkout: Option<job::CheckoutOption>,
+    #[serde(default = "default_update_check_schedule")]
+    pub update_check_schedule: Value,
     pub release_targets: HashMap<String, release_target::ReleaseTarget>,
     pub vcs: vcs::Account,
     pub ci: ci::Accounts,
@@ -457,5 +460,17 @@ impl Config {
             // on ci, deplo cli should have installed before invoking deplo (if not, how can we invoke deplo itself?)
             Ok(None)
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn default_update_check_schedule_is_current_fixed_value() {
+        let config = Config::with(None).unwrap();
+
+        assert_eq!(config.borrow().update_check_schedule.resolve(), "17 3 * * *");
     }
 }

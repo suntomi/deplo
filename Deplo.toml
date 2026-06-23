@@ -4,6 +4,7 @@ version = 1
 # ---------------
 project_name = "deplo"
 checkout = { submodules = true, fetch_depth = 0, token = "${SUNTOMI_VCS_ACCOUNT_KEY}" }
+update_check_schedule = "16 3 * * *"
 
 # release target branch settings
 [release_targets]

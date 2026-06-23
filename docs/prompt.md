@@ -110,3 +110,4 @@ core/src/config/ci.rs => ci_type() に変更し、呼び出している関数名
 - typesではなく単一のtype(&str)を受け取るようにする
 - circleci側はis_main("CircleCI), ghaction側はis_main("GhAction")と変更
 
+48e8a0685d3
