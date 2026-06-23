@@ -11,7 +11,7 @@ else
         DEPLO_BIN_PATH_POSTFIX="${OS}"
     fi
 fi
-DEPLO_VERSION=nightly
+DEPLO_VERSION=0.5.5-rc1
 DEPLO_CLI_DIR="${CWD}/.deplo/cli/${DEPLO_VERSION}/${OS}"
 DEPLO_CLI_BIN="${DEPLO_CLI_DIR}/deplo"
 

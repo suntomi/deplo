@@ -8,7 +8,7 @@ on:
         required: false
         description: Target deplo version. If empty, the latest GitHub release is used.
   schedule:
-    - cron: 17 3 * * *
+    - cron: 16 3 * * *
 
 permissions:
   contents: write
@@ -25,7 +25,7 @@ env:
   DEPLO_CI_LOG_VERBOSITY: ${{ vars.DEPLO_CI_LOG_VERBOSITY }}
   DEPLO_CI_RUN_DEBUGGER: "true"
   
-  DEPLO_UPDATE_CURRENT_VERSION: nightly
+  DEPLO_UPDATE_CURRENT_VERSION: 0.5.5-rc1
   DEPLO_UPDATE_VERSION_PATTERN: ${{ vars.DEPLO_UPDATE_VERSION_PATTERN || '^[0-9]+\.[0-9]+\.[0-9]+$' }}
   SUNTOMI_AWS_ROLE: ${{ secrets.SUNTOMI_AWS_ROLE }}
   SUNTOMI_VCS_ACCOUNT: ${{ secrets.SUNTOMI_VCS_ACCOUNT }}
@@ -44,7 +44,7 @@ jobs:
     steps:
       - name: Fetch deplo cli
         run: |
-          curl -L https://github.com/suntomi/deplo/releases/download/nightly/deplo-Linux-$(uname -m) -o /usr/local/bin/deplo
+          curl -L https://github.com/suntomi/deplo/releases/download/0.5.5-rc1/deplo-Linux-$(uname -m) -o /usr/local/bin/deplo
           chmod +x /usr/local/bin/deplo
       - name: Get GitHub App Token
         uses: actions/create-github-app-token@v3
@@ -126,6 +126,19 @@ jobs:
               continue
             fi
             /tmp/deplo-latest vcs pr close "$url" -o message="Closing superseded deplo update pull request."
+            if [[ "$title" == "Update deplo to "* ]]; then
+              version=$(printf '%s' "$title" | sed 's/^Update deplo to //')
+              if [ -z "$version" ] || printf '%s' "$version" | grep -Eq '[^A-Za-z0-9._-]'; then
+                echo "skip deleting deplo update branch for unexpected version: $version"
+              else
+                branch="deplo/update-$version"
+                if git ls-remote --exit-code --heads origin "$branch" >/dev/null 2>&1; then
+                  git push origin --delete "$branch"
+                else
+                  echo "deplo update branch already absent: $branch"
+                fi
+              fi
+            fi
           done
           if printf '%s' "$open_update_prs" | jq -e --arg expected_title "$expected_title" 'any(.[]; .title == $expected_title)' >/dev/null; then
             echo "same version deplo update pull request already exists"
@@ -182,6 +195,19 @@ jobs:
                 echo "same version deplo update pull request already exists: $url"
               else
                 /tmp/deplo-latest vcs pr close "$url" -o message="Closing superseded deplo update pull request."
+                if [[ "$title" == "Update deplo to "* ]]; then
+                  version=$(printf '%s' "$title" | sed 's/^Update deplo to //')
+                  if [ -z "$version" ] || printf '%s' "$version" | grep -Eq '[^A-Za-z0-9._-]'; then
+                    echo "skip deleting deplo update branch for unexpected version: $version"
+                  else
+                    branch="deplo/update-$version"
+                    if git ls-remote --exit-code --heads origin "$branch" >/dev/null 2>&1; then
+                      git push origin --delete "$branch"
+                    else
+                      echo "deplo update branch already absent: $branch"
+                    fi
+                  fi
+                fi
               fi
             fi
           done
