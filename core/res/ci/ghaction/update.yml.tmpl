@@ -156,9 +156,10 @@ jobs:
           latest="${{{{ steps.version.outputs.latest }}}}"
           branch="${{{{ steps.commit.outputs.branch }}}}"
           base="${{{{ steps.commit.outputs.base }}}}"
+          compare_url="https://github.com/suntomi/deplo/compare/$DEPLO_UPDATE_CURRENT_VERSION...$latest"
           /tmp/deplo-latest vcs pr create \
             -o title="Update deplo to $latest" \
             -o head="$branch" \
             -o base="$base" \
-            -o body="Updates generated deplo wrapper and workflow files to $latest." \
+            -o body=$'Updates generated deplo wrapper and workflow files to '"$latest"$'.\n\nDiff: '"$compare_url" \
             -o labels='["deplo-update"]'
