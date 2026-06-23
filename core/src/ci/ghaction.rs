@@ -31,7 +31,7 @@ use crate::vcs::github::AppTokenGenerator;
 
 lazy_static! {
     pub static ref DEPLO_GHACTION_MODULE_VERSIONS: HashMap<String, String> = hashmap! {
-        "actions/checkout".to_string() => "v6".to_string(),
+        "actions/checkout".to_string() => "v7".to_string(),
         "actions/cache".to_string() => "v5".to_string(),
         "mxschmitt/action-tmate".to_string() => "35b54afac29c97fb54faba5b513f8fbd1882f113".to_string(),
         "actions/create-github-app-token".to_string() => "v3".to_string()
