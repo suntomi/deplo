@@ -80,7 +80,7 @@ jobs:
             if [ "$title" = "$expected_title" ]; then
               continue
             fi
-            /tmp/deplo-latest vcs pr close "$url" -o message="Closing superseded deplo update pull request."
+            /tmp/deplo-latest vcs pr close "$url" -o message="Closing superseded deplo update pull request (for $latest)."
             if [[ "$title" == "Update deplo to "* ]]; then
               version=$(printf '%s' "$title" | sed 's/^Update deplo to //')
               if [ -z "$version" ] || printf '%s' "$version" | grep -Eq '[^A-Za-z0-9._-]'; then
@@ -138,34 +138,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          latest="${{{{ steps.version.outputs.latest }}}}"
-          expected_title="Update deplo to $latest"
           /tmp/deplo-latest vcs label create deplo-update -c FFFF00 || true
-          open_update_prs=$(/tmp/deplo-latest vcs pr search -f state=open -f labels=deplo-update)
-          printf '%s' "$open_update_prs" | jq -c '.[]' | while read -r pr; do
-            title=$(printf '%s' "$pr" | jq -r '.title')
-            url=$(printf '%s' "$pr" | jq -r '.html_url')
-            if [ -n "$url" ]; then
-              if [ "$title" = "$expected_title" ]; then
-                echo "same version deplo update pull request already exists: $url"
-              else
-                /tmp/deplo-latest vcs pr close "$url" -o message="Closing superseded deplo update pull request."
-                if [[ "$title" == "Update deplo to "* ]]; then
-                  version=$(printf '%s' "$title" | sed 's/^Update deplo to //')
-                  if [ -z "$version" ] || printf '%s' "$version" | grep -Eq '[^A-Za-z0-9._-]'; then
-                    echo "skip deleting deplo update branch for unexpected version: $version"
-                  else
-                    branch="deplo/update-$version"
-                    if git ls-remote --exit-code --heads origin "$branch" >/dev/null 2>&1; then
-                      git push origin --delete "$branch"
-                    else
-                      echo "deplo update branch already absent: $branch"
-                    fi
-                  fi
-                fi
-              fi
-            fi
-          done
       - name: Create update pull request
         if: steps.commit.outputs.has_changes == 'true'
         shell: bash
