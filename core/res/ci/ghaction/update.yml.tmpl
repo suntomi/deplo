@@ -66,8 +66,11 @@ jobs:
         id: existing-pr
         if: steps.version.outputs.should_update == 'true'
         shell: bash
+        env:
+          GH_APP_TOKEN: ${{{{ steps.app-token.outputs.token }}}}
         run: |
           set -euo pipefail
+          remote_url="https://x-access-token:$GH_APP_TOKEN@github.com/${{{{ github.repository }}}}.git"
           latest="${{{{ steps.version.outputs.latest }}}}"
           expected_title="Update deplo to $latest"
           open_update_prs=$(/tmp/deplo-latest vcs pr search -f state=open -f labels=deplo-update)
@@ -90,9 +93,9 @@ jobs:
                 echo "skip deleting deplo update branch for unexpected version: $version"
               else
                 branch="deplo/update-$version"
-                if git ls-remote --exit-code --heads origin "$branch" >/dev/null 2>&1; then
+                if git ls-remote --exit-code --heads "$remote_url" "$branch" >/dev/null 2>&1; then
                   echo "deleting deplo update branch: $branch"
-                  git push origin --delete "$branch"
+                  git push "$remote_url" --delete "$branch"
                 else
                   echo "deplo update branch already absent: $branch"
                 fi
