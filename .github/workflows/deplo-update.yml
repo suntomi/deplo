@@ -63,7 +63,7 @@ jobs:
             deplo-git-v1-FF20A2BE8FC59416-
       - name: Checkout
         if: steps.fetch-repository-cache.outputs.cache-hit != 'true'
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0
           submodules: true
