@@ -720,6 +720,7 @@ impl<S: shell::Shell> GhAction<S> {
                 include_str!("../../res/ci/ghaction/update.yml.tmpl"),
                 current_version = config::DEPLO_VERSION,
                 release_url_base = config::DEPLO_RELEASE_URL_BASE,
+                update_check_schedule = self.config.borrow().update_check_schedule.resolve(),
                 common_envs = MultilineFormatString{ strings: &common_envs(&self.account_name), postfix: None },
                 secrets = MultilineFormatString{ strings: secrets, postfix: None },
                 fetchcli = MultilineFormatString{

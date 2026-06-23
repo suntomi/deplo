@@ -8,7 +8,7 @@ on:
         required: false
         description: Target deplo version. If empty, the latest GitHub release is used.
   schedule:
-    - cron: 17 3 * * *
+    - cron: {update_check_schedule}
 
 permissions:
   contents: write
