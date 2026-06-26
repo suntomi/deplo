@@ -17,6 +17,37 @@ pub struct CI<S: shell::Shell = shell::Default> {
     pub shell: S
 }
 impl<S: shell::Shell> CI<S> {
+    fn secret<A: args::Args>(&self, args: &A) -> Result<(), Box<dyn Error>> {
+        let key = args.value_or_die("key");
+        match args.value_of("value") {
+            Some(value) => {
+                let config = self.config.borrow();
+                let ci = config.ci_by_env();
+                let targets = config::secret::targets(key);
+                ci.set_secret(key, value, &targets)?;
+            },
+            None => match config::secret::var(key) {
+                Some(value) => println!("{}", value),
+                None => return escalate!(args.error(&format!("ci secret: no such secret: {}", key)))
+            }
+        }
+        Ok(())
+    }
+    fn var<A: args::Args>(&self, args: &A) -> Result<(), Box<dyn Error>> {
+        let key = args.value_or_die("key");
+        match args.value_of("value") {
+            Some(value) => {
+                let config = self.config.borrow();
+                let ci = config.ci_by_env();
+                ci.set_var(key, value)?;
+            },
+            None => match config::var::var(key) {
+                Some(value) => println!("{}", value),
+                None => return escalate!(args.error(&format!("ci var: no such var: {}", key)))
+            }
+        }
+        Ok(())
+    }
     fn setenv<A: args::Args>(&self, _: &A) -> Result<(), Box<dyn Error>> {
         let config = self.config.borrow();
         let ci = config.ci_by_env();
@@ -95,6 +126,8 @@ impl<S: shell::Shell, A: args::Args> command::Command<A> for CI<S> {
     }
     fn run(&self, args: &A) -> Result<(), Box<dyn Error>> {
         match args.subcommand() {
+            Some(("secret", subargs)) => return self.secret(&subargs),
+            Some(("var", subargs)) => return self.var(&subargs),
             Some(("setenv", subargs)) => return self.setenv(&subargs),
             Some(("getenv", subargs)) => return self.getenv(&subargs),
             Some(("token", subargs)) => return self.token(&subargs),

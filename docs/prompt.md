@@ -110,4 +110,13 @@ core/src/config/ci.rs => ci_type() に変更し、呼び出している関数名
 - typesではなく単一のtype(&str)を受け取るようにする
 - circleci側はis_main("CircleCI), ghaction側はis_main("GhAction")と変更
 
-48e8a0685d3
+=======
+core/res/ci/ghaction/update.yml.tmpl の `Create update pull request` step でpull requestを作成していますが、PRの本文に差分を表示するためのリンクを含むようにしてください。  `$DEPLO_UPDATE_CURRENT_VERSION` と `$latest` の差分が見れれば良いです。
+
+=======
+cli/src/command/ci.rs ですが、現在 deplo ci setenvで全てのactions vars/secretsを設定しますが、以下のように個別のvars/secretsを設定/取得できるようにします。
+
+$keyという名前の単独のsecretを設定する: deplo ci secret $key $value 
+$keyという名前の単独のvarを設定する: deplo ci var $key $value 
+$keyという名前の単独のsecretの値を得る: deplo ci secret $key 
+$keyという名前の単独のvarの値を得る: deplo ci var $key
