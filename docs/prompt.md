@@ -129,3 +129,14 @@ $keyには=が含まれないとして良いため、左から最初に現れた
 =以降が空文字列だった場合は削除することとします。
 
 従って、ci::CI::set_var, set_secretについて、値が空文字列の場合はvar/secretを削除するように修正してください。
+=======
+github action secrets/variable ですが、以下の仕様変更があります。
+- secretを設定できるカテゴリーにagents, codespacesが追加されています。このサポートを追加してください。
+- variableを設定できるカテゴリーにagentsが追加されています。このサポートを追加してください。
+  - このため、Deplo.tomlのvarsもsecretsと同様にtargetsを持つ必要があります。また、G_SECRET_TARGETSに倣って、G_VARS_TARGETSのようなものを作る必要もあります。
+
+修正後、targetsが設定されていない場合のtargetのデフォルトは以下のようにします。
+- secret => actions, dependabot (変化なし)
+  - 今デフォルト値としてG_ALL_SECRET_TARGETSが使われていますがG_DEFAULT_SECRET_TARGETSとします。
+- var => actions (変化なし)
+  - デフォルト値としてG_DEFAULT_VAR_TARGETSを用意して利用するようにしてください。

@@ -52,7 +52,8 @@ impl<S: shell::Shell> CI<S> {
             Some(value) => {
                 let config = self.config.borrow();
                 let ci = config.ci_by_env();
-                ci.set_var(key, value)?;
+                let targets = config::var::targets(key);
+                ci.set_var(key, value, &targets)?;
             },
             None => match config::var::var(key) {
                 Some(value) => println!("{}", value),
@@ -71,7 +72,8 @@ impl<S: shell::Shell> CI<S> {
         }
         for (k,v) in config::var::vars()? {
             println!("set var {}", k);
-            ci.set_var(&k, &v)?;
+            let targets = config::var::targets(&k);
+            ci.set_var(&k, &v, &targets)?;
         }
         Ok(())
     }

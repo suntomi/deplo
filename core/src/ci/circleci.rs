@@ -107,7 +107,7 @@ impl<'a, S: shell::Shell> ci::CI for CircleCI<S> {
                 log::debug!("set secret value of {}", k);
             }
             for (k, v) in &config::secret::vars()? {
-                (self as &dyn ci::CI).set_var(k, v)?;
+                (self as &dyn ci::CI).set_var(k, v, &None)?;
                 log::debug!("set secret value of {}", k);
             }
         }
@@ -210,7 +210,7 @@ impl<'a, S: shell::Shell> ci::CI for CircleCI<S> {
         log::warn!("TODO: implement list_secret_name for circleci");
         Ok(vec![])   
     }
-    fn set_var(&self, key: &str, value: &str) -> Result<(), Box<dyn Error>> {
+    fn set_var(&self, key: &str, value: &str, _targets: &Option<Vec<String>>) -> Result<(), Box<dyn Error>> {
         self.set_secret(key, value, &None)
     }
     fn set_secret(&self, key: &str, val: &str, _targets: &Option<Vec<String>>) -> Result<(), Box<dyn Error>> {
