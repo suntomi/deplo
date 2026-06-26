@@ -17,6 +17,51 @@ pub struct CI<S: shell::Shell = shell::Default> {
     pub shell: S
 }
 impl<S: shell::Shell> CI<S> {
+    fn key_value<'a, A: args::Args>(&self, args: &'a A) -> Result<(&'a str, Option<&'a str>), Box<dyn Error>> {
+        let key_or_assignment = args.value_or_die("key");
+        match key_or_assignment.find('=') {
+            Some(pos) => {
+                let key = &key_or_assignment[..pos];
+                if key.is_empty() {
+                    return escalate!(args.error("ci secret/var: key must not be empty"));
+                }
+                Ok((key, Some(&key_or_assignment[pos + 1..])))
+            },
+            None => Ok((key_or_assignment, None))
+        }
+    }
+    fn secret<A: args::Args>(&self, args: &A) -> Result<(), Box<dyn Error>> {
+        let (key, value) = self.key_value(args)?;
+        match value {
+            Some(value) => {
+                let config = self.config.borrow();
+                let ci = config.ci_by_env();
+                let targets = config::secret::targets(key);
+                ci.set_secret(key, value, &targets)?;
+            },
+            None => match config::secret::var(key) {
+                Some(value) => println!("{}", value),
+                None => return escalate!(args.error(&format!("ci secret: no such secret: {}", key)))
+            }
+        }
+        Ok(())
+    }
+    fn var<A: args::Args>(&self, args: &A) -> Result<(), Box<dyn Error>> {
+        let (key, value) = self.key_value(args)?;
+        match value {
+            Some(value) => {
+                let config = self.config.borrow();
+                let ci = config.ci_by_env();
+                let targets = config::var::targets(key);
+                ci.set_var(key, value, &targets)?;
+            },
+            None => match config::var::var(key) {
+                Some(value) => println!("{}", value),
+                None => return escalate!(args.error(&format!("ci var: no such var: {}", key)))
+            }
+        }
+        Ok(())
+    }
     fn setenv<A: args::Args>(&self, _: &A) -> Result<(), Box<dyn Error>> {
         let config = self.config.borrow();
         let ci = config.ci_by_env();
@@ -27,7 +72,8 @@ impl<S: shell::Shell> CI<S> {
         }
         for (k,v) in config::var::vars()? {
             println!("set var {}", k);
-            ci.set_var(&k, &v)?;
+            let targets = config::var::targets(&k);
+            ci.set_var(&k, &v, &targets)?;
         }
         Ok(())
     }
@@ -95,6 +141,8 @@ impl<S: shell::Shell, A: args::Args> command::Command<A> for CI<S> {
     }
     fn run(&self, args: &A) -> Result<(), Box<dyn Error>> {
         match args.subcommand() {
+            Some(("secret", subargs)) => return self.secret(&subargs),
+            Some(("var", subargs)) => return self.var(&subargs),
             Some(("setenv", subargs)) => return self.setenv(&subargs),
             Some(("getenv", subargs)) => return self.getenv(&subargs),
             Some(("token", subargs)) => return self.token(&subargs),

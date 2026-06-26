@@ -330,8 +330,24 @@ lazy_static! {
             Command::new("ci")
                 .about("control CI resources")
                 .subcommand(
+                    Command::new("secret")
+                    .about("set or get a single CI secret")
+                    .arg(Arg::new("key")
+                        .help("secret key to get, or key=value to set. key= deletes the secret")
+                        .index(1)
+                        .required(true))
+                )
+                .subcommand(
+                    Command::new("var")
+                    .about("set or get a single CI variable")
+                    .arg(Arg::new("key")
+                        .help("variable key to get, or key=value to set. key= deletes the variable")
+                        .index(1)
+                        .required(true))
+                )
+                .subcommand(
                     Command::new("setenv")
-                    .about("upload current .env contents as CI service secrets")
+                    .about("upload current .env contents as CI service secrets/vars")
                 )
                 .subcommand(
                     Command::new("getenv")

@@ -110,4 +110,33 @@ core/src/config/ci.rs => ci_type() に変更し、呼び出している関数名
 - typesではなく単一のtype(&str)を受け取るようにする
 - circleci側はis_main("CircleCI), ghaction側はis_main("GhAction")と変更
 
-48e8a0685d3
+=======
+core/res/ci/ghaction/update.yml.tmpl の `Create update pull request` step でpull requestを作成していますが、PRの本文に差分を表示するためのリンクを含むようにしてください。  `$DEPLO_UPDATE_CURRENT_VERSION` と `$latest` の差分が見れれば良いです。
+
+=======
+cli/src/command/ci.rs ですが、現在 deplo ci setenvで全てのactions vars/secretsを設定しますが、以下のように個別のvars/secretsを設定/取得できるようにします。
+
+$keyという名前の単独のsecretを設定する: deplo ci secret $key $value 
+$keyという名前の単独のvarを設定する: deplo ci var $key $value 
+$keyという名前の単独のsecretの値を得る: deplo ci secret $key 
+$keyという名前の単独のvarの値を得る: deplo ci var $key
+
+=======
+削除までサポートしたいので、値を設定するときの構文を以下のように変えます
+$keyという名前の単独のsecretを設定する: deplo ci secret $key=$value 
+$keyという名前の単独のvarを設定する: deplo ci var $key=$value 
+$keyには=が含まれないとして良いため、左から最初に現れた=の場所で区切ってください。
+=以降が空文字列だった場合は削除することとします。
+
+従って、ci::CI::set_var, set_secretについて、値が空文字列の場合はvar/secretを削除するように修正してください。
+=======
+github action secrets/variable ですが、以下の仕様変更があります。
+- secretを設定できるカテゴリーにagents, codespacesが追加されています。このサポートを追加してください。
+- variableを設定できるカテゴリーにagentsが追加されています。このサポートを追加してください。
+  - このため、Deplo.tomlのvarsもsecretsと同様にtargetsを持つ必要があります。また、G_SECRET_TARGETSに倣って、G_VARS_TARGETSのようなものを作る必要もあります。
+
+修正後、targetsが設定されていない場合のtargetのデフォルトは以下のようにします。
+- secret => actions, dependabot (変化なし)
+  - 今デフォルト値としてG_ALL_SECRET_TARGETSが使われていますがG_DEFAULT_SECRET_TARGETSとします。
+- var => actions (変化なし)
+  - デフォルト値としてG_DEFAULT_VAR_TARGETSを用意して利用するようにしてください。

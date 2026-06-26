@@ -107,7 +107,7 @@ impl<'a, S: shell::Shell> ci::CI for CircleCI<S> {
                 log::debug!("set secret value of {}", k);
             }
             for (k, v) in &config::secret::vars()? {
-                (self as &dyn ci::CI).set_var(k, v)?;
+                (self as &dyn ci::CI).set_var(k, v, &None)?;
                 log::debug!("set secret value of {}", k);
             }
         }
@@ -210,9 +210,8 @@ impl<'a, S: shell::Shell> ci::CI for CircleCI<S> {
         log::warn!("TODO: implement list_secret_name for circleci");
         Ok(vec![])   
     }
-    fn set_var(&self, _key: &str, _value: &str) -> Result<(), Box<dyn Error>> {
-        log::warn!("TODO: implement set_var for circleci");
-        Ok(())
+    fn set_var(&self, key: &str, value: &str, _targets: &Option<Vec<String>>) -> Result<(), Box<dyn Error>> {
+        self.set_secret(key, value, &None)
     }
     fn set_secret(&self, key: &str, val: &str, _targets: &Option<Vec<String>>) -> Result<(), Box<dyn Error>> {
         let config = self.config.borrow();
@@ -224,8 +223,25 @@ impl<'a, S: shell::Shell> ci::CI for CircleCI<S> {
                 }));
             }
         };
-        let json = format!("{{\"name\":\"{}\",\"value\":\"{}\"}}", key, val);
         let user_and_repo = config.modules.vcs().user_and_repo()?;
+        if val.is_empty() {
+            let status = self.shell.exec(shell::args!(
+                "curl", "-X", "DELETE", "-u", format!("{}:", token),
+                format!(
+                    "https://circleci.com/api/v2/project/gh/{}/{}/envvar/{}",
+                    user_and_repo.0, user_and_repo.1, key
+                ),
+                "-H", "Accept: application/json",
+                "-w", "%{http_code}", "-o", "/dev/null"
+            ), shell::no_env(), shell::no_cwd(), &shell::capture())?.parse::<u32>()?;
+            if (status >= 200 && status < 300) || status == 404 {
+                return Ok(());
+            }
+            return escalate!(Box::new(ci::CIError {
+                cause: format!("fail to delete secret from CircleCI CI with status code:{}", status)
+            }));
+        }
+        let json = format!("{{\"name\":\"{}\",\"value\":\"{}\"}}", key, val);
         let status = self.shell.exec(shell::args!(
             "curl", "-X", "POST", "-u", format!("{}:", token),
             format!(

@@ -215,8 +215,11 @@ pub struct GhAction<S: shell::Shell = shell::Default> {
 }
 
 lazy_static! {
-    static ref G_ALL_SECRET_TARGETS: Vec<String> = {
+    static ref G_DEFAULT_SECRET_TARGETS: Vec<String> = {
         vec!["actions".to_string(), "dependabot".to_string()]
+    };
+    static ref G_DEFAULT_VAR_TARGETS: Vec<String> = {
+        vec!["actions".to_string()]
     };
 }
 impl<S: shell::Shell> GhAction<S> {
@@ -260,7 +263,29 @@ impl<S: shell::Shell> GhAction<S> {
             Ok(())
         } else {
             return escalate!(Box::new(ci::CIError {
-                cause: format!("fail to set secret to CircleCI CI with status code:{}", status)
+                cause: format!("fail to set secret to GitHub Actions {} with status code:{}", path, status)
+            }));
+        }
+    }
+    fn delete_secret_base(&self, key: &str, path: &str) -> Result<(), Box<dyn Error>> {
+        let config = self.config.borrow();
+        let user_and_repo = config.modules.vcs().user_and_repo()?;
+        let (token, auth_type) = self.get_token()?;
+        let status = self.shell.exec(shell::args!(
+            "curl", "-X", "DELETE",
+            format!(
+                "https://api.github.com/repos/{}/{}/{}/secrets/{}",
+                user_and_repo.0, user_and_repo.1, path, key
+            ),
+            "-H", "Accept: application/json",
+            "-H", shell::fmtargs!("Authorization: {} {}", auth_type, &token),
+            "-w", "%{http_code}", "-o", "/dev/null"
+        ), shell::no_env(), shell::no_cwd(), &shell::capture())?.parse::<u32>()?;
+        if (status >= 200 && status < 300) || status == 404 {
+            Ok(())
+        } else {
+            return escalate!(Box::new(ci::CIError {
+                cause: format!("fail to delete secret from GitHub Actions with status code:{}", status)
             }));
         }
     }
@@ -896,7 +921,8 @@ impl<S: shell::Shell> ci::CI for GhAction<S> {
         }
         for (k, v) in sorted_key_iter(&config::var::vars()?) {
             if previously_no_file || reinit {
-                (self as &dyn ci::CI).set_var(k, v)?;
+                let targets = config::var::targets(k);
+                (self as &dyn ci::CI).set_var(k, v, &targets)?;
                 log::debug!("set variable value of {}", k);
             }
             secrets.push(format!("{}: ${{{{ vars.{} }}}}", k, k));
@@ -1534,17 +1560,53 @@ impl<S: shell::Shell> ci::CI for GhAction<S> {
     fn set_secret(&self, key: &str, value: &str, targets: &Option<Vec<String>>) -> Result<(), Box<dyn Error>> {
         let ts = match targets {
             Some(v) => v,
-            None => &G_ALL_SECRET_TARGETS
+            None => &G_DEFAULT_SECRET_TARGETS
         };
         for t in ts {
-            self.set_secret_base(key, value, &t)?;
+            if value.is_empty() {
+                self.delete_secret_base(key, &t)?;
+            } else {
+                self.set_secret_base(key, value, &t)?;
+            }
         }
         Ok(())
     }
-    fn set_var(&self, key: &str, value: &str) -> Result<(), Box<dyn Error>> {
+    fn set_var(&self, key: &str, value: &str, targets: &Option<Vec<String>>) -> Result<(), Box<dyn Error>> {
+        let ts = match targets {
+            Some(v) => v,
+            None => &G_DEFAULT_VAR_TARGETS
+        };
+        for t in ts {
+            self.set_var_base(key, value, t)?;
+        }
+        Ok(())
+    }    
+}
+
+impl<S: shell::Shell> GhAction<S> {
+    fn set_var_base(&self, key: &str, value: &str, target: &str) -> Result<(), Box<dyn Error>> {
         let config = self.config.borrow();
         let user_and_repo = config.modules.vcs().user_and_repo()?;
         let (token, auth_type) = self.get_token()?;
+        if value.is_empty() {
+            let status = self.shell.exec(shell::args!(
+                "curl", "-X", "DELETE",
+                format!(
+                    "https://api.github.com/repos/{}/{}/{}/variables/{}",
+                    user_and_repo.0, user_and_repo.1, target, key
+                ),
+                "-H", "Accept: application/json",
+                "-H", "X-GitHub-Api-Version: 2022-11-28",
+                "-H", shell::fmtargs!("Authorization: {} {}", auth_type, &token),
+                "-w", "%{http_code}", "-o", "/dev/null"
+            ), shell::no_env(), shell::no_cwd(), &shell::capture())?.parse::<u32>()?;
+            if (status >= 200 && status < 300) || status == 404 {
+                return Ok(());
+            }
+            return escalate!(Box::new(ci::CIError {
+                cause: format!("fail to delete variable from GitHub Actions {} with status code:{}", target, status)
+            }));
+        }
         let json = format!("{{\"name\":\"{}\",\"value\":\"{}\"}}", 
             key, escape(value)
         );
@@ -1552,8 +1614,8 @@ impl<S: shell::Shell> ci::CI for GhAction<S> {
         let check_status = self.shell.exec(shell::args!(
             "curl", "-X", "GET",
             format!(
-                "https://api.github.com/repos/{}/{}/actions/variables/{}",
-                user_and_repo.0, user_and_repo.1, key
+                "https://api.github.com/repos/{}/{}/{}/variables/{}",
+                user_and_repo.0, user_and_repo.1, target, key
             ),
             "-H", "Content-Type: application/json",
             "-H", "Accept: application/json",
@@ -1564,13 +1626,13 @@ impl<S: shell::Shell> ci::CI for GhAction<S> {
         log::debug!("check status: {}", check_status);
         let (method, url) = if check_status != 200 { 
             ("POST", format!(
-                "https://api.github.com/repos/{}/{}/actions/variables",
-                user_and_repo.0, user_and_repo.1
+                "https://api.github.com/repos/{}/{}/{}/variables",
+                user_and_repo.0, user_and_repo.1, target
             ))
         } else {
             ("PATCH", format!(
-                "https://api.github.com/repos/{}/{}/actions/variables/{}",
-                user_and_repo.0, user_and_repo.1, key
+                "https://api.github.com/repos/{}/{}/{}/variables/{}",
+                user_and_repo.0, user_and_repo.1, target, key
             ))
         };
         // TODO_PATH: use Path to generate path of /dev/null
@@ -1586,8 +1648,8 @@ impl<S: shell::Shell> ci::CI for GhAction<S> {
             Ok(())
         } else {
             return escalate!(Box::new(ci::CIError {
-                cause: format!("fail to set variable to CircleCI CI with status code:{}", status)
+                cause: format!("fail to set variable to GitHub Actions {} with status code:{}", target, status)
             }));
         }
-    }    
+    }
 }
