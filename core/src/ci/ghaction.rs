@@ -264,6 +264,28 @@ impl<S: shell::Shell> GhAction<S> {
             }));
         }
     }
+    fn delete_secret_base(&self, key: &str, path: &str) -> Result<(), Box<dyn Error>> {
+        let config = self.config.borrow();
+        let user_and_repo = config.modules.vcs().user_and_repo()?;
+        let (token, auth_type) = self.get_token()?;
+        let status = self.shell.exec(shell::args!(
+            "curl", "-X", "DELETE",
+            format!(
+                "https://api.github.com/repos/{}/{}/{}/secrets/{}",
+                user_and_repo.0, user_and_repo.1, path, key
+            ),
+            "-H", "Accept: application/json",
+            "-H", shell::fmtargs!("Authorization: {} {}", auth_type, &token),
+            "-w", "%{http_code}", "-o", "/dev/null"
+        ), shell::no_env(), shell::no_cwd(), &shell::capture())?.parse::<u32>()?;
+        if (status >= 200 && status < 300) || status == 404 {
+            Ok(())
+        } else {
+            return escalate!(Box::new(ci::CIError {
+                cause: format!("fail to delete secret from GitHub Actions with status code:{}", status)
+            }));
+        }
+    }
 }
 
 impl<S: shell::Shell> GhAction<S> {
@@ -1537,7 +1559,11 @@ impl<S: shell::Shell> ci::CI for GhAction<S> {
             None => &G_ALL_SECRET_TARGETS
         };
         for t in ts {
-            self.set_secret_base(key, value, &t)?;
+            if value.is_empty() {
+                self.delete_secret_base(key, &t)?;
+            } else {
+                self.set_secret_base(key, value, &t)?;
+            }
         }
         Ok(())
     }
@@ -1545,6 +1571,25 @@ impl<S: shell::Shell> ci::CI for GhAction<S> {
         let config = self.config.borrow();
         let user_and_repo = config.modules.vcs().user_and_repo()?;
         let (token, auth_type) = self.get_token()?;
+        if value.is_empty() {
+            let status = self.shell.exec(shell::args!(
+                "curl", "-X", "DELETE",
+                format!(
+                    "https://api.github.com/repos/{}/{}/actions/variables/{}",
+                    user_and_repo.0, user_and_repo.1, key
+                ),
+                "-H", "Accept: application/json",
+                "-H", "X-GitHub-Api-Version: 2022-11-28",
+                "-H", shell::fmtargs!("Authorization: {} {}", auth_type, &token),
+                "-w", "%{http_code}", "-o", "/dev/null"
+            ), shell::no_env(), shell::no_cwd(), &shell::capture())?.parse::<u32>()?;
+            if (status >= 200 && status < 300) || status == 404 {
+                return Ok(());
+            }
+            return escalate!(Box::new(ci::CIError {
+                cause: format!("fail to delete variable from GitHub Actions with status code:{}", status)
+            }));
+        }
         let json = format!("{{\"name\":\"{}\",\"value\":\"{}\"}}", 
             key, escape(value)
         );

@@ -17,9 +17,22 @@ pub struct CI<S: shell::Shell = shell::Default> {
     pub shell: S
 }
 impl<S: shell::Shell> CI<S> {
+    fn key_value<'a, A: args::Args>(&self, args: &'a A) -> Result<(&'a str, Option<&'a str>), Box<dyn Error>> {
+        let key_or_assignment = args.value_or_die("key");
+        match key_or_assignment.find('=') {
+            Some(pos) => {
+                let key = &key_or_assignment[..pos];
+                if key.is_empty() {
+                    return escalate!(args.error("ci secret/var: key must not be empty"));
+                }
+                Ok((key, Some(&key_or_assignment[pos + 1..])))
+            },
+            None => Ok((key_or_assignment, None))
+        }
+    }
     fn secret<A: args::Args>(&self, args: &A) -> Result<(), Box<dyn Error>> {
-        let key = args.value_or_die("key");
-        match args.value_of("value") {
+        let (key, value) = self.key_value(args)?;
+        match value {
             Some(value) => {
                 let config = self.config.borrow();
                 let ci = config.ci_by_env();
@@ -34,8 +47,8 @@ impl<S: shell::Shell> CI<S> {
         Ok(())
     }
     fn var<A: args::Args>(&self, args: &A) -> Result<(), Box<dyn Error>> {
-        let key = args.value_or_die("key");
-        match args.value_of("value") {
+        let (key, value) = self.key_value(args)?;
+        match value {
             Some(value) => {
                 let config = self.config.borrow();
                 let ci = config.ci_by_env();

@@ -120,3 +120,12 @@ $keyという名前の単独のsecretを設定する: deplo ci secret $key $valu
 $keyという名前の単独のvarを設定する: deplo ci var $key $value 
 $keyという名前の単独のsecretの値を得る: deplo ci secret $key 
 $keyという名前の単独のvarの値を得る: deplo ci var $key
+
+=======
+削除までサポートしたいので、値を設定するときの構文を以下のように変えます
+$keyという名前の単独のsecretを設定する: deplo ci secret $key=$value 
+$keyという名前の単独のvarを設定する: deplo ci var $key=$value 
+$keyには=が含まれないとして良いため、左から最初に現れた=の場所で区切ってください。
+=以降が空文字列だった場合は削除することとします。
+
+従って、ci::CI::set_var, set_secretについて、値が空文字列の場合はvar/secretを削除するように修正してください。
